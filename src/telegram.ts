@@ -5,6 +5,7 @@ import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import type { Config, ToolConfig } from './types.js';
 import { isAllowed, isRateLimited, sanitizeUserInput } from './security.js';
+import type { ChatMessage } from './types.js';
 import { runAgentTurn } from './agent.js';
 import { getCronJobs, runCronJob } from './cron.js';
 import { getCurrentModel, setCurrentModel, getLastMessage } from './gateway.js';
@@ -29,6 +30,38 @@ function getTodayDailyNote(): string | null {
 let bot: Bot | null = null;
 let config: Config;
 let silenceUntil: Date | null = null;
+
+// Conversation history per chat — last N user/assistant message pairs
+const MAX_HISTORY_PAIRS = 5;
+const chatHistory = new Map<number, ChatMessage[]>();
+
+function getHistory(chatId: number): ChatMessage[] {
+  return chatHistory.get(chatId) || [];
+}
+
+function addToHistory(chatId: number, userMsg: string, assistantMsg: string): void {
+  const history = getHistory(chatId);
+  history.push({ role: 'user', content: userMsg });
+  history.push({ role: 'assistant', content: assistantMsg });
+  // Keep only last N pairs (2 messages per pair)
+  while (history.length > MAX_HISTORY_PAIRS * 2) {
+    history.shift();
+    history.shift();
+  }
+  chatHistory.set(chatId, history);
+}
+
+function clearHistory(chatId: number): void {
+  chatHistory.delete(chatId);
+}
+
+/** Keep sending "typing..." every 4s until the returned stop function is called. */
+function startTypingIndicator(ctx: Context): () => void {
+  const interval = setInterval(() => {
+    ctx.replyWithChatAction('typing').catch(() => {});
+  }, 4000);
+  return () => clearInterval(interval);
+}
 
 // Default tool config for Telegram — gives the agent file/bash access
 const DEFAULT_TELEGRAM_TOOLS: ToolConfig = {
@@ -153,13 +186,58 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
 
   // /heartbeat command — trigger a heartbeat check on demand
   bot.command('heartbeat', async (ctx) => {
-    await ctx.replyWithChatAction('typing');
+    const stopTyping = startTypingIndicator(ctx);
     try {
       const response = await runHeartbeatCheck(cfg);
       await sendLongMessage(ctx, `🫀 ${response}`);
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Unknown error';
       await ctx.reply(`Heartbeat error: ${msg}`);
+    } finally {
+      stopTyping();
+    }
+  });
+
+  // /new command — clear conversation history
+  bot.command('new', async (ctx) => {
+    const chatId = ctx.chat?.id;
+    if (chatId) clearHistory(chatId);
+    await ctx.reply('Conversation cleared. Starting fresh.');
+  });
+
+  // /compact command — summarize and compress conversation history
+  bot.command('compact', async (ctx) => {
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
+
+    const history = getHistory(chatId);
+    if (history.length === 0) {
+      await ctx.reply('No conversation history to compact.');
+      return;
+    }
+
+    const stopTyping = startTypingIndicator(ctx);
+    try {
+      // Ask the agent to summarize the conversation so far
+      const historyText = history.map(m => `${m.role}: ${m.content}`).join('\n');
+      const summary = await runAgentTurn(
+        cfg.agents.default,
+        `Summarize this conversation in 2-3 sentences so you can remember the context:\n\n${historyText}`,
+        cfg,
+        getCurrentModel()
+      );
+      // Replace history with a single summary message
+      clearHistory(chatId);
+      chatHistory.set(chatId, [
+        { role: 'user', content: 'Summary of our previous conversation:' },
+        { role: 'assistant', content: summary },
+      ]);
+      await ctx.reply(`Compacted ${history.length} messages into a summary.`);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      await ctx.reply(`Error: ${msg}`);
+    } finally {
+      stopTyping();
     }
   });
 
@@ -195,7 +273,7 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
 
   // /eod command
   bot.command('eod', async (ctx) => {
-    await ctx.replyWithChatAction('typing');
+    const stopTyping = startTypingIndicator(ctx);
     try {
       const response = await runAgentTurn(
         cfg.agents.default,
@@ -208,12 +286,14 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Unknown error';
       await ctx.reply(`Error: ${msg}`);
+    } finally {
+      stopTyping();
     }
   });
 
   // /focus command
   bot.command('focus', async (ctx) => {
-    await ctx.replyWithChatAction('typing');
+    const stopTyping = startTypingIndicator(ctx);
     try {
       const response = await runAgentTurn(
         cfg.agents.default,
@@ -226,6 +306,8 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Unknown error';
       await ctx.reply(`Error: ${msg}`);
+    } finally {
+      stopTyping();
     }
   });
 
@@ -242,20 +324,26 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
     // Skip if it's a command
     if (text.startsWith('/')) return;
 
-    await ctx.replyWithChatAction('typing');
+    const chatId = ctx.chat?.id;
+    const stopTyping = startTypingIndicator(ctx);
 
     try {
+      const history = chatId ? getHistory(chatId) : [];
       const response = await runAgentTurn(
         cfg.agents.default,
         text,
         cfg,
         getCurrentModel(),
-        getTelegramToolConfig(cfg)
+        getTelegramToolConfig(cfg),
+        history
       );
+      if (chatId) addToHistory(chatId, text, response);
       await sendLongMessage(ctx, response);
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Unknown error';
       await ctx.reply(`Error: ${msg}`);
+    } finally {
+      stopTyping();
     }
   });
 

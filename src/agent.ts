@@ -107,10 +107,50 @@ export function appendToMemory(agentId: string, entry: string): void {
   writeFileSync(path, newContent.trim() + '\n');
 }
 
+// --- Codex OAuth ---
+
+const CODEX_AUTH_PATH = '/Users/katre/.codex/auth.json';
+
+function loadCodexToken(): string | null {
+  if (!existsSync(CODEX_AUTH_PATH)) {
+    console.log('[codex] No auth file at ~/.codex/auth.json');
+    return null;
+  }
+
+  try {
+    const raw = JSON.parse(readFileSync(CODEX_AUTH_PATH, 'utf-8'));
+    const token = raw?.tokens?.access_token;
+    if (!token) {
+      console.log('[codex] No access_token in auth file');
+      return null;
+    }
+
+    // Check if token is expired (JWT: header.payload.signature)
+    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+    const exp = payload.exp * 1000; // JWT exp is in seconds
+    const now = Date.now();
+    if (now > exp) {
+      const expiredAgo = Math.round((now - exp) / 60000);
+      console.warn(`[codex] Token expired ${expiredAgo} min ago. Run 'codex' to re-auth.`);
+      return null;
+    }
+
+    const expiresIn = Math.round((exp - now) / 60000);
+    console.log(`[codex] Token valid (expires in ${expiresIn} min)`);
+    return token;
+  } catch (error) {
+    console.error('[codex] Failed to read auth file:', error);
+    return null;
+  }
+}
+
 // --- Model Providers ---
 
 let anthropicClient: Anthropic | null = null;
-let openaiClient: OpenAI | null = null;
+// Map of provider name → OpenAI client (supports openai, openrouter, groq, together, etc.)
+const openaiClients = new Map<string, OpenAI>();
+// Providers that use the Responses API instead of Chat Completions
+const responsesApiProviders = new Set<string>();
 
 export function initProviders(config: Config): void {
   const anthropicConfig = config.models.providers.anthropic;
@@ -136,10 +176,28 @@ export function initProviders(config: Config): void {
     anthropicClient = new Anthropic(opts);
   }
 
-  if (config.models.providers.openai?.apiKey) {
-    openaiClient = new OpenAI({
-      apiKey: config.models.providers.openai.apiKey,
-    });
+  // Initialize all OpenAI-compatible providers
+  for (const [name, providerConfig] of Object.entries(config.models.providers)) {
+    if (name === 'anthropic' || !providerConfig) continue;
+
+    // Resolve API key — support reading from Codex OAuth
+    let apiKey = providerConfig.apiKey;
+    if (providerConfig.authToken === 'codex') {
+      apiKey = loadCodexToken() || undefined;
+      if (!apiKey) {
+        console.log(`[providers] Skipping ${name} — no Codex OAuth token found`);
+        continue;
+      }
+    }
+    if (!apiKey) continue;
+
+    const opts: Record<string, any> = { apiKey };
+    if (providerConfig.baseURL) opts.baseURL = providerConfig.baseURL;
+    openaiClients.set(name, new OpenAI(opts));
+    if (providerConfig.authToken === 'codex') {
+      responsesApiProviders.add(name);
+    }
+    console.log(`[providers] Initialized ${name}${providerConfig.baseURL ? ` (${providerConfig.baseURL})` : ''}${responsesApiProviders.has(name) ? ' [responses API]' : ''}`);
   }
 }
 
@@ -151,19 +209,34 @@ export function resolveModel(modelSpec: string, config: Config): string {
   return modelSpec;
 }
 
-function getProvider(model: string): 'anthropic' | 'openai' {
-  if (model.startsWith('anthropic/') || model.includes('claude')) {
-    return 'anthropic';
+function getProvider(model: string): string {
+  // Explicit prefix: "openrouter/google/gemini-2.0-flash" → "openrouter"
+  const slashIdx = model.indexOf('/');
+  if (slashIdx > 0) {
+    const prefix = model.slice(0, slashIdx);
+    // Known Anthropic prefix
+    if (prefix === 'anthropic') return 'anthropic';
+    // Any other prefix = provider name (openai, openrouter, groq, together, etc.)
+    return prefix;
   }
-  if (model.startsWith('openai/') || model.includes('gpt')) {
-    return 'openai';
-  }
+  // No prefix: infer from model name
+  if (model.includes('claude')) return 'anthropic';
+  if (model.includes('gpt')) return 'openai';
   // Default to anthropic
   return 'anthropic';
 }
 
 function stripProvider(model: string): string {
-  return model.replace(/^(anthropic|openai)\//, '');
+  const slashIdx = model.indexOf('/');
+  if (slashIdx > 0) {
+    const prefix = model.slice(0, slashIdx);
+    // For OpenRouter etc., the model ID includes sub-paths like "google/gemini-2.0-flash"
+    // Only strip the first prefix if it matches a known provider
+    if (openaiClients.has(prefix) || prefix === 'anthropic') {
+      return model.slice(slashIdx + 1);
+    }
+  }
+  return model;
 }
 
 // --- Chat ---
@@ -225,17 +298,38 @@ export async function chat(
     return textContent?.text || '';
   }
 
-  if (provider === 'openai') {
-    if (!openaiClient) {
-      throw new Error('OpenAI client not initialized');
+  // All non-Anthropic providers use OpenAI-compatible API
+  const client = openaiClients.get(provider);
+  if (client) {
+    // Codex / Responses API providers use client.responses.create()
+    if (responsesApiProviders.has(provider)) {
+      // Build input: system instruction + conversation as structured items
+      const input: any[] = [];
+      const systemMsg = messages.find(m => m.role === 'system');
+      if (systemMsg) {
+        input.push({ role: 'system', content: systemMsg.content });
+      }
+      for (const m of messages) {
+        if (m.role === 'system') continue;
+        input.push({ role: m.role, content: m.content });
+      }
+
+      console.log(`[agent] Using Responses API for ${provider}/${modelId}`);
+      const response = await client.responses.create({
+        model: modelId,
+        input,
+      });
+
+      return response.output_text || '';
     }
 
+    // Standard Chat Completions API
     const openaiMessages = messages.map(m => ({
       role: m.role,
       content: m.content,
     }));
 
-    const response = await openaiClient.chat.completions.create({
+    const response = await client.chat.completions.create({
       model: modelId,
       messages: openaiMessages,
       max_tokens: options.maxTokens || 4096,
@@ -245,7 +339,7 @@ export async function chat(
     return response.choices[0]?.message?.content || '';
   }
 
-  throw new Error(`Unknown provider for model: ${resolvedModel}`);
+  throw new Error(`Unknown provider "${provider}" for model: ${resolvedModel}. Available: anthropic, ${[...openaiClients.keys()].join(', ')}`);
 }
 
 // --- Chat with Tools (Agentic Loop) ---
@@ -357,7 +451,8 @@ export async function runAgentTurn(
   userMessage: string,
   config: Config,
   modelOverride?: string,
-  toolConfig?: ToolConfig
+  toolConfig?: ToolConfig,
+  history?: ChatMessage[]
 ): Promise<string> {
   const agentConfig = config.agents.list[agentId];
   if (!agentConfig) {
@@ -369,20 +464,29 @@ export async function runAgentTurn(
 
   const messages: ChatMessage[] = [
     { role: 'system', content: systemPrompt },
+    ...(history || []),
     { role: 'user', content: sanitizedMessage },
   ];
 
   const model = modelOverride || agentConfig.model;
   const chatOptions: ChatOptions = { model, thinking: agentConfig.thinking };
 
+  // Determine if we can use tools (only Anthropic supports tool_use via our API)
+  const resolvedModel = resolveModel(model, config);
+  const provider = getProvider(resolvedModel);
+  const canUseTools = provider === 'anthropic' && !!anthropicClient;
+
   let response: string;
   let toolCalls: string[] = [];
-  if (toolConfig?.enabled) {
+  if (toolConfig?.enabled && canUseTools) {
     console.log(`[agent] Running with tools enabled (paths: ${toolConfig.allowedPaths.join(', ')})`);
     const result = await chatWithTools(messages, chatOptions, config, toolConfig);
     response = result.response;
     toolCalls = result.toolCalls;
   } else {
+    if (toolConfig?.enabled && !canUseTools) {
+      console.log(`[agent] Tools requested but ${provider} doesn't support tool_use — running without tools`);
+    }
     response = await chat(messages, chatOptions, config);
   }
 
