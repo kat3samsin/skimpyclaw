@@ -78,6 +78,18 @@ describe('read_file', () => {
     const result = await executeTool('Read', { path: join(TEST_DIR, '..', '__test_outside__', 'secret.txt') }, toolConfig);
     expect(result).toContain('Error: Path not allowed');
   });
+
+  it('rejects sibling path prefix bypass attempts', async () => {
+    const siblingDir = `${TEST_DIR}-sibling`;
+    mkdirSync(siblingDir, { recursive: true });
+    const siblingFile = join(siblingDir, 'secret.txt');
+    writeFileSync(siblingFile, 'top secret');
+
+    const result = await executeTool('Read', { path: siblingFile }, toolConfig);
+    expect(result).toContain('Error: Path not allowed');
+
+    rmSync(siblingDir, { recursive: true, force: true });
+  });
 });
 
 describe('write_file', () => {

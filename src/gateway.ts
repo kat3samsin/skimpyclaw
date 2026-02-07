@@ -2,7 +2,7 @@
 
 import Fastify, { FastifyInstance } from 'fastify';
 import type { Config, GatewayStatus } from './types.js';
-import { runAgentTurn, initProviders } from './agent.js';
+import { runAgentTurn } from './agent.js';
 import { getCronJobs, runCronJob } from './cron.js';
 import { registerDashboardAPI } from './api.js';
 import { registerDashboard } from './dashboard.js';
@@ -17,8 +17,6 @@ export async function createGateway(cfg: Config): Promise<FastifyInstance> {
   config = cfg;
   startTime = new Date();
   currentModel = cfg.agents.list[cfg.agents.default]?.model || 'claude-sonnet-4-20250514';
-
-  initProviders(config);
 
   const fastify = Fastify({
     logger: {
