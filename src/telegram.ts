@@ -1,8 +1,8 @@
 // Telegram bot using Grammy
 
 import { Bot, Context, GrammyError, HttpError } from 'grammy';
-import { readFileSync, existsSync } from 'fs';
-import { join } from 'path';
+import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
+import { join, basename } from 'path';
 import { homedir } from 'os';
 import { spawnSync } from 'child_process';
 import type { Config, ToolConfig } from './types.js';
@@ -14,6 +14,28 @@ import { getCurrentModel, setCurrentModel, getLastMessage } from './gateway.js';
 import { runHeartbeatCheck } from './heartbeat.js';
 
 const LAUNCHD_LABEL = 'com.skimpyclaw.gateway';
+
+// Command definitions — single source of truth for the / menu and /help
+const BOT_COMMANDS: { command: string; description: string }[] = [
+  { command: 'help', description: 'Show available commands' },
+  { command: 'model', description: 'Switch model (fast/smart/opus)' },
+  { command: 'status', description: 'Show bot status' },
+  { command: 'morning', description: 'Run morning routine' },
+  { command: 'eod', description: 'Run EOD review' },
+  { command: 'focus', description: 'Plan your day' },
+  { command: 'memory', description: 'View recent memory entries' },
+  { command: 'new', description: 'Clear conversation history' },
+  { command: 'compact', description: 'Compress conversation history' },
+  { command: 'silence', description: 'Pause proactive messages' },
+  { command: 'cron', description: 'List or run scheduled jobs' },
+  { command: 'heartbeat', description: 'Trigger heartbeat check' },
+  { command: 'restart', description: 'Restart the gateway' },
+];
+
+// Set of known command names for catch-all routing
+const KNOWN_COMMANDS = new Set(
+  BOT_COMMANDS.map(c => c.command).concat(['start'])
+);
 
 function getTodayDailyNote(cfg: Config): string | null {
   const dailyNotesDir = cfg.channels.telegram.dailyNotesDir;
@@ -93,6 +115,45 @@ function getTelegramToolConfig(cfg: Config): ToolConfig | undefined {
   return DEFAULT_TELEGRAM_TOOLS;
 }
 
+/** Build the help text from BOT_COMMANDS. */
+function buildHelpText(cfg: Config): string {
+  const agentConfig = cfg.agents.list[cfg.agents.default];
+  const emoji = agentConfig?.identity?.emoji || '🦞';
+  const name = agentConfig?.identity?.name || 'SkimpyClaw';
+
+  const commandList = BOT_COMMANDS
+    .map(c => `/${c.command} — ${c.description}`)
+    .join('\n');
+
+  return `${emoji} ${name} online.\n\nSend a message to chat, or use a command:\n\n${commandList}`;
+}
+
+/** Get recent memory files (sorted newest first). */
+function getRecentMemoryFiles(count: number = 5): { name: string; path: string; date: string; size: number }[] {
+  const memoryDir = join(homedir(), '.skimpyclaw', 'agents', 'main', 'memory');
+
+  if (!existsSync(memoryDir)) {
+    return [];
+  }
+
+  const files = readdirSync(memoryDir)
+    .filter(f => f.endsWith('.md'))
+    .map(f => {
+      const filePath = join(memoryDir, f);
+      const stats = statSync(filePath);
+      return {
+        name: f,
+        path: filePath,
+        date: f.replace('.md', ''),
+        size: stats.size,
+      };
+    })
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, count);
+
+  return files;
+}
+
 export async function initTelegram(cfg: Config): Promise<Bot | null> {
   if (!cfg.channels.telegram.enabled || !cfg.channels.telegram.token) {
     console.log('[telegram] Disabled or no token configured');
@@ -101,6 +162,11 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
 
   config = cfg;
   bot = new Bot(cfg.channels.telegram.token);
+
+  // Register commands with Telegram for the / menu
+  bot.api.setMyCommands(BOT_COMMANDS).catch((err) => {
+    console.error('[telegram] Failed to set bot commands:', err);
+  });
 
   // Middleware: allowlist check
   bot.use(async (ctx, next) => {
@@ -123,10 +189,12 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
 
   // /start command
   bot.command('start', async (ctx) => {
-    const agentConfig = cfg.agents.list[cfg.agents.default];
-    const emoji = agentConfig?.identity?.emoji || '🦞';
-    const name = agentConfig?.identity?.name || 'SkimpyClaw';
-    await ctx.reply(`${emoji} ${name} online.\n\nJust send me a message. Commands:\n/model <alias> - Switch model (fast/smart/opus)\n/status - Show status\n/morning - Morning routine\n/eod - EOD review\n/silence <mins> - Pause proactive messages\n/restart - Restart the gateway`);
+    await ctx.reply(buildHelpText(cfg));
+  });
+
+  // /help command
+  bot.command('help', async (ctx) => {
+    await ctx.reply(buildHelpText(cfg));
   });
 
   // /model command
@@ -347,18 +415,66 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
     }
   });
 
-  // /memory command
+  // /memory command — show recent memory entries
   bot.command('memory', async (ctx) => {
-    // TODO: Show recent memory entries
-    await ctx.reply('Memory viewing not yet implemented.');
+    const arg = ctx.match.trim();
+    const recentFiles = getRecentMemoryFiles(10);
+
+    if (recentFiles.length === 0) {
+      await ctx.reply('No memory entries found.');
+      return;
+    }
+
+    // If a date was specified, show that entry
+    if (arg) {
+      const match = recentFiles.find(f => f.date === arg || f.name === arg || f.name === `${arg}.md`);
+      if (!match) {
+        await ctx.reply(`No memory entry for "${arg}".\n\nAvailable: ${recentFiles.map(f => f.date).join(', ')}`);
+        return;
+      }
+
+      try {
+        const content = readFileSync(match.path, 'utf-8');
+        // Show first ~3500 chars to stay within Telegram limits
+        const preview = content.length > 3500
+          ? content.slice(0, 3500) + '\n\n... (truncated)'
+          : content;
+        await sendLongMessage(ctx, `📝 Memory: ${match.date}\n\n${preview}`);
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : 'Unknown error';
+        await ctx.reply(`Error reading memory: ${msg}`);
+      }
+      return;
+    }
+
+    // Default: show list of recent entries with sizes
+    const formatSize = (bytes: number): string => {
+      if (bytes < 1024) return `${bytes}B`;
+      return `${(bytes / 1024).toFixed(1)}KB`;
+    };
+
+    const list = recentFiles
+      .map(f => `  ${f.date} (${formatSize(f.size)})`)
+      .join('\n');
+
+    await ctx.reply(
+      `📝 Recent memory entries:\n\n${list}\n\n` +
+      `View one: /memory <date>\nExample: /memory ${recentFiles[0].date}`
+    );
   });
 
   // Handle plain text messages (treat as /ask)
   bot.on('message:text', async (ctx) => {
     const text = ctx.message.text;
 
-    // Skip if it's a command
-    if (text.startsWith('/')) return;
+    // Catch-all for unknown commands — respond instead of silently ignoring
+    if (text.startsWith('/')) {
+      const command = text.split(/[\s@]/)[0].slice(1).toLowerCase();
+      if (!KNOWN_COMMANDS.has(command)) {
+        await ctx.reply(`Unknown command: /${command}\n\nType /help to see available commands.`);
+      }
+      return;
+    }
 
     const chatId = ctx.chat?.id;
     const stopTyping = startTypingIndicator(ctx);
