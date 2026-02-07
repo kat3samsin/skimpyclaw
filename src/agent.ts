@@ -266,7 +266,7 @@ async function codexChat(messages: ChatMessage[], model: string, toolConfig?: To
     }
   }
 
-  const maxIterations = toolConfig?.maxIterations || 20;
+  const maxIterations = toolConfig?.maxIterations || 100;
   const tools = toolConfig?.enabled ? getCodexToolDefinitions() : undefined;
   const toolLog: string[] = [];
 

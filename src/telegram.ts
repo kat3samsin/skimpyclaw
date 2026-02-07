@@ -74,7 +74,7 @@ function startTypingIndicator(ctx: Context): () => void {
 const DEFAULT_TELEGRAM_TOOLS: ToolConfig = {
   enabled: true,
   allowedPaths: [join(homedir(), '.skimpyclaw'), process.cwd()],
-  maxIterations: 20,
+  maxIterations: 100,
   bashTimeout: 15000,
 };
 

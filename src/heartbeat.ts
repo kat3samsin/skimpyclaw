@@ -12,7 +12,7 @@ let running = false;
 const DEFAULT_HEARTBEAT_TOOLS: ToolConfig = {
   enabled: true,
   allowedPaths: [join(homedir(), '.skimpyclaw'), process.cwd()],
-  maxIterations: 20,
+  maxIterations: 100,
   bashTimeout: 15000,
 };
 
