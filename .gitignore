@@ -1,3 +1,10 @@
 node_modules/
 dist/
 .DS_Store
+config.json
+config.local.json
+*.local.json
+config/
+.env
+.env.*
+auth.json

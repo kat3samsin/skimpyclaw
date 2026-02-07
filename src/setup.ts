@@ -67,6 +67,9 @@ async function main(): Promise<void> {
   const timezone = (await ask('   Enter timezone [America/Chicago]: ')) || 'America/Chicago';
   console.log(`   ✓ ${timezone}\n`);
 
+  const launchdLabel = 'com.skimpyclaw';
+  const workspaceDir = process.cwd();
+
   // Create directories
   console.log('Creating directories...');
   mkdirSync(CONFIG_DIR, { recursive: true });
@@ -100,6 +103,11 @@ async function main(): Promise<void> {
         anthropic: {
           apiKey: '${ANTHROPIC_API_KEY}',
         },
+        codex: {
+          authToken: 'codex',
+          authPath: '${HOME}/.codex/auth.json',
+          baseURL: 'https://chatgpt.com/backend-api',
+        },
       },
       aliases: {
         fast: 'anthropic/claude-3-5-haiku-20241022',
@@ -112,6 +120,11 @@ async function main(): Promise<void> {
         enabled: true,
         token: '${TELEGRAM_BOT_TOKEN}',
         allowFrom: [parseInt(telegramId) || telegramId],
+        dailyNotesDir: '${HOME}/Daily Notes',
+        defaultAllowedPaths: [
+          '${HOME}/.skimpyclaw',
+          workspaceDir,
+        ],
       },
     },
     cron: {
@@ -133,6 +146,15 @@ async function main(): Promise<void> {
     heartbeat: {
       intervalMs: 1800000,
       prompt: 'Read HEARTBEAT.md. Follow it strictly. If nothing needs attention, reply HEARTBEAT_OK.',
+      tools: {
+        enabled: true,
+        allowedPaths: [
+          '${HOME}/.skimpyclaw',
+          workspaceDir,
+        ],
+        maxIterations: 10,
+        bashTimeout: 15000,
+      },
     },
   };
 
@@ -186,19 +208,19 @@ Name: ${userName}
 `);
 
   // Create launchd plist
-  const plistPath = join(homedir(), 'Library', 'LaunchAgents', 'com.katre.skimpyclaw.plist');
+  const plistPath = join(homedir(), 'Library', 'LaunchAgents', `${launchdLabel}.plist`);
   const plistContent = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.katre.skimpyclaw</string>
+    <string>${launchdLabel}</string>
     <key>ProgramArguments</key>
     <array>
         <string>${process.execPath}</string>
         <string>--import</string>
         <string>tsx</string>
-        <string>${join(homedir(), 'Sites', 'skimpyclaw', 'src', 'index.ts')}</string>
+        <string>${join(workspaceDir, 'src', 'index.ts')}</string>
     </array>
     <key>RunAtLoad</key>
     <true/>
@@ -208,7 +230,7 @@ Name: ${userName}
         <false/>
     </dict>
     <key>WorkingDirectory</key>
-    <string>${join(homedir(), 'Sites', 'skimpyclaw')}</string>
+    <string>${workspaceDir}</string>
     <key>StandardOutPath</key>
     <string>${join(CONFIG_DIR, 'logs', 'stdout.log')}</string>
     <key>StandardErrorPath</key>
@@ -235,7 +257,7 @@ Name: ${userName}
   console.log('Next steps:');
   console.log('1. Review templates in ~/.skimpyclaw/agents/main/');
   console.log('2. Start the daemon:');
-  console.log('   launchctl load ~/Library/LaunchAgents/com.katre.skimpyclaw.plist');
+  console.log(`   launchctl load ~/Library/LaunchAgents/${launchdLabel}.plist`);
   console.log('3. Check health:');
   console.log('   curl http://localhost:18790/health');
   console.log('4. Send /start to your Telegram bot');

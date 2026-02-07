@@ -3,6 +3,7 @@
 import { Bot, Context, GrammyError, HttpError } from 'grammy';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
+import { homedir } from 'os';
 import type { Config, ToolConfig } from './types.js';
 import { isAllowed, isRateLimited, sanitizeUserInput } from './security.js';
 import type { ChatMessage } from './types.js';
@@ -11,15 +12,18 @@ import { getCronJobs, runCronJob } from './cron.js';
 import { getCurrentModel, setCurrentModel, getLastMessage } from './gateway.js';
 import { runHeartbeatCheck } from './heartbeat.js';
 
-const VAULT_DAILY_NOTES = '/Users/katre/Library/Mobile Documents/iCloud~md~obsidian/Documents/2ndBrain/2. Areas/Daily Notes';
+function getTodayDailyNote(cfg: Config): string | null {
+  const dailyNotesDir = cfg.channels.telegram.dailyNotesDir;
+  if (!dailyNotesDir) {
+    return null;
+  }
 
-function getTodayDailyNote(): string | null {
   const now = new Date();
   const month = String(now.getMonth() + 1).padStart(2, '0');
   const day = String(now.getDate()).padStart(2, '0');
   const year = now.getFullYear();
   const filename = `${month}-${day}-${year}.md`;
-  const filePath = join(VAULT_DAILY_NOTES, filename);
+  const filePath = join(dailyNotesDir, filename);
 
   if (!existsSync(filePath)) {
     return null;
@@ -66,16 +70,24 @@ function startTypingIndicator(ctx: Context): () => void {
 // Default tool config for Telegram — gives the agent file/bash access
 const DEFAULT_TELEGRAM_TOOLS: ToolConfig = {
   enabled: true,
-  allowedPaths: [
-    '/Users/katre/Library/Mobile Documents/iCloud~md~obsidian/Documents/2ndBrain',
-    '/Users/katre/.skimpyclaw',
-  ],
+  allowedPaths: [join(homedir(), '.skimpyclaw'), process.cwd()],
   maxIterations: 10,
   bashTimeout: 15000,
 };
 
 function getTelegramToolConfig(cfg: Config): ToolConfig | undefined {
-  return cfg.channels.telegram.tools || DEFAULT_TELEGRAM_TOOLS;
+  if (cfg.channels.telegram.tools) {
+    return cfg.channels.telegram.tools;
+  }
+
+  if (cfg.channels.telegram.defaultAllowedPaths?.length) {
+    return {
+      ...DEFAULT_TELEGRAM_TOOLS,
+      allowedPaths: cfg.channels.telegram.defaultAllowedPaths,
+    };
+  }
+
+  return DEFAULT_TELEGRAM_TOOLS;
 }
 
 export async function initTelegram(cfg: Config): Promise<Bot | null> {
@@ -260,7 +272,7 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
     }
 
     // Always check for the daily note — claude -p may succeed but exit non-zero
-    const dailyNote = getTodayDailyNote();
+    const dailyNote = getTodayDailyNote(cfg);
     if (dailyNote) {
       await ctx.reply('Morning routine complete. Here\'s your daily note:');
       await sendLongMessage(ctx, dailyNote);

@@ -11,7 +11,7 @@ export interface Config {
   };
   models: {
     providers: {
-      [key: string]: { apiKey?: string; authToken?: string; baseURL?: string } | undefined;
+      [key: string]: { apiKey?: string; authToken?: string; baseURL?: string; authPath?: string } | undefined;
     };
     aliases: Record<string, string>;
   };
@@ -21,6 +21,8 @@ export interface Config {
       token: string;
       allowFrom: AllowlistEntry[];
       tools?: ToolConfig;
+      dailyNotesDir?: string;
+      defaultAllowedPaths?: string[];
     };
   };
   cron: {
@@ -30,6 +32,7 @@ export interface Config {
     intervalMs: number;
     prompt: string;
     model?: string;
+    tools?: ToolConfig;
   };
   dashboard?: {
     token?: string;

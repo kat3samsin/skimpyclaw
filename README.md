@@ -124,7 +124,7 @@ This creates and populates:
 - `~/.skimpyclaw/config.json`
 - `~/.skimpyclaw/.env`
 - `~/.skimpyclaw/agents/main/*.md` (from `templates/`)
-- `~/Library/LaunchAgents/com.katre.skimpyclaw.plist`
+- `~/Library/LaunchAgents/com.skimpyclaw.plist`
 
 3. Start locally:
 
@@ -247,6 +247,7 @@ Current tests cover:
 
 ## Known implementation caveats
 
-- Some default tool paths are hardcoded for a specific local environment (`/Users/katre/...`), especially in Telegram and heartbeat defaults.
+- Telegram daily notes path and default tool paths are configurable in `channels.telegram`.
+- Heartbeat tool paths are configurable in `heartbeat.tools`.
 - Gateway binds to `127.0.0.1` by default.
 - Config reload endpoint currently indicates restart is required.
