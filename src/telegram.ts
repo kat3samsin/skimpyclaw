@@ -2,11 +2,11 @@
 
 import { Bot, Context, GrammyError, HttpError } from 'grammy';
 import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
-import { join, basename } from 'path';
+import { join } from 'path';
 import { homedir } from 'os';
 import { spawnSync } from 'child_process';
 import type { Config, ToolConfig } from './types.js';
-import { isAllowed, isRateLimited, sanitizeUserInput } from './security.js';
+import { isAllowed, isRateLimited } from './security.js';
 import type { ChatMessage } from './types.js';
 import { runAgentTurn } from './agent.js';
 import { getCronJobs, runCronJob } from './cron.js';
@@ -57,7 +57,6 @@ function getTodayDailyNote(cfg: Config): string | null {
 }
 
 let bot: Bot | null = null;
-let config: Config;
 let silenceUntil: Date | null = null;
 
 // Conversation history per chat — last N user/assistant message pairs
@@ -160,7 +159,6 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
     return null;
   }
 
-  config = cfg;
   bot = new Bot(cfg.channels.telegram.token);
 
   // Register commands with Telegram for the / menu

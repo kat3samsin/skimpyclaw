@@ -7,7 +7,7 @@ import { join } from 'path';
 import { homedir } from 'os';
 import { getAgentDir } from './config.js';
 import { buildSafeSystemPrompt, sanitizeUserInput } from './security.js';
-import type { Config, ChatMessage, ChatOptions, AgentTurn, Session, ToolConfig } from './types.js';
+import type { Config, ChatMessage, ChatOptions, ToolConfig } from './types.js';
 import { TOOL_DEFINITIONS, executeTool } from './tools.js';
 
 // --- Template Loading ---

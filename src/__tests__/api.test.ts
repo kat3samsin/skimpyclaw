@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
-import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
+import { mkdirSync, writeFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import Fastify, { FastifyInstance } from 'fastify';
@@ -11,6 +11,7 @@ const LOGS_DIR = join(TEST_ROOT, 'logs');
 const AGENT_DIR = join(TEST_ROOT, 'agents', 'default');
 const MEMORY_DIR = join(AGENT_DIR, 'memory');
 const CONFIG_PATH = join(TEST_ROOT, 'config.json');
+const TODO_PATH = join(TEST_ROOT, 'TODO.md');
 
 const TEST_CONFIG = {
   gateway: { port: 18790, mode: 'local' as const },
@@ -182,6 +183,8 @@ function inject(opts: Record<string, any>) {
 // --- Setup & Teardown ---
 
 beforeAll(async () => {
+  process.env.SKIMPYCLAW_TODO_PATH = TODO_PATH;
+
   // Create directory structure
   mkdirSync(SESSIONS_DIR, { recursive: true });
   mkdirSync(LOGS_DIR, { recursive: true });
@@ -231,6 +234,16 @@ beforeAll(async () => {
   writeFileSync(join(LOGS_DIR, 'app.log'), 'line1\nline2\nline3\nline4\nline5\n');
   writeFileSync(join(LOGS_DIR, 'error.log'), 'error1\nerror2\n');
 
+  // Seed TODO file
+  writeFileSync(TODO_PATH, [
+    '# TODO',
+    '',
+    '- [ ] Ship dashboard todo tracking',
+    '- [x] Existing done task',
+    '- [ ] Add e2e tests',
+    '',
+  ].join('\n'));
+
   // Seed config file
   writeFileSync(CONFIG_PATH, JSON.stringify(TEST_CONFIG, null, 2));
 
@@ -242,6 +255,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await app.close();
+  delete process.env.SKIMPYCLAW_TODO_PATH;
   rmSync(TEST_ROOT, { recursive: true, force: true });
 });
 
@@ -251,6 +265,15 @@ beforeEach(() => {
   mockLastMessage = undefined;
   // Re-seed config in case a test modified it
   writeFileSync(CONFIG_PATH, JSON.stringify(TEST_CONFIG, null, 2));
+  // Re-seed TODO file in case a test modified it
+  writeFileSync(TODO_PATH, [
+    '# TODO',
+    '',
+    '- [ ] Ship dashboard todo tracking',
+    '- [x] Existing done task',
+    '- [ ] Add e2e tests',
+    '',
+  ].join('\n'));
 });
 
 // ===== TESTS =====
@@ -574,6 +597,51 @@ describe('Config endpoints', () => {
     const saved = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8'));
     expect(saved.models.providers.anthropic.apiKey).toBe('sk-ant-test-secret-key');
     expect(saved.channels.telegram.token).toBe('tg-secret-token');
+  });
+});
+
+describe('TODO endpoints', () => {
+  it('GET /api/dashboard/todos returns checklist items and summary', async () => {
+    const res = await inject({ method: 'GET', url: '/api/dashboard/todos' });
+    expect(res.statusCode).toBe(200);
+
+    const body = res.json();
+    expect(body.total).toBe(3);
+    expect(body.completed).toBe(1);
+    expect(body.remaining).toBe(2);
+    expect(body.items).toHaveLength(3);
+    expect(body.items[0]).toMatchObject({
+      id: 0,
+      text: 'Ship dashboard todo tracking',
+      completed: false,
+    });
+  });
+
+  it('PUT /api/dashboard/todos/:id toggles completion state', async () => {
+    const res = await inject({
+      method: 'PUT',
+      url: '/api/dashboard/todos/0',
+      payload: { completed: true },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.updated).toBe(true);
+    expect(body.item).toMatchObject({ id: 0, completed: true });
+    expect(body.completed).toBe(2);
+
+    const verify = await inject({ method: 'GET', url: '/api/dashboard/todos' });
+    const verifyBody = verify.json();
+    expect(verifyBody.items.find((i: any) => i.id === 0).completed).toBe(true);
+  });
+
+  it('PUT /api/dashboard/todos/:id returns 404 for missing item', async () => {
+    const res = await inject({
+      method: 'PUT',
+      url: '/api/dashboard/todos/999',
+      payload: { completed: true },
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toHaveProperty('error', 'TODO item not found');
   });
 });
 
