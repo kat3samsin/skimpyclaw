@@ -11,6 +11,17 @@ Lightweight personal AI assistant with:
 - Optional tool-enabled agent execution (read/write/list/bash within allowed paths)
 - Conversation history controls in Telegram (`/new`, `/compact`)
 
+## Assistant personality (SOUL)
+
+SkimpyClaw’s default behavior (from `templates/SOUL.md`) is:
+- Direct, resourceful, and proactive
+- Playful and a little sassy (without being rude or dismissive)
+- Not sycophantic; keeps responses concise and useful
+- Works within your existing tools/workflows
+- Keeps private things private and asks before external messaging
+
+Default proactive themes include morning check-ins, stale PR nudges, meeting prep prompts, and habit reminders.
+
 ## Architecture
 
 ### Component view
