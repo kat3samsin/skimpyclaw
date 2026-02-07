@@ -6,6 +6,7 @@ Lightweight personal AI assistant with:
 - Scheduled cron routines
 - Periodic heartbeat checks
 - Optional tool-enabled agent execution (read/write/list/bash within allowed paths)
+- Conversation history controls in Telegram (`/new`, `/compact`)
 
 ## Architecture
 
@@ -23,7 +24,7 @@ flowchart LR
   gw --> st["/health /status /message /model /cron/:id/run"]
   cron["Cron Scheduler (croner)"] --> agent
   hb["Heartbeat Timer"] --> agent
-  agent --> models["Model Providers (Anthropic/OpenAI)"]
+  agent --> models["Model Providers (Anthropic/OpenAI/Codex-compatible)"]
   agent --> fs["~/.skimpyclaw (config, sessions, logs, memory, templates)"]
 ```
 
@@ -184,15 +185,16 @@ Main config file: `~/.skimpyclaw/config.json`
 Top-level sections:
 - `gateway`: HTTP port and mode
 - `agents`: default agent + agent definitions
-- `models`: provider credentials + model aliases
-- `channels.telegram`: token, allowlist, optional tool config
+- `models`: provider credentials + model aliases (`apiKey`, optional `authToken`, optional `baseURL`, optional `authPath`)
+- `channels.telegram`: token, allowlist, optional `tools`, optional `dailyNotesDir`, optional `defaultAllowedPaths`
 - `cron.jobs`: scheduled tasks
-- `heartbeat`: interval and prompt
+- `heartbeat`: interval, prompt, optional `model`, optional `tools`
 - `dashboard.token`: API auth token for `/api/dashboard/*`
 
 Environment placeholders in JSON are supported:
 - `${ANTHROPIC_API_KEY}`
 - `${TELEGRAM_BOT_TOKEN}`
+- `${HOME}`
 
 ## HTTP endpoints
 
@@ -230,13 +232,17 @@ Dashboard API routes (Bearer token protected when configured):
 - `/status`
 - `/cron list`
 - `/cron run <job-id>`
+- `/heartbeat`
 - `/silence <minutes>`
 - `/morning`
 - `/eod`
 - `/focus`
-- `/memory` (placeholder)
+- `/new` (clear conversation history)
+- `/compact` (summarize + compress conversation history)
+- `/memory` (list recent memory files)
+- `/memory <filename>` (read one memory file)
 
-Any non-command text message is treated as a chat prompt to the agent.
+Any non-command text message is treated as a chat prompt to the agent and uses recent in-memory conversation context.
 
 ## Data and logs
 
