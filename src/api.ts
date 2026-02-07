@@ -1,13 +1,12 @@
 // Dashboard API endpoints
 
 import { FastifyInstance } from 'fastify';
-import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'fs';
 import { join, basename } from 'path';
 import type { Config } from './types.js';
 import {
   loadConfig,
   loadRawConfig,
-  getConfigPath,
   saveConfig,
   getSessionsDir,
   getLogsDir,
@@ -36,6 +35,39 @@ function validateAgentId(agentId: string): boolean {
 function validateModelString(model: string): boolean {
   // Allow alphanumeric, hyphens, underscores, dots, slashes (for provider/model format)
   return /^[a-zA-Z0-9_./-]+$/.test(model) && model.length <= 100;
+}
+
+interface TodoItem {
+  id: number;
+  text: string;
+  completed: boolean;
+  lineIndex: number;
+  prefix: string;
+}
+
+function getTodoPath(): string {
+  return process.env.SKIMPYCLAW_TODO_PATH || join(process.cwd(), 'TODO.md');
+}
+
+function parseTodoItems(content: string): TodoItem[] {
+  const lines = content.split('\n');
+  const items: TodoItem[] = [];
+  let id = 0;
+
+  for (let i = 0; i < lines.length; i++) {
+    const match = lines[i].match(/^(\s*-\s*)\[( |x|X)\]\s+(.*)$/);
+    if (!match) continue;
+
+    items.push({
+      id: id++,
+      text: match[3],
+      completed: match[2].toLowerCase() === 'x',
+      lineIndex: i,
+      prefix: match[1],
+    });
+  }
+
+  return items;
 }
 
 export function registerDashboardAPI(fastify: FastifyInstance, config: Config): void {
@@ -298,6 +330,68 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
     const logsDir = getLogsDir();
     const files = collectLogFiles(logsDir).sort((a, b) => b.modified.localeCompare(a.modified));
     return { files };
+  });
+
+  // --- TODOs ---
+  fastify.get('/api/dashboard/todos', async (request, reply) => {
+    const todoPath = getTodoPath();
+    if (!existsSync(todoPath)) {
+      return reply.code(404).send({ error: `TODO file not found: ${todoPath}` });
+    }
+
+    const content = readFileSync(todoPath, 'utf-8');
+    const items = parseTodoItems(content).map(({ prefix: _prefix, lineIndex: _lineIndex, ...item }) => item);
+    const completed = items.filter(i => i.completed).length;
+
+    return {
+      path: todoPath,
+      total: items.length,
+      completed,
+      remaining: items.length - completed,
+      items,
+    };
+  });
+
+  fastify.put<{
+    Params: { id: string };
+    Body: { completed?: boolean };
+  }>('/api/dashboard/todos/:id', async (request, reply) => {
+    const todoId = Number.parseInt(request.params.id, 10);
+    if (Number.isNaN(todoId) || todoId < 0) {
+      return reply.code(400).send({ error: 'Invalid todo id' });
+    }
+
+    const todoPath = getTodoPath();
+    if (!existsSync(todoPath)) {
+      return reply.code(404).send({ error: `TODO file not found: ${todoPath}` });
+    }
+
+    const content = readFileSync(todoPath, 'utf-8');
+    const hadTrailingNewline = content.endsWith('\n');
+    const lines = content.split('\n');
+    const items = parseTodoItems(content);
+    const target = items.find(i => i.id === todoId);
+    if (!target) {
+      return reply.code(404).send({ error: 'TODO item not found' });
+    }
+
+    const nextCompleted = typeof request.body?.completed === 'boolean'
+      ? request.body.completed
+      : !target.completed;
+    lines[target.lineIndex] = `${target.prefix}[${nextCompleted ? 'x' : ' '}] ${target.text}`;
+    const nextContent = lines.join('\n') + (hadTrailingNewline ? '\n' : '');
+    writeFileSync(todoPath, nextContent, 'utf-8');
+
+    const updatedItems = parseTodoItems(nextContent).map(({ prefix: _prefix, lineIndex: _lineIndex, ...item }) => item);
+    const completed = updatedItems.filter(i => i.completed).length;
+    return {
+      updated: true,
+      item: updatedItems.find(i => i.id === todoId),
+      total: updatedItems.length,
+      completed,
+      remaining: updatedItems.length - completed,
+      items: updatedItems,
+    };
   });
 
   fastify.get<{

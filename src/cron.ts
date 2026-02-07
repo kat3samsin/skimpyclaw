@@ -2,7 +2,7 @@
 
 import { Cron } from 'croner';
 import { exec } from 'child_process';
-import { existsSync, mkdirSync, writeFileSync, appendFileSync } from 'fs';
+import { existsSync, mkdirSync, appendFileSync } from 'fs';
 import { join } from 'path';
 import { getLogsDir } from './config.js';
 import type { Config, CronJob } from './types.js';

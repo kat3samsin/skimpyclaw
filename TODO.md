@@ -6,7 +6,7 @@
   - Add migration for existing plaintext secrets and remove/rotate old values.
 - [ ] Dashboard tracking of completed tasks.
 - [ ] Langfuse integration.
-- [ ] Expand Telegram command coverage and polish command UX.
+- [x] Expand Telegram command coverage and polish command UX.
 - [ ] Support additional channels (e.g. Discord) by decoupling channel adapters from core agent runtime.
-- [ ] Add stronger test coverage: unit tests + end-to-end tests.
+- [x] Add stronger test coverage: unit tests + end-to-end tests.
 - [ ] Add browser control capability.
