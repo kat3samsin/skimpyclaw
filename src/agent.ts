@@ -2,8 +2,9 @@
 
 import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync } from 'fs';
 import { join } from 'path';
+import { homedir } from 'os';
 import { getAgentDir } from './config.js';
 import { buildSafeSystemPrompt, sanitizeUserInput } from './security.js';
 import type { Config, ChatMessage, ChatOptions, AgentTurn, Session, ToolConfig } from './types.js';
@@ -46,7 +47,7 @@ export function buildSystemPrompt(agentId: string): string {
   const base = [soul, identity, tools].filter(Boolean).join('\n\n---\n\n');
   const userContext = [user, memory].filter(Boolean).join('\n\n');
 
-  let prompt = buildSafeSystemPrompt(base, userContext);
+  const prompt = buildSafeSystemPrompt(base, userContext);
 
   return prompt;
 }
@@ -109,25 +110,33 @@ export function appendToMemory(agentId: string, entry: string): void {
 
 // --- Codex OAuth ---
 
-const CODEX_AUTH_PATH = '/Users/katre/.codex/auth.json';
+const DEFAULT_CODEX_AUTH_PATH = join(homedir(), '.codex', 'auth.json');
+const DEFAULT_CODEX_BASE_URL = 'https://chatgpt.com/backend-api';
+let codexAuthPath = DEFAULT_CODEX_AUTH_PATH;
+let codexBaseUrl = DEFAULT_CODEX_BASE_URL;
 
-function loadCodexToken(): string | null {
-  if (!existsSync(CODEX_AUTH_PATH)) {
-    console.log('[codex] No auth file at ~/.codex/auth.json');
+interface CodexAuth {
+  accessToken: string;
+  accountId: string;
+}
+
+function loadCodexAuth(authPath: string = codexAuthPath): CodexAuth | null {
+  if (!existsSync(authPath)) {
+    console.log(`[codex] No auth file at ${authPath}`);
     return null;
   }
 
   try {
-    const raw = JSON.parse(readFileSync(CODEX_AUTH_PATH, 'utf-8'));
+    const raw = JSON.parse(readFileSync(authPath, 'utf-8'));
     const token = raw?.tokens?.access_token;
     if (!token) {
       console.log('[codex] No access_token in auth file');
       return null;
     }
 
-    // Check if token is expired (JWT: header.payload.signature)
+    // Decode JWT to check expiry and extract account ID
     const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
-    const exp = payload.exp * 1000; // JWT exp is in seconds
+    const exp = payload.exp * 1000;
     const now = Date.now();
     if (now > exp) {
       const expiredAgo = Math.round((now - exp) / 60000);
@@ -135,13 +144,186 @@ function loadCodexToken(): string | null {
       return null;
     }
 
+    // Extract account ID from JWT claims
+    const authClaims = payload['https://api.openai.com/auth'];
+    const accountId = authClaims?.chatgpt_account_id;
+    if (!accountId) {
+      console.error('[codex] No account ID in token');
+      return null;
+    }
+
     const expiresIn = Math.round((exp - now) / 60000);
-    console.log(`[codex] Token valid (expires in ${expiresIn} min)`);
-    return token;
+    console.log(`[codex] Token valid (expires in ${expiresIn} min, account: ${accountId.slice(0, 8)}...)`);
+    return { accessToken: token, accountId };
   } catch (error) {
     console.error('[codex] Failed to read auth file:', error);
     return null;
   }
+}
+
+let codexAuth: CodexAuth | null = null;
+
+/**
+ * Convert Anthropic tool definitions to OpenAI function format for Responses API.
+ */
+function getCodexToolDefinitions(): any[] {
+  return TOOL_DEFINITIONS.map(t => ({
+    type: 'function',
+    name: t.name,
+    description: t.description,
+    parameters: t.input_schema,
+  }));
+}
+
+/**
+ * Parse an SSE response from the Codex backend.
+ * Extracts function calls from the completed response object (not from delta events)
+ * because call_id is only reliably available on the final output items.
+ */
+function parseCodexSSE(text: string): { outputText: string; functionCalls: any[]; response: any | null } {
+  let outputText = '';
+  let completedResponse: any = null;
+
+  for (const line of text.split('\n')) {
+    if (!line.startsWith('data: ')) continue;
+    const data = line.slice(6).trim();
+    if (data === '[DONE]') break;
+    try {
+      const event = JSON.parse(data);
+      if (event.type === 'response.output_text.delta') {
+        outputText += event.delta || '';
+      } else if (event.type === 'response.completed' && event.response) {
+        completedResponse = event.response;
+        if (event.response.output_text) outputText = event.response.output_text;
+      }
+    } catch { /* skip non-JSON lines */ }
+  }
+
+  // Extract function calls from completed response output items
+  const functionCalls: any[] = [];
+  if (completedResponse?.output) {
+    for (const item of completedResponse.output) {
+      if (item.type === 'function_call') {
+        functionCalls.push({
+          callId: item.call_id,
+          name: item.name,
+          arguments: item.arguments,
+        });
+      }
+    }
+  }
+
+  return { outputText, functionCalls, response: completedResponse };
+}
+
+/**
+ * Make a single Codex API call. Returns raw SSE text.
+ */
+async function codexFetch(body: any): Promise<string> {
+  if (!codexAuth) {
+    throw new Error('Codex auth not initialized. Run "codex" CLI to authenticate.');
+  }
+
+  const baseUrl = codexBaseUrl || DEFAULT_CODEX_BASE_URL;
+  const response = await fetch(`${baseUrl}/codex/responses`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${codexAuth.accessToken}`,
+      'chatgpt-account-id': codexAuth.accountId,
+      'OpenAI-Beta': 'responses=experimental',
+      'originator': 'codex_cli_rs',
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => 'unknown');
+    throw new Error(`Codex API ${response.status}: ${errorText}`);
+  }
+
+  return response.text();
+}
+
+/**
+ * Call the Codex Responses API via ChatGPT backend.
+ * Supports tool use via agentic loop.
+ */
+async function codexChat(messages: ChatMessage[], model: string, toolConfig?: ToolConfig): Promise<{ response: string; toolCalls: string[] }> {
+  // Build input — system messages go to `instructions`, rest to `input`
+  let instructions = 'You are a helpful assistant.';
+  const input: any[] = [];
+  for (const m of messages) {
+    if (m.role === 'system') {
+      instructions = m.content;
+    } else {
+      const contentType = m.role === 'assistant' ? 'output_text' : 'input_text';
+      input.push({
+        type: 'message',
+        role: m.role,
+        content: [{ type: contentType, text: m.content }],
+      });
+    }
+  }
+
+  const maxIterations = toolConfig?.maxIterations || 20;
+  const tools = toolConfig?.enabled ? getCodexToolDefinitions() : undefined;
+  const toolLog: string[] = [];
+
+  for (let i = 0; i < maxIterations; i++) {
+    const body: any = {
+      model,
+      instructions,
+      input,
+      store: false,
+      stream: true,
+      reasoning: { effort: 'medium', summary: 'auto' },
+      include: ['reasoning.encrypted_content'],
+    };
+    if (tools) body.tools = tools;
+
+    console.log(`[codex] Iteration ${i + 1}/${maxIterations} (model: ${model})`);
+    const sseText = await codexFetch(body);
+    const parsed = parseCodexSSE(sseText);
+
+    // No function calls — we're done
+    if (parsed.functionCalls.length === 0) {
+      return { response: parsed.outputText || '[No response from Codex]', toolCalls: toolLog };
+    }
+
+    // Add the assistant's output items to input for next turn
+    if (parsed.response?.output) {
+      for (const item of parsed.response.output) {
+        input.push(item);
+      }
+    }
+
+    // Execute each function call and add results to input
+    for (const fc of parsed.functionCalls) {
+      let args: Record<string, any>;
+      try {
+        args = JSON.parse(fc.arguments);
+      } catch {
+        args = {};
+      }
+
+      const inputStr = fc.arguments.slice(0, 200);
+      console.log(`[codex:tools] -> ${fc.name}(${inputStr})`);
+      const result = await executeTool(fc.name, args, toolConfig!);
+      const resultPreview = result.slice(0, 200) + (result.length > 200 ? '...' : '');
+      console.log(`[codex:tools] <- ${resultPreview}`);
+      toolLog.push(`${fc.name}(${inputStr}) → ${resultPreview}`);
+
+      input.push({
+        type: 'function_call_output',
+        call_id: fc.callId,
+        output: result,
+      });
+    }
+  }
+
+  console.warn(`[codex:tools] Max iterations (${maxIterations}) reached`);
+  return { response: '[Tool use loop reached maximum iterations]', toolCalls: toolLog };
 }
 
 // --- Model Providers ---
@@ -149,7 +331,7 @@ function loadCodexToken(): string | null {
 let anthropicClient: Anthropic | null = null;
 // Map of provider name → OpenAI client (supports openai, openrouter, groq, together, etc.)
 const openaiClients = new Map<string, OpenAI>();
-// Providers that use the Responses API instead of Chat Completions
+// Providers that use the Codex Responses API (ChatGPT backend)
 const responsesApiProviders = new Set<string>();
 
 export function initProviders(config: Config): void {
@@ -176,28 +358,31 @@ export function initProviders(config: Config): void {
     anthropicClient = new Anthropic(opts);
   }
 
-  // Initialize all OpenAI-compatible providers
+  // Initialize all non-Anthropic providers
   for (const [name, providerConfig] of Object.entries(config.models.providers)) {
     if (name === 'anthropic' || !providerConfig) continue;
 
-    // Resolve API key — support reading from Codex OAuth
-    let apiKey = providerConfig.apiKey;
+    // Codex OAuth uses ChatGPT backend, not OpenAI API
     if (providerConfig.authToken === 'codex') {
-      apiKey = loadCodexToken() || undefined;
-      if (!apiKey) {
+      codexAuthPath = providerConfig.authPath || DEFAULT_CODEX_AUTH_PATH;
+      codexBaseUrl = providerConfig.baseURL || DEFAULT_CODEX_BASE_URL;
+      codexAuth = loadCodexAuth();
+      if (codexAuth) {
+        responsesApiProviders.add(name);
+        console.log(`[providers] Initialized ${name} [codex ChatGPT backend]`);
+      } else {
         console.log(`[providers] Skipping ${name} — no Codex OAuth token found`);
-        continue;
       }
+      continue;
     }
+
+    const apiKey = providerConfig.apiKey;
     if (!apiKey) continue;
 
     const opts: Record<string, any> = { apiKey };
     if (providerConfig.baseURL) opts.baseURL = providerConfig.baseURL;
     openaiClients.set(name, new OpenAI(opts));
-    if (providerConfig.authToken === 'codex') {
-      responsesApiProviders.add(name);
-    }
-    console.log(`[providers] Initialized ${name}${providerConfig.baseURL ? ` (${providerConfig.baseURL})` : ''}${responsesApiProviders.has(name) ? ' [responses API]' : ''}`);
+    console.log(`[providers] Initialized ${name}${providerConfig.baseURL ? ` (${providerConfig.baseURL})` : ''}`);
   }
 }
 
@@ -230,9 +415,8 @@ function stripProvider(model: string): string {
   const slashIdx = model.indexOf('/');
   if (slashIdx > 0) {
     const prefix = model.slice(0, slashIdx);
-    // For OpenRouter etc., the model ID includes sub-paths like "google/gemini-2.0-flash"
     // Only strip the first prefix if it matches a known provider
-    if (openaiClients.has(prefix) || prefix === 'anthropic') {
+    if (openaiClients.has(prefix) || responsesApiProviders.has(prefix) || prefix === 'anthropic') {
       return model.slice(slashIdx + 1);
     }
   }
@@ -298,32 +482,15 @@ export async function chat(
     return textContent?.text || '';
   }
 
-  // All non-Anthropic providers use OpenAI-compatible API
+  // Codex OAuth providers use ChatGPT backend (not OpenAI API)
+  if (responsesApiProviders.has(provider)) {
+    const result = await codexChat(messages, modelId);
+    return result.response;
+  }
+
+  // All other non-Anthropic providers use OpenAI-compatible API
   const client = openaiClients.get(provider);
   if (client) {
-    // Codex / Responses API providers use client.responses.create()
-    if (responsesApiProviders.has(provider)) {
-      // Build input: system instruction + conversation as structured items
-      const input: any[] = [];
-      const systemMsg = messages.find(m => m.role === 'system');
-      if (systemMsg) {
-        input.push({ role: 'system', content: systemMsg.content });
-      }
-      for (const m of messages) {
-        if (m.role === 'system') continue;
-        input.push({ role: m.role, content: m.content });
-      }
-
-      console.log(`[agent] Using Responses API for ${provider}/${modelId}`);
-      const response = await client.responses.create({
-        model: modelId,
-        input,
-      });
-
-      return response.output_text || '';
-    }
-
-    // Standard Chat Completions API
     const openaiMessages = messages.map(m => ({
       role: m.role,
       content: m.content,
@@ -471,22 +638,30 @@ export async function runAgentTurn(
   const model = modelOverride || agentConfig.model;
   const chatOptions: ChatOptions = { model, thinking: agentConfig.thinking };
 
-  // Determine if we can use tools (only Anthropic supports tool_use via our API)
   const resolvedModel = resolveModel(model, config);
   const provider = getProvider(resolvedModel);
-  const canUseTools = provider === 'anthropic' && !!anthropicClient;
+  const modelId = stripProvider(resolvedModel);
 
   let response: string;
   let toolCalls: string[] = [];
-  if (toolConfig?.enabled && canUseTools) {
+
+  if (toolConfig?.enabled && provider === 'anthropic' && !!anthropicClient) {
+    // Anthropic tool_use loop
     console.log(`[agent] Running with tools enabled (paths: ${toolConfig.allowedPaths.join(', ')})`);
     const result = await chatWithTools(messages, chatOptions, config, toolConfig);
     response = result.response;
     toolCalls = result.toolCalls;
+  } else if (toolConfig?.enabled && responsesApiProviders.has(provider)) {
+    // Codex tool_use loop via Responses API
+    console.log(`[agent] Running Codex with tools enabled (paths: ${toolConfig.allowedPaths.join(', ')})`);
+    const result = await codexChat(messages, modelId, toolConfig);
+    response = result.response;
+    toolCalls = result.toolCalls;
+  } else if (responsesApiProviders.has(provider)) {
+    // Codex without tools
+    const result = await codexChat(messages, modelId);
+    response = result.response;
   } else {
-    if (toolConfig?.enabled && !canUseTools) {
-      console.log(`[agent] Tools requested but ${provider} doesn't support tool_use — running without tools`);
-    }
     response = await chat(messages, chatOptions, config);
   }
 
@@ -511,7 +686,6 @@ export function hasBootstrap(agentId: string): boolean {
 export function deleteBootstrap(agentId: string): void {
   const path = join(getAgentDir(agentId), 'BOOTSTRAP.md');
   if (existsSync(path)) {
-    const { unlinkSync } = require('fs');
     unlinkSync(path);
   }
 }

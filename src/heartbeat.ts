@@ -1,6 +1,8 @@
 // Heartbeat: periodic health check that alerts via Telegram when something needs attention
 
 import type { Config, ToolConfig } from './types.js';
+import { join } from 'path';
+import { homedir } from 'os';
 import { runAgentTurn } from './agent.js';
 import { sendProactiveMessage, isSilenced } from './telegram.js';
 
@@ -9,13 +11,25 @@ let running = false;
 
 const DEFAULT_HEARTBEAT_TOOLS: ToolConfig = {
   enabled: true,
-  allowedPaths: [
-    '/Users/katre/Library/Mobile Documents/iCloud~md~obsidian/Documents/2ndBrain',
-    '/Users/katre/.skimpyclaw',
-  ],
+  allowedPaths: [join(homedir(), '.skimpyclaw'), process.cwd()],
   maxIterations: 10,
   bashTimeout: 15000,
 };
+
+function getHeartbeatTools(config: Config): ToolConfig {
+  if (config.heartbeat.tools) {
+    return config.heartbeat.tools;
+  }
+
+  if (config.channels.telegram.defaultAllowedPaths?.length) {
+    return {
+      ...DEFAULT_HEARTBEAT_TOOLS,
+      allowedPaths: config.channels.telegram.defaultAllowedPaths,
+    };
+  }
+
+  return DEFAULT_HEARTBEAT_TOOLS;
+}
 
 export function initHeartbeat(config: Config): void {
   const { heartbeat } = config;
@@ -55,7 +69,7 @@ export async function runHeartbeatCheck(config: Config): Promise<string> {
       config.heartbeat.prompt,
       config,
       config.heartbeat.model,
-      DEFAULT_HEARTBEAT_TOOLS,
+      getHeartbeatTools(config),
     );
 
     if (response.includes('HEARTBEAT_OK')) {
