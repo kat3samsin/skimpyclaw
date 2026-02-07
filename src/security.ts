@@ -113,7 +113,14 @@ export function redactSecrets(obj: Record<string, any>): Record<string, any> {
   for (const [key, value] of Object.entries(obj)) {
     if (SECRET_KEYS.some(s => key.toLowerCase().includes(s))) {
       redacted[key] = '[REDACTED]';
-    } else if (value && typeof value === 'object' && !Array.isArray(value)) {
+    } else if (Array.isArray(value)) {
+      redacted[key] = value.map((item) => {
+        if (item && typeof item === 'object') {
+          return redactSecrets(item as Record<string, any>);
+        }
+        return item;
+      });
+    } else if (value && typeof value === 'object') {
       redacted[key] = redactSecrets(value);
     } else {
       redacted[key] = value;

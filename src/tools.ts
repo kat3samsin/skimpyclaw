@@ -1,7 +1,7 @@
 // Tool definitions and executors for Anthropic API tool_use
 
 import { readFileSync, writeFileSync, readdirSync, existsSync, statSync, mkdirSync } from 'fs';
-import { join, resolve, dirname } from 'path';
+import { join, resolve, dirname, sep } from 'path';
 import { exec } from 'child_process';
 import { isBashCommandSafe } from './security.js';
 import type { ToolConfig } from './types.js';
@@ -84,7 +84,10 @@ export const TOOL_DEFINITIONS = [
 
 function isPathAllowed(filePath: string, allowedPaths: string[]): boolean {
   const resolved = resolve(filePath);
-  return allowedPaths.some(allowed => resolved.startsWith(resolve(allowed)));
+  return allowedPaths.some((allowed) => {
+    const allowedRoot = resolve(allowed);
+    return resolved === allowedRoot || resolved.startsWith(`${allowedRoot}${sep}`);
+  });
 }
 
 // --- Tool Executor ---
