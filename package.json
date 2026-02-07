@@ -1,0 +1,32 @@
+{
+  "name": "skimpyclaw",
+  "version": "0.1.0",
+  "description": "Lightweight personal AI assistant with Telegram integration",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "dev": "tsx watch src/index.ts",
+    "setup": "tsx src/setup.ts",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.52.0",
+    "@mariozechner/pi-ai": "^0.51.6",
+    "croner": "^8.0.0",
+    "dotenv": "^16.4.0",
+    "fastify": "^4.26.0",
+    "grammy": "^1.21.1",
+    "openai": "^4.47.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0",
+    "vitest": "^4.0.18"
+  }
+}
