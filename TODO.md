@@ -10,3 +10,4 @@
 - [ ] Support additional channels (e.g. Discord) by decoupling channel adapters from core agent runtime.
 - [x] Add stronger test coverage: unit tests + end-to-end tests.
 - [ ] Add browser control capability.
+- [] OpenRouter, Minimax, and Kimi

@@ -153,12 +153,12 @@ Execute a shell command. Parameters: \`command\` (string, required), \`cwd\` (st
 - Config: ~/.skimpyclaw/config.json
 - Agent templates: ~/.skimpyclaw/agents/
 
-({vault} = /Users/katre/Library/Mobile Documents/iCloud~md~obsidian/Documents/2ndBrain)
+({vault} = ${VAULT_PATH})
 
 ## Vault Workflows
 
 When you need vault-specific instructions, read the vault's CLAUDE.md:
-\`Read({ file_path: "/Users/katre/Library/Mobile Documents/iCloud~md~obsidian/Documents/2ndBrain/CLAUDE.md" })\`
+\`Read({ file_path: "${VAULT_PATH}/CLAUDE.md" })\`
 `,
   },
   general: {

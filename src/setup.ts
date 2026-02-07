@@ -82,7 +82,7 @@ export async function runSetup(): Promise<void> {
 
     // 5. Your Name
     console.log('5. Your Name');
-    const userName = (await ask(rl, '   What should I call you? [Katrina]: ')) || 'Katrina';
+    const userName = (await ask(rl, '   What should I call you? ')) || 'User';
     console.log(`   ✓ ${userName}\n`);
 
     // 6. Timezone
@@ -210,7 +210,7 @@ export async function runSetup(): Promise<void> {
     if (existsSync(userMdPath)) {
       // Will be created from template, but let's create a basic one
     }
-    writeFileSync(userMdPath, `# USER.md - About ${userName}\n\nName: ${userName}\n\n## Preferences\n\n- Direct communication, no fluff\n- Obsidian vault for notes (PARA method)\n- Team Forno at Automattic\n\n## Routines\n\n- Morning: Check PRs, Linear, Slack\n- EOD: Review completed work, plan tomorrow\n`);
+    writeFileSync(userMdPath, `# USER.md - About ${userName}\n\nName: ${userName}\n\n## Preferences\n\n- Direct communication, no fluff\n\n## Routines\n\n- Morning: Review tasks and messages\n- EOD: Review completed work, plan tomorrow\n`);
 
     // Create launchd plist from template
     const plistPath = join(homedir(), 'Library', 'LaunchAgents', `${GATEWAY_PLIST_LABEL}.plist`);
