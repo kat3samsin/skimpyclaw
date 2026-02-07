@@ -1,7 +1,7 @@
 // Interactive setup wizard for SkimpyClaw
 
 import * as readline from 'readline';
-import { writeFileSync, mkdirSync, existsSync, copyFileSync, readdirSync } from 'fs';
+import { writeFileSync, mkdirSync, existsSync, copyFileSync, readdirSync, readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { homedir } from 'os';
 import { fileURLToPath } from 'url';
@@ -12,6 +12,8 @@ const __dirname = dirname(__filename);
 const CONFIG_DIR = join(homedir(), '.skimpyclaw');
 const AGENTS_DIR = join(CONFIG_DIR, 'agents', 'main');
 const TEMPLATES_DIR = join(__dirname, '..', 'templates');
+const GATEWAY_PLIST_LABEL = 'com.skimpyclaw.gateway';
+const GATEWAY_PLIST_TEMPLATE = join(__dirname, '..', 'com.skimpyclaw.gateway.plist.example');
 
 function ask(rl: readline.Interface, question: string): Promise<string> {
   return new Promise((resolve) => {
@@ -24,6 +26,26 @@ function ask(rl: readline.Interface, question: string): Promise<string> {
 function maskInput(input: string): string {
   if (input.length <= 8) return '****';
   return input.slice(0, 4) + '****' + input.slice(-4);
+}
+
+function renderGatewayPlist(workspaceDir: string): string {
+  if (!existsSync(GATEWAY_PLIST_TEMPLATE)) {
+    throw new Error(`Gateway launchd template not found: ${GATEWAY_PLIST_TEMPLATE}`);
+  }
+
+  const nodeBin = process.execPath;
+  const nodeBinDir = dirname(nodeBin);
+  const homeDir = homedir();
+  const pnpmBinDir = process.env.PNPM_HOME || join(homeDir, 'Library', 'pnpm');
+  const systemPath = process.env.PATH || '/usr/local/bin:/usr/bin:/bin';
+
+  return readFileSync(GATEWAY_PLIST_TEMPLATE, 'utf-8')
+    .replaceAll('__NODE_BIN__', nodeBin)
+    .replaceAll('__NODE_BIN_DIR__', nodeBinDir)
+    .replaceAll('__PNPM_BIN_DIR__', pnpmBinDir)
+    .replaceAll('__SYSTEM_PATH__', systemPath)
+    .replaceAll('__REPO_DIR__', workspaceDir)
+    .replaceAll('__HOME_DIR__', homeDir);
 }
 
 export async function runSetup(): Promise<void> {
@@ -68,7 +90,6 @@ export async function runSetup(): Promise<void> {
     const timezone = (await ask(rl, '   Enter timezone [America/Chicago]: ')) || 'America/Chicago';
     console.log(`   ✓ ${timezone}\n`);
 
-    const launchdLabel = 'com.skimpyclaw';
     const workspaceDir = process.cwd();
 
     // Create directories
@@ -191,9 +212,9 @@ export async function runSetup(): Promise<void> {
     }
     writeFileSync(userMdPath, `# USER.md - About ${userName}\n\nName: ${userName}\n\n## Preferences\n\n- Direct communication, no fluff\n- Obsidian vault for notes (PARA method)\n- Team Forno at Automattic\n\n## Routines\n\n- Morning: Check PRs, Linear, Slack\n- EOD: Review completed work, plan tomorrow\n`);
 
-    // Create launchd plist
-    const plistPath = join(homedir(), 'Library', 'LaunchAgents', `${launchdLabel}.plist`);
-    const plistContent = `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0">\n<dict>\n    <key>Label</key>\n    <string>${launchdLabel}</string>\n    <key>ProgramArguments</key>\n    <array>\n        <string>${process.execPath}</string>\n        <string>--import</string>\n        <string>tsx</string>\n        <string>${join(workspaceDir, 'src', 'index.ts')}</string>\n    </array>\n    <key>RunAtLoad</key>\n    <true/>\n    <key>KeepAlive</key>\n    <dict>\n        <key>SuccessfulExit</key>\n        <false/>\n    </dict>\n    <key>WorkingDirectory</key>\n    <string>${workspaceDir}</string>\n    <key>StandardOutPath</key>\n    <string>${join(CONFIG_DIR, 'logs', 'stdout.log')}</string>\n    <key>StandardErrorPath</key>\n    <string>${join(CONFIG_DIR, 'logs', 'stderr.log')}</string>\n    <key>EnvironmentVariables</key>\n    <dict>\n        <key>PATH</key>\n        <string>/usr/local/bin:/usr/bin:/bin:${join(homedir(), '.local', 'share', 'pnpm')}</string>\n        <key>HOME</key>\n        <string>${homedir()}</string>\n        <key>ANTHROPIC_API_KEY</key>\n        <string>${anthropicKey}</string>\n        <key>TELEGRAM_BOT_TOKEN</key>\n        <string>${telegramToken}</string>\n    </dict>\n</dict>\n</plist>`;
+    // Create launchd plist from template
+    const plistPath = join(homedir(), 'Library', 'LaunchAgents', `${GATEWAY_PLIST_LABEL}.plist`);
+    const plistContent = renderGatewayPlist(workspaceDir);
 
     mkdirSync(dirname(plistPath), { recursive: true });
     writeFileSync(plistPath, plistContent);
@@ -203,7 +224,7 @@ export async function runSetup(): Promise<void> {
     console.log('Next steps:');
     console.log('1. Review templates in ~/.skimpyclaw/agents/main/');
     console.log('2. Start the daemon:');
-    console.log(`   launchctl load ~/Library/LaunchAgents/${launchdLabel}.plist`);
+    console.log(`   launchctl load ~/Library/LaunchAgents/${GATEWAY_PLIST_LABEL}.plist`);
     console.log('3. Check health:');
     console.log('   curl http://localhost:18790/health');
     console.log('4. Send /start to your Telegram bot');

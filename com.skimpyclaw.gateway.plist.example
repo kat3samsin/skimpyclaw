@@ -12,22 +12,22 @@
     <true/>
     <key>ProgramArguments</key>
     <array>
-      <string>/Users/katre/.nvm/versions/node/v22.14.0/bin/node</string>
-      <string>/Users/katre/Sites/skimpyclaw/node_modules/.bin/tsx</string>
-      <string>/Users/katre/Sites/skimpyclaw/src/index.ts</string>
+      <string>__NODE_BIN__</string>
+      <string>__REPO_DIR__/node_modules/.bin/tsx</string>
+      <string>__REPO_DIR__/src/index.ts</string>
     </array>
     <key>WorkingDirectory</key>
-    <string>/Users/katre/Sites/skimpyclaw</string>
+    <string>__REPO_DIR__</string>
     <key>EnvironmentVariables</key>
     <dict>
       <key>SKIMPYCLAW_LAUNCHD</key>
       <string>1</string>
       <key>PATH</key>
-      <string>/Users/katre/.nvm/versions/node/v22.14.0/bin:/Users/katre/Library/pnpm:/usr/local/bin:/usr/bin:/bin</string>
+      <string>__NODE_BIN_DIR__:__PNPM_BIN_DIR__:__SYSTEM_PATH__</string>
     </dict>
     <key>StandardOutPath</key>
-    <string>/Users/katre/.skimpyclaw/logs/gateway.stdout.log</string>
+    <string>__HOME_DIR__/.skimpyclaw/logs/gateway.stdout.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/katre/.skimpyclaw/logs/gateway.stderr.log</string>
+    <string>__HOME_DIR__/.skimpyclaw/logs/gateway.stderr.log</string>
   </dict>
 </plist>

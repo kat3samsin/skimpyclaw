@@ -139,7 +139,6 @@ This creates and populates:
 - `~/.skimpyclaw/config.json`
 - `~/.skimpyclaw/.env`
 - `~/.skimpyclaw/agents/main/*.md` (from `templates/`)
-- `~/Library/LaunchAgents/com.skimpyclaw.plist`
 
 3. Start locally:
 
@@ -181,9 +180,7 @@ Common commands:
 
 - `skimpyclaw onboard` - run onboarding wizard
 - `skimpyclaw start` - start in foreground
-- `skimpyclaw start --daemon` - load launchd daemon (macOS)
-- `skimpyclaw stop` - stop launchd daemon
-- `skimpyclaw status` - show daemon + gateway status
+- `skimpyclaw status` - show service + gateway status
 - `skimpyclaw logs --file stdout --lines 200 --follow` - tail logs
 - `skimpyclaw config get gateway.port`
 - `skimpyclaw config set gateway.port 18790`

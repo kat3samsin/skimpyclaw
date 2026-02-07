@@ -12,7 +12,7 @@ import { runSetup } from './setup.js';
 
 const APP_NAME = 'skimpyclaw';
 const DEFAULT_PORT = 18790;
-const LAUNCHD_LABEL = 'com.katre.skimpyclaw';
+const LAUNCHD_LABEL = 'com.skimpyclaw.gateway';
 const LAUNCHD_PLIST = join(homedir(), 'Library', 'LaunchAgents', `${LAUNCHD_LABEL}.plist`);
 
 function printHelp(): void {

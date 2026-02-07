@@ -8,3 +8,4 @@ config/
 .env
 .env.*
 auth.json
+com.skimpyclaw.gateway.plist
