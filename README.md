@@ -114,10 +114,10 @@ dist/             # compiled output
 pnpm install
 ```
 
-2. Run setup wizard:
+2. Run onboarding:
 
 ```bash
-pnpm run setup
+pnpm run cli -- onboard
 ```
 
 This creates and populates:
@@ -147,10 +147,35 @@ curl http://127.0.0.1:18790/health
 
 - `pnpm run start` - run once
 - `pnpm run dev` - run with watch mode
-- `pnpm run setup` - interactive setup
+- `pnpm run setup` - interactive setup (legacy)
+- `pnpm run onboard` - interactive onboarding via CLI
+- `pnpm run cli -- <command>` - run CLI commands
 - `pnpm run build` - compile TypeScript to `dist/`
 - `pnpm run typecheck` - type-check only
 - `pnpm run test` - run Vitest
+
+## CLI
+
+After build, the package exposes a `skimpyclaw` binary. During development:
+
+```bash
+pnpm run cli -- help
+```
+
+Common commands:
+
+- `skimpyclaw onboard` - run onboarding wizard
+- `skimpyclaw start` - start in foreground
+- `skimpyclaw start --daemon` - load launchd daemon (macOS)
+- `skimpyclaw stop` - stop launchd daemon
+- `skimpyclaw status` - show daemon + gateway status
+- `skimpyclaw logs --file stdout --lines 200 --follow` - tail logs
+- `skimpyclaw config get gateway.port`
+- `skimpyclaw config set gateway.port 18790`
+- `skimpyclaw model smart`
+- `skimpyclaw send "plan my day"`
+- `skimpyclaw cron list`
+- `skimpyclaw cron run morning`
 
 ## Configuration overview
 
