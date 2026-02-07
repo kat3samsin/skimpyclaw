@@ -3,10 +3,15 @@
   "version": "0.1.0",
   "description": "Lightweight personal AI assistant with Telegram integration",
   "type": "module",
+  "bin": {
+    "skimpyclaw": "dist/cli.js"
+  },
   "scripts": {
+    "cli": "tsx src/cli.ts",
     "start": "tsx src/index.ts",
     "dev": "tsx watch src/index.ts",
     "setup": "tsx src/setup.ts",
+    "onboard": "tsx src/cli.ts onboard",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
