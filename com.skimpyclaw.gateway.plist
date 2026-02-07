@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>com.skimpyclaw.gateway</string>
+    <key>Comment</key>
+    <string>SkimpyClaw personal AI assistant gateway</string>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>ProgramArguments</key>
+    <array>
+      <string>/Users/katre/.nvm/versions/node/v22.14.0/bin/node</string>
+      <string>/Users/katre/Sites/skimpyclaw/node_modules/.bin/tsx</string>
+      <string>/Users/katre/Sites/skimpyclaw/src/index.ts</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/katre/Sites/skimpyclaw</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+      <key>SKIMPYCLAW_LAUNCHD</key>
+      <string>1</string>
+      <key>PATH</key>
+      <string>/Users/katre/.nvm/versions/node/v22.14.0/bin:/Users/katre/Library/pnpm:/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>/Users/katre/.skimpyclaw/logs/gateway.stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/katre/.skimpyclaw/logs/gateway.stderr.log</string>
+  </dict>
+</plist>
