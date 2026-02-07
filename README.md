@@ -1,4 +1,7 @@
-# SkimpyClaw
+# SkimpyClaw 👙🦞
+
+SkimpyClaw is a tiny, cheeky, mini-"me" inspired by OpenClaw.
+Think: pocket-sized brain, lobster attitude, zero chill for boring workflows.
 
 Lightweight personal AI assistant with:
 - Telegram chat interface
