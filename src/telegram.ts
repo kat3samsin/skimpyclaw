@@ -12,6 +12,8 @@ import { runAgentTurn } from './agent.js';
 import { getCronJobs, runCronJob } from './cron.js';
 import { getCurrentModel, setCurrentModel, getLastMessage } from './gateway.js';
 import { runHeartbeatCheck } from './heartbeat.js';
+import { initSubagentSystem, dispatchSubagent, cancelTask, getActiveTasks, getRecentTasks, getPresetDescriptions } from './subagent.js';
+import type { SubagentType } from './types.js';
 
 const LAUNCHD_LABEL = 'com.skimpyclaw.gateway';
 
@@ -28,6 +30,9 @@ const BOT_COMMANDS: { command: string; description: string }[] = [
   { command: 'compact', description: 'Compress conversation history' },
   { command: 'silence', description: 'Pause proactive messages' },
   { command: 'cron', description: 'List or run scheduled jobs' },
+  { command: 'agent', description: 'Run a background agent task' },
+  { command: 'tasks', description: 'Show active/recent agent tasks' },
+  { command: 'cancel', description: 'Cancel a running agent task' },
   { command: 'heartbeat', description: 'Trigger heartbeat check' },
   { command: 'restart', description: 'Restart the gateway' },
 ];
@@ -160,6 +165,12 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
   }
 
   bot = new Bot(cfg.channels.telegram.token);
+
+  // Initialize subagent system with message delivery callback
+  initSubagentSystem(async (chatId: number, message: string) => {
+    if (!bot) return;
+    await sendLongMessage({ reply: (text: string) => bot!.api.sendMessage(chatId, text) } as any, message);
+  });
 
   // Register commands with Telegram for the / menu
   bot.api.setMyCommands(BOT_COMMANDS).catch((err) => {
@@ -297,6 +308,108 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
     } else {
       await ctx.reply('🦞 Restarting (dev mode)...');
       setTimeout(() => process.exit(0), 500);
+    }
+  });
+
+  // /agent command — dispatch a background agent task
+  bot.command('agent', async (ctx) => {
+    const raw = ctx.match.trim();
+    if (!raw) {
+      const presets = getPresetDescriptions();
+      await ctx.reply(
+        `Usage: /agent <type> [model:<alias>] <prompt>\n\nTypes:\n${presets}\n\n` +
+        `Example: /agent coding list TODOs in the codebase\n` +
+        `Example: /agent research model:claude-opus summarize my daily notes`
+      );
+      return;
+    }
+
+    // Parse: <type> [model:<alias>] <prompt>
+    const parts = raw.split(/\s+/);
+    const type = parts[0] as SubagentType;
+    if (!['coding', 'research', 'general'].includes(type)) {
+      await ctx.reply(`Unknown type: ${type}. Use: coding, research, general`);
+      return;
+    }
+
+    let modelOverride: string | undefined;
+    let promptStart = 1;
+
+    if (parts[1]?.startsWith('model:')) {
+      const alias = parts[1].slice(6);
+      modelOverride = cfg.models.aliases[alias] || alias;
+      promptStart = 2;
+    }
+
+    const prompt = parts.slice(promptStart).join(' ');
+    if (!prompt) {
+      await ctx.reply('Missing prompt. What should the agent do?');
+      return;
+    }
+
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
+
+    try {
+      const history = getHistory(chatId);
+      const task = dispatchSubagent(type, prompt, chatId, cfg, modelOverride, history);
+      await ctx.reply(
+        `🚀 Agent ${task.id} dispatched (${task.type}, model: ${task.model})\n` +
+        `Prompt: ${prompt.slice(0, 100)}${prompt.length > 100 ? '...' : ''}\n\n` +
+        `I'll send the result when it's done. Use /tasks to check status.`
+      );
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      await ctx.reply(`Error: ${msg}`);
+    }
+  });
+
+  // /tasks command — show active and recent agent tasks
+  bot.command('tasks', async (ctx) => {
+    const active = getActiveTasks();
+    const recent = getRecentTasks(5);
+
+    if (recent.length === 0) {
+      await ctx.reply('No agent tasks yet. Use /agent to start one.');
+      return;
+    }
+
+    const formatTask = (t: typeof recent[0]) => {
+      const elapsed = ((t.completedAt || new Date()).getTime() - t.createdAt.getTime()) / 1000;
+      const elapsedStr = elapsed < 60 ? `${Math.round(elapsed)}s` : `${Math.round(elapsed / 60)}m`;
+      const status = {
+        pending: '⏳ Pending',
+        running: `🔄 Running (${elapsedStr})`,
+        completed: `✅ Done (${elapsedStr})`,
+        failed: `❌ Failed (${elapsedStr})`,
+        cancelled: '🚫 Cancelled',
+      }[t.status];
+      const promptPreview = t.prompt.slice(0, 60) + (t.prompt.length > 60 ? '...' : '');
+      return `${t.id}: ${status} [${t.type}] ${promptPreview}`;
+    };
+
+    const lines = recent.map(formatTask).join('\n');
+    await ctx.reply(`Agent tasks:\n\n${lines}`);
+  });
+
+  // /cancel command — cancel a running agent task
+  bot.command('cancel', async (ctx) => {
+    const id = ctx.match.trim();
+    if (!id) {
+      await ctx.reply('Usage: /cancel <task-id>\nExample: /cancel t1');
+      return;
+    }
+
+    const task = cancelTask(id);
+    if (!task) {
+      await ctx.reply(`No task found: ${id}`);
+      return;
+    }
+
+    if (task.status === 'cancelled') {
+      await ctx.reply(`Cancelled ${id}.`);
+    } else {
+      await ctx.reply(`Task ${id} is already ${task.status}.`);
     }
   });
 

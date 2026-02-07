@@ -111,6 +111,24 @@ export interface ModelProvider {
   chat(messages: ChatMessage[], options: ChatOptions): Promise<string>;
 }
 
+export type SubagentType = 'coding' | 'research' | 'general';
+export type SubagentStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+
+export interface SubagentTask {
+  id: string;               // "t1", "t2", etc.
+  type: SubagentType;
+  prompt: string;
+  status: SubagentStatus;
+  chatId: number;
+  model: string;
+  createdAt: Date;
+  startedAt?: Date;
+  completedAt?: Date;
+  result?: string;
+  error?: string;
+  abortController: AbortController;
+}
+
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
   content: string;

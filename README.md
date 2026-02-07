@@ -9,6 +9,7 @@ Lightweight personal AI assistant with:
 - Scheduled cron routines
 - Periodic heartbeat checks
 - Optional tool-enabled agent execution (read/write/list/bash within allowed paths)
+- Background subagents (coding, research, general) with dedicated identities
 - Conversation history controls in Telegram (`/new`, `/compact`)
 
 ## Assistant personality (SOUL)
@@ -103,6 +104,7 @@ src/
   api.ts          # dashboard API routes
   dashboard.ts    # dashboard frontend HTML
   agent.ts        # prompt assembly, model calls, tool loop, memory writes
+  subagent.ts     # background task dispatch with typed presets + auto-setup
   tools.ts        # Read/Write/Glob/Bash tool implementations
   telegram.ts     # Telegram commands and message handling
   cron.ts         # job scheduling + execution + cron logging
@@ -248,6 +250,9 @@ Dashboard API routes (Bearer token protected when configured):
 - `/morning`
 - `/eod`
 - `/focus`
+- `/agent <type> [model:<alias>] <prompt>` (dispatch a background subagent)
+- `/tasks` (list recent subagent tasks)
+- `/cancel <id>` (cancel a running subagent task)
 - `/new` (clear conversation history)
 - `/compact` (summarize + compress conversation history)
 - `/memory` (list recent memory files)
@@ -255,12 +260,29 @@ Dashboard API routes (Bearer token protected when configured):
 
 Any non-command text message is treated as a chat prompt to the agent and uses recent in-memory conversation context.
 
+## Subagents
+
+Background agents dispatched via `/agent` for async tasks. Each type has its own identity, tool config, and auto-generated templates under `~/.skimpyclaw/agents/<type>/`.
+
+| Type | Emoji | Default Model | Allowed Paths | Description |
+|------|-------|---------------|---------------|-------------|
+| `coding` | 🔧 | claude-think | ~/.skimpyclaw, ~/Sites | Code tasks with broad file + bash access |
+| `research` | 🔍 | claude-think | ~/.skimpyclaw, Obsidian vault | Research with vault access for notes |
+| `general` | 🦞 | current model | ~/.skimpyclaw | General tasks with config access |
+
+On first dispatch, the agent directory is auto-created with starter IDENTITY.md and TOOLS.md templates. The agent is registered in-memory (no config file write). You can customize templates by editing the files in `~/.skimpyclaw/agents/<type>/`.
+
+Max 3 concurrent subagents. Results are delivered back to the Telegram chat on completion.
+
 ## Data and logs
 
 Under `~/.skimpyclaw`:
 - `config.json` - runtime configuration
 - `.env` - local secrets
-- `agents/<id>/` - markdown templates and memory
+- `agents/main/` - main agent templates and memory
+- `agents/coding/` - coding subagent templates (auto-created)
+- `agents/research/` - research subagent templates (auto-created)
+- `agents/general/` - general subagent templates (auto-created)
 - `agents/<id>/memory/YYYY-MM-DD.md` - daily conversation memory
 - `sessions/*.json` - session records (dashboard-readable)
 - `logs/` - app logs
@@ -286,6 +308,7 @@ pnpm run test
 Current tests cover:
 - Dashboard API behavior and auth
 - Tool name mapping and tool safety/path constraints
+- Subagent dispatch, cancellation, and agent setup
 
 ## Known implementation caveats
 
