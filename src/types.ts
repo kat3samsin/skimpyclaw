@@ -11,8 +11,7 @@ export interface Config {
   };
   models: {
     providers: {
-      anthropic?: { apiKey?: string; authToken?: string };
-      openai?: { apiKey: string };
+      [key: string]: { apiKey?: string; authToken?: string; baseURL?: string } | undefined;
     };
     aliases: Record<string, string>;
   };
