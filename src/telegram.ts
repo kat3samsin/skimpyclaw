@@ -4,6 +4,7 @@ import { Bot, Context, GrammyError, HttpError } from 'grammy';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
+import { spawnSync } from 'child_process';
 import type { Config, ToolConfig } from './types.js';
 import { isAllowed, isRateLimited, sanitizeUserInput } from './security.js';
 import type { ChatMessage } from './types.js';
@@ -11,6 +12,8 @@ import { runAgentTurn } from './agent.js';
 import { getCronJobs, runCronJob } from './cron.js';
 import { getCurrentModel, setCurrentModel, getLastMessage } from './gateway.js';
 import { runHeartbeatCheck } from './heartbeat.js';
+
+const LAUNCHD_LABEL = 'com.skimpyclaw.gateway';
 
 function getTodayDailyNote(cfg: Config): string | null {
   const dailyNotesDir = cfg.channels.telegram.dailyNotesDir;
@@ -71,7 +74,7 @@ function startTypingIndicator(ctx: Context): () => void {
 const DEFAULT_TELEGRAM_TOOLS: ToolConfig = {
   enabled: true,
   allowedPaths: [join(homedir(), '.skimpyclaw'), process.cwd()],
-  maxIterations: 10,
+  maxIterations: 20,
   bashTimeout: 15000,
 };
 
@@ -123,7 +126,7 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
     const agentConfig = cfg.agents.list[cfg.agents.default];
     const emoji = agentConfig?.identity?.emoji || '🦞';
     const name = agentConfig?.identity?.name || 'SkimpyClaw';
-    await ctx.reply(`${emoji} ${name} online.\n\nJust send me a message. Commands:\n/model <alias> - Switch model (fast/smart/opus)\n/status - Show status\n/morning - Morning routine\n/eod - EOD review\n/silence <mins> - Pause proactive messages`);
+    await ctx.reply(`${emoji} ${name} online.\n\nJust send me a message. Commands:\n/model <alias> - Switch model (fast/smart/opus)\n/status - Show status\n/morning - Morning routine\n/eod - EOD review\n/silence <mins> - Pause proactive messages\n/restart - Restart the gateway`);
   });
 
   // /model command
@@ -207,6 +210,27 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
       await ctx.reply(`Heartbeat error: ${msg}`);
     } finally {
       stopTyping();
+    }
+  });
+
+  // /restart command — restart the gateway
+  bot.command('restart', async (ctx) => {
+    const isLaunchd = !!process.env.SKIMPYCLAW_LAUNCHD;
+    if (isLaunchd) {
+      await ctx.reply('🦞 Restarting via launchd...');
+      const uid = typeof process.getuid === 'function' ? process.getuid() : undefined;
+      const target = uid !== undefined ? `gui/${uid}/${LAUNCHD_LABEL}` : LAUNCHD_LABEL;
+      const res = spawnSync('launchctl', ['kickstart', '-k', target], {
+        encoding: 'utf8',
+        timeout: 3000,
+      });
+      if (res.error || res.status !== 0) {
+        await ctx.reply(`Restart failed: ${res.stderr || res.error?.message || 'unknown error'}`);
+      }
+      // If kickstart succeeded, process is already dead — this won't run
+    } else {
+      await ctx.reply('🦞 Restarting (dev mode)...');
+      setTimeout(() => process.exit(0), 500);
     }
   });
 
