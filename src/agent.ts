@@ -584,7 +584,7 @@ export async function chat(
       const content = response.choices[0]?.message?.content || '';
       genObs?.update({
         output: response.choices[0]?.message,
-        usageDetails: response.usage,
+        usageDetails: (response as any).usage,
       });
       genObs?.end();
 
