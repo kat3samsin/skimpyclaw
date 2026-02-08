@@ -247,6 +247,7 @@ Optional, disabled by default. Enable via tool config:
       "allowedPaths": ["${HOME}/.skimpyclaw"],
       "browser": {
         "enabled": true,
+        "type": "chromium",        // chromium, firefox, or webkit
         "headless": true,
         "allowFile": false,
         "slowMoMs": 50,
@@ -268,6 +269,7 @@ Profile:
 CLI wrapper:
 ```bash
 skimpyclaw browser open https://example.com --headful --slowmo 50
+skimpyclaw browser open https://example.com --browser firefox   # use Firefox
 skimpyclaw browser waitFor "h1"
 skimpyclaw browser screenshot
 skimpyclaw browser wait --ms 30000   # manual login window
