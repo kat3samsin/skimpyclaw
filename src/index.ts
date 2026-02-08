@@ -4,6 +4,7 @@
 import { createWriteStream, mkdirSync, existsSync, statSync, renameSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
+import dotenv from 'dotenv';
 import { loadConfig } from './config.js';
 import { startRuntime } from './service.js';
 
@@ -54,6 +55,10 @@ function initLogging(): void {
 
 // Initialize logging before anything else
 initLogging();
+
+// Load optional .env (local secrets)
+const ENV_PATH = join(homedir(), '.skimpyclaw', '.env');
+dotenv.config({ path: ENV_PATH });
 
 async function main(): Promise<void> {
   console.log('👙🦞 SkimpyClaw starting...');
