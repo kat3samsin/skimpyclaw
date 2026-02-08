@@ -44,7 +44,8 @@ const DANGEROUS_PATTERNS = [
   /DEVELOPER MESSAGE/gi,
 ];
 
-const CONTROL_CHARS_RE = new RegExp('[\\x00-\\x1F\\x7F]', 'g');
+// eslint-disable-next-line no-control-regex
+const CONTROL_CHARS_RE = /[\x00-\x1F\x7F]/g;
 
 function normalizeInput(input: string): string {
   return input
