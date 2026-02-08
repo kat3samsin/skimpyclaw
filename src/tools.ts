@@ -2,6 +2,7 @@
 
 import { readFileSync, writeFileSync, readdirSync, existsSync, statSync, mkdirSync } from 'fs';
 import { join, resolve, dirname, sep } from 'path';
+import { homedir } from 'os';
 import { exec } from 'child_process';
 import { isBashCommandSafe } from './security.js';
 import type { ToolConfig } from './types.js';
@@ -78,6 +79,22 @@ export const TOOL_DEFINITIONS = [
       required: ['command'],
     },
   },
+  {
+    name: 'Browser',
+    description: 'Control a headless browser (Playwright). Actions: open, click, type, waitFor, screenshot, close.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        action: { type: 'string', description: 'open | click | type | waitFor | screenshot | close' },
+        url: { type: 'string', description: 'URL to open (open action)' },
+        selector: { type: 'string', description: 'CSS selector (click/type/waitFor)' },
+        text: { type: 'string', description: 'Text to type or wait for (type/waitFor)' },
+        file_path: { type: 'string', description: 'Absolute path to save screenshot (optional)' },
+        timeoutMs: { type: 'number', description: 'Timeout in ms (optional)' },
+      },
+      required: ['action'],
+    },
+  },
 ];
 
 // --- Path Validation ---
@@ -98,7 +115,7 @@ export async function executeTool(
   config: ToolConfig
 ): Promise<string> {
   // Map Claude Code names to internal names
-  const internalName = fromClaudeCodeName(name);
+  const internalName = fromClaudeCodeName(name).toLowerCase();
   try {
     switch (internalName) {
       case 'read_file':
@@ -109,6 +126,8 @@ export async function executeTool(
         return executeListDirectory(input.path, config);
       case 'bash':
         return await executeBash(input.command, input.cwd, config);
+      case 'browser':
+        return await executeBrowser(input, config);
       default:
         return `Error: Unknown tool "${name}"`;
     }
@@ -192,4 +211,113 @@ function executeBash(command: string, cwd: string | undefined, config: ToolConfi
       res(output.slice(0, 50_000) || '(no output)');
     });
   });
+}
+
+// --- Browser Tool (Playwright) ---
+
+let playwrightModule: any | null = null;
+let browserInstance: any | null = null;
+let browserPage: any | null = null;
+
+async function getPlaywright(): Promise<any> {
+  if (!playwrightModule) {
+    playwrightModule = await import('playwright');
+  }
+  return playwrightModule;
+}
+
+function resolveScreenshotPath(filePath?: string): string {
+  if (filePath) return filePath;
+  const dir = join(homedir(), '.skimpyclaw', 'screenshots');
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  return join(dir, `shot-${stamp}.png`);
+}
+
+function isFileUrlAllowed(url: string, config: ToolConfig): boolean {
+  if (!url.startsWith('file://')) return true;
+  if (!config.browser?.allowFile) return false;
+  const path = url.replace('file://', '');
+  return isPathAllowed(path, config.allowedPaths);
+}
+
+async function ensureBrowser(config: ToolConfig): Promise<void> {
+  if (browserInstance && browserPage) return;
+  const { chromium } = await getPlaywright();
+  browserInstance = await chromium.launch({ headless: config.browser?.headless ?? true });
+  const context = await browserInstance.newContext();
+  browserPage = await context.newPage();
+}
+
+async function executeBrowser(input: Record<string, any>, config: ToolConfig): Promise<string> {
+  if (!config.browser?.enabled) {
+    return 'Error: Browser tool is disabled. Enable it in config (tools.browser.enabled).';
+  }
+
+  const action = String(input.action || '').toLowerCase();
+  const timeoutMs = typeof input.timeoutMs === 'number' ? input.timeoutMs : 30_000;
+
+  switch (action) {
+    case 'open': {
+      const url = input.url as string | undefined;
+      if (!url) return 'Error: url is required for open.';
+      if (!isFileUrlAllowed(url, config)) {
+        return 'Error: file:// URLs are blocked. Enable tools.browser.allowFile to allow.';
+      }
+      await ensureBrowser(config);
+      await browserPage.goto(url, { timeout: timeoutMs, waitUntil: 'domcontentloaded' });
+      return `Opened: ${url}`;
+    }
+    case 'click': {
+      if (!browserPage) return 'Error: Browser not open. Call open(url) first.';
+      const selector = input.selector as string | undefined;
+      if (!selector) return 'Error: selector is required for click.';
+      await browserPage.click(selector, { timeout: timeoutMs });
+      return `Clicked: ${selector}`;
+    }
+    case 'type': {
+      if (!browserPage) return 'Error: Browser not open. Call open(url) first.';
+      const selector = input.selector as string | undefined;
+      const text = input.text as string | undefined;
+      if (!selector || text === undefined) return 'Error: selector and text are required for type.';
+      await browserPage.fill(selector, text, { timeout: timeoutMs });
+      return `Typed into: ${selector}`;
+    }
+    case 'waitfor': {
+      if (!browserPage) return 'Error: Browser not open. Call open(url) first.';
+      const selector = input.selector as string | undefined;
+      const text = input.text as string | undefined;
+      if (!selector && !text) return 'Error: selector or text is required for waitFor.';
+      if (selector) {
+        await browserPage.waitForSelector(selector, { timeout: timeoutMs });
+        return `Waited for selector: ${selector}`;
+      }
+      await browserPage.waitForSelector(`text=${text}`, { timeout: timeoutMs });
+      return `Waited for text: ${text}`;
+    }
+    case 'screenshot': {
+      if (!browserPage) return 'Error: Browser not open. Call open(url) first.';
+      const filePath = resolveScreenshotPath(input.file_path);
+      if (!isPathAllowed(filePath, config.allowedPaths)) {
+        return `Error: Path not allowed. Permitted: ${config.allowedPaths.join(', ')}`;
+      }
+      await browserPage.screenshot({ path: filePath, fullPage: true });
+      return `Saved screenshot: ${filePath}`;
+    }
+    case 'close': {
+      if (browserPage) {
+        await browserPage.close().catch(() => {});
+        browserPage = null;
+      }
+      if (browserInstance) {
+        await browserInstance.close().catch(() => {});
+        browserInstance = null;
+      }
+      return 'Browser closed.';
+    }
+    default:
+      return `Error: Unknown browser action "${action}"`;
+  }
 }

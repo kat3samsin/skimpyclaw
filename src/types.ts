@@ -107,6 +107,11 @@ export interface ToolConfig {
   allowedPaths: string[];
   maxIterations?: number;  // Max tool use rounds (default: 20)
   bashTimeout?: number;    // Bash command timeout in ms (default: 30000)
+  browser?: {
+    enabled?: boolean;
+    headless?: boolean;
+    allowFile?: boolean;
+  };
 }
 
 export interface AgentTurn {

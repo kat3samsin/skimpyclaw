@@ -235,6 +235,32 @@ Traces are created per agent turn with tool calls captured as child observations
 
 **Costs:** We record token usage where providers report it. Costs may be blank unless Langfuse has model pricing configured (OAuth/Codex often won’t include costs).
 
+## Browser tool (Playwright)
+
+Optional, disabled by default. Enable via tool config:
+
+```json
+"channels": {
+  "telegram": {
+    "tools": {
+      "enabled": true,
+      "allowedPaths": ["${HOME}/.skimpyclaw"],
+      "browser": {
+        "enabled": true,
+        "headless": true,
+        "allowFile": false
+      }
+    }
+  }
+}
+```
+
+Actions: `open(url)`, `click(selector)`, `type(selector,text)`, `waitFor(selector|text)`, `screenshot(file_path?)`, `close()`.
+
+Security notes:
+- `file://` URLs are blocked unless `allowFile` is true **and** the path is inside `allowedPaths`.
+- Screenshots must be saved under `allowedPaths`.
+
 ## HTTP endpoints
 
 Gateway routes:
