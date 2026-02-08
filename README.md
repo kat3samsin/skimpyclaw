@@ -248,20 +248,24 @@ Optional, disabled by default. Enable via tool config:
       "browser": {
         "enabled": true,
         "headless": true,
-        "allowFile": false
+        "allowFile": false,
+        "slowMoMs": 50,
+        "userAgent": "",
+        "viewport": { "width": 1280, "height": 720 }
       }
     }
   }
 }
 ```
 
-Actions: `open(url)`, `click(selector)`, `type(selector,text)`, `waitFor(selector|text)`, `screenshot(file_path?)`, `close()`.
+Actions: `open(url)`, `click(selector)`, `type(selector,text)`, `waitFor(selector|text)`, `screenshot(file_path?)`, `wait(timeMs)`, `close()`.
 
 CLI wrapper:
 ```bash
-skimpyclaw browser open https://example.com
-skimpyclaw browser waitFor "h1" 
+skimpyclaw browser open https://example.com --headful --slowmo 50
+skimpyclaw browser waitFor "h1"
 skimpyclaw browser screenshot
+skimpyclaw browser wait --ms 30000   # manual login window
 skimpyclaw browser close
 ```
 

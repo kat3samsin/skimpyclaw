@@ -81,16 +81,27 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: 'Browser',
-    description: 'Control a headless browser (Playwright). Actions: open, click, type, waitFor, screenshot, close.',
+    description: 'Control a headless browser (Playwright). Actions: open, click, type, waitFor, screenshot, wait, close.',
     input_schema: {
       type: 'object' as const,
       properties: {
-        action: { type: 'string', description: 'open | click | type | waitFor | screenshot | close' },
+        action: { type: 'string', description: 'open | click | type | waitFor | screenshot | wait | close' },
         url: { type: 'string', description: 'URL to open (open action)' },
         selector: { type: 'string', description: 'CSS selector (click/type/waitFor)' },
         text: { type: 'string', description: 'Text to type or wait for (type/waitFor)' },
         file_path: { type: 'string', description: 'Absolute path to save screenshot (optional)' },
         timeoutMs: { type: 'number', description: 'Timeout in ms (optional)' },
+        timeMs: { type: 'number', description: 'Time to wait in ms (wait action)' },
+        headless: { type: 'boolean', description: 'Override headless for open (optional)' },
+        slowMoMs: { type: 'number', description: 'Slow motion delay per action (ms) (optional)' },
+        userAgent: { type: 'string', description: 'Override user agent (optional)' },
+        viewport: {
+          type: 'object',
+          properties: {
+            width: { type: 'number' },
+            height: { type: 'number' },
+          },
+        },
       },
       required: ['action'],
     },
@@ -218,6 +229,7 @@ function executeBash(command: string, cwd: string | undefined, config: ToolConfi
 let playwrightModule: any | null = null;
 let browserInstance: any | null = null;
 let browserPage: any | null = null;
+let browserOptionsKey: string | null = null;
 
 async function getPlaywright(): Promise<any> {
   if (!playwrightModule) {
@@ -243,12 +255,34 @@ function isFileUrlAllowed(url: string, config: ToolConfig): boolean {
   return isPathAllowed(path, config.allowedPaths);
 }
 
-async function ensureBrowser(config: ToolConfig): Promise<void> {
-  if (browserInstance && browserPage) return;
+function buildBrowserOptions(config: ToolConfig, overrides?: Record<string, any>) {
+  const headless = overrides?.headless ?? config.browser?.headless ?? true;
+  const slowMo = overrides?.slowMoMs ?? config.browser?.slowMoMs;
+  const userAgent = overrides?.userAgent ?? config.browser?.userAgent;
+  const viewport = overrides?.viewport ?? config.browser?.viewport;
+  return { headless, slowMo, userAgent, viewport };
+}
+
+async function ensureBrowser(config: ToolConfig, overrides?: Record<string, any>): Promise<void> {
+  const options = buildBrowserOptions(config, overrides);
+  const optionsKey = JSON.stringify(options);
+
+  if (browserInstance && browserPage && browserOptionsKey === optionsKey) return;
+
+  if (browserPage) {
+    await browserPage.close().catch(() => {});
+    browserPage = null;
+  }
+  if (browserInstance) {
+    await browserInstance.close().catch(() => {});
+    browserInstance = null;
+  }
+
   const { chromium } = await getPlaywright();
-  browserInstance = await chromium.launch({ headless: config.browser?.headless ?? true });
-  const context = await browserInstance.newContext();
+  browserInstance = await chromium.launch({ headless: options.headless, slowMo: options.slowMo });
+  const context = await browserInstance.newContext({ userAgent: options.userAgent, viewport: options.viewport });
   browserPage = await context.newPage();
+  browserOptionsKey = optionsKey;
 }
 
 async function executeBrowser(input: Record<string, any>, config: ToolConfig): Promise<string> {
@@ -266,7 +300,7 @@ async function executeBrowser(input: Record<string, any>, config: ToolConfig): P
       if (!isFileUrlAllowed(url, config)) {
         return 'Error: file:// URLs are blocked. Enable tools.browser.allowFile to allow.';
       }
-      await ensureBrowser(config);
+      await ensureBrowser(config, input);
       await browserPage.goto(url, { timeout: timeoutMs, waitUntil: 'domcontentloaded' });
       return `Opened: ${url}`;
     }
@@ -306,6 +340,11 @@ async function executeBrowser(input: Record<string, any>, config: ToolConfig): P
       await browserPage.screenshot({ path: filePath, fullPage: true });
       return `Saved screenshot: ${filePath}`;
     }
+    case 'wait': {
+      const waitMs = typeof input.timeMs === 'number' ? input.timeMs : timeoutMs;
+      await new Promise((r) => setTimeout(r, waitMs));
+      return `Waited ${waitMs}ms`;
+    }
     case 'close': {
       if (browserPage) {
         await browserPage.close().catch(() => {});
@@ -315,6 +354,7 @@ async function executeBrowser(input: Record<string, any>, config: ToolConfig): P
         await browserInstance.close().catch(() => {});
         browserInstance = null;
       }
+      browserOptionsKey = null;
       return 'Browser closed.';
     }
     default:

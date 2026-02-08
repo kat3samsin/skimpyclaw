@@ -37,7 +37,7 @@ Commands:
   send <message>          Send a message to the local gateway
   cron list               List cron jobs from gateway status
   cron run <id>           Trigger cron job by id
-  browser <action> ...    Run browser tool action (open/click/type/waitFor/screenshot/close)
+  browser <action> ...    Run browser tool action (open/click/type/waitFor/screenshot/wait/close)
   help                    Show this help
 `);
 }
@@ -411,7 +411,7 @@ async function commandCron(args: string[]): Promise<number> {
 async function commandBrowser(args: string[]): Promise<number> {
   const action = args[0];
   if (!action) {
-    console.error('Usage: skimpyclaw browser <open|click|type|waitFor|screenshot|close> ...');
+    console.error('Usage: skimpyclaw browser <open|click|type|waitFor|screenshot|wait|close> ...');
     return 1;
   }
 
@@ -440,6 +440,21 @@ async function commandBrowser(args: string[]): Promise<number> {
     }
   } else if (action === 'screenshot') {
     input.file_path = args[1];
+  } else if (action === 'wait') {
+    const idx = args.indexOf('--ms');
+    if (idx !== -1) input.timeMs = Number(args[idx + 1]);
+  }
+
+  if (hasFlag(args, '--headful')) input.headless = false;
+  if (hasFlag(args, '--headless')) input.headless = true;
+  const slowIdx = args.indexOf('--slowmo');
+  if (slowIdx !== -1) input.slowMoMs = Number(args[slowIdx + 1]);
+  const uaIdx = args.indexOf('--user-agent');
+  if (uaIdx !== -1) input.userAgent = args[uaIdx + 1];
+  const wIdx = args.indexOf('--width');
+  const hIdx = args.indexOf('--height');
+  if (wIdx !== -1 && hIdx !== -1) {
+    input.viewport = { width: Number(args[wIdx + 1]), height: Number(args[hIdx + 1]) };
   }
 
   const result = await executeTool('Browser', input, toolConfig);

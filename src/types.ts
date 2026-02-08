@@ -111,6 +111,9 @@ export interface ToolConfig {
     enabled?: boolean;
     headless?: boolean;
     allowFile?: boolean;
+    slowMoMs?: number;
+    userAgent?: string;
+    viewport?: { width: number; height: number };
   };
 }
 
