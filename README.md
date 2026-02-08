@@ -301,9 +301,18 @@ Under `~/.skimpyclaw`:
 Run:
 
 ```bash
+pnpm run lint
 pnpm run typecheck
 pnpm run test
 ```
+
+Or run the full local CI gate:
+
+```bash
+pnpm run ci
+```
+
+GitHub Actions runs the same `pnpm run ci` checks on every push and pull request.
 
 Current tests cover:
 - Dashboard API behavior and auth
