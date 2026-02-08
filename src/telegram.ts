@@ -5,7 +5,7 @@ import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { spawnSync } from 'child_process';
-import type { Config, ToolConfig } from './types.js';
+import type { Config, ToolConfig, AgentRunContext } from './types.js';
 import { isAllowed, isRateLimited } from './security.js';
 import type { ChatMessage } from './types.js';
 import { runAgentTurn } from './agent.js';
@@ -86,6 +86,17 @@ function addToHistory(chatId: number, userMsg: string, assistantMsg: string): vo
 
 function clearHistory(chatId: number): void {
   chatHistory.delete(chatId);
+}
+
+function getRunContext(ctx: Context): AgentRunContext {
+  return {
+    userId: ctx.from?.id ? String(ctx.from.id) : undefined,
+    sessionId: ctx.chat?.id ? String(ctx.chat.id) : undefined,
+    channel: 'telegram',
+    metadata: {
+      username: ctx.from?.username,
+    },
+  };
 }
 
 /** Keep sending "typing..." every 4s until the returned stop function is called. */
@@ -439,7 +450,10 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
         cfg.agents.default,
         `Summarize this conversation in 2-3 sentences so you can remember the context:\n\n${historyText}`,
         cfg,
-        getCurrentModel()
+        getCurrentModel(),
+        undefined,
+        undefined,
+        getRunContext(ctx)
       );
       // Replace history with a single summary message
       clearHistory(chatId);
@@ -495,7 +509,9 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
         'run EOD review',
         cfg,
         getCurrentModel(),
-        getTelegramToolConfig(cfg)
+        getTelegramToolConfig(cfg),
+        undefined,
+        getRunContext(ctx)
       );
       await sendLongMessage(ctx, response);
     } catch (error) {
@@ -515,7 +531,9 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
         'plan my day',
         cfg,
         getCurrentModel(),
-        getTelegramToolConfig(cfg)
+        getTelegramToolConfig(cfg),
+        undefined,
+        getRunContext(ctx)
       );
       await sendLongMessage(ctx, response);
     } catch (error) {
@@ -598,7 +616,8 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
         cfg,
         getCurrentModel(),
         getTelegramToolConfig(cfg),
-        history
+        history,
+        getRunContext(ctx)
       );
       if (chatId) addToHistory(chatId, text, response);
       await sendLongMessage(ctx, response);

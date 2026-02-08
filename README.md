@@ -209,6 +209,26 @@ Environment placeholders in JSON are supported:
 - `${TELEGRAM_BOT_TOKEN}`
 - `${HOME}`
 
+## Langfuse (optional)
+
+Enable tracing by adding a `langfuse` block to your config:
+
+```json
+"langfuse": {
+  "enabled": true,
+  "publicKey": "${LANGFUSE_PUBLIC_KEY}",
+  "secretKey": "${LANGFUSE_SECRET_KEY}",
+  "baseUrl": "https://cloud.langfuse.com",
+  "environment": "local",
+  "release": "dev",
+  "exportMode": "batched"
+}
+```
+
+Traces are created per agent turn with tool calls captured as child observations when tools are used.
+
+**Costs:** We record token usage where providers report it. Costs may be blank unless Langfuse has model pricing configured (OAuth/Codex often won’t include costs).
+
 ## HTTP endpoints
 
 Gateway routes:
@@ -301,9 +321,18 @@ Under `~/.skimpyclaw`:
 Run:
 
 ```bash
+pnpm run lint
 pnpm run typecheck
 pnpm run test
 ```
+
+Or run the full local CI gate:
+
+```bash
+pnpm run ci
+```
+
+GitHub Actions runs the same `pnpm run ci` checks on every push and pull request.
 
 Current tests cover:
 - Dashboard API behavior and auth

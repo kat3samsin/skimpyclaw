@@ -64,12 +64,18 @@ export async function runHeartbeatCheck(config: Config): Promise<string> {
   running = true;
   try {
     console.log('[heartbeat] Running check...');
+    const chatId = getChatId(config);
     const response = await runAgentTurn(
       config.agents.default,
       config.heartbeat.prompt,
       config,
       config.heartbeat.model,
       getHeartbeatTools(config),
+      undefined,
+      {
+        channel: 'heartbeat',
+        sessionId: chatId ? String(chatId) : undefined,
+      }
     );
 
     if (response.includes('HEARTBEAT_OK')) {
@@ -83,7 +89,6 @@ export async function runHeartbeatCheck(config: Config): Promise<string> {
       return response;
     }
 
-    const chatId = getChatId(config);
     if (!chatId) {
       console.log('[heartbeat] No chat ID available, logging alert:');
       console.log(response);

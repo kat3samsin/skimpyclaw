@@ -5,6 +5,7 @@ import { initCron, stopCron } from './cron.js';
 import { initHeartbeat, stopHeartbeat } from './heartbeat.js';
 import { initTelegram, startTelegram, stopTelegram } from './telegram.js';
 import { initProviders } from './agent.js';
+import { initLangfuse, shutdownLangfuse } from './langfuse.js';
 
 export interface SkimpyClawRuntime {
   config: Config;
@@ -13,6 +14,7 @@ export interface SkimpyClawRuntime {
 }
 
 export async function startRuntime(config: Config): Promise<SkimpyClawRuntime> {
+  initLangfuse(config);
   initProviders(config);
 
   const gateway = await createGateway(config);
@@ -34,6 +36,7 @@ export async function startRuntime(config: Config): Promise<SkimpyClawRuntime> {
       stopHeartbeat();
       await stopTelegram();
       await gateway.close();
+      await shutdownLangfuse();
     },
   };
 }

@@ -60,7 +60,13 @@ export async function createGateway(cfg: Config): Promise<FastifyInstance> {
         config.agents.default,
         message,
         config,
-        model || currentModel
+        model || currentModel,
+        undefined,
+        undefined,
+        {
+          channel: 'gateway',
+          metadata: { ip: request.ip },
+        }
       );
       lastMessage = new Date();
       return { response };
