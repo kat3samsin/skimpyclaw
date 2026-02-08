@@ -44,10 +44,12 @@ const DANGEROUS_PATTERNS = [
   /DEVELOPER MESSAGE/gi,
 ];
 
+const CONTROL_CHARS_RE = new RegExp('[\\x00-\\x1F\\x7F]', 'g');
+
 function normalizeInput(input: string): string {
   return input
     .normalize('NFKC')
-    .replace(/[\u0000-\u001F\u007F]/g, '');
+    .replace(CONTROL_CHARS_RE, '');
 }
 
 export function sanitizeUserInput(input: string): string {
@@ -152,7 +154,7 @@ export function clearRateLimiter(): void {
 
 const SECRET_KEYS = ['apikey', 'token', 'password', 'secret', 'key'];
 const JWT_RE = /eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+/;
-const HIGH_ENTROPY_RE = /[A-Za-z0-9_\-]{32,}/;
+const HIGH_ENTROPY_RE = /[A-Za-z0-9_-]{32,}/;
 
 function looksLikeSecret(value: string): boolean {
   if (JWT_RE.test(value)) return true;

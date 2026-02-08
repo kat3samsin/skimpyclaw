@@ -56,6 +56,6 @@ describe('isBashCommandSafe', () => {
   });
 
   it('blocks find -exec', () => {
-    expect(isBashCommandSafe('find . -exec rm {} \;')).toBe(false);
+    expect(isBashCommandSafe('find . -exec rm {} ;')).toBe(false);
   });
 });
