@@ -242,11 +242,6 @@ export async function runSetup(options?: { dryRun?: boolean }): Promise<void> {
     const userName = (await ask(rl, '   What should I call you? ')) || 'User';
     console.log(`   ✓ ${userName}\n`);
 
-    // 6. Timezone
-    console.log('6. Timezone');
-    const timezone = (await ask(rl, '   Enter timezone [America/Chicago]: ')) || 'America/Chicago';
-    console.log(`   ✓ ${timezone}\n`);
-
     const workspaceDir = process.cwd();
 
     // Build config
