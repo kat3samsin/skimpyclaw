@@ -26,8 +26,8 @@ Commands:
   logs [--file name]      Show logs (stdout|stderr|app), default stdout
        [--lines N]
        [--follow]
-  onboard [--dry-run]     Run interactive onboarding wizard
-  setup                   Alias for onboard (supports --dry-run)
+  onboard [--dry-run]     Run onboarding wizard (or validate setup only)
+  setup [--dry-run]       Alias for onboard
   config                  Show config JSON
   config path             Show config file path
   config get <key>        Read config value by dot path
@@ -425,8 +425,7 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<nu
     }
 
     if (command === 'onboard' || command === 'setup') {
-      const dryRun = args.includes('--dry-run');
-      await runSetup({ dryRun });
+      await runSetup({ dryRun: args.includes('--dry-run') });
       return 0;
     }
 
