@@ -6,9 +6,10 @@ import { homedir } from 'os';
 import { spawn, spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { loadConfig, loadRawConfig, getConfigPath, saveConfig } from './config.js';
-import type { Config } from './types.js';
+import type { Config, ToolConfig } from './types.js';
 import { startRuntime } from './service.js';
 import { runSetup } from './setup.js';
+import { executeTool } from './tools.js';
 
 const APP_NAME = 'skimpyclaw';
 const DEFAULT_PORT = 18790;
@@ -36,6 +37,7 @@ Commands:
   send <message>          Send a message to the local gateway
   cron list               List cron jobs from gateway status
   cron run <id>           Trigger cron job by id
+  browser <action> ...    Run browser tool action (open/click/type/waitFor/screenshot/close)
   help                    Show this help
 `);
 }
@@ -92,6 +94,24 @@ function parseOption(args: string[], longFlag: string, fallback: string): string
 
 function hasFlag(args: string[], flag: string): boolean {
   return args.includes(flag);
+}
+
+function getCliToolConfig(config: Config): ToolConfig {
+  if (config.channels.telegram.tools) return config.channels.telegram.tools;
+  if (config.channels.telegram.defaultAllowedPaths?.length) {
+    return {
+      enabled: true,
+      allowedPaths: config.channels.telegram.defaultAllowedPaths,
+      maxIterations: 100,
+      bashTimeout: 15000,
+    };
+  }
+  return {
+    enabled: true,
+    allowedPaths: [join(homedir(), '.skimpyclaw')],
+    maxIterations: 100,
+    bashTimeout: 15000,
+  };
 }
 
 function launchctlAvailable(): boolean {
@@ -388,6 +408,45 @@ async function commandCron(args: string[]): Promise<number> {
   return 1;
 }
 
+async function commandBrowser(args: string[]): Promise<number> {
+  const action = args[0];
+  if (!action) {
+    console.error('Usage: skimpyclaw browser <open|click|type|waitFor|screenshot|close> ...');
+    return 1;
+  }
+
+  const config = loadConfig();
+  const toolConfig = getCliToolConfig(config);
+
+  if (!toolConfig.browser?.enabled) {
+    console.error('Browser tool is disabled. Enable tools.browser.enabled in config.');
+    return 1;
+  }
+
+  const input: Record<string, any> = { action };
+
+  if (action === 'open') {
+    input.url = args[1];
+  } else if (action === 'click') {
+    input.selector = args[1];
+  } else if (action === 'type') {
+    input.selector = args[1];
+    input.text = args.slice(2).join(' ');
+  } else if (action.toLowerCase() === 'waitfor') {
+    input.selector = args[1];
+    if (hasFlag(args, '--text')) {
+      const idx = args.indexOf('--text');
+      input.text = args[idx + 1];
+    }
+  } else if (action === 'screenshot') {
+    input.file_path = args[1];
+  }
+
+  const result = await executeTool('Browser', input, toolConfig);
+  console.log(result);
+  return result.startsWith('Error') ? 1 : 0;
+}
+
 export async function runCli(argv: string[] = process.argv.slice(2)): Promise<number> {
   const [command, ...args] = argv;
 
@@ -443,6 +502,10 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<nu
 
     if (command === 'cron') {
       return await commandCron(args);
+    }
+
+    if (command === 'browser') {
+      return await commandBrowser(args);
     }
 
     console.error(`Unknown command: ${command}`);

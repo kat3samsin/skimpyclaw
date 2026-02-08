@@ -257,6 +257,14 @@ Optional, disabled by default. Enable via tool config:
 
 Actions: `open(url)`, `click(selector)`, `type(selector,text)`, `waitFor(selector|text)`, `screenshot(file_path?)`, `close()`.
 
+CLI wrapper:
+```bash
+skimpyclaw browser open https://example.com
+skimpyclaw browser waitFor "h1" 
+skimpyclaw browser screenshot
+skimpyclaw browser close
+```
+
 Security notes:
 - `file://` URLs are blocked unless `allowFile` is true **and** the path is inside `allowedPaths`.
 - Screenshots must be saved under `allowedPaths`.
