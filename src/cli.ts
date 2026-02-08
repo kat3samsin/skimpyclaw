@@ -32,7 +32,7 @@ Commands:
   config path             Show config file path
   config get <key>        Read config value by dot path
   config set <key> <val>  Set config value (JSON value or string)
-  model <alias|model>     Switch current runtime model
+  model <alias|model>     Switch current runtime model (e.g. openrouter/openai/gpt-4o, minimax/minimax-m2.1)
   send <message>          Send a message to the local gateway
   cron list               List cron jobs from gateway status
   cron run <id>           Trigger cron job by id
