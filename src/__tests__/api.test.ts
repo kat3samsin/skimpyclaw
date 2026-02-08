@@ -33,6 +33,7 @@ const TEST_CONFIG = {
   },
   channels: {
     telegram: { enabled: false, token: 'tg-secret-token', allowFrom: [] },
+    discord: { enabled: false, token: 'discord-secret-token', allowFrom: [] },
   },
   cron: {
     jobs: [
@@ -546,6 +547,10 @@ describe('Config endpoints', () => {
     if (telegram) {
       expect(telegram.token).toBe('[REDACTED]');
     }
+    const discord = body.config.channels?.discord;
+    if (discord) {
+      expect(discord.token).toBe('[REDACTED]');
+    }
   });
 
   it('PUT /api/dashboard/config saves valid config', async () => {
@@ -584,6 +589,7 @@ describe('Config endpoints', () => {
     const configWithRedacted = JSON.parse(JSON.stringify(TEST_CONFIG));
     configWithRedacted.models.providers.anthropic.apiKey = '[REDACTED]';
     configWithRedacted.channels.telegram.token = '[REDACTED]';
+    configWithRedacted.channels.discord.token = '[REDACTED]';
 
     const res = await inject({
       method: 'PUT',
@@ -597,6 +603,7 @@ describe('Config endpoints', () => {
     const saved = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8'));
     expect(saved.models.providers.anthropic.apiKey).toBe('sk-ant-test-secret-key');
     expect(saved.channels.telegram.token).toBe('tg-secret-token');
+    expect(saved.channels.discord.token).toBe('discord-secret-token');
   });
 });
 

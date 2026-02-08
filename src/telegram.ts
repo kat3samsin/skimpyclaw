@@ -696,7 +696,19 @@ export function isSilenced(): boolean {
   return new Date() < silenceUntil;
 }
 
-export async function sendProactiveMessage(chatId: number, message: string): Promise<void> {
+export async function sendProactiveMessage(chatId: string | number, message: string): Promise<void> {
   if (!bot || isSilenced()) return;
-  await bot.api.sendMessage(chatId, message);
+  const resolvedChatId = typeof chatId === 'number' ? chatId : Number(chatId);
+  if (!Number.isFinite(resolvedChatId)) return;
+  await bot.api.sendMessage(resolvedChatId, message);
+}
+
+export function getTelegramDefaultChatId(cfg: Config): number | null {
+  const allowFrom = cfg.channels.telegram.allowFrom;
+  for (const entry of allowFrom) {
+    if (typeof entry === 'number') return entry;
+    const num = Number(entry);
+    if (!isNaN(num)) return num;
+  }
+  return null;
 }

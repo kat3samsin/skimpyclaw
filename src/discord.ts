@@ -1,0 +1,438 @@
+import { Client, GatewayIntentBits, Partials, type Message } from 'discord.js';
+import { join } from 'path';
+import { homedir } from 'os';
+import type { ChatMessage, Config, ToolConfig } from './types.js';
+import { getCurrentModel, setCurrentModel, getLastMessage } from './gateway.js';
+import { getCronJobs, runCronJob } from './cron.js';
+import { runAgentTurn } from './agent.js';
+import { runHeartbeatCheck } from './heartbeat.js';
+import { isAllowed, isRateLimited } from './security.js';
+
+const BOT_COMMANDS: { command: string; description: string }[] = [
+  { command: 'start', description: 'Show available commands' },
+  { command: 'help', description: 'Show available commands' },
+  { command: 'model', description: 'Switch model (fast/smart/opus)' },
+  { command: 'status', description: 'Show bot status' },
+  { command: 'new', description: 'Clear conversation history' },
+  { command: 'compact', description: 'Compress conversation history' },
+  { command: 'silence', description: 'Pause proactive messages' },
+  { command: 'cron', description: 'List or run scheduled jobs' },
+  { command: 'heartbeat', description: 'Trigger heartbeat check' },
+  { command: 'eod', description: 'Run EOD review' },
+  { command: 'focus', description: 'Plan your day' },
+];
+
+const KNOWN_COMMANDS = new Set(BOT_COMMANDS.map(c => c.command));
+
+const MAX_HISTORY_PAIRS = 5;
+const chatHistory = new Map<string, ChatMessage[]>();
+
+const DEFAULT_DISCORD_TOOLS: ToolConfig = {
+  enabled: true,
+  allowedPaths: [join(homedir(), '.skimpyclaw'), process.cwd()],
+  maxIterations: 100,
+  bashTimeout: 15000,
+};
+
+let client: Client | null = null;
+let config: Config;
+let silenceUntil: Date | null = null;
+
+function getHistory(key: string): ChatMessage[] {
+  return chatHistory.get(key) || [];
+}
+
+function addToHistory(key: string, userMsg: string, assistantMsg: string): void {
+  const history = getHistory(key);
+  history.push({ role: 'user', content: userMsg });
+  history.push({ role: 'assistant', content: assistantMsg });
+  while (history.length > MAX_HISTORY_PAIRS * 2) {
+    history.shift();
+    history.shift();
+  }
+  chatHistory.set(key, history);
+}
+
+function clearHistory(key: string): void {
+  chatHistory.delete(key);
+}
+
+function getDiscordToolConfig(cfg: Config): ToolConfig {
+  const discord = cfg.channels.discord;
+  if (discord?.tools) {
+    return discord.tools;
+  }
+  if (discord?.defaultAllowedPaths?.length) {
+    return {
+      ...DEFAULT_DISCORD_TOOLS,
+      allowedPaths: discord.defaultAllowedPaths,
+    };
+  }
+  return DEFAULT_DISCORD_TOOLS;
+}
+
+function conversationKey(message: Message): string {
+  if (message.channel.isDMBased()) {
+    return `dm:${message.author.id}`;
+  }
+  return `channel:${message.channelId}`;
+}
+
+function buildHelpText(cfg: Config): string {
+  const agentConfig = cfg.agents.list[cfg.agents.default];
+  const emoji = agentConfig?.identity?.emoji || '🦞';
+  const name = agentConfig?.identity?.name || 'SkimpyClaw';
+  const commandList = BOT_COMMANDS.map(c => `/${c.command} - ${c.description}`).join('\n');
+  return `${emoji} ${name} online.\n\nSend a message to chat, or use a command:\n\n${commandList}`;
+}
+
+async function sendLongText(message: Message, text: string): Promise<void> {
+  const MAX_LENGTH = 1900;
+  if (text.length <= MAX_LENGTH) {
+    await message.reply(text);
+    return;
+  }
+
+  let current = '';
+  const chunks: string[] = [];
+  for (const paragraph of text.split('\n\n')) {
+    if (current.length + paragraph.length + 2 > MAX_LENGTH) {
+      if (current) chunks.push(current.trim());
+      current = paragraph;
+    } else {
+      current += (current ? '\n\n' : '') + paragraph;
+    }
+  }
+  if (current) chunks.push(current.trim());
+
+  for (const chunk of chunks) {
+    await message.reply(chunk);
+  }
+}
+
+function startTypingIndicator(message: Message): () => void {
+  const interval = setInterval(() => {
+    const channel = message.channel as { sendTyping?: () => Promise<unknown> };
+    if (typeof channel.sendTyping === 'function') {
+      void channel.sendTyping().catch(() => {});
+    }
+  }, 4000);
+  return () => clearInterval(interval);
+}
+
+async function handleCommand(message: Message, command: string, args: string[]): Promise<void> {
+  const rawArgs = args.join(' ').trim();
+
+  if (command === 'start' || command === 'help') {
+    await sendLongText(message, buildHelpText(config));
+    return;
+  }
+
+  if (command === 'model') {
+    if (!rawArgs) {
+      const current = getCurrentModel();
+      const aliases = Object.keys(config.models.aliases).join(', ');
+      await message.reply(`Current: ${current}\nAliases: ${aliases}\n\nUsage: /model <alias>`);
+      return;
+    }
+    const resolved = config.models.aliases[rawArgs] || rawArgs;
+    setCurrentModel(resolved);
+    await message.reply(`Model switched to: ${resolved}`);
+    return;
+  }
+
+  if (command === 'status') {
+    const model = getCurrentModel();
+    const last = getLastMessage();
+    const jobs = getCronJobs();
+    const jobList = jobs.map(j => `- ${j.name}: ${j.nextRun?.toLocaleString() || 'unknown'}`).join('\n');
+    await message.reply(
+      `Agent: ${config.agents.default}\n` +
+      `Model: ${model}\n` +
+      `Last message: ${last?.toLocaleString() || 'never'}\n` +
+      `Silence until: ${silenceUntil?.toLocaleString() || 'not silenced'}\n\n` +
+      `Scheduled jobs:\n${jobList || '(none)'}`
+    );
+    return;
+  }
+
+  if (command === 'cron') {
+    const subcommand = args[0];
+    if (!subcommand || subcommand === 'list') {
+      const jobs = getCronJobs();
+      if (jobs.length === 0) {
+        await message.reply('No scheduled jobs.');
+        return;
+      }
+      const list = jobs.map(j => `${j.id}: ${j.name} (next: ${j.nextRun?.toLocaleString() || '?'})`).join('\n');
+      await message.reply(`Scheduled jobs:\n${list}`);
+      return;
+    }
+
+    if (subcommand === 'run') {
+      const jobId = args[1];
+      if (!jobId) {
+        await message.reply('Usage: /cron run <job-id>');
+        return;
+      }
+      try {
+        await runCronJob(jobId, config);
+        await message.reply(`Triggered: ${jobId}`);
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : 'Unknown error';
+        await message.reply(`Error: ${msg}`);
+      }
+      return;
+    }
+
+    await message.reply('Usage: /cron list | /cron run <id>');
+    return;
+  }
+
+  if (command === 'heartbeat') {
+    const stopTyping = startTypingIndicator(message);
+    try {
+      const response = await runHeartbeatCheck(config);
+      await sendLongText(message, `Heartbeat:\n\n${response}`);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      await message.reply(`Heartbeat error: ${msg}`);
+    } finally {
+      stopTyping();
+    }
+    return;
+  }
+
+  if (command === 'new') {
+    clearHistory(conversationKey(message));
+    await message.reply('Conversation cleared. Starting fresh.');
+    return;
+  }
+
+  if (command === 'compact') {
+    const key = conversationKey(message);
+    const history = getHistory(key);
+    if (history.length === 0) {
+      await message.reply('No conversation history to compact.');
+      return;
+    }
+
+    const stopTyping = startTypingIndicator(message);
+    try {
+      const historyText = history.map(m => `${m.role}: ${m.content}`).join('\n');
+      const summary = await runAgentTurn(
+        config.agents.default,
+        `Summarize this conversation in 2-3 sentences so you can remember the context:\n\n${historyText}`,
+        config,
+        getCurrentModel(),
+      );
+      clearHistory(key);
+      chatHistory.set(key, [
+        { role: 'user', content: 'Summary of our previous conversation:' },
+        { role: 'assistant', content: summary },
+      ]);
+      await message.reply(`Compacted ${history.length} messages into a summary.`);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      await message.reply(`Error: ${msg}`);
+    } finally {
+      stopTyping();
+    }
+    return;
+  }
+
+  if (command === 'silence') {
+    const minutes = parseInt(rawArgs, 10) || 30;
+    silenceUntil = new Date(Date.now() + minutes * 60 * 1000);
+    await message.reply(`Proactive messages silenced until ${silenceUntil.toLocaleTimeString()}`);
+    return;
+  }
+
+  if (command === 'eod' || command === 'focus') {
+    const stopTyping = startTypingIndicator(message);
+    try {
+      const prompt = command === 'eod' ? 'run EOD review' : 'plan my day';
+      const response = await runAgentTurn(
+        config.agents.default,
+        prompt,
+        config,
+        getCurrentModel(),
+        getDiscordToolConfig(config),
+      );
+      await sendLongText(message, response);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      await message.reply(`Error: ${msg}`);
+    } finally {
+      stopTyping();
+    }
+    return;
+  }
+
+  await message.reply(`Unknown command: /${command}\n\nType /help to see available commands.`);
+}
+
+async function handleIncomingMessage(message: Message): Promise<void> {
+  if (message.author.bot) return;
+  if (!config.channels.discord) return;
+
+  console.log(
+    `[discord] Received message from ${message.author.id} in ${message.channelId}: ${JSON.stringify(message.content).slice(0, 120)}`
+  );
+
+  const senderId = message.author.id;
+  const senderUsername = message.author.username;
+  if (!isAllowed(config.channels.discord.allowFrom, senderId, senderUsername)) {
+    console.log(`[discord] Blocked message from ${senderId} (@${senderUsername})`);
+    return;
+  }
+
+  if (isRateLimited(senderId)) {
+    await message.reply('Too many messages. Please wait a moment.');
+    return;
+  }
+
+  const text = message.content.trim();
+  if (!text) return;
+
+  const isPrefixedCommand = text.startsWith('/') || text.startsWith('!');
+  const isDm = message.channel.isDMBased();
+  if (isPrefixedCommand || isDm) {
+    const commandText = isPrefixedCommand ? text.slice(1).trim() : text;
+    const [commandPart, ...args] = commandText.split(/\s+/);
+    const command = (commandPart || '').toLowerCase();
+    if (!KNOWN_COMMANDS.has(command)) {
+      if (isPrefixedCommand) {
+        await message.reply(`Unknown command: /${command}\n\nType /help to see available commands.`);
+        return;
+      }
+    } else {
+      await handleCommand(message, command, args);
+      return;
+    }
+  }
+
+  const key = conversationKey(message);
+  const stopTyping = startTypingIndicator(message);
+
+  try {
+    const history = getHistory(key);
+    const response = await runAgentTurn(
+      config.agents.default,
+      text,
+      config,
+      getCurrentModel(),
+      getDiscordToolConfig(config),
+      history
+    );
+    addToHistory(key, text, response);
+    await sendLongText(message, response);
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : 'Unknown error';
+    await message.reply(`Error: ${msg}`);
+  } finally {
+    stopTyping();
+  }
+}
+
+export async function initDiscord(cfg: Config): Promise<boolean> {
+  const discord = cfg.channels.discord;
+  if (!discord?.enabled || !discord.token) {
+    console.log('[discord] Disabled or no token configured');
+    return false;
+  }
+
+  config = cfg;
+  client = new Client({
+    intents: [
+      GatewayIntentBits.Guilds,
+      GatewayIntentBits.GuildMessages,
+      GatewayIntentBits.DirectMessages,
+      GatewayIntentBits.MessageContent,
+    ],
+    partials: [Partials.Channel],
+  });
+
+  client.on('messageCreate', (message: Message) => {
+    void handleIncomingMessage(message);
+  });
+
+  client.once('clientReady', () => {
+    console.log(`[discord] Bot started as ${client?.user?.tag ?? 'unknown'}`);
+  });
+
+  client.on('error', (error: unknown) => {
+    console.error('[discord] Client error:', error);
+  });
+
+  return true;
+}
+
+export async function startDiscord(): Promise<void> {
+  if (!client || !config.channels.discord?.token) return;
+  console.log('[discord] Starting bot...');
+  await client.login(config.channels.discord.token);
+}
+
+export async function stopDiscord(): Promise<void> {
+  if (!client) return;
+  client.destroy();
+  console.log('[discord] Bot stopped');
+}
+
+export function isDiscordSilenced(): boolean {
+  if (!silenceUntil) return false;
+  return new Date() < silenceUntil;
+}
+
+export function getDiscordDefaultTarget(cfg: Config): string | null {
+  const discord = cfg.channels.discord;
+  if (!discord) return null;
+  if (discord.defaultChannelId?.trim()) return discord.defaultChannelId.trim();
+
+  for (const entry of discord.allowFrom) {
+    const value = String(entry).trim();
+    if (value) return value;
+  }
+  return null;
+}
+
+async function sendChunked(target: { send: (content: string) => Promise<unknown> }, text: string): Promise<void> {
+  const MAX_LENGTH = 1900;
+  if (text.length <= MAX_LENGTH) {
+    await target.send(text);
+    return;
+  }
+
+  let current = '';
+  const chunks: string[] = [];
+  for (const paragraph of text.split('\n\n')) {
+    if (current.length + paragraph.length + 2 > MAX_LENGTH) {
+      if (current) chunks.push(current.trim());
+      current = paragraph;
+    } else {
+      current += (current ? '\n\n' : '') + paragraph;
+    }
+  }
+  if (current) chunks.push(current.trim());
+
+  for (const chunk of chunks) {
+    await target.send(chunk);
+  }
+}
+
+export async function sendDiscordProactiveMessage(target: string | number, message: string): Promise<void> {
+  if (!client || isDiscordSilenced()) return;
+
+  const targetId = String(target);
+  const channel = await client.channels.fetch(targetId).catch(() => null);
+  if (channel && 'send' in channel && typeof channel.send === 'function') {
+    await sendChunked(channel as { send: (content: string) => Promise<unknown> }, message);
+    return;
+  }
+
+  const user = await client.users.fetch(targetId).catch(() => null);
+  if (user) {
+    await sendChunked(user as { send: (content: string) => Promise<unknown> }, message);
+  }
+}

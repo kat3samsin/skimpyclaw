@@ -96,6 +96,9 @@ interface SetupBuildInput {
   workspaceDir: string;
   telegramId: string;
   telegramToken: string;
+  discordToken?: string;
+  discordUserId?: string;
+  discordDefaultChannelId?: string;
   agentName: string;
   selectedProviders: Set<ProviderChoice>;
   providerSecrets: ProviderSecrets;
@@ -192,7 +195,12 @@ function buildAliases(providers: Set<ProviderChoice>): Record<string, string> {
   return aliases;
 }
 
-function buildEnvContent(telegramToken: string, providers: Set<ProviderChoice>, secrets: ProviderSecrets): string {
+function buildEnvContent(
+  telegramToken: string,
+  providers: Set<ProviderChoice>,
+  secrets: ProviderSecrets,
+  discordToken?: string,
+): string {
   const lines = ['# SkimpyClaw secrets'];
 
   if (providers.has('anthropic-api') && secrets.anthropicKey) {
@@ -209,11 +217,15 @@ function buildEnvContent(telegramToken: string, providers: Set<ProviderChoice>, 
   }
 
   lines.push(`TELEGRAM_BOT_TOKEN=${telegramToken}`);
+  if (discordToken) {
+    lines.push(`DISCORD_BOT_TOKEN=${discordToken}`);
+  }
   lines.push('');
   return lines.join('\n');
 }
 
 export function buildSetupConfig(input: SetupBuildInput): Record<string, unknown> {
+  const useDiscord = Boolean(input.discordToken);
   return {
     gateway: {
       port: 18790,
@@ -237,6 +249,7 @@ export function buildSetupConfig(input: SetupBuildInput): Record<string, unknown
       aliases: buildAliases(input.selectedProviders),
     },
     channels: {
+      active: useDiscord ? 'discord' : 'telegram',
       telegram: {
         enabled: true,
         token: '${TELEGRAM_BOT_TOKEN}',
@@ -246,6 +259,16 @@ export function buildSetupConfig(input: SetupBuildInput): Record<string, unknown
           '${HOME}/.skimpyclaw',
           input.workspaceDir,
         ],
+      },
+      discord: {
+        enabled: useDiscord,
+        token: useDiscord ? '${DISCORD_BOT_TOKEN}' : '',
+        allowFrom: useDiscord ? [input.discordUserId || ''] : [],
+        defaultAllowedPaths: [
+          '${HOME}/.skimpyclaw',
+          input.workspaceDir,
+        ],
+        ...(input.discordDefaultChannelId ? { defaultChannelId: input.discordDefaultChannelId } : {}),
       },
     },
     cron: {
@@ -271,7 +294,7 @@ export function buildSetupArtifacts(input: SetupBuildInput): { configJson: strin
   const config = buildSetupConfig(input);
   return {
     configJson: JSON.stringify(config, null, 2),
-    envContent: buildEnvContent(input.telegramToken, input.selectedProviders, input.providerSecrets),
+    envContent: buildEnvContent(input.telegramToken, input.selectedProviders, input.providerSecrets, input.discordToken),
   };
 }
 
@@ -315,6 +338,22 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
     const telegramId = await ask(rl, '   Enter ID: ');
     console.log(`   ✓ ${telegramId}\n`);
 
+    // 2b. Optional Discord
+    console.log('2b. Discord Bot (optional)');
+    const useDiscord = /^y(es)?$/i.test(await ask(rl, '   Enable Discord channel? [y/N]: '));
+    let discordToken = '';
+    let discordUserId = '';
+    let discordDefaultChannelId = '';
+    if (useDiscord) {
+      console.log('   Create bot in Discord Developer Portal, then copy token and user ID.');
+      discordToken = await ask(rl, '   Enter Discord bot token: ');
+      discordUserId = await ask(rl, '   Enter your Discord user ID: ');
+      discordDefaultChannelId = await ask(rl, '   Optional default channel ID for proactive alerts: ');
+      console.log(`   ✓ ${maskInput(discordToken)}\n`);
+    } else {
+      console.log('   ✓ skipped\n');
+    }
+
     // 3. Model Providers
     const selectedProviders = await askProviders(rl);
     const providerSecrets = await collectProviderSecrets(rl, selectedProviders);
@@ -335,6 +374,9 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
       workspaceDir,
       telegramId,
       telegramToken,
+      discordToken: useDiscord ? discordToken : undefined,
+      discordUserId: useDiscord ? discordUserId : undefined,
+      discordDefaultChannelId: useDiscord ? discordDefaultChannelId : undefined,
       agentName,
       selectedProviders,
       providerSecrets,
@@ -348,7 +390,6 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
     mkdirSync(join(CONFIG_DIR, 'cron'), { recursive: true });
     mkdirSync(AGENTS_DIR, { recursive: true });
     mkdirSync(join(AGENTS_DIR, 'memory'), { recursive: true });
-
     const configPath = join(CONFIG_DIR, 'config.json');
     writeFileSync(configPath, configJson);
     console.log(`✓ Config written to ${configPath}`);
@@ -391,7 +432,7 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
     console.log(`   launchctl load ~/Library/LaunchAgents/${GATEWAY_PLIST_LABEL}.plist`);
     console.log('3. Check health:');
     console.log('   curl http://localhost:18790/health');
-    console.log('4. Send /start to your Telegram bot');
+    console.log(`4. Send /help in your ${useDiscord ? 'Discord bot DM/server' : 'Telegram bot'}`);
     console.log('\n👙🦞 Enjoy!');
   } finally {
     rl.close();
