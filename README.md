@@ -227,6 +227,8 @@ Enable tracing by adding a `langfuse` block to your config:
 
 Traces are created per agent turn with tool calls captured as child observations when tools are used.
 
+**Costs:** We record token usage where providers report it. Costs may be blank unless Langfuse has model pricing configured (OAuth/Codex often won’t include costs).
+
 ## HTTP endpoints
 
 Gateway routes:
