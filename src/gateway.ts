@@ -19,6 +19,7 @@ export async function createGateway(cfg: Config): Promise<FastifyInstance> {
   currentModel = cfg.agents.list[cfg.agents.default]?.model || 'claude-sonnet-4-20250514';
 
   const fastify = Fastify({
+    bodyLimit: 1_000_000,
     logger: {
       level: 'info',
     },
@@ -53,6 +54,9 @@ export async function createGateway(cfg: Config): Promise<FastifyInstance> {
     const { message, model } = request.body;
     if (!message) {
       return reply.code(400).send({ error: 'message required' });
+    }
+    if (message.length > 10_000) {
+      return reply.code(413).send({ error: 'message too long' });
     }
 
     try {

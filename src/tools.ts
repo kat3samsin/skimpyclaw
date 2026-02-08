@@ -1,7 +1,7 @@
 // Tool definitions and executors for Anthropic API tool_use
 
-import { readFileSync, writeFileSync, readdirSync, existsSync, statSync, mkdirSync } from 'fs';
-import { join, resolve, dirname, sep } from 'path';
+import { readFileSync, writeFileSync, readdirSync, existsSync, statSync, mkdirSync, realpathSync } from 'fs';
+import { join, resolve, dirname, sep, basename } from 'path';
 import { exec } from 'child_process';
 import { isBashCommandSafe } from './security.js';
 import type { ToolConfig } from './types.js';
@@ -82,10 +82,23 @@ export const TOOL_DEFINITIONS = [
 
 // --- Path Validation ---
 
-function isPathAllowed(filePath: string, allowedPaths: string[]): boolean {
+function resolveForCheck(filePath: string): string {
   const resolved = resolve(filePath);
+  if (existsSync(resolved)) {
+    return realpathSync(resolved);
+  }
+  const parent = dirname(resolved);
+  if (existsSync(parent)) {
+    const parentReal = realpathSync(parent);
+    return join(parentReal, basename(resolved));
+  }
+  return resolved;
+}
+
+function isPathAllowed(filePath: string, allowedPaths: string[]): boolean {
+  const resolved = resolveForCheck(filePath);
   return allowedPaths.some((allowed) => {
-    const allowedRoot = resolve(allowed);
+    const allowedRoot = existsSync(allowed) ? realpathSync(allowed) : resolve(allowed);
     return resolved === allowedRoot || resolved.startsWith(`${allowedRoot}${sep}`);
   });
 }

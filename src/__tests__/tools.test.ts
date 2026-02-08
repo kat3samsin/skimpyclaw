@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { existsSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'fs';
+import { existsSync, mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSync } from 'fs';
 import { join } from 'path';
 import { executeTool, TOOL_DEFINITIONS, fromClaudeCodeName, toClaudeCodeName } from '../tools.js';
 import type { ToolConfig } from '../types.js';
@@ -89,6 +89,14 @@ describe('read_file', () => {
     expect(result).toContain('Error: Path not allowed');
 
     rmSync(siblingDir, { recursive: true, force: true });
+  });
+
+  it('rejects symlink traversal outside allowed paths', async () => {
+    const linkPath = join(TEST_DIR, 'link-out');
+    symlinkSync(OUTSIDE_DIR, linkPath);
+
+    const result = await executeTool('Read', { path: join(linkPath, 'secret.txt') }, toolConfig);
+    expect(result).toContain('Error: Path not allowed');
   });
 });
 

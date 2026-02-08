@@ -96,6 +96,15 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
     }
   });
 
+  fastify.addHook('onSend', async (request, reply, payload) => {
+    if (!request.url.startsWith('/api/dashboard')) return payload;
+    reply.header('X-Content-Type-Options', 'nosniff');
+    reply.header('X-Frame-Options', 'DENY');
+    reply.header('Referrer-Policy', 'no-referrer');
+    reply.header('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+    return payload;
+  });
+
   // --- Status ---
   fastify.get('/api/dashboard/status', async () => {
     const jobs = getCronJobs();

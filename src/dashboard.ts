@@ -4,7 +4,14 @@ import { FastifyInstance } from 'fastify';
 
 export function registerDashboard(fastify: FastifyInstance): void {
   fastify.get('/dashboard', async (_request, reply) => {
-    reply.type('text/html').send(DASHBOARD_HTML);
+    reply
+      .header('Content-Security-Policy', "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self';")
+      .header('X-Content-Type-Options', 'nosniff')
+      .header('X-Frame-Options', 'DENY')
+      .header('Referrer-Policy', 'no-referrer')
+      .header('Permissions-Policy', 'geolocation=(), microphone=(), camera=()')
+      .type('text/html')
+      .send(DASHBOARD_HTML);
   });
 }
 
