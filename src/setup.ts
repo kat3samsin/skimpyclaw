@@ -14,6 +14,9 @@ const AGENTS_DIR = join(CONFIG_DIR, 'agents', 'main');
 const TEMPLATES_DIR = join(__dirname, '..', 'templates');
 const GATEWAY_PLIST_LABEL = 'com.skimpyclaw.gateway';
 const GATEWAY_PLIST_TEMPLATE = join(__dirname, '..', 'com.skimpyclaw.gateway.plist.example');
+interface SetupOptions {
+  dryRun?: boolean;
+}
 
 function ask(rl: readline.Interface, question: string): Promise<string> {
   return new Promise((resolve) => {
@@ -87,6 +90,15 @@ async function askProviders(rl: readline.Interface): Promise<Set<ProviderChoice>
 interface ProviderSecrets {
   anthropicKey?: string;
   openaiKey?: string;
+}
+
+interface SetupBuildInput {
+  workspaceDir: string;
+  telegramId: string;
+  telegramToken: string;
+  agentName: string;
+  selectedProviders: Set<ProviderChoice>;
+  providerSecrets: ProviderSecrets;
 }
 
 async function collectProviderSecrets(
@@ -180,11 +192,7 @@ function buildAliases(providers: Set<ProviderChoice>): Record<string, string> {
   return aliases;
 }
 
-function buildEnvContent(
-  telegramToken: string,
-  providers: Set<ProviderChoice>,
-  secrets: ProviderSecrets,
-): string {
+function buildEnvContent(telegramToken: string, providers: Set<ProviderChoice>, secrets: ProviderSecrets): string {
   const lines = ['# SkimpyClaw secrets'];
 
   if (providers.has('anthropic-api') && secrets.anthropicKey) {
@@ -205,8 +213,88 @@ function buildEnvContent(
   return lines.join('\n');
 }
 
-export async function runSetup(options?: { dryRun?: boolean }): Promise<void> {
-  const dryRun = options?.dryRun ?? false;
+export function buildSetupConfig(input: SetupBuildInput): Record<string, unknown> {
+  return {
+    gateway: {
+      port: 18790,
+      mode: 'local',
+    },
+    agents: {
+      default: 'main',
+      list: {
+        main: {
+          identity: {
+            name: input.agentName,
+            emoji: '👙🦞',
+          },
+          model: buildDefaultModel(input.selectedProviders),
+          thinking: 'low',
+        },
+      },
+    },
+    models: {
+      providers: buildProviders(input.selectedProviders),
+      aliases: buildAliases(input.selectedProviders),
+    },
+    channels: {
+      telegram: {
+        enabled: true,
+        token: '${TELEGRAM_BOT_TOKEN}',
+        allowFrom: [parseInt(input.telegramId, 10) || input.telegramId],
+        dailyNotesDir: '${HOME}/Daily Notes',
+        defaultAllowedPaths: [
+          '${HOME}/.skimpyclaw',
+          input.workspaceDir,
+        ],
+      },
+    },
+    cron: {
+      jobs: [],
+    },
+    heartbeat: {
+      intervalMs: 1800000,
+      prompt: 'Read HEARTBEAT.md. Follow it strictly. If nothing needs attention, reply HEARTBEAT_OK.',
+      tools: {
+        enabled: true,
+        allowedPaths: [
+          '${HOME}/.skimpyclaw',
+          input.workspaceDir,
+        ],
+        maxIterations: 10,
+        bashTimeout: 15000,
+      },
+    },
+  };
+}
+
+export function buildSetupArtifacts(input: SetupBuildInput): { configJson: string; envContent: string } {
+  const config = buildSetupConfig(input);
+  return {
+    configJson: JSON.stringify(config, null, 2),
+    envContent: buildEnvContent(input.telegramToken, input.selectedProviders, input.providerSecrets),
+  };
+}
+
+export async function runSetup(options: SetupOptions = {}): Promise<void> {
+  const dryRun = options.dryRun ?? false;
+  if (dryRun) {
+    const workspaceDir = process.cwd();
+    if (!existsSync(TEMPLATES_DIR)) {
+      throw new Error(`Templates directory not found: ${TEMPLATES_DIR}`);
+    }
+    const templates = readdirSync(TEMPLATES_DIR).filter((f) => f.endsWith('.md'));
+    if (templates.length === 0) {
+      throw new Error(`No markdown templates found in ${TEMPLATES_DIR}`);
+    }
+    // Validate launchd template rendering with current environment and workspace.
+    renderGatewayPlist(workspaceDir);
+
+    console.log('✅ Onboarding dry run successful.');
+    console.log(`Would create config under: ${CONFIG_DIR}`);
+    console.log(`Would copy ${templates.length} templates to: ${AGENTS_DIR}`);
+    console.log(`Would render launchd plist from: ${GATEWAY_PLIST_TEMPLATE}`);
+    return;
+  }
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
@@ -214,7 +302,6 @@ export async function runSetup(options?: { dryRun?: boolean }): Promise<void> {
 
   try {
     console.log('\n👙🦞 SkimpyClaw Setup\n');
-    if (dryRun) console.log('   ⚠ DRY RUN — nothing will be written to disk.\n');
 
     // 1. Telegram Bot Token
     console.log('1. Telegram Bot Token');
@@ -244,123 +331,68 @@ export async function runSetup(options?: { dryRun?: boolean }): Promise<void> {
 
     const workspaceDir = process.cwd();
 
-    // Build config
-    const config = {
-      gateway: {
-        port: 18790,
-        mode: 'local',
-      },
-      agents: {
-        default: 'main',
-        list: {
-          main: {
-            identity: {
-              name: agentName,
-              emoji: '👙🦞',
-            },
-            model: buildDefaultModel(selectedProviders),
-            thinking: 'low',
-          },
-        },
-      },
-      models: {
-        providers: buildProviders(selectedProviders),
-        aliases: buildAliases(selectedProviders),
-      },
-      channels: {
-        telegram: {
-          enabled: true,
-          token: '${TELEGRAM_BOT_TOKEN}',
-          allowFrom: [parseInt(telegramId, 10) || telegramId],
-          dailyNotesDir: '${HOME}/Daily Notes',
-          defaultAllowedPaths: [
-            '${HOME}/.skimpyclaw',
-            workspaceDir,
-          ],
-        },
-      },
-      cron: {
-        jobs: [],
-      },
-      heartbeat: {
-        intervalMs: 1800000,
-        prompt: 'Read HEARTBEAT.md. Follow it strictly. If nothing needs attention, reply HEARTBEAT_OK.',
-        tools: {
-          enabled: true,
-          allowedPaths: [
-            '${HOME}/.skimpyclaw',
-            workspaceDir,
-          ],
-          maxIterations: 10,
-          bashTimeout: 15000,
-        },
-      },
-    };
+    const { configJson, envContent } = buildSetupArtifacts({
+      workspaceDir,
+      telegramId,
+      telegramToken,
+      agentName,
+      selectedProviders,
+      providerSecrets,
+    });
 
-    const configJson = JSON.stringify(config, null, 2);
-    const envContent = buildEnvContent(telegramToken, selectedProviders, providerSecrets);
+    // Create directories
+    console.log('Creating directories...');
+    mkdirSync(CONFIG_DIR, { recursive: true });
+    mkdirSync(join(CONFIG_DIR, 'logs'), { recursive: true });
+    mkdirSync(join(CONFIG_DIR, 'sessions'), { recursive: true });
+    mkdirSync(join(CONFIG_DIR, 'cron'), { recursive: true });
+    mkdirSync(AGENTS_DIR, { recursive: true });
+    mkdirSync(join(AGENTS_DIR, 'memory'), { recursive: true });
 
-    if (dryRun) {
-      console.log('\n--- config.json ---');
-      console.log(configJson);
-      console.log('\n--- .env ---');
-      console.log(envContent);
-      console.log('--- end dry run ---\n');
-    } else {
-      // Create directories
-      console.log('Creating directories...');
-      mkdirSync(CONFIG_DIR, { recursive: true });
-      mkdirSync(join(CONFIG_DIR, 'logs'), { recursive: true });
-      mkdirSync(join(CONFIG_DIR, 'sessions'), { recursive: true });
-      mkdirSync(join(CONFIG_DIR, 'cron'), { recursive: true });
-      mkdirSync(AGENTS_DIR, { recursive: true });
-      mkdirSync(join(AGENTS_DIR, 'memory'), { recursive: true });
+    const configPath = join(CONFIG_DIR, 'config.json');
+    writeFileSync(configPath, configJson);
+    console.log(`✓ Config written to ${configPath}`);
 
-      const configPath = join(CONFIG_DIR, 'config.json');
-      writeFileSync(configPath, configJson);
-      console.log(`✓ Config written to ${configPath}`);
-
-      // Copy templates
-      if (existsSync(TEMPLATES_DIR)) {
-        const templates = readdirSync(TEMPLATES_DIR).filter((f) => f.endsWith('.md'));
-        for (const template of templates) {
-          const src = join(TEMPLATES_DIR, template);
-          const dst = join(AGENTS_DIR, template);
-          if (!existsSync(dst)) {
-            copyFileSync(src, dst);
-          }
+    // Copy templates
+    if (existsSync(TEMPLATES_DIR)) {
+      const templates = readdirSync(TEMPLATES_DIR).filter((f) => f.endsWith('.md'));
+      for (const template of templates) {
+        const src = join(TEMPLATES_DIR, template);
+        const dst = join(AGENTS_DIR, template);
+        if (!existsSync(dst)) {
+          copyFileSync(src, dst);
         }
-        console.log(`✓ Templates copied to ${AGENTS_DIR}`);
-      } else {
-        console.log(`⚠ Templates directory not found. Create templates manually in ${AGENTS_DIR}`);
       }
-
-      // Create .env file for secrets
-      const envPath = join(CONFIG_DIR, '.env');
-      writeFileSync(envPath, envContent);
-      console.log(`✓ Secrets written to ${envPath}`);
-
-      // Update USER.md with name
-      writeFileSync(join(AGENTS_DIR, 'USER.md'), `# USER.md - About ${userName}\n\nName: ${userName}\n\n## Preferences\n\n- Direct communication, no fluff\n\n## Routines\n\n- Morning: Review tasks and messages\n- EOD: Review completed work, plan tomorrow\n`);
-
-      // Create launchd plist from template
-      const plistPath = join(homedir(), 'Library', 'LaunchAgents', `${GATEWAY_PLIST_LABEL}.plist`);
-      const plistContent = renderGatewayPlist(workspaceDir);
-
-      mkdirSync(dirname(plistPath), { recursive: true });
-      writeFileSync(plistPath, plistContent);
-      console.log(`✓ Daemon plist written to ${plistPath}`);
-
-      console.log('\n✅ Setup complete!\n');
-      console.log('Next steps:');
-      console.log('1. Review templates in ~/.skimpyclaw/agents/main/');
-      console.log('2. Start the daemon:');
-      console.log(`   launchctl load ~/Library/LaunchAgents/${GATEWAY_PLIST_LABEL}.plist`);
-      console.log('3. Check health:');
-      console.log('   curl http://localhost:18790/health');
-      console.log('4. Send /start to your Telegram bot');
-      console.log('\n👙🦞 Enjoy!');
+      console.log(`✓ Templates copied to ${AGENTS_DIR}`);
+    } else {
+      console.log(`⚠ Templates directory not found. Create templates manually in ${AGENTS_DIR}`);
     }
+
+    // Create .env file for secrets
+    const envPath = join(CONFIG_DIR, '.env');
+    writeFileSync(envPath, envContent);
+    console.log(`✓ Secrets written to ${envPath}`);
+
+    // Update USER.md with name
+    writeFileSync(join(AGENTS_DIR, 'USER.md'), `# USER.md - About ${userName}\n\nName: ${userName}\n\n## Preferences\n\n- Direct communication, no fluff\n\n## Routines\n\n- Morning: Review tasks and messages\n- EOD: Review completed work, plan tomorrow\n`);
+
+    // Create launchd plist from template
+    const plistPath = join(homedir(), 'Library', 'LaunchAgents', `${GATEWAY_PLIST_LABEL}.plist`);
+    const plistContent = renderGatewayPlist(workspaceDir);
+
+    mkdirSync(dirname(plistPath), { recursive: true });
+    writeFileSync(plistPath, plistContent);
+    console.log(`✓ Daemon plist written to ${plistPath}`);
+
+    console.log('\n✅ Setup complete!\n');
+    console.log('Next steps:');
+    console.log('1. Review templates in ~/.skimpyclaw/agents/main/');
+    console.log('2. Start the daemon:');
+    console.log(`   launchctl load ~/Library/LaunchAgents/${GATEWAY_PLIST_LABEL}.plist`);
+    console.log('3. Check health:');
+    console.log('   curl http://localhost:18790/health');
+    console.log('4. Send /start to your Telegram bot');
+    console.log('\n👙🦞 Enjoy!');
   } finally {
     rl.close();
   }
