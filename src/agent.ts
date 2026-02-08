@@ -73,6 +73,34 @@ function startGenerationObservation(name: string, attributes: Record<string, any
   return startObservation(name, attributes, { asType: 'generation' });
 }
 
+function toUsageDetails(usage: OpenAI.Completions.CompletionUsage | null | undefined): Record<string, number> | undefined {
+  if (!usage) return undefined;
+
+  const usageDetails: Record<string, number> = {
+    prompt_tokens: usage.prompt_tokens,
+    completion_tokens: usage.completion_tokens,
+    total_tokens: usage.total_tokens,
+  };
+
+  if (usage.prompt_tokens_details) {
+    for (const [key, value] of Object.entries(usage.prompt_tokens_details)) {
+      if (typeof value === 'number') {
+        usageDetails[`prompt_tokens_details_${key}`] = value;
+      }
+    }
+  }
+
+  if (usage.completion_tokens_details) {
+    for (const [key, value] of Object.entries(usage.completion_tokens_details)) {
+      if (typeof value === 'number') {
+        usageDetails[`completion_tokens_details_${key}`] = value;
+      }
+    }
+  }
+
+  return usageDetails;
+}
+
 /**
  * Build the system parameter for Anthropic API calls.
  * For OAuth: returns an array with Claude Code identity + guard + actual prompt as separate blocks.
@@ -584,7 +612,7 @@ export async function chat(
       const content = response.choices[0]?.message?.content || '';
       genObs?.update({
         output: response.choices[0]?.message,
-        usageDetails: response.usage,
+        usageDetails: toUsageDetails(response.usage),
       });
       genObs?.end();
 

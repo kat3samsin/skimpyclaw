@@ -452,17 +452,6 @@ label {
 }
 .toggle-label input { width: auto; }
 
-.todo-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--border);
-}
-.todo-item:hover { background: var(--surface-alt); }
-.todo-item input[type="checkbox"] { margin-top: 2px; width: auto; accent-color: var(--accent); }
-.todo-text.done { text-decoration: line-through; color: var(--text-dim); }
-
 table {
   width: 100%;
   border-collapse: collapse;
@@ -546,7 +535,6 @@ td:first-child { color: var(--highlight); }
     <div class="tab-group-header">
       <span class="tab-group-title"><span class="tab-group-icon">◔</span> Operations</span>
     </div>
-    <button class="tab" data-tab="todos">TODOs</button>
     <button class="tab" data-tab="cron">Cron</button>
     <button class="tab" data-tab="logs">Logs</button>
   </div>
@@ -623,17 +611,6 @@ td:first-child { color: var(--highlight); }
       <div class="split-detail" id="templateEditor">
         <div class="empty">Select a template to edit</div>
       </div>
-    </div>
-  </div>
-
-  <!-- TODOs Tab -->
-  <div class="tab-panel" id="panel-todos">
-    <div class="card">
-      <div class="card-title">Progress</div>
-      <div id="todoSummary" class="card-value">-</div>
-    </div>
-    <div class="card" style="padding:0;">
-      <div id="todoList"></div>
     </div>
   </div>
 
@@ -831,7 +808,6 @@ function onTabActivated(tab) {
   else if (tab === 'cron') loadCronJobs();
   else if (tab === 'model') loadModel();
   else if (tab === 'templates') loadTemplates();
-  else if (tab === 'todos') loadTodos();
   else if (tab === 'logs') loadLogFiles();
   else if (tab === 'config') loadConfig();
 }
@@ -1103,50 +1079,6 @@ async function saveTemplate(agentId, name) {
     showToast('Template saved');
   } catch (e) {
     showToast('Failed to save: ' + e.message, 'error');
-  }
-}
-
-// --- TODOs Tab ---
-async function loadTodos() {
-  const summaryEl = document.getElementById('todoSummary');
-  const listEl = document.getElementById('todoList');
-
-  try {
-    const data = await api('todos');
-    summaryEl.textContent = data.total + ' total • ' + data.completed + ' done • ' + data.remaining + ' remaining';
-
-    if (!data.items || data.items.length === 0) {
-      listEl.innerHTML = '<div class="empty">No TODO checklist items found</div>';
-      return;
-    }
-
-    listEl.innerHTML = data.items.map(item =>
-      '<label class="todo-item">' +
-        '<input type="checkbox" data-id="' + item.id + '" ' + (item.completed ? 'checked' : '') + '>' +
-        '<span class="todo-text' + (item.completed ? ' done' : '') + '">' + esc(item.text) + '</span>' +
-      '</label>'
-    ).join('');
-
-    listEl.querySelectorAll('input[type="checkbox"][data-id]').forEach((checkbox) => {
-      checkbox.addEventListener('change', async (e) => {
-        const id = e.target.dataset.id;
-        const completed = !!e.target.checked;
-        try {
-          await api('todos/' + encodeURIComponent(id), {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ completed }),
-          });
-          loadTodos();
-        } catch (err) {
-          e.target.checked = !completed;
-          showToast('Failed to update TODO: ' + err.message, 'error');
-        }
-      });
-    });
-  } catch (e) {
-    summaryEl.textContent = 'Error loading TODOs';
-    listEl.innerHTML = '<div class="empty">Failed to load TODOs</div>';
   }
 }
 
