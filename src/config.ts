@@ -4,9 +4,18 @@ import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from '
 import { randomUUID } from 'crypto';
 import { homedir } from 'os';
 import { join, basename } from 'path';
+import dotenv from 'dotenv';
 import type { Config } from './types.js';
 
 const CONFIG_PATH = join(homedir(), '.skimpyclaw', 'config.json');
+const ENV_PATH = join(homedir(), '.skimpyclaw', '.env');
+let envLoaded = false;
+
+function ensureEnvLoaded(): void {
+  if (envLoaded) return;
+  dotenv.config({ path: ENV_PATH });
+  envLoaded = true;
+}
 
 function expandEnvVars(obj: any): any {
   if (typeof obj === 'string') {
@@ -26,6 +35,7 @@ function expandEnvVars(obj: any): any {
 }
 
 export function loadConfig(): Config {
+  ensureEnvLoaded();
   if (!existsSync(CONFIG_PATH)) {
     throw new Error(`Config not found: ${CONFIG_PATH}\nRun 'pnpm run setup' to create one.`);
   }
@@ -36,6 +46,7 @@ export function loadConfig(): Config {
 }
 
 export function loadRawConfig(): Record<string, any> {
+  ensureEnvLoaded();
   if (!existsSync(CONFIG_PATH)) {
     throw new Error(`Config not found: ${CONFIG_PATH}\nRun 'pnpm run setup' to create one.`);
   }

@@ -1,10 +1,14 @@
-// Heartbeat: periodic health check that alerts via Telegram when something needs attention
+// Heartbeat: periodic health check that alerts via the active chat channel when needed
 
 import type { Config, ToolConfig } from './types.js';
 import { join } from 'path';
 import { homedir } from 'os';
 import { runAgentTurn } from './agent.js';
-import { sendProactiveMessage, isSilenced } from './telegram.js';
+import {
+  getActiveChannelId,
+  isActiveChannelSilenced,
+  sendActiveChannelProactiveMessage,
+} from './channels.js';
 
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 let running = false;
@@ -21,10 +25,14 @@ function getHeartbeatTools(config: Config): ToolConfig {
     return config.heartbeat.tools;
   }
 
-  if (config.channels.telegram.defaultAllowedPaths?.length) {
+  const defaultAllowedPaths = config.channels.active === 'discord'
+    ? config.channels.discord?.defaultAllowedPaths
+    : config.channels.telegram.defaultAllowedPaths || config.channels.discord?.defaultAllowedPaths;
+
+  if (defaultAllowedPaths?.length) {
     return {
       ...DEFAULT_HEARTBEAT_TOOLS,
-      allowedPaths: config.channels.telegram.defaultAllowedPaths,
+      allowedPaths: defaultAllowedPaths,
     };
   }
 
@@ -41,10 +49,21 @@ export function initHeartbeat(config: Config): void {
   const intervalMs = heartbeat.intervalMs;
   console.log(`[heartbeat] Started (interval: ${Math.round(intervalMs / 60000)}min)`);
 
-  // Run first check after a short delay (let everything else initialize)
-  setTimeout(() => runHeartbeatCheck(config), 10_000);
+  // Run first check after a short delay (let everything else initialize).
+  // Never let async heartbeat failures bubble out of timer callbacks.
+  setTimeout(() => {
+    void runHeartbeatCheck(config).catch((error) => {
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error(`[heartbeat] Initial check failed: ${msg}`);
+    });
+  }, 10_000);
 
-  heartbeatTimer = setInterval(() => runHeartbeatCheck(config), intervalMs);
+  heartbeatTimer = setInterval(() => {
+    void runHeartbeatCheck(config).catch((error) => {
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error(`[heartbeat] Scheduled check failed: ${msg}`);
+    });
+  }, intervalMs);
 }
 
 export function stopHeartbeat(): void {
@@ -64,7 +83,6 @@ export async function runHeartbeatCheck(config: Config): Promise<string> {
   running = true;
   try {
     console.log('[heartbeat] Running check...');
-    const chatId = getChatId(config);
     const response = await runAgentTurn(
       config.agents.default,
       config.heartbeat.prompt,
@@ -74,7 +92,7 @@ export async function runHeartbeatCheck(config: Config): Promise<string> {
       undefined,
       {
         channel: 'heartbeat',
-        sessionId: chatId ? String(chatId) : undefined,
+        sessionId: undefined,
       }
     );
 
@@ -83,20 +101,20 @@ export async function runHeartbeatCheck(config: Config): Promise<string> {
       return response;
     }
 
-    // Something needs attention — send to Telegram
-    if (isSilenced()) {
+    // Something needs attention — send to active channel
+    if (isActiveChannelSilenced()) {
       console.log('[heartbeat] Alert suppressed (silenced)');
       return response;
     }
 
-    if (!chatId) {
-      console.log('[heartbeat] No chat ID available, logging alert:');
+    const sent = await sendActiveChannelProactiveMessage(config, `🫀 Heartbeat alert:\n\n${response}`);
+    if (!sent) {
+      console.log('[heartbeat] No proactive target available, logging alert:');
       console.log(response);
       return response;
     }
 
-    await sendProactiveMessage(chatId, `🫀 Heartbeat alert:\n\n${response}`);
-    console.log('[heartbeat] Alert sent to Telegram');
+    console.log(`[heartbeat] Alert sent to ${getActiveChannelId() || 'active channel'}`);
     return response;
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
@@ -105,14 +123,4 @@ export async function runHeartbeatCheck(config: Config): Promise<string> {
   } finally {
     running = false;
   }
-}
-
-function getChatId(config: Config): number | null {
-  const allowFrom = config.channels.telegram.allowFrom;
-  for (const entry of allowFrom) {
-    if (typeof entry === 'number') return entry;
-    const num = Number(entry);
-    if (!isNaN(num)) return num;
-  }
-  return null;
 }

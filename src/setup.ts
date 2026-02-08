@@ -184,6 +184,7 @@ function buildEnvContent(
   telegramToken: string,
   providers: Set<ProviderChoice>,
   secrets: ProviderSecrets,
+  discordToken?: string,
 ): string {
   const lines = ['# SkimpyClaw secrets'];
 
@@ -201,6 +202,9 @@ function buildEnvContent(
   }
 
   lines.push(`TELEGRAM_BOT_TOKEN=${telegramToken}`);
+  if (discordToken) {
+    lines.push(`DISCORD_BOT_TOKEN=${discordToken}`);
+  }
   lines.push('');
   return lines.join('\n');
 }
@@ -227,6 +231,22 @@ export async function runSetup(options?: { dryRun?: boolean }): Promise<void> {
     console.log('   Get it from @userinfobot: https://t.me/userinfobot');
     const telegramId = await ask(rl, '   Enter ID: ');
     console.log(`   ✓ ${telegramId}\n`);
+
+    // 2b. Optional Discord
+    console.log('2b. Discord Bot (optional)');
+    const useDiscord = /^y(es)?$/i.test(await ask(rl, '   Enable Discord channel? [y/N]: '));
+    let discordToken = '';
+    let discordUserId = '';
+    let discordDefaultChannelId = '';
+    if (useDiscord) {
+      console.log('   Create bot in Discord Developer Portal, then copy token and user ID.');
+      discordToken = await ask(rl, '   Enter Discord bot token: ');
+      discordUserId = await ask(rl, '   Enter your Discord user ID: ');
+      discordDefaultChannelId = await ask(rl, '   Optional default channel ID for proactive alerts: ');
+      console.log(`   ✓ ${maskInput(discordToken)}\n`);
+    } else {
+      console.log('   ✓ skipped\n');
+    }
 
     // 3. Model Providers
     const selectedProviders = await askProviders(rl);
@@ -268,6 +288,7 @@ export async function runSetup(options?: { dryRun?: boolean }): Promise<void> {
         aliases: buildAliases(selectedProviders),
       },
       channels: {
+        active: useDiscord ? 'discord' : 'telegram',
         telegram: {
           enabled: true,
           token: '${TELEGRAM_BOT_TOKEN}',
@@ -277,6 +298,16 @@ export async function runSetup(options?: { dryRun?: boolean }): Promise<void> {
             '${HOME}/.skimpyclaw',
             workspaceDir,
           ],
+        },
+        discord: {
+          enabled: useDiscord,
+          token: useDiscord ? '${DISCORD_BOT_TOKEN}' : '',
+          allowFrom: useDiscord ? [discordUserId] : [],
+          defaultAllowedPaths: [
+            '${HOME}/.skimpyclaw',
+            workspaceDir,
+          ],
+          ...(discordDefaultChannelId ? { defaultChannelId: discordDefaultChannelId } : {}),
         },
       },
       cron: {
@@ -298,7 +329,12 @@ export async function runSetup(options?: { dryRun?: boolean }): Promise<void> {
     };
 
     const configJson = JSON.stringify(config, null, 2);
-    const envContent = buildEnvContent(telegramToken, selectedProviders, providerSecrets);
+    const envContent = buildEnvContent(
+      telegramToken,
+      selectedProviders,
+      providerSecrets,
+      useDiscord ? discordToken : undefined,
+    );
 
     if (dryRun) {
       console.log('\n--- config.json ---');
@@ -358,7 +394,7 @@ export async function runSetup(options?: { dryRun?: boolean }): Promise<void> {
       console.log(`   launchctl load ~/Library/LaunchAgents/${GATEWAY_PLIST_LABEL}.plist`);
       console.log('3. Check health:');
       console.log('   curl http://localhost:18790/health');
-      console.log('4. Send /start to your Telegram bot');
+      console.log(`4. Send /help in your ${useDiscord ? 'Discord bot DM/server' : 'Telegram bot'}`);
       console.log('\n👙🦞 Enjoy!');
     }
   } finally {

@@ -1,7 +1,7 @@
 {
   "name": "skimpyclaw",
   "version": "0.1.0",
-  "description": "Lightweight personal AI assistant with Telegram integration",
+  "description": "Lightweight personal AI assistant with Telegram and Discord integration",
   "type": "module",
   "bin": {
     "skimpyclaw": "dist/cli.js"
@@ -29,6 +29,7 @@
     "@opentelemetry/sdk-trace-base": "^2.0.1",
     "@opentelemetry/sdk-trace-node": "^2.0.1",
     "croner": "^8.0.0",
+    "discord.js": "^14.25.1",
     "dotenv": "^16.4.0",
     "fastify": "^4.26.0",
     "grammy": "^1.21.1",

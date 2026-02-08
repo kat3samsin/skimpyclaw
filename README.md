@@ -4,13 +4,13 @@ SkimpyClaw is a tiny, cheeky, mini-"me" inspired by OpenClaw.
 Think: pocket-sized brain, lobster attitude, zero chill for boring workflows.
 
 Lightweight personal AI assistant with:
-- Telegram chat interface
+- Telegram or Discord chat interface (single active channel)
 - Local HTTP gateway + web dashboard
 - Scheduled cron routines
 - Periodic heartbeat checks
 - Optional tool-enabled agent execution (read/write/list/bash within allowed paths)
 - Background subagents (coding, research, general) with dedicated identities
-- Conversation history controls in Telegram (`/new`, `/compact`)
+- Conversation history controls (`/new`, `/compact`)
 
 ## Assistant personality (SOUL)
 
@@ -29,7 +29,7 @@ Default proactive themes include morning check-ins, stale PR nudges, meeting pre
 
 ```mermaid
 flowchart LR
-  user["User (Telegram)"] --> tg["Telegram Bot (grammy)"]
+  user["User (Telegram/Discord)"] --> tg["Chat Channel Adapter"]
   user2["User (Browser)"] --> dash["Dashboard UI (/dashboard)"]
   dash --> api["Dashboard API (/api/dashboard/*)"]
   tg --> agent["Agent Runtime"]
@@ -48,7 +48,7 @@ flowchart LR
 ```mermaid
 sequenceDiagram
   participant U as User
-  participant T as Telegram/Gateway API
+  participant T as Chat Channel/Gateway API
   participant A as Agent Runtime
   participant M as Model API
   participant F as Local Files
@@ -80,8 +80,8 @@ flowchart TD
   cfg --> providers["initProviders()"]
   providers --> gateway["createGateway() + listen 127.0.0.1:port"]
   gateway --> cron["initCron()"]
-  cron --> hb["initHeartbeat()"]
-  hb --> tg["initTelegram() + startTelegram()"]
+  cron --> tg["initActiveChannel() + startActiveChannel()"]
+  tg --> hb["initHeartbeat()"]
   tg --> run["Service running"]
 ```
 
@@ -90,6 +90,7 @@ flowchart TD
 - TypeScript (ESM)
 - Fastify (HTTP server + dashboard routes)
 - grammy (Telegram bot)
+- discord.js (Discord bot)
 - Croner (scheduling)
 - Anthropic SDK + OpenAI SDK (model providers)
 - Vitest (tests)
@@ -106,7 +107,9 @@ src/
   agent.ts        # prompt assembly, model calls, tool loop, memory writes
   subagent.ts     # background task dispatch with typed presets + auto-setup
   tools.ts        # Read/Write/Glob/Bash tool implementations
+  channels.ts     # active channel selection + proactive routing
   telegram.ts     # Telegram commands and message handling
+  discord.ts      # Discord commands and message handling
   cron.ts         # job scheduling + execution + cron logging
   heartbeat.ts    # periodic health/attention checks
   security.ts     # allowlist, sanitization, rate limit, secret redaction
@@ -120,7 +123,7 @@ dist/             # compiled output
 
 - Node.js 20+
 - pnpm
-- Telegram bot token (from @BotFather)
+- Telegram bot token (from @BotFather) and/or Discord bot token
 - Anthropic API key (or compatible auth token config)
 
 ## Quick start
@@ -199,7 +202,9 @@ Top-level sections:
 - `gateway`: HTTP port and mode
 - `agents`: default agent + agent definitions
 - `models`: provider credentials + model aliases (`apiKey`, optional `authToken`, optional `baseURL`, optional `authPath`)
+- `channels.active`: preferred active channel (`telegram` or `discord`)
 - `channels.telegram`: token, allowlist, optional `tools`, optional `dailyNotesDir`, optional `defaultAllowedPaths`
+- `channels.discord`: token, allowlist, optional `tools`, optional `defaultAllowedPaths`, optional `defaultChannelId`
 - `cron.jobs`: scheduled tasks
 - `heartbeat`: interval, prompt, optional `model`, optional `tools`
 - `dashboard.token`: API auth token for `/api/dashboard/*`
@@ -207,6 +212,7 @@ Top-level sections:
 Environment placeholders in JSON are supported:
 - `${ANTHROPIC_API_KEY}`
 - `${TELEGRAM_BOT_TOKEN}`
+- `${DISCORD_BOT_TOKEN}`
 - `${HOME}`
 
 ## Langfuse (optional)
@@ -258,7 +264,7 @@ Dashboard API routes (Bearer token protected when configured):
 - `GET /api/dashboard/config`
 - `PUT /api/dashboard/config`
 
-## Telegram commands
+## Chat commands
 
 - `/start`
 - `/model <alias-or-model>`
@@ -275,8 +281,11 @@ Dashboard API routes (Bearer token protected when configured):
 - `/cancel <id>` (cancel a running subagent task)
 - `/new` (clear conversation history)
 - `/compact` (summarize + compress conversation history)
-- `/memory` (list recent memory files)
-- `/memory <filename>` (read one memory file)
+
+Telegram-only:
+- `/morning`
+- `/memory`
+- `/memory <filename>`
 
 Any non-command text message is treated as a chat prompt to the agent and uses recent in-memory conversation context.
 
@@ -310,7 +319,7 @@ Under `~/.skimpyclaw`:
 
 ## Security notes
 
-- Telegram access is allowlist-based (`allowFrom` IDs/usernames)
+- Channel access is allowlist-based (`allowFrom` IDs/usernames)
 - Basic per-user message rate limiting is enabled
 - User input is sanitized for common prompt-injection markers
 - Dashboard config responses redact key/token-like fields
@@ -342,6 +351,8 @@ Current tests cover:
 ## Known implementation caveats
 
 - Telegram daily notes path and default tool paths are configurable in `channels.telegram`.
+- Discord default proactive target is configurable with `channels.discord.defaultChannelId`.
+- Runtime uses one active channel at a time (`channels.active`, or first enabled if unset).
 - Heartbeat tool paths are configurable in `heartbeat.tools`.
 - Gateway binds to `127.0.0.1` by default.
 - Config reload endpoint currently indicates restart is required.
