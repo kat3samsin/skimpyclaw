@@ -3,7 +3,14 @@
 import { homedir } from 'os';
 import { join } from 'path';
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
-import type { Config, SubagentType, SubagentStatus, SubagentTask, ToolConfig, ChatMessage } from './types.js';
+import type {
+  Config,
+  SubagentType,
+  SubagentStatus,
+  SubagentTask,
+  ToolConfig,
+  ChatMessage
+} from './types.js';
 import { runAgentTurn } from './agent.js';
 import { getCurrentModel } from './gateway.js';
 import { getAgentDir } from './config.js';
@@ -12,53 +19,54 @@ const MAX_CONCURRENT = 3;
 
 // Preset configs per agent type
 interface SubagentPreset {
-  agentId: SubagentType;       // matches the type name, used as agent dir name
-  defaultModel: string;        // alias from config.models.aliases
+  agentId: SubagentType; // matches the type name, used as agent dir name
+  defaultModel: string; // alias from config.models.aliases
   toolConfig: ToolConfig;
   description: string;
 }
 
-const VAULT_PATH = join(homedir(), 'Library/Mobile Documents/iCloud~md~obsidian/Documents/2ndBrain');
-
 const PRESETS: Record<SubagentType, SubagentPreset> = {
   coding: {
     agentId: 'coding',
-    defaultModel: 'claude-think',
+    defaultModel: 'claude-opus',
     toolConfig: {
       enabled: true,
-      allowedPaths: [join(homedir(), '.skimpyclaw'), join(homedir(), 'Sites')],
+      allowedPaths: [join(homedir(), '.skimpyclaw')],
       maxIterations: 100,
-      bashTimeout: 30000,
+      bashTimeout: 30000
     },
-    description: 'Code tasks with broad file + bash access',
+    description: 'Code tasks with broad file + bash access'
   },
   research: {
     agentId: 'research',
     defaultModel: 'claude-think',
     toolConfig: {
       enabled: true,
-      allowedPaths: [join(homedir(), '.skimpyclaw'), VAULT_PATH],
+      allowedPaths: [join(homedir(), '.skimpyclaw')],
       maxIterations: 50,
-      bashTimeout: 15000,
+      bashTimeout: 15000
     },
-    description: 'Research with vault access for notes',
+    description: 'Research tasks with configurable file access'
   },
   general: {
     agentId: 'general',
-    defaultModel: '',  // uses current model
+    defaultModel: '', // uses current model
     toolConfig: {
       enabled: true,
       allowedPaths: [join(homedir(), '.skimpyclaw')],
       maxIterations: 100,
-      bashTimeout: 15000,
+      bashTimeout: 15000
     },
-    description: 'General tasks with config access',
-  },
+    description: 'General tasks with config access'
+  }
 };
 
 // --- Starter Templates ---
 
-const STARTER_TEMPLATES: Record<SubagentType, { identity: string; tools: string }> = {
+const STARTER_TEMPLATES: Record<
+  SubagentType,
+  { identity: string; tools: string }
+> = {
   coding: {
     identity: `# IDENTITY.md - Coding Subagent
 
@@ -104,7 +112,7 @@ Execute a shell command. Parameters: \`command\` (string, required), \`cwd\` (st
 - Config: ~/.skimpyclaw/config.json
 - Agent templates: ~/.skimpyclaw/agents/
 - Sites: ~/Sites/
-`,
+`
   },
   research: {
     identity: `# IDENTITY.md - Research Subagent
@@ -112,8 +120,7 @@ Execute a shell command. Parameters: \`command\` (string, required), \`cwd\` (st
 Name: Research Agent
 Emoji: 🔍
 
-You are a research subagent dispatched for a specific task. You have access to the
-Obsidian vault and config files.
+You are a research subagent dispatched for a specific task.
 
 ## Your Role
 - Research questions using vault notes and files
@@ -146,20 +153,10 @@ List files and directories at a path. Parameter: \`path\` (string, required)
 Execute a shell command. Parameters: \`command\` (string, required), \`cwd\` (string, optional)
 
 ## Key Paths
-- Obsidian vault: ~/Library/Mobile Documents/iCloud~md~obsidian/Documents/2ndBrain
-- Daily notes: {vault}/2. Areas/Daily Notes/MM-DD-YYYY.md
-- Daily digests: {vault}/2. Areas/Daily Digests/MM-DD-YYYY.md
-- Reading tracker: {vault}/1. Projects/Reading.md
 - Config: ~/.skimpyclaw/config.json
 - Agent templates: ~/.skimpyclaw/agents/
-
-({vault} = ${VAULT_PATH})
-
-## Vault Workflows
-
-When you need vault-specific instructions, read the vault's CLAUDE.md:
-\`Read({ file_path: "${VAULT_PATH}/CLAUDE.md" })\`
-`,
+- Add your notes/vault paths to allowedPaths in config before using them
+`
   },
   general: {
     identity: `# IDENTITY.md - General Subagent
@@ -202,16 +199,17 @@ Execute a shell command. Parameters: \`command\` (string, required), \`cwd\` (st
 ## Key Paths
 - Config: ~/.skimpyclaw/config.json
 - Agent templates: ~/.skimpyclaw/agents/
-`,
-  },
+`
+  }
 };
 
 // Agent identity metadata for in-memory registration
-const AGENT_IDENTITIES: Record<SubagentType, { name: string; emoji: string }> = {
-  coding: { name: 'Coding Agent', emoji: '🔧' },
-  research: { name: 'Research Agent', emoji: '🔍' },
-  general: { name: 'General Agent', emoji: '🦞' },
-};
+const AGENT_IDENTITIES: Record<SubagentType, { name: string; emoji: string }> =
+  {
+    coding: { name: 'Coding Agent', emoji: '🔧' },
+    research: { name: 'Research Agent', emoji: '🔍' },
+    general: { name: 'General Agent', emoji: '🦞' }
+  };
 
 /**
  * Ensure agent directory and templates exist for a subagent type.
@@ -237,7 +235,7 @@ export function ensureAgentSetup(type: SubagentType, config: Config): void {
     config.agents.list[preset.agentId] = {
       identity,
       model: preset.defaultModel || 'anthropic/claude-sonnet-4-5',
-      thinking: 'medium',
+      thinking: 'medium'
     };
     console.log(`[subagent] Registered agent in config: ${preset.agentId}`);
   }
@@ -246,16 +244,23 @@ export function ensureAgentSetup(type: SubagentType, config: Config): void {
 // Task tracking
 let taskCounter = 0;
 const tasks = new Map<string, SubagentTask>();
-let deliverMessage: ((chatId: number, message: string) => Promise<void>) | null = null;
+let deliverMessage:
+  | ((chatId: number, message: string) => Promise<void>)
+  | null = null;
 
-export function initSubagentSystem(deliverFn: (chatId: number, message: string) => Promise<void>): void {
+export function initSubagentSystem(
+  deliverFn: (chatId: number, message: string) => Promise<void>
+): void {
   deliverMessage = deliverFn;
   console.log('[subagent] System initialized');
 }
 
 export function getPresetDescriptions(): string {
   return Object.entries(PRESETS)
-    .map(([type, preset]) => `  ${type} — ${preset.description} (default: ${preset.defaultModel || 'current model'})`)
+    .map(
+      ([type, preset]) =>
+        `  ${type} — ${preset.description} (default: ${preset.defaultModel || 'current model'})`
+    )
     .join('\n');
 }
 
@@ -267,14 +272,18 @@ export function dispatchSubagent(
   modelOverride?: string,
   history?: ChatMessage[]
 ): SubagentTask {
-  const running = [...tasks.values()].filter(t => t.status === 'running');
+  const running = [...tasks.values()].filter((t) => t.status === 'running');
   if (running.length >= MAX_CONCURRENT) {
-    throw new Error(`Max concurrent agents reached (${MAX_CONCURRENT}). Use /tasks to see running agents or /cancel to stop one.`);
+    throw new Error(
+      `Max concurrent agents reached (${MAX_CONCURRENT}). Use /tasks to see running agents or /cancel to stop one.`
+    );
   }
 
   const preset = PRESETS[type];
   if (!preset) {
-    throw new Error(`Unknown agent type: ${type}. Use: ${Object.keys(PRESETS).join(', ')}`);
+    throw new Error(
+      `Unknown agent type: ${type}. Use: ${Object.keys(PRESETS).join(', ')}`
+    );
   }
 
   taskCounter++;
@@ -289,23 +298,29 @@ export function dispatchSubagent(
     chatId,
     model,
     createdAt: new Date(),
-    abortController: new AbortController(),
+    abortController: new AbortController()
   };
 
   tasks.set(id, task);
 
   // Fire and forget — don't await
-  executeTask(task, config, history).catch(err => {
+  executeTask(task, config, history).catch((err) => {
     console.error(`[subagent] Unhandled error in task ${id}:`, err);
   });
 
   return task;
 }
 
-async function executeTask(task: SubagentTask, config: Config, history?: ChatMessage[]): Promise<void> {
+async function executeTask(
+  task: SubagentTask,
+  config: Config,
+  history?: ChatMessage[]
+): Promise<void> {
   task.status = 'running';
   task.startedAt = new Date();
-  console.log(`[subagent] Starting ${task.id} (${task.type}, model: ${task.model})`);
+  console.log(
+    `[subagent] Starting ${task.id} (${task.type}, model: ${task.model})`
+  );
 
   try {
     // Check cancellation before starting
@@ -332,8 +347,8 @@ async function executeTask(task: SubagentTask, config: Config, history?: ChatMes
         sessionId: task.id,
         metadata: {
           type: task.type,
-          chatId: task.chatId,
-        },
+          chatId: task.chatId
+        }
       }
     );
 
@@ -348,7 +363,9 @@ async function executeTask(task: SubagentTask, config: Config, history?: ChatMes
     task.result = response;
     task.completedAt = new Date();
 
-    const elapsed = Math.round((task.completedAt.getTime() - task.startedAt!.getTime()) / 1000);
+    const elapsed = Math.round(
+      (task.completedAt.getTime() - task.startedAt!.getTime()) / 1000
+    );
     console.log(`[subagent] Completed ${task.id} in ${elapsed}s`);
 
     // Deliver result
@@ -361,11 +378,21 @@ async function executeTask(task: SubagentTask, config: Config, history?: ChatMes
     task.error = error instanceof Error ? error.message : 'Unknown error';
     task.completedAt = new Date();
 
-    const elapsed = Math.round((task.completedAt.getTime() - (task.startedAt?.getTime() || task.createdAt.getTime())) / 1000);
-    console.error(`[subagent] Failed ${task.id} after ${elapsed}s:`, task.error);
+    const elapsed = Math.round(
+      (task.completedAt.getTime() -
+        (task.startedAt?.getTime() || task.createdAt.getTime())) /
+        1000
+    );
+    console.error(
+      `[subagent] Failed ${task.id} after ${elapsed}s:`,
+      task.error
+    );
 
     if (deliverMessage) {
-      await deliverMessage(task.chatId, `❌ Agent ${task.id} (${task.type}) failed after ${elapsed}s:\n\n${task.error}`);
+      await deliverMessage(
+        task.chatId,
+        `❌ Agent ${task.id} (${task.type}) failed after ${elapsed}s:\n\n${task.error}`
+      );
     }
   }
 }
@@ -383,7 +410,9 @@ export function cancelTask(id: string): SubagentTask | null {
 }
 
 export function getActiveTasks(): SubagentTask[] {
-  return [...tasks.values()].filter(t => t.status === 'pending' || t.status === 'running');
+  return [...tasks.values()].filter(
+    (t) => t.status === 'pending' || t.status === 'running'
+  );
 }
 
 export function getRecentTasks(n: number = 10): SubagentTask[] {

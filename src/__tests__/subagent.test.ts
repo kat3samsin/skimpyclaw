@@ -292,7 +292,7 @@ describe('subagent', () => {
         (c: any) => String(c[0]).endsWith('IDENTITY.md')
       );
       expect(identityCall![1]).toContain('Research Agent');
-      expect(identityCall![1]).toContain('Obsidian vault');
+      expect(identityCall![1]).toContain('research subagent dispatched');
     });
 
     it('creates correct templates for general type', () => {
