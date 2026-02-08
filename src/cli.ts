@@ -447,6 +447,8 @@ async function commandBrowser(args: string[]): Promise<number> {
 
   if (hasFlag(args, '--headful')) input.headless = false;
   if (hasFlag(args, '--headless')) input.headless = true;
+  const browserIdx = args.indexOf('--browser');
+  if (browserIdx !== -1) input.type = args[browserIdx + 1];
   const slowIdx = args.indexOf('--slowmo');
   if (slowIdx !== -1) input.slowMoMs = Number(args[slowIdx + 1]);
   const uaIdx = args.indexOf('--user-agent');

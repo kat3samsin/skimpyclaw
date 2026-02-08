@@ -109,6 +109,7 @@ export interface ToolConfig {
   bashTimeout?: number;    // Bash command timeout in ms (default: 30000)
   browser?: {
     enabled?: boolean;
+    type?: 'chromium' | 'firefox' | 'webkit';
     headless?: boolean;
     allowFile?: boolean;
     slowMoMs?: number;

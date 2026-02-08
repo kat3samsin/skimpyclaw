@@ -86,6 +86,7 @@ export const TOOL_DEFINITIONS = [
       type: 'object' as const,
       properties: {
         action: { type: 'string', description: 'open | click | type | waitFor | screenshot | wait | close' },
+        type: { type: 'string', description: 'Browser type: chromium | firefox | webkit (optional, config default)' },
         url: { type: 'string', description: 'URL to open (open action)' },
         selector: { type: 'string', description: 'CSS selector (click/type/waitFor)' },
         text: { type: 'string', description: 'Text to type or wait for (type/waitFor)' },
@@ -256,12 +257,13 @@ function isFileUrlAllowed(url: string, config: ToolConfig): boolean {
 }
 
 function buildBrowserOptions(config: ToolConfig, overrides?: Record<string, any>) {
+  const type = overrides?.type ?? config.browser?.type ?? 'chromium';
   const headless = overrides?.headless ?? config.browser?.headless ?? true;
   const slowMo = overrides?.slowMoMs ?? config.browser?.slowMoMs;
   const userAgent = overrides?.userAgent ?? config.browser?.userAgent;
   const viewport = overrides?.viewport ?? config.browser?.viewport;
   const profileDir = overrides?.profileDir ?? config.browser?.profileDir ?? join(homedir(), '.skimpyclaw', 'browser-profile');
-  return { headless, slowMo, userAgent, viewport, profileDir };
+  return { type, headless, slowMo, userAgent, viewport, profileDir };
 }
 
 async function ensureBrowser(config: ToolConfig, overrides?: Record<string, any>): Promise<void> {
@@ -286,8 +288,9 @@ async function ensureBrowser(config: ToolConfig, overrides?: Record<string, any>
     mkdirSync(options.profileDir, { recursive: true });
   }
 
-  const { chromium } = await getPlaywright();
-  browserContext = await chromium.launchPersistentContext(options.profileDir, {
+  const pw = await getPlaywright();
+  const browserLauncher = pw[options.type as keyof typeof pw] || pw.chromium;
+  browserContext = await browserLauncher.launchPersistentContext(options.profileDir, {
     headless: options.headless,
     slowMo: options.slowMo,
     userAgent: options.userAgent,
