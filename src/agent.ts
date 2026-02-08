@@ -584,9 +584,16 @@ export async function chat(
       // Extract text content
       const textContent = response.content.find(c => c.type === 'text');
       const text = textContent?.text || '';
+      const usageDetails = response.usage
+        ? {
+            input_tokens: response.usage.input_tokens,
+            output_tokens: response.usage.output_tokens,
+            total_tokens: response.usage.input_tokens + response.usage.output_tokens,
+          }
+        : undefined;
       genObs?.update({
         output: { text },
-        usageDetails: (response as any).usage,
+        usageDetails,
       });
       genObs?.end();
 
