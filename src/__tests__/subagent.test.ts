@@ -105,7 +105,7 @@ describe('subagent', () => {
       expect(task.type).toBe('coding');
       expect(task.prompt).toBe('list TODOs');
       expect(task.chatId).toBe(123);
-      expect(task.model).toBe('claude-think');
+      expect(task.model).toBe('claude-opus');
       expect(task.createdAt).toBeInstanceOf(Date);
     });
 
