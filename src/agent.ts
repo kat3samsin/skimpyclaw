@@ -68,6 +68,11 @@ You are NOT the full Claude Code CLI. Do NOT roleplay as Claude Code.
 - NEVER invent tools that are not in your tool list (no str_replace_editor, no view, etc.)
 - If you need information, use a tool to get it. Do not guess.`;
 
+function startGenerationObservation(name: string, attributes: Record<string, any>) {
+  if (!isLangfuseEnabled()) return null;
+  return startObservation(name, attributes, { asType: 'generation' });
+}
+
 /**
  * Build the system parameter for Anthropic API calls.
  * For OAuth: returns an array with Claude Code identity + guard + actual prompt as separate blocks.
@@ -285,8 +290,29 @@ async function codexChat(messages: ChatMessage[], model: string, toolConfig?: To
     if (tools) body.tools = tools;
 
     console.log(`[codex] Iteration ${i + 1}/${maxIterations} (model: ${model})`);
-    const sseText = await codexFetch(body);
-    const parsed = parseCodexSSE(sseText);
+
+    const genObs = startGenerationObservation(`codex:${model}`, {
+      input: { instructions, input },
+      model,
+      modelParameters: { stream: true, reasoning: body.reasoning },
+      metadata: { provider: 'codex', iteration: i + 1 },
+    });
+
+    let parsed: { outputText: string; functionCalls: any[]; response: any | null };
+    try {
+      const sseText = await codexFetch(body);
+      parsed = parseCodexSSE(sseText);
+      genObs?.update({
+        output: { text: parsed.outputText },
+        usageDetails: parsed.response?.usage,
+      });
+      genObs?.end();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      genObs?.update({ level: 'ERROR', statusMessage: errorMessage, output: { error: errorMessage } });
+      genObs?.end();
+      throw err;
+    }
 
     // No function calls — we're done
     if (parsed.functionCalls.length === 0) {
@@ -492,11 +518,35 @@ export async function chat(
       params.max_tokens = Math.max(params.max_tokens, budgetTokens + 4096);
     }
 
-    const response = await anthropicClient.messages.create(params);
+    const genObs = startGenerationObservation(`anthropic:${modelId}`, {
+      input: { system: systemMessage?.content, messages: chatMessages },
+      model: modelId,
+      modelParameters: {
+        max_tokens: params.max_tokens,
+        ...(options.thinking && options.thinking !== 'none' ? { thinking: options.thinking } : {}),
+      },
+      metadata: { provider: 'anthropic' },
+    });
 
-    // Extract text content
-    const textContent = response.content.find(c => c.type === 'text');
-    return textContent?.text || '';
+    try {
+      const response = await anthropicClient.messages.create(params);
+
+      // Extract text content
+      const textContent = response.content.find(c => c.type === 'text');
+      const text = textContent?.text || '';
+      genObs?.update({
+        output: { text },
+        usageDetails: (response as any).usage,
+      });
+      genObs?.end();
+
+      return text;
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      genObs?.update({ level: 'ERROR', statusMessage: errorMessage, output: { error: errorMessage } });
+      genObs?.end();
+      throw err;
+    }
   }
 
   // Codex OAuth providers use ChatGPT backend (not OpenAI API)
@@ -513,14 +563,38 @@ export async function chat(
       content: m.content,
     }));
 
-    const response = await client.chat.completions.create({
+    const genObs = startGenerationObservation(`openai:${modelId}`, {
+      input: { messages: openaiMessages },
       model: modelId,
-      messages: openaiMessages,
-      max_tokens: options.maxTokens || 4096,
-      temperature: options.temperature,
+      modelParameters: {
+        max_tokens: options.maxTokens || 4096,
+        temperature: options.temperature,
+      },
+      metadata: { provider },
     });
 
-    return response.choices[0]?.message?.content || '';
+    try {
+      const response = await client.chat.completions.create({
+        model: modelId,
+        messages: openaiMessages,
+        max_tokens: options.maxTokens || 4096,
+        temperature: options.temperature,
+      });
+
+      const content = response.choices[0]?.message?.content || '';
+      genObs?.update({
+        output: response.choices[0]?.message,
+        usageDetails: response.usage,
+      });
+      genObs?.end();
+
+      return content;
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      genObs?.update({ level: 'ERROR', statusMessage: errorMessage, output: { error: errorMessage } });
+      genObs?.end();
+      throw err;
+    }
   }
 
   throw new Error(`Unknown provider "${provider}" for model: ${resolvedModel}. Available: anthropic, ${[...openaiClients.keys()].join(', ')}`);
@@ -584,7 +658,28 @@ export async function chatWithTools(
     }
 
     console.log(`[agent:tools] Iteration ${i + 1}/${maxIterations}`);
-    const response = await anthropicClient.messages.create(params);
+
+    const genObs = startGenerationObservation(`anthropic:${modelId}`, {
+      input: { messages: apiMessages },
+      model: modelId,
+      modelParameters: { max_tokens: params.max_tokens },
+      metadata: { provider: 'anthropic', iteration: i + 1 },
+    });
+
+    let response: any;
+    try {
+      response = await anthropicClient.messages.create(params);
+      genObs?.update({
+        output: response.content,
+        usageDetails: (response as any).usage,
+      });
+      genObs?.end();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      genObs?.update({ level: 'ERROR', statusMessage: errorMessage, output: { error: errorMessage } });
+      genObs?.end();
+      throw err;
+    }
 
     // If no tool use, we're done — extract text
     if (response.stop_reason !== 'tool_use') {
