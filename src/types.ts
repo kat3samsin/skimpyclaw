@@ -114,6 +114,7 @@ export interface ToolConfig {
     slowMoMs?: number;
     userAgent?: string;
     viewport?: { width: number; height: number };
+    profileDir?: string;
   };
 }
 

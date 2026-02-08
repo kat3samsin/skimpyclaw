@@ -227,7 +227,7 @@ function executeBash(command: string, cwd: string | undefined, config: ToolConfi
 // --- Browser Tool (Playwright) ---
 
 let playwrightModule: any | null = null;
-let browserInstance: any | null = null;
+let browserContext: any | null = null;
 let browserPage: any | null = null;
 let browserOptionsKey: string | null = null;
 
@@ -260,28 +260,42 @@ function buildBrowserOptions(config: ToolConfig, overrides?: Record<string, any>
   const slowMo = overrides?.slowMoMs ?? config.browser?.slowMoMs;
   const userAgent = overrides?.userAgent ?? config.browser?.userAgent;
   const viewport = overrides?.viewport ?? config.browser?.viewport;
-  return { headless, slowMo, userAgent, viewport };
+  const profileDir = overrides?.profileDir ?? config.browser?.profileDir ?? join(homedir(), '.skimpyclaw', 'browser-profile');
+  return { headless, slowMo, userAgent, viewport, profileDir };
 }
 
 async function ensureBrowser(config: ToolConfig, overrides?: Record<string, any>): Promise<void> {
   const options = buildBrowserOptions(config, overrides);
   const optionsKey = JSON.stringify(options);
 
-  if (browserInstance && browserPage && browserOptionsKey === optionsKey) return;
+  if (browserContext && browserPage && browserOptionsKey === optionsKey) return;
 
   if (browserPage) {
     await browserPage.close().catch(() => {});
     browserPage = null;
   }
-  if (browserInstance) {
-    await browserInstance.close().catch(() => {});
-    browserInstance = null;
+  if (browserContext) {
+    await browserContext.close().catch(() => {});
+    browserContext = null;
+  }
+
+  if (!isPathAllowed(options.profileDir, config.allowedPaths)) {
+    throw new Error(`Profile dir not allowed. Add to allowedPaths: ${options.profileDir}`);
+  }
+  if (!existsSync(options.profileDir)) {
+    mkdirSync(options.profileDir, { recursive: true });
   }
 
   const { chromium } = await getPlaywright();
-  browserInstance = await chromium.launch({ headless: options.headless, slowMo: options.slowMo });
-  const context = await browserInstance.newContext({ userAgent: options.userAgent, viewport: options.viewport });
-  browserPage = await context.newPage();
+  browserContext = await chromium.launchPersistentContext(options.profileDir, {
+    headless: options.headless,
+    slowMo: options.slowMo,
+    userAgent: options.userAgent,
+    viewport: options.viewport,
+  });
+
+  const pages = browserContext.pages();
+  browserPage = pages.length > 0 ? pages[0] : await browserContext.newPage();
   browserOptionsKey = optionsKey;
 }
 
@@ -350,9 +364,9 @@ async function executeBrowser(input: Record<string, any>, config: ToolConfig): P
         await browserPage.close().catch(() => {});
         browserPage = null;
       }
-      if (browserInstance) {
-        await browserInstance.close().catch(() => {});
-        browserInstance = null;
+      if (browserContext) {
+        await browserContext.close().catch(() => {});
+        browserContext = null;
       }
       browserOptionsKey = null;
       return 'Browser closed.';

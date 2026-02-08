@@ -251,7 +251,8 @@ Optional, disabled by default. Enable via tool config:
         "allowFile": false,
         "slowMoMs": 50,
         "userAgent": "",
-        "viewport": { "width": 1280, "height": 720 }
+        "viewport": { "width": 1280, "height": 720 },
+        "profileDir": "${HOME}/.skimpyclaw/browser-profile"
       }
     }
   }
@@ -259,6 +260,10 @@ Optional, disabled by default. Enable via tool config:
 ```
 
 Actions: `open(url)`, `click(selector)`, `type(selector,text)`, `waitFor(selector|text)`, `screenshot(file_path?)`, `wait(timeMs)`, `close()`.
+
+Profile:
+- Uses a persistent browser profile directory so logins/cookies are remembered between runs.
+- Default: `~/.skimpyclaw/browser-profile` (set `browser.profileDir` to change).
 
 CLI wrapper:
 ```bash
