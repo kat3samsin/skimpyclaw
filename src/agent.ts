@@ -101,6 +101,28 @@ function toUsageDetails(usage: OpenAI.Completions.CompletionUsage | null | undef
   return usageDetails;
 }
 
+function toNumericUsageDetails(usage: unknown): Record<string, number> | undefined {
+  if (!usage || typeof usage !== 'object') return undefined;
+
+  const details: Record<string, number> = {};
+
+  const flatten = (value: unknown, prefix = ''): void => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return;
+
+    for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+      const field = prefix ? `${prefix}_${key}` : key;
+      if (typeof nested === 'number') {
+        details[field] = nested;
+      } else if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
+        flatten(nested, field);
+      }
+    }
+  };
+
+  flatten(usage);
+  return Object.keys(details).length > 0 ? details : undefined;
+}
+
 /**
  * Build the system parameter for Anthropic API calls.
  * For OAuth: returns an array with Claude Code identity + guard + actual prompt as separate blocks.
@@ -332,7 +354,7 @@ async function codexChat(messages: ChatMessage[], model: string, toolConfig?: To
       parsed = parseCodexSSE(sseText);
       genObs?.update({
         output: { text: parsed.outputText },
-        usageDetails: parsed.response?.usage,
+        usageDetails: toNumericUsageDetails(parsed.response?.usage),
       });
       genObs?.end();
     } catch (err) {
