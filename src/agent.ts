@@ -7,8 +7,10 @@ import { join } from 'path';
 import { homedir } from 'os';
 import { getAgentDir } from './config.js';
 import { buildSafeSystemPrompt, sanitizeUserInput } from './security.js';
-import type { Config, ChatMessage, ChatOptions, ToolConfig } from './types.js';
+import type { Config, ChatMessage, ChatOptions, ToolConfig, AgentRunContext } from './types.js';
 import { TOOL_DEFINITIONS, executeTool } from './tools.js';
+import { getLangfuseConfig, isLangfuseEnabled } from './langfuse.js';
+import { startActiveObservation, startObservation, updateActiveTrace } from '@langfuse/tracing';
 
 // --- Template Loading ---
 
@@ -309,16 +311,31 @@ async function codexChat(messages: ChatMessage[], model: string, toolConfig?: To
 
       const inputStr = fc.arguments.slice(0, 200);
       console.log(`[codex:tools] -> ${fc.name}(${inputStr})`);
-      const result = await executeTool(fc.name, args, toolConfig!);
-      const resultPreview = result.slice(0, 200) + (result.length > 200 ? '...' : '');
-      console.log(`[codex:tools] <- ${resultPreview}`);
-      toolLog.push(`${fc.name}(${inputStr}) → ${resultPreview}`);
 
-      input.push({
-        type: 'function_call_output',
-        call_id: fc.callId,
-        output: result,
-      });
+      const toolObs = isLangfuseEnabled()
+        ? startObservation(`tool:${fc.name}`, { input: args, metadata: { tool: fc.name } }, { asType: 'tool' })
+        : null;
+
+      try {
+        const result = await executeTool(fc.name, args, toolConfig!);
+        const resultPreview = result.slice(0, 200) + (result.length > 200 ? '...' : '');
+        console.log(`[codex:tools] <- ${resultPreview}`);
+        toolLog.push(`${fc.name}(${inputStr}) → ${resultPreview}`);
+
+        toolObs?.update({ output: result });
+        toolObs?.end();
+
+        input.push({
+          type: 'function_call_output',
+          call_id: fc.callId,
+          output: result,
+        });
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        toolObs?.update({ level: 'ERROR', statusMessage: errorMessage, output: { error: errorMessage } });
+        toolObs?.end();
+        throw err;
+      }
     }
   }
 
@@ -588,16 +605,31 @@ export async function chatWithTools(
 
       const inputStr = JSON.stringify(block.input).slice(0, 200);
       console.log(`[agent:tools] -> ${block.name}(${inputStr})`);
-      const result = await executeTool(block.name, block.input as Record<string, any>, toolConfig);
-      const resultPreview = result.slice(0, 200) + (result.length > 200 ? '...' : '');
-      console.log(`[agent:tools] <- ${resultPreview}`);
-      toolLog.push(`${block.name}(${inputStr}) → ${resultPreview}`);
 
-      toolResults.push({
-        type: 'tool_result',
-        tool_use_id: block.id,
-        content: result,
-      });
+      const toolObs = isLangfuseEnabled()
+        ? startObservation(`tool:${block.name}`, { input: block.input, metadata: { tool: block.name } }, { asType: 'tool' })
+        : null;
+
+      try {
+        const result = await executeTool(block.name, block.input as Record<string, any>, toolConfig);
+        const resultPreview = result.slice(0, 200) + (result.length > 200 ? '...' : '');
+        console.log(`[agent:tools] <- ${resultPreview}`);
+        toolLog.push(`${block.name}(${inputStr}) → ${resultPreview}`);
+
+        toolObs?.update({ output: result });
+        toolObs?.end();
+
+        toolResults.push({
+          type: 'tool_result',
+          tool_use_id: block.id,
+          content: result,
+        });
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        toolObs?.update({ level: 'ERROR', statusMessage: errorMessage, output: { error: errorMessage } });
+        toolObs?.end();
+        throw err;
+      }
     }
 
     // Send tool results back
@@ -619,7 +651,8 @@ export async function runAgentTurn(
   config: Config,
   modelOverride?: string,
   toolConfig?: ToolConfig,
-  history?: ChatMessage[]
+  history?: ChatMessage[],
+  context?: AgentRunContext
 ): Promise<string> {
   const agentConfig = config.agents.list[agentId];
   if (!agentConfig) {
@@ -642,38 +675,101 @@ export async function runAgentTurn(
   const provider = getProvider(resolvedModel);
   const modelId = stripProvider(resolvedModel);
 
-  let response: string;
+  let response: string = '';
   let toolCalls: string[] = [];
 
-  if (toolConfig?.enabled && provider === 'anthropic' && !!anthropicClient) {
-    // Anthropic tool_use loop
-    console.log(`[agent] Running with tools enabled (paths: ${toolConfig.allowedPaths.join(', ')})`);
-    const result = await chatWithTools(messages, chatOptions, config, toolConfig);
-    response = result.response;
-    toolCalls = result.toolCalls;
-  } else if (toolConfig?.enabled && responsesApiProviders.has(provider)) {
-    // Codex tool_use loop via Responses API
-    console.log(`[agent] Running Codex with tools enabled (paths: ${toolConfig.allowedPaths.join(', ')})`);
-    const result = await codexChat(messages, modelId, toolConfig);
-    response = result.response;
-    toolCalls = result.toolCalls;
-  } else if (responsesApiProviders.has(provider)) {
-    // Codex without tools
-    const result = await codexChat(messages, modelId);
-    response = result.response;
-  } else {
-    response = await chat(messages, chatOptions, config);
+  const runTurn = async (): Promise<string> => {
+    if (toolConfig?.enabled && provider === 'anthropic' && !!anthropicClient) {
+      // Anthropic tool_use loop
+      console.log(`[agent] Running with tools enabled (paths: ${toolConfig.allowedPaths.join(', ')})`);
+      const result = await chatWithTools(messages, chatOptions, config, toolConfig);
+      response = result.response;
+      toolCalls = result.toolCalls;
+    } else if (toolConfig?.enabled && responsesApiProviders.has(provider)) {
+      // Codex tool_use loop via Responses API
+      console.log(`[agent] Running Codex with tools enabled (paths: ${toolConfig.allowedPaths.join(', ')})`);
+      const result = await codexChat(messages, modelId, toolConfig);
+      response = result.response;
+      toolCalls = result.toolCalls;
+    } else if (responsesApiProviders.has(provider)) {
+      // Codex without tools
+      const result = await codexChat(messages, modelId);
+      response = result.response;
+    } else {
+      response = await chat(messages, chatOptions, config);
+    }
+
+    // Log to memory with tool usage summary
+    let memoryEntry = `**User:** ${sanitizedMessage}\n\n`;
+    if (toolCalls.length > 0) {
+      memoryEntry += `**Tools used (${toolCalls.length}):**\n${toolCalls.map(t => `- ${t}`).join('\n')}\n\n`;
+    }
+    memoryEntry += `**Assistant:** ${response}`;
+    appendToMemory(agentId, memoryEntry);
+
+    return response;
+  };
+
+  if (!isLangfuseEnabled()) {
+    return runTurn();
   }
 
-  // Log to memory with tool usage summary
-  let memoryEntry = `**User:** ${sanitizedMessage}\n\n`;
-  if (toolCalls.length > 0) {
-    memoryEntry += `**Tools used (${toolCalls.length}):**\n${toolCalls.map(t => `- ${t}`).join('\n')}\n\n`;
-  }
-  memoryEntry += `**Assistant:** ${response}`;
-  appendToMemory(agentId, memoryEntry);
+  const lfConfig = getLangfuseConfig();
+  const traceName = `agent:${agentId}`;
+  const traceInput = { message: sanitizedMessage };
+  const traceMetadata = {
+    agentId,
+    model: resolvedModel,
+    provider,
+    toolEnabled: !!toolConfig?.enabled,
+    channel: context?.channel,
+    ...context?.metadata,
+  };
 
-  return response;
+  return startActiveObservation(
+    traceName,
+    async (agentObs) => {
+      updateActiveTrace({
+        name: traceName,
+        userId: context?.userId,
+        sessionId: context?.sessionId,
+        input: traceInput,
+        metadata: traceMetadata,
+        tags: context?.tags,
+        environment: lfConfig?.environment,
+        release: lfConfig?.release,
+      });
+
+      agentObs.update({
+        input: traceInput,
+        metadata: traceMetadata,
+        environment: lfConfig?.environment,
+      });
+
+      try {
+        const result = await runTurn();
+        agentObs.update({
+          output: { response: result, toolCalls },
+          metadata: { toolCallsCount: toolCalls.length },
+        });
+        updateActiveTrace({
+          output: { response: result },
+          metadata: { toolCallsCount: toolCalls.length },
+        });
+        return result;
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        agentObs.update({
+          level: 'ERROR',
+          statusMessage: errorMessage,
+          output: { error: errorMessage },
+        });
+        updateActiveTrace({ output: { error: errorMessage } });
+        throw err;
+      }
+    },
+    { asType: 'agent' }
+  );
 }
 
 // --- Bootstrap Check ---

@@ -209,6 +209,24 @@ Environment placeholders in JSON are supported:
 - `${TELEGRAM_BOT_TOKEN}`
 - `${HOME}`
 
+## Langfuse (optional)
+
+Enable tracing by adding a `langfuse` block to your config:
+
+```json
+"langfuse": {
+  "enabled": true,
+  "publicKey": "${LANGFUSE_PUBLIC_KEY}",
+  "secretKey": "${LANGFUSE_SECRET_KEY}",
+  "baseUrl": "https://cloud.langfuse.com",
+  "environment": "local",
+  "release": "dev",
+  "exportMode": "batched"
+}
+```
+
+Traces are created per agent turn with tool calls captured as child observations when tools are used.
+
 ## HTTP endpoints
 
 Gateway routes:

@@ -123,7 +123,19 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
   try {
     if (jobDef.payload.kind === 'agentTurn') {
       const message = expandVariables(jobDef.payload.message || '');
-      const response = await runAgentTurn(config.agents.default, message, config, jobDef.model, jobDef.payload.tools);
+      const response = await runAgentTurn(
+        config.agents.default,
+        message,
+        config,
+        jobDef.model,
+        jobDef.payload.tools,
+        undefined,
+        {
+          channel: 'cron',
+          sessionId: jobDef.id,
+          metadata: { jobName: jobDef.name },
+        }
+      );
       logEntry.output = response.slice(0, 5000);
     } else if (jobDef.payload.kind === 'script') {
       const output = await executeScript(jobDef);

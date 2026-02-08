@@ -326,7 +326,15 @@ async function executeTask(task: SubagentTask, config: Config, history?: ChatMes
       config,
       task.model,
       preset.toolConfig,
-      history
+      history,
+      {
+        channel: 'subagent',
+        sessionId: task.id,
+        metadata: {
+          type: task.type,
+          chatId: task.chatId,
+        },
+      }
     );
 
     // Check cancellation after completion

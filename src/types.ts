@@ -37,6 +37,15 @@ export interface Config {
   dashboard?: {
     token?: string;
   };
+  langfuse?: {
+    enabled?: boolean;
+    publicKey?: string;
+    secretKey?: string;
+    baseUrl?: string;
+    environment?: string;
+    release?: string;
+    exportMode?: 'immediate' | 'batched';
+  };
 }
 
 export interface AgentConfig {
@@ -139,4 +148,12 @@ export interface ChatOptions {
   maxTokens?: number;
   temperature?: number;
   thinking?: 'none' | 'low' | 'medium' | 'high';
+}
+
+export interface AgentRunContext {
+  userId?: string;
+  sessionId?: string;
+  channel?: string;
+  tags?: string[];
+  metadata?: Record<string, unknown>;
 }
