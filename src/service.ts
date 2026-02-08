@@ -3,7 +3,7 @@ import type { Config } from './types.js';
 import { createGateway } from './gateway.js';
 import { initCron, stopCron } from './cron.js';
 import { initHeartbeat, stopHeartbeat } from './heartbeat.js';
-import { initTelegram, startTelegram, stopTelegram } from './telegram.js';
+import { initActiveChannel, startActiveChannel, stopActiveChannel } from './channels.js';
 import { initProviders } from './agent.js';
 import { initLangfuse, shutdownLangfuse } from './langfuse.js';
 
@@ -21,12 +21,10 @@ export async function startRuntime(config: Config): Promise<SkimpyClawRuntime> {
   await gateway.listen({ port: config.gateway.port, host: '127.0.0.1' });
 
   initCron(config);
-  initHeartbeat(config);
 
-  const telegramBot = await initTelegram(config);
-  if (telegramBot) {
-    await startTelegram();
-  }
+  await initActiveChannel(config);
+  await startActiveChannel();
+  initHeartbeat(config);
 
   return {
     config,
@@ -34,7 +32,7 @@ export async function startRuntime(config: Config): Promise<SkimpyClawRuntime> {
     stop: async () => {
       stopCron();
       stopHeartbeat();
-      await stopTelegram();
+      await stopActiveChannel();
       await gateway.close();
       await shutdownLangfuse();
     },

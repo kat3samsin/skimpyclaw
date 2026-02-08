@@ -15,16 +15,7 @@ export interface Config {
     };
     aliases: Record<string, string>;
   };
-  channels: {
-    telegram: {
-      enabled: boolean;
-      token: string;
-      allowFrom: AllowlistEntry[];
-      tools?: ToolConfig;
-      dailyNotesDir?: string;
-      defaultAllowedPaths?: string[];
-    };
-  };
+  channels: ChannelsConfig;
   cron: {
     jobs: CronJob[];
   };
@@ -58,6 +49,33 @@ export interface AgentConfig {
 }
 
 export type AllowlistEntry = string | number;
+
+export type ChannelId = 'telegram' | 'discord';
+
+export interface TelegramChannelConfig {
+  enabled: boolean;
+  token: string;
+  allowFrom: AllowlistEntry[];
+  tools?: ToolConfig;
+  dailyNotesDir?: string;
+  defaultAllowedPaths?: string[];
+}
+
+export interface DiscordChannelConfig {
+  enabled: boolean;
+  token: string;
+  allowFrom: AllowlistEntry[];
+  tools?: ToolConfig;
+  defaultAllowedPaths?: string[];
+  defaultChannelId?: string;
+}
+
+export interface ChannelsConfig {
+  // Single active channel preference. If unset, runtime picks the first enabled channel.
+  active?: ChannelId;
+  telegram: TelegramChannelConfig;
+  discord?: DiscordChannelConfig;
+}
 
 export interface CronJob {
   id: string;

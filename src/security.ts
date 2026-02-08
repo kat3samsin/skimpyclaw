@@ -6,20 +6,21 @@ import type { AllowlistEntry } from './types.js';
 
 export function isAllowed(
   allowlist: AllowlistEntry[],
-  senderId: number,
+  senderId: string | number,
   senderUsername?: string
 ): boolean {
   if (allowlist.length === 0) return false; // Empty = block all
+  const senderIdStr = String(senderId);
 
   for (const entry of allowlist) {
     // Numeric ID match (most secure)
-    if (typeof entry === 'number' && entry === senderId) return true;
+    if (typeof entry === 'number' && String(entry) === senderIdStr) return true;
 
     // Username match (case-insensitive)
     if (typeof entry === 'string') {
       const normalized = entry.toLowerCase().replace(/^@/, '');
       if (senderUsername?.toLowerCase() === normalized) return true;
-      if (String(senderId) === entry) return true;
+      if (senderIdStr === entry) return true;
     }
   }
   return false;
@@ -82,13 +83,14 @@ export function isBashCommandSafe(command: string): boolean {
 
 // --- Rate Limiting ---
 
-const rateLimiter = new Map<number, number[]>();
+const rateLimiter = new Map<string, number[]>();
 const RATE_LIMIT = 10; // messages per minute
 const WINDOW_MS = 60000;
 
-export function isRateLimited(userId: number): boolean {
+export function isRateLimited(userId: string | number): boolean {
+  const key = String(userId);
   const now = Date.now();
-  const timestamps = rateLimiter.get(userId) || [];
+  const timestamps = rateLimiter.get(key) || [];
   const recent = timestamps.filter(t => now - t < WINDOW_MS);
 
   if (recent.length >= RATE_LIMIT) {
@@ -96,7 +98,7 @@ export function isRateLimited(userId: number): boolean {
   }
 
   recent.push(now);
-  rateLimiter.set(userId, recent);
+  rateLimiter.set(key, recent);
   return false;
 }
 
