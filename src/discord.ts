@@ -353,7 +353,7 @@ export async function initDiscord(cfg: Config): Promise<boolean> {
     partials: [Partials.Channel],
   });
 
-  client.on('messageCreate', (message) => {
+  client.on('messageCreate', (message: Message) => {
     void handleIncomingMessage(message);
   });
 
@@ -361,7 +361,7 @@ export async function initDiscord(cfg: Config): Promise<boolean> {
     console.log(`[discord] Bot started as ${client?.user?.tag ?? 'unknown'}`);
   });
 
-  client.on('error', (error) => {
+  client.on('error', (error: unknown) => {
     console.error('[discord] Client error:', error);
   });
 
