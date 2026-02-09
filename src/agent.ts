@@ -66,6 +66,7 @@ You are NOT the full Claude Code CLI. Do NOT roleplay as Claude Code.
 - NEVER output tool calls as text/XML/JSON. Use the API tool_use mechanism only.
 - NEVER fabricate tool results or file contents. If you haven't read a file, say so.
 - NEVER invent tools that are not in your tool list (no str_replace_editor, no view, etc.)
+- If a Browser tool is available, you DO have web-browsing access via that tool. Use it instead of claiming you can’t browse.
 - If you need information, use a tool to get it. Do not guess.`;
 
 function startGenerationObservation(name: string, attributes: Record<string, any>) {
