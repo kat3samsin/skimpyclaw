@@ -103,6 +103,7 @@ export const TOOL_DEFINITIONS = [
             height: { type: 'number' },
           },
         },
+        executablePath: { type: 'string', description: 'Path to Chrome/Chromium executable (optional)' },
       },
       required: ['action'],
     },
@@ -263,7 +264,8 @@ function buildBrowserOptions(config: ToolConfig, overrides?: Record<string, any>
   const userAgent = overrides?.userAgent ?? config.browser?.userAgent;
   const viewport = overrides?.viewport ?? config.browser?.viewport;
   const profileDir = overrides?.profileDir ?? config.browser?.profileDir ?? join(homedir(), '.skimpyclaw', 'browser-profile');
-  return { type, headless, slowMo, userAgent, viewport, profileDir };
+  const executablePath = overrides?.executablePath ?? config.browser?.executablePath;
+  return { type, headless, slowMo, userAgent, viewport, profileDir, executablePath };
 }
 
 async function ensureBrowser(config: ToolConfig, overrides?: Record<string, any>): Promise<void> {
@@ -295,6 +297,7 @@ async function ensureBrowser(config: ToolConfig, overrides?: Record<string, any>
     slowMo: options.slowMo,
     userAgent: options.userAgent,
     viewport: options.viewport,
+    executablePath: options.executablePath,
   });
 
   const pages = browserContext.pages();

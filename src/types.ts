@@ -116,6 +116,7 @@ export interface ToolConfig {
     userAgent?: string;
     viewport?: { width: number; height: number };
     profileDir?: string;
+    executablePath?: string;
   };
 }
 

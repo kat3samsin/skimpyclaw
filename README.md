@@ -253,7 +253,8 @@ Optional, disabled by default. Enable via tool config:
         "slowMoMs": 50,
         "userAgent": "",
         "viewport": { "width": 1280, "height": 720 },
-        "profileDir": "${HOME}/.skimpyclaw/browser-profile"
+        "profileDir": "${HOME}/.skimpyclaw/browser-profile",
+        "executablePath": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
       }
     }
   }
@@ -270,6 +271,7 @@ CLI wrapper:
 ```bash
 skimpyclaw browser open https://example.com --headful --slowmo 50
 skimpyclaw browser open https://example.com --browser firefox   # use Firefox
+skimpyclaw browser open https://example.com --executable "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 skimpyclaw browser waitFor "h1"
 skimpyclaw browser screenshot
 skimpyclaw browser wait --ms 30000   # manual login window

@@ -453,6 +453,8 @@ async function commandBrowser(args: string[]): Promise<number> {
   if (slowIdx !== -1) input.slowMoMs = Number(args[slowIdx + 1]);
   const uaIdx = args.indexOf('--user-agent');
   if (uaIdx !== -1) input.userAgent = args[uaIdx + 1];
+  const exeIdx = args.indexOf('--executable');
+  if (exeIdx !== -1) input.executablePath = args[exeIdx + 1];
   const wIdx = args.indexOf('--width');
   const hIdx = args.indexOf('--height');
   if (wIdx !== -1 && hIdx !== -1) {
