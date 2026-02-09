@@ -205,6 +205,7 @@ Top-level sections:
 - `gateway`: HTTP port and mode
 - `agents`: default agent + agent definitions
 - `models`: provider credentials + model aliases (`apiKey`, optional `authToken`, optional `baseURL`, optional `authPath`)
+- `models.vision.model` (optional): model spec or alias to use when an incoming message contains images (Telegram). If unset, SkimpyClaw falls back to text-only behavior for image messages.
 - `channels.active`: preferred active channel (`telegram` or `discord`)
 - `channels.telegram`: token, allowlist, optional `tools`, optional `dailyNotesDir`, optional `defaultAllowedPaths`
 - `channels.discord`: token, allowlist, optional `tools`, optional `defaultAllowedPaths`, optional `defaultChannelId`
@@ -217,6 +218,33 @@ Environment placeholders in JSON are supported:
 - `${TELEGRAM_BOT_TOKEN}`
 - `${DISCORD_BOT_TOKEN}`
 - `${HOME}`
+
+## Vision / Images (Telegram)
+
+Telegram image messages are supported (photos and image documents).
+
+- If `models.vision.model` is configured, SkimpyClaw downloads the image from Telegram and sends it to the vision-capable model using the provider's multimodal message format.
+- If `models.vision.model` is not configured, SkimpyClaw falls back to text-only: it forwards the caption (if any) plus image metadata, and notes that vision is disabled.
+
+Example config:
+
+```json
+{
+  "models": {
+    "vision": {
+      "model": "openai/gpt-4o"
+    },
+    "aliases": {
+      "smart": "anthropic/claude-sonnet-4-20250514"
+    }
+  }
+}
+```
+
+Limitations:
+- Only a small number of images per message are forwarded (currently capped).
+- Images are sent as base64 payloads to the model provider; this can be slow and may increase usage/cost.
+- If you use short-lived/expiring attachments, SkimpyClaw uses data URLs to avoid URL expiry, but the initial Telegram download still depends on bot access to the file.
 
 ## Langfuse (optional)
 

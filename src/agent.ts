@@ -7,10 +7,11 @@ import { join } from 'path';
 import { homedir } from 'os';
 import { getAgentDir } from './config.js';
 import { buildSafeSystemPrompt, sanitizeUserInput } from './security.js';
-import type { Config, ChatMessage, ChatOptions, ToolConfig, AgentRunContext } from './types.js';
+import type { Config, ChatMessage, ChatOptions, ToolConfig, AgentRunContext, AgentUserInput } from './types.js';
 import { getToolDefinitions, executeTool } from './tools.js';
 import { getLangfuseConfig, isLangfuseEnabled } from './langfuse.js';
 import { startActiveObservation, startObservation, updateActiveTrace } from '@langfuse/tracing';
+import { stripImageData, toAnthropicContent, toAnthropicMessages, toOpenAIChatMessages } from './multimodal.js';
 
 // --- Template Loading ---
 
@@ -534,12 +535,7 @@ export async function chat(
     }
 
     const systemMessage = messages.find(m => m.role === 'system');
-    const chatMessages = messages
-      .filter(m => m.role !== 'system')
-      .map(m => ({
-        role: m.role as 'user' | 'assistant',
-        content: m.content,
-      }));
+    const chatMessages = toAnthropicMessages(messages);
 
     // Build request parameters
     const params: Anthropic.MessageCreateParams = {
@@ -580,10 +576,11 @@ export async function chat(
     });
 
     try {
-      const response = await anthropicClient.messages.create(params);
+      // Anthropic SDK types include a streaming overload; we always call non-streaming here.
+      const response: any = await anthropicClient.messages.create(params as any);
 
       // Extract text content
-      const textContent = response.content.find(c => c.type === 'text');
+      const textContent = (response.content || []).find((c: any) => c.type === 'text');
       const text = textContent?.text || '';
       genObs?.update({
         output: { text },
@@ -609,10 +606,7 @@ export async function chat(
   // All other non-Anthropic providers use OpenAI-compatible API
   const client = openaiClients.get(provider);
   if (client) {
-    const openaiMessages = messages.map(m => ({
-      role: m.role,
-      content: m.content,
-    }));
+    const openaiMessages = toOpenAIChatMessages(messages) as any;
 
     const genObs = startGenerationObservation(`openai:${modelId}`, {
       input: { messages: openaiMessages },
@@ -627,7 +621,7 @@ export async function chat(
     try {
       const response = await client.chat.completions.create({
         model: modelId,
-        messages: openaiMessages,
+        messages: openaiMessages as any,
         max_tokens: options.maxTokens || 4096,
         temperature: options.temperature,
       });
@@ -682,7 +676,7 @@ export async function chatWithTools(
   // Build initial messages (exclude system)
   const apiMessages: any[] = messages
     .filter(m => m.role !== 'system')
-    .map(m => ({ role: m.role, content: m.content }));
+    .map(m => ({ role: m.role, content: toAnthropicContent(m.content, m.attachments) }));
 
   // Track tool calls for logging
   const toolLog: string[] = [];
@@ -796,7 +790,7 @@ export async function chatWithTools(
 
 export async function runAgentTurn(
   agentId: string,
-  userMessage: string,
+  userInput: string | AgentUserInput,
   config: Config,
   modelOverride?: string,
   toolConfig?: ToolConfig,
@@ -819,12 +813,17 @@ export async function runAgentTurn(
     systemPrompt += channelHints[context.channel] || '';
   }
 
-  const sanitizedMessage = sanitizeUserInput(userMessage);
+  const inputObj: AgentUserInput = typeof userInput === 'string'
+    ? { text: userInput }
+    : userInput;
+
+  const sanitizedText = sanitizeUserInput(inputObj.text || '');
+  const images = inputObj.images;
 
   const messages: ChatMessage[] = [
     { role: 'system', content: systemPrompt },
     ...(history || []),
-    { role: 'user', content: sanitizedMessage },
+    { role: 'user', content: sanitizedText, attachments: images },
   ];
 
   const model = modelOverride || agentConfig.model;
@@ -860,7 +859,16 @@ export async function runAgentTurn(
     }
 
     // Log to memory with tool usage summary
-    let memoryEntry = `**User:** ${sanitizedMessage}\n\n`;
+    let memoryEntry = `**User:** ${sanitizedText}\n\n`;
+    if (images && images.length > 0) {
+      const meta = stripImageData(images) || [];
+      const line = meta.map((img) => {
+        const dims = img.width && img.height ? `${img.width}x${img.height}` : undefined;
+        const size = typeof img.sizeBytes === 'number' ? `${img.sizeBytes}B` : undefined;
+        return `- ${img.mimeType}${dims ? ` ${dims}` : ''}${size ? ` ${size}` : ''}${img.fileName ? ` (${img.fileName})` : ''}${img.sourceUrl ? ` ${img.sourceUrl}` : ''}`;
+      }).join('\n');
+      memoryEntry += `**Images (${meta.length}):**\n${line || '(metadata unavailable)'}\n\n`;
+    }
     if (toolCalls.length > 0) {
       memoryEntry += `**Tools used (${toolCalls.length}):**\n${toolCalls.map(t => `- ${t}`).join('\n')}\n\n`;
     }
@@ -876,7 +884,7 @@ export async function runAgentTurn(
 
   const lfConfig = getLangfuseConfig();
   const traceName = `agent:${agentId}`;
-  const traceInput = { message: sanitizedMessage };
+  const traceInput = { message: sanitizedText };
   const traceMetadata = {
     agentId,
     model: resolvedModel,

@@ -14,6 +14,13 @@ export interface Config {
       [key: string]: { apiKey?: string; authToken?: string; baseURL?: string; authPath?: string } | undefined;
     };
     aliases: Record<string, string>;
+    /**
+     * Optional vision config. If set, image attachments can be sent to a multimodal model.
+     * If unset, channels will fall back to text-only behavior when images are received.
+     */
+    vision?: {
+      model?: string; // model spec or alias (e.g. "openai/gpt-4o" or "gpt")
+    };
   };
   channels: ChannelsConfig;
   cron: {
@@ -170,6 +177,7 @@ export interface SubagentTask {
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
   content: string;
+  attachments?: ImageAttachment[];
 }
 
 export interface ChatOptions {
@@ -177,6 +185,35 @@ export interface ChatOptions {
   maxTokens?: number;
   temperature?: number;
   thinking?: 'none' | 'low' | 'medium' | 'high';
+}
+
+export interface ImageAttachment {
+  kind: 'image';
+  /**
+   * Provider-specific identifier (e.g. Telegram file_id). For Telegram photos/documents,
+   * this is the file_id.
+   */
+  id: string;
+  uniqueId?: string;
+  mimeType: string;
+  sizeBytes?: number;
+  width?: number;
+  height?: number;
+  fileName?: string;
+  caption?: string;
+
+  /**
+   * Optional transport fields for passing images to multimodal models.
+   * Do not persist base64 blobs in long-lived history unless you really mean to.
+   */
+  dataBase64?: string;
+  sourceUrl?: string;
+  sourcePath?: string;
+}
+
+export interface AgentUserInput {
+  text: string;
+  images?: ImageAttachment[];
 }
 
 export interface AgentRunContext {

@@ -172,6 +172,14 @@ function buildDefaultModel(providers: Set<ProviderChoice>): string {
   return 'openai/gpt-4o';
 }
 
+function buildDefaultVisionModel(providers: Set<ProviderChoice>): string | undefined {
+  // Prefer OpenAI for vision if available, otherwise fall back to Anthropic.
+  if (providers.has('openai-api')) return 'openai/gpt-4o';
+  const hasAnthropic = providers.has('anthropic-api') || providers.has('anthropic-oauth');
+  if (hasAnthropic) return 'anthropic/claude-opus-4-6';
+  return undefined;
+}
+
 function buildAliases(providers: Set<ProviderChoice>): Record<string, string> {
   const aliases: Record<string, string> = {};
   const hasAnthropic = providers.has('anthropic-api') || providers.has('anthropic-oauth');
@@ -226,6 +234,7 @@ function buildEnvContent(
 
 export function buildSetupConfig(input: SetupBuildInput): Record<string, unknown> {
   const useDiscord = Boolean(input.discordToken);
+  const visionModel = buildDefaultVisionModel(input.selectedProviders);
   return {
     gateway: {
       port: 18790,
@@ -247,6 +256,7 @@ export function buildSetupConfig(input: SetupBuildInput): Record<string, unknown
     models: {
       providers: buildProviders(input.selectedProviders),
       aliases: buildAliases(input.selectedProviders),
+      ...(visionModel ? { vision: { model: visionModel } } : {}),
     },
     channels: {
       active: useDiscord ? 'discord' : 'telegram',

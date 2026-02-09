@@ -7,7 +7,7 @@ import { homedir } from 'os';
 import { spawnSync } from 'child_process';
 import type { Config, ToolConfig, AgentRunContext } from './types.js';
 import { isAllowed, isRateLimited } from './security.js';
-import type { ChatMessage } from './types.js';
+import type { ChatMessage, ImageAttachment } from './types.js';
 import { runAgentTurn } from './agent.js';
 import { getCronJobs, runCronJob } from './cron.js';
 import { getCurrentModel, setCurrentModel, getLastMessage } from './gateway.js';
@@ -72,10 +72,10 @@ function getHistory(chatId: number): ChatMessage[] {
   return chatHistory.get(chatId) || [];
 }
 
-function addToHistory(chatId: number, userMsg: string, assistantMsg: string): void {
+function addToHistoryMessages(chatId: number, userMsg: ChatMessage, assistantMsg: ChatMessage): void {
   const history = getHistory(chatId);
-  history.push({ role: 'user', content: userMsg });
-  history.push({ role: 'assistant', content: assistantMsg });
+  history.push(userMsg);
+  history.push(assistantMsg);
   // Keep only last N pairs (2 messages per pair)
   while (history.length > MAX_HISTORY_PAIRS * 2) {
     history.shift();
@@ -97,6 +97,64 @@ function getRunContext(ctx: Context): AgentRunContext {
       username: ctx.from?.username,
     },
   };
+}
+
+function inferMimeTypeFromPath(path: string | undefined): string {
+  const p = (path || '').toLowerCase();
+  if (p.endsWith('.png')) return 'image/png';
+  if (p.endsWith('.webp')) return 'image/webp';
+  if (p.endsWith('.gif')) return 'image/gif';
+  // Telegram photos are typically JPEG
+  return 'image/jpeg';
+}
+
+async function getTelegramImageAttachment(
+  cfg: Config,
+  fileId: string,
+  meta: Omit<ImageAttachment, 'kind' | 'id' | 'mimeType'> & { mimeType?: string },
+  downloadData: boolean,
+): Promise<ImageAttachment> {
+  if (!bot) throw new Error('Telegram bot not initialized');
+
+  let filePath: string | undefined;
+  let sourceUrl: string | undefined;
+  try {
+    const file = await bot.api.getFile(fileId);
+    filePath = (file as any).file_path;
+    if (filePath) {
+      sourceUrl = `https://api.telegram.org/file/bot${cfg.channels.telegram.token}/${filePath}`;
+    }
+  } catch {
+    // Best-effort: still return metadata even if getFile fails.
+  }
+
+  let dataBase64: string | undefined;
+  if (downloadData && sourceUrl) {
+    try {
+      const res = await fetch(sourceUrl);
+      if (res.ok) {
+        const ab = await res.arrayBuffer();
+        dataBase64 = Buffer.from(ab).toString('base64');
+      }
+    } catch {
+      // Best-effort: keep metadata even if download fails.
+    }
+  }
+
+  const mimeType = meta.mimeType || inferMimeTypeFromPath(filePath);
+  return {
+    kind: 'image',
+    id: fileId,
+    mimeType,
+    dataBase64,
+    sourceUrl,
+    ...meta,
+  };
+}
+
+function stripImageData(images: ImageAttachment[] | undefined): ImageAttachment[] | undefined {
+  if (!images || images.length === 0) return undefined;
+  return images.map(({ dataBase64, ...rest }) => rest);
 }
 
 /** Keep sending "typing..." every 4s until the returned stop function is called. */
@@ -619,13 +677,122 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
         history,
         getRunContext(ctx)
       );
-      if (chatId) addToHistory(chatId, text, response);
+      if (chatId) {
+        addToHistoryMessages(chatId, { role: 'user', content: text }, { role: 'assistant', content: response });
+      }
       await sendLongMessage(ctx, response);
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Unknown error';
       await ctx.reply(`Error: ${msg}`);
     } finally {
       stopTyping();
+    }
+  });
+
+  const MAX_IMAGES_PER_MESSAGE = 4;
+
+  async function handleImageMessage(ctx: Context): Promise<void> {
+    const chatId = ctx.chat?.id;
+    const stopTyping = startTypingIndicator(ctx);
+
+    const visionModel = cfg.models.vision?.model;
+    const canUseVision = Boolean(visionModel);
+
+    try {
+      const caption = (ctx.message as any)?.caption || '';
+      const baseText = caption.trim()
+        ? caption
+        : 'User sent an image.';
+
+      const photos = (ctx.message as any)?.photo as Array<any> | undefined;
+      const doc = (ctx.message as any)?.document as any | undefined;
+
+      const attachments: ImageAttachment[] = [];
+
+      if (Array.isArray(photos) && photos.length > 0) {
+        // Telegram sends multiple sizes for a single photo; pick the largest.
+        const sorted = [...photos].sort((a, b) => (b.file_size || 0) - (a.file_size || 0));
+        const best = sorted[0];
+        const fileId = best.file_id;
+        const att = await getTelegramImageAttachment(
+          cfg,
+          fileId,
+          {
+            uniqueId: best.file_unique_id,
+            width: best.width,
+            height: best.height,
+            sizeBytes: best.file_size,
+            caption: caption || undefined,
+          },
+          canUseVision
+        );
+        attachments.push(att);
+      } else if (doc && typeof doc.mime_type === 'string' && doc.mime_type.startsWith('image/')) {
+        const fileId = doc.file_id;
+        const att = await getTelegramImageAttachment(
+          cfg,
+          fileId,
+          {
+            uniqueId: doc.file_unique_id,
+            mimeType: doc.mime_type,
+            sizeBytes: doc.file_size,
+            fileName: doc.file_name,
+            caption: caption || undefined,
+          },
+          canUseVision
+        );
+        attachments.push(att);
+      }
+
+      // Hard cap to avoid huge payloads if Telegram changes shape or forwards multiple images.
+      const limited = attachments.slice(0, MAX_IMAGES_PER_MESSAGE);
+
+      const history = chatId ? getHistory(chatId) : [];
+
+      // If no vision model configured, fall back to text-only with metadata summary.
+      const input = canUseVision
+        ? { text: baseText, images: limited }
+        : {
+          text:
+            `${baseText}\n\n` +
+            `[Image attachment received but vision is not enabled. Configure config.models.vision.model to enable image understanding.]\n` +
+            `Metadata: ${JSON.stringify(stripImageData(limited) || [], null, 0)}`,
+        };
+
+      const modelOverride = canUseVision ? visionModel : getCurrentModel();
+      const response = await runAgentTurn(
+        cfg.agents.default,
+        input,
+        cfg,
+        modelOverride,
+        getTelegramToolConfig(cfg),
+        history,
+        getRunContext(ctx)
+      );
+
+      if (chatId) {
+        addToHistoryMessages(
+          chatId,
+          { role: 'user', content: baseText, attachments: stripImageData(limited) },
+          { role: 'assistant', content: response }
+        );
+      }
+
+      await sendLongMessage(ctx, response);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      await ctx.reply(`Error: ${msg}`);
+    } finally {
+      stopTyping();
+    }
+  }
+
+  // Photos and image documents
+  bot.on('message:photo', handleImageMessage);
+  bot.on('message:document', async (ctx) => {
+    const doc = (ctx.message as any)?.document;
+    if (doc?.mime_type && typeof doc.mime_type === 'string' && doc.mime_type.startsWith('image/')) {
+      await handleImageMessage(ctx);
     }
   });
 
