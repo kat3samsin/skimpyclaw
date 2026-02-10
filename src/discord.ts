@@ -60,7 +60,11 @@ function clearHistory(key: string): void {
 function getDiscordToolConfig(cfg: Config): ToolConfig {
   const discord = cfg.channels.discord;
   if (discord?.tools) {
-    return discord.tools;
+    return {
+      ...DEFAULT_DISCORD_TOOLS,
+      ...discord.tools,
+      allowedPaths: discord.tools.allowedPaths ?? discord.defaultAllowedPaths ?? DEFAULT_DISCORD_TOOLS.allowedPaths,
+    };
   }
   if (discord?.defaultAllowedPaths?.length) {
     return {
