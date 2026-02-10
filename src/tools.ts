@@ -119,7 +119,7 @@ export const TOOL_DEFINITIONS = [
             height: { type: 'number' },
           },
         },
-        executablePath: { type: 'string', description: 'Path to Chrome/Chromium executable (optional)' },
+        // executablePath and profileDir are config-only for security (no model overrides)
       },
       required: ['action'],
     },
@@ -301,8 +301,9 @@ function buildBrowserOptions(config: ToolConfig, overrides?: Record<string, any>
   const slowMo = config.browser?.slowMoMs ?? ((typeof overrides?.slowMoMs === 'number' && overrides.slowMoMs > 0) ? overrides.slowMoMs : undefined);
   const userAgent = pick(config.browser?.userAgent, overrides?.userAgent) as string | undefined;
   const viewport = config.browser?.viewport ?? (overrides?.viewport?.width ? overrides.viewport : undefined);
-  const profileDir = pick(config.browser?.profileDir, overrides?.profileDir, join(homedir(), '.skimpyclaw', 'browser-profile')) as string;
-  const executablePath = pick(config.browser?.executablePath, overrides?.executablePath) as string | undefined;
+  // Security: profileDir and executablePath are config-only — never allow model overrides
+  const profileDir = config.browser?.profileDir || join(homedir(), '.skimpyclaw', 'browser-profile');
+  const executablePath = config.browser?.executablePath;
   return { type, headless, slowMo, userAgent, viewport, profileDir, executablePath };
 }
 
