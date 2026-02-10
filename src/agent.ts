@@ -805,7 +805,17 @@ export async function runAgentTurn(
     throw new Error(`Agent not found: ${agentId}`);
   }
 
-  const systemPrompt = buildSystemPrompt(agentId);
+  let systemPrompt = buildSystemPrompt(agentId);
+
+  // Inject channel-specific formatting context
+  if (context?.channel) {
+    const channelHints: Record<string, string> = {
+      telegram: `\n\n## Output Channel: Telegram\nTelegram does NOT render markdown. Use plain text only.\n- No **bold**, _italic_, or \`code blocks\`\n- Use CAPS or spacing for emphasis\n- Use plain dashes for lists\n- Include full URLs as plain text (no markdown links)`,
+      discord: `\n\n## Output Channel: Discord\nDiscord renders markdown. Use it for formatting.\n- Use **bold**, *italic*, \`code\`, and \`\`\`code blocks\`\`\`\n- Use markdown links: [text](url)\n- Use bullet lists and headers`,
+    };
+    systemPrompt += channelHints[context.channel] || '';
+  }
+
   const sanitizedMessage = sanitizeUserInput(userMessage);
 
   const messages: ChatMessage[] = [

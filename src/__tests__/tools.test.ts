@@ -27,13 +27,14 @@ afterEach(() => {
 });
 
 describe('TOOL_DEFINITIONS', () => {
-  it('exports 4 tools with Claude Code names', () => {
-    expect(TOOL_DEFINITIONS).toHaveLength(4);
+  it('exports 5 tools with Claude Code names', () => {
+    expect(TOOL_DEFINITIONS).toHaveLength(5);
     const names = TOOL_DEFINITIONS.map(t => t.name);
     expect(names).toContain('Read');
     expect(names).toContain('Write');
     expect(names).toContain('Glob');
     expect(names).toContain('Bash');
+    expect(names).toContain('Browser');
   });
 });
 
@@ -166,5 +167,100 @@ describe('bash', () => {
   it('handles unknown tools', async () => {
     const result = await executeTool('delete_everything', {}, toolConfig);
     expect(result).toContain('Error: Unknown tool');
+  });
+});
+
+describe('browser', () => {
+  const browserDisabledConfig: ToolConfig = {
+    ...toolConfig,
+    browser: { enabled: false },
+  };
+
+  const browserEnabledConfig: ToolConfig = {
+    ...toolConfig,
+    browser: { enabled: true },
+  };
+
+  const browserWithFileConfig: ToolConfig = {
+    ...toolConfig,
+    browser: { enabled: true, allowFile: true },
+  };
+
+  it('returns error when browser is disabled', async () => {
+    const result = await executeTool('Browser', { action: 'open', url: 'https://example.com' }, browserDisabledConfig);
+    expect(result).toContain('Error: Browser tool is disabled');
+  });
+
+  it('returns error when browser config is missing', async () => {
+    const result = await executeTool('Browser', { action: 'open', url: 'https://example.com' }, toolConfig);
+    expect(result).toContain('Error: Browser tool is disabled');
+  });
+
+  it('blocks file:// URLs when allowFile is false', async () => {
+    const result = await executeTool('Browser', { action: 'open', url: 'file:///etc/passwd' }, browserEnabledConfig);
+    expect(result).toContain('Error: file:// URLs are blocked');
+  });
+
+  it('validates file:// URLs with new URL() parsing', async () => {
+    // file://localhost/etc/passwd should parse to /etc/passwd, which is outside allowedPaths
+    const result = await executeTool('Browser', { action: 'open', url: 'file://localhost/etc/passwd' }, browserWithFileConfig);
+    expect(result).toContain('Error: file:// URLs are blocked');
+  });
+
+  it('returns error for unknown action', async () => {
+    const result = await executeTool('Browser', { action: 'destroy' }, browserEnabledConfig);
+    expect(result).toContain('Error: Unknown browser action "destroy"');
+  });
+
+  it('requires url for open action', async () => {
+    const result = await executeTool('Browser', { action: 'open' }, browserEnabledConfig);
+    expect(result).toContain('Error: url is required');
+  });
+
+  it('requires selector for click action', async () => {
+    const result = await executeTool('Browser', { action: 'click' }, browserEnabledConfig);
+    expect(result).toContain('Error: Browser not open');
+  });
+
+  it('requires selector and text for type action', async () => {
+    const result = await executeTool('Browser', { action: 'type', selector: '#input' }, browserEnabledConfig);
+    expect(result).toContain('Error: Browser not open');
+  });
+
+  it('requires script for evaluate action', async () => {
+    const result = await executeTool('Browser', { action: 'evaluate' }, browserEnabledConfig);
+    expect(result).toContain('Error: Browser not open');
+  });
+
+  it('requires selector for hover action', async () => {
+    const result = await executeTool('Browser', { action: 'hover' }, browserEnabledConfig);
+    expect(result).toContain('Error: Browser not open');
+  });
+
+  it('requires selector and text for select action', async () => {
+    const result = await executeTool('Browser', { action: 'select' }, browserEnabledConfig);
+    expect(result).toContain('Error: Browser not open');
+  });
+
+  it('returns "Browser not open" for actions before open', async () => {
+    for (const action of ['click', 'type', 'waitfor', 'screenshot', 'evaluate', 'gettext', 'scroll', 'select', 'hover']) {
+      const result = await executeTool('Browser', { action }, browserEnabledConfig);
+      expect(result).toContain('Error: Browser not open');
+    }
+  });
+
+  it('handles close when browser is not open', async () => {
+    const result = await executeTool('Browser', { action: 'close' }, browserEnabledConfig);
+    expect(result).toBe('Browser closed.');
+  });
+
+  it('handles case-insensitive actions', async () => {
+    const result = await executeTool('Browser', { action: 'OPEN' }, browserEnabledConfig);
+    expect(result).toContain('Error: url is required');
+  });
+
+  it('maps Browser name correctly', () => {
+    expect(fromClaudeCodeName('Browser')).toBe('browser');
+    expect(toClaudeCodeName('browser')).toBe('Browser');
   });
 });

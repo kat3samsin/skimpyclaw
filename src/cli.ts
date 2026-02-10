@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { existsSync } from 'fs';
+import { existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { spawn, spawnSync } from 'child_process';
@@ -37,7 +37,8 @@ Commands:
   send <message>          Send a message to the local gateway
   cron list               List cron jobs from gateway status
   cron run <id>           Trigger cron job by id
-  browser <action> ...    Run browser tool action (open/click/type/waitFor/screenshot/wait/close)
+  browser <action> ...    Run browser tool action (open/click/type/select/hover/scroll/waitFor/evaluate/getText/screenshot/wait/close)
+  browser login [url]     Open real Chrome (no automation) for manual login. Cookies persist for agent use.
   help                    Show this help
 `);
 }
@@ -408,14 +409,57 @@ async function commandCron(args: string[]): Promise<number> {
   return 1;
 }
 
+async function commandBrowserLogin(args: string[], config: Config): Promise<number> {
+  const url = args[0] || 'about:blank';
+  const toolConfig = getCliToolConfig(config);
+  const profileDir = toolConfig.browser?.profileDir || join(homedir(), '.skimpyclaw', 'browser-profile');
+  const executablePath = toolConfig.browser?.executablePath || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+
+  if (!existsSync(profileDir)) {
+    mkdirSync(profileDir, { recursive: true });
+  }
+
+  console.log(`Opening Chrome for login (profile: ${profileDir})`);
+  console.log('Log in manually, then close the browser window when done.');
+  console.log('Cookies will persist for agent use.');
+
+  const chromeArgs = [
+    `--user-data-dir=${profileDir}`,
+    '--no-first-run',
+    '--no-default-browser-check',
+    url,
+  ];
+
+  const child = spawn(executablePath, chromeArgs, {
+    stdio: 'ignore',
+    detached: false,
+  });
+
+  return new Promise((resolve) => {
+    child.on('exit', (code) => {
+      console.log('Browser closed. Login session saved.');
+      resolve(code ?? 0);
+    });
+    child.on('error', (err) => {
+      console.error(`Failed to launch Chrome: ${err.message}`);
+      resolve(1);
+    });
+  });
+}
+
 async function commandBrowser(args: string[]): Promise<number> {
   const action = args[0];
   if (!action) {
-    console.error('Usage: skimpyclaw browser <open|click|type|waitFor|screenshot|wait|close> ...');
+    console.error('Usage: skimpyclaw browser <open|click|type|select|hover|scroll|waitFor|evaluate|getText|screenshot|wait|close|login> ...');
     return 1;
   }
 
   const config = loadConfig();
+
+  if (action.toLowerCase() === 'login') {
+    return commandBrowserLogin(args.slice(1), config);
+  }
+
   const toolConfig = getCliToolConfig(config);
 
   if (!toolConfig.browser?.enabled) {
@@ -423,26 +467,73 @@ async function commandBrowser(args: string[]): Promise<number> {
     return 1;
   }
 
-  const input: Record<string, any> = { action };
+  const normalizedAction = action.toLowerCase();
+  const input: Record<string, any> = { action: normalizedAction };
 
-  if (action === 'open') {
+  if (normalizedAction === 'open') {
     input.url = args[1];
-  } else if (action === 'click') {
+    if (!input.url) {
+      console.error('Usage: skimpyclaw browser open <url>');
+      return 1;
+    }
+  } else if (normalizedAction === 'click') {
     input.selector = args[1];
-  } else if (action === 'type') {
+    if (!input.selector) {
+      console.error('Usage: skimpyclaw browser click <selector>');
+      return 1;
+    }
+  } else if (normalizedAction === 'type') {
     input.selector = args[1];
     input.text = args.slice(2).join(' ');
-  } else if (action.toLowerCase() === 'waitfor') {
+    if (!input.selector || !input.text) {
+      console.error('Usage: skimpyclaw browser type <selector> <text>');
+      return 1;
+    }
+  } else if (normalizedAction === 'waitfor') {
     input.selector = args[1];
     if (hasFlag(args, '--text')) {
       const idx = args.indexOf('--text');
       input.text = args[idx + 1];
     }
-  } else if (action === 'screenshot') {
+  } else if (normalizedAction === 'screenshot') {
     input.file_path = args[1];
-  } else if (action === 'wait') {
+  } else if (normalizedAction === 'wait') {
     const idx = args.indexOf('--ms');
     if (idx !== -1) input.timeMs = Number(args[idx + 1]);
+  } else if (normalizedAction === 'evaluate') {
+    const scriptIdx = args.indexOf('--script');
+    if (scriptIdx !== -1) {
+      input.script = args.slice(scriptIdx + 1).join(' ');
+    } else {
+      input.script = args[1];
+    }
+    if (!input.script) {
+      console.error('Usage: skimpyclaw browser evaluate --script "document.title"');
+      return 1;
+    }
+  } else if (normalizedAction === 'gettext') {
+    input.selector = args[1]; // optional
+  } else if (normalizedAction === 'scroll') {
+    if (args[1] && !args[1].startsWith('--')) {
+      input.selector = args[1]; // scrollIntoView target
+    }
+    const dirIdx = args.indexOf('--direction');
+    if (dirIdx !== -1) input.direction = args[dirIdx + 1];
+    const amtIdx = args.indexOf('--amount');
+    if (amtIdx !== -1) input.amount = Number(args[amtIdx + 1]);
+  } else if (normalizedAction === 'select') {
+    input.selector = args[1];
+    input.text = args[2];
+    if (!input.selector || !input.text) {
+      console.error('Usage: skimpyclaw browser select <selector> <value>');
+      return 1;
+    }
+  } else if (normalizedAction === 'hover') {
+    input.selector = args[1];
+    if (!input.selector) {
+      console.error('Usage: skimpyclaw browser hover <selector>');
+      return 1;
+    }
   }
 
   if (hasFlag(args, '--headful')) input.headless = false;

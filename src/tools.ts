@@ -14,6 +14,7 @@ const TOOL_NAME_MAP: Record<string, string> = {
   'Write': 'write_file',
   'Glob': 'list_directory',
   'Bash': 'bash',
+  'Browser': 'browser',
 };
 
 // Reverse map: internal name -> Claude Code name
@@ -81,15 +82,30 @@ export const TOOL_DEFINITIONS = [
   },
   {
     name: 'Browser',
-    description: 'Control a headless browser (Playwright). Actions: open, click, type, waitFor, screenshot, wait, close.',
+    description: `Control a browser via Playwright. Actions (case-insensitive):
+- open: Navigate to URL. Required: url
+- click: Click element. Required: selector
+- type: Fill input. Required: selector, text
+- select: Pick dropdown option. Required: selector, text (value)
+- hover: Hover element. Required: selector
+- scroll: Scroll page. Optional: selector (scrollIntoView), direction (up/down), amount (pixels)
+- waitFor: Wait for element/text. Required: selector OR text
+- evaluate: Run JavaScript in page. Required: script. Returns JSON result.
+- getText: Get visible text. Optional: selector (defaults to full page body text)
+- screenshot: Capture page. Optional: file_path
+- wait: Delay. Required: timeMs
+- close: Close browser`,
     input_schema: {
       type: 'object' as const,
       properties: {
-        action: { type: 'string', description: 'open | click | type | waitFor | screenshot | wait | close' },
+        action: { type: 'string', description: 'Action to perform (see description)' },
         type: { type: 'string', description: 'Browser type: chromium | firefox | webkit (optional, config default)' },
         url: { type: 'string', description: 'URL to open (open action)' },
-        selector: { type: 'string', description: 'CSS selector (click/type/waitFor)' },
-        text: { type: 'string', description: 'Text to type or wait for (type/waitFor)' },
+        selector: { type: 'string', description: 'CSS selector (click/type/waitFor/getText/scroll/select/hover)' },
+        text: { type: 'string', description: 'Text to type, wait for, or select value (type/waitFor/select)' },
+        script: { type: 'string', description: 'JavaScript code to evaluate in page (evaluate action)' },
+        direction: { type: 'string', description: 'Scroll direction: up or down (scroll action, default: down)' },
+        amount: { type: 'number', description: 'Pixels to scroll (scroll action, default: one viewport height)' },
         file_path: { type: 'string', description: 'Absolute path to save screenshot (optional)' },
         timeoutMs: { type: 'number', description: 'Timeout in ms (optional)' },
         timeMs: { type: 'number', description: 'Time to wait in ms (wait action)' },
@@ -235,13 +251,26 @@ let browserOptionsKey: string | null = null;
 
 async function getPlaywright(): Promise<any> {
   if (!playwrightModule) {
-    playwrightModule = await import('playwright');
+    try {
+      playwrightModule = await import('playwright');
+    } catch {
+      throw new Error('Playwright not installed. Run: npx playwright install');
+    }
   }
   return playwrightModule;
 }
 
-function resolveScreenshotPath(filePath?: string): string {
-  if (filePath) return filePath;
+function resolveScreenshotPath(filePath: string | undefined, config: ToolConfig): string {
+  if (filePath) {
+    if (!isPathAllowed(filePath, config.allowedPaths)) {
+      throw new Error(`Path not allowed. Permitted: ${config.allowedPaths.join(', ')}`);
+    }
+    const dir = dirname(filePath);
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true });
+    }
+    return filePath;
+  }
   const dir = join(homedir(), '.skimpyclaw', 'screenshots');
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true });
@@ -253,18 +282,27 @@ function resolveScreenshotPath(filePath?: string): string {
 function isFileUrlAllowed(url: string, config: ToolConfig): boolean {
   if (!url.startsWith('file://')) return true;
   if (!config.browser?.allowFile) return false;
-  const path = url.replace('file://', '');
-  return isPathAllowed(path, config.allowedPaths);
+  const filePath = new URL(url).pathname;
+  return isPathAllowed(filePath, config.allowedPaths);
+}
+
+/** Pick override only if it's a meaningful value (not empty string, not 0 for non-numeric fields). */
+function pick<T>(override: T | undefined, configVal: T | undefined, fallback?: T): T | undefined {
+  if (override !== undefined && override !== null && override !== '') return override;
+  if (configVal !== undefined && configVal !== null && configVal !== '') return configVal;
+  return fallback as T | undefined;
 }
 
 function buildBrowserOptions(config: ToolConfig, overrides?: Record<string, any>) {
-  const type = overrides?.type ?? config.browser?.type ?? 'chromium';
-  const headless = overrides?.headless ?? config.browser?.headless ?? true;
-  const slowMo = overrides?.slowMoMs ?? config.browser?.slowMoMs;
-  const userAgent = overrides?.userAgent ?? config.browser?.userAgent;
-  const viewport = overrides?.viewport ?? config.browser?.viewport;
-  const profileDir = overrides?.profileDir ?? config.browser?.profileDir ?? join(homedir(), '.skimpyclaw', 'browser-profile');
-  const executablePath = overrides?.executablePath ?? config.browser?.executablePath;
+  // Config values take priority for security/environment settings.
+  // Overrides (from model tool calls) only apply when config doesn't specify a value.
+  const type = pick(overrides?.type, config.browser?.type, 'chromium') as string;
+  const headless = config.browser?.headless ?? overrides?.headless ?? true;
+  const slowMo = config.browser?.slowMoMs ?? ((typeof overrides?.slowMoMs === 'number' && overrides.slowMoMs > 0) ? overrides.slowMoMs : undefined);
+  const userAgent = pick(config.browser?.userAgent, overrides?.userAgent) as string | undefined;
+  const viewport = config.browser?.viewport ?? (overrides?.viewport?.width ? overrides.viewport : undefined);
+  const profileDir = pick(config.browser?.profileDir, overrides?.profileDir, join(homedir(), '.skimpyclaw', 'browser-profile')) as string;
+  const executablePath = pick(config.browser?.executablePath, overrides?.executablePath) as string | undefined;
   return { type, headless, slowMo, userAgent, viewport, profileDir, executablePath };
 }
 
@@ -292,16 +330,30 @@ async function ensureBrowser(config: ToolConfig, overrides?: Record<string, any>
 
   const pw = await getPlaywright();
   const browserLauncher = pw[options.type as keyof typeof pw] || pw.chromium;
-  browserContext = await browserLauncher.launchPersistentContext(options.profileDir, {
-    headless: options.headless,
-    slowMo: options.slowMo,
-    userAgent: options.userAgent,
-    viewport: options.viewport,
-    executablePath: options.executablePath,
-  });
+  try {
+    browserContext = await browserLauncher.launchPersistentContext(options.profileDir, {
+      headless: options.headless,
+      slowMo: options.slowMo,
+      userAgent: options.userAgent,
+      viewport: options.viewport,
+      executablePath: options.executablePath,
+      args: [
+        '--disable-blink-features=AutomationControlled',
+        '--no-first-run',
+        '--no-default-browser-check',
+      ],
+      ignoreDefaultArgs: ['--enable-automation'],
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`Failed to launch browser (${options.type}): ${msg}. Ensure the browser is installed: npx playwright install ${options.type}`);
+  }
 
   const pages = browserContext.pages();
   browserPage = pages.length > 0 ? pages[0] : await browserContext.newPage();
+
+  // Remove navigator.webdriver flag that sites use to detect automation
+  await browserPage.addInitScript(`Object.defineProperty(navigator, 'webdriver', { get: () => false })`);
   browserOptionsKey = optionsKey;
 }
 
@@ -351,12 +403,60 @@ async function executeBrowser(input: Record<string, any>, config: ToolConfig): P
       await browserPage.waitForSelector(`text=${text}`, { timeout: timeoutMs });
       return `Waited for text: ${text}`;
     }
+    case 'select': {
+      if (!browserPage) return 'Error: Browser not open. Call open(url) first.';
+      const selector = input.selector as string | undefined;
+      const value = input.text as string | undefined;
+      if (!selector || value === undefined) return 'Error: selector and text (value) are required for select.';
+      await browserPage.selectOption(selector, value, { timeout: timeoutMs });
+      return `Selected "${value}" in: ${selector}`;
+    }
+    case 'hover': {
+      if (!browserPage) return 'Error: Browser not open. Call open(url) first.';
+      const selector = input.selector as string | undefined;
+      if (!selector) return 'Error: selector is required for hover.';
+      await browserPage.hover(selector, { timeout: timeoutMs });
+      return `Hovered: ${selector}`;
+    }
+    case 'scroll': {
+      if (!browserPage) return 'Error: Browser not open. Call open(url) first.';
+      const selector = input.selector as string | undefined;
+      if (selector) {
+        await browserPage.evaluate(`{
+          const el = document.querySelector(${JSON.stringify(selector)});
+          if (el) el.scrollIntoView({ behavior: 'smooth' });
+        }`);
+        return `Scrolled into view: ${selector}`;
+      }
+      const direction = (input.direction as string || 'down').toLowerCase();
+      const amount = typeof input.amount === 'number' ? input.amount : undefined;
+      const dir = direction === 'up' ? -1 : 1;
+      const scrollExpr = amount != null
+        ? `window.scrollBy(0, ${dir * amount})`
+        : `window.scrollBy(0, ${dir} * window.innerHeight)`;
+      await browserPage.evaluate(scrollExpr);
+      return `Scrolled ${direction}${amount ? ` ${amount}px` : ' one viewport'}`;
+    }
+    case 'evaluate': {
+      if (!browserPage) return 'Error: Browser not open. Call open(url) first.';
+      const script = input.script as string | undefined;
+      if (!script) return 'Error: script is required for evaluate.';
+      const result = await browserPage.evaluate(script);
+      return JSON.stringify(result);
+    }
+    case 'gettext': {
+      if (!browserPage) return 'Error: Browser not open. Call open(url) first.';
+      const selector = input.selector as string | undefined;
+      if (selector) {
+        const text = await browserPage.textContent(selector, { timeout: timeoutMs });
+        return text ?? '(no text content)';
+      }
+      const bodyText = await browserPage.evaluate('document.body.innerText');
+      return bodyText || '(empty page)';
+    }
     case 'screenshot': {
       if (!browserPage) return 'Error: Browser not open. Call open(url) first.';
-      const filePath = resolveScreenshotPath(input.file_path);
-      if (!isPathAllowed(filePath, config.allowedPaths)) {
-        return `Error: Path not allowed. Permitted: ${config.allowedPaths.join(', ')}`;
-      }
+      const filePath = resolveScreenshotPath(input.file_path, config);
       await browserPage.screenshot({ path: filePath, fullPage: true });
       return `Saved screenshot: ${filePath}`;
     }
@@ -366,18 +466,37 @@ async function executeBrowser(input: Record<string, any>, config: ToolConfig): P
       return `Waited ${waitMs}ms`;
     }
     case 'close': {
-      if (browserPage) {
-        await browserPage.close().catch(() => {});
-        browserPage = null;
-      }
-      if (browserContext) {
-        await browserContext.close().catch(() => {});
-        browserContext = null;
-      }
-      browserOptionsKey = null;
+      await cleanupBrowser();
       return 'Browser closed.';
     }
     default:
       return `Error: Unknown browser action "${action}"`;
   }
 }
+
+// --- Browser Cleanup ---
+
+export async function cleanupBrowser(): Promise<void> {
+  if (browserPage) {
+    await browserPage.close().catch(() => {});
+    browserPage = null;
+  }
+  if (browserContext) {
+    await browserContext.close().catch(() => {});
+    browserContext = null;
+  }
+  browserOptionsKey = null;
+}
+
+// Prevent orphaned browser processes on exit
+const handleExit = () => {
+  if (browserContext) {
+    browserContext.close().catch(() => {});
+    browserContext = null;
+    browserPage = null;
+    browserOptionsKey = null;
+  }
+};
+process.on('SIGTERM', handleExit);
+process.on('SIGINT', handleExit);
+process.on('exit', handleExit);
