@@ -32,8 +32,8 @@ export function toClaudeCodeName(name: string): string {
   return INTERNAL_TO_CC[name] || name;
 }
 
-// Anthropic API tool definitions — names match Claude Code for OAuth stealth
-export const TOOL_DEFINITIONS = [
+// Built-in tool definitions — always available
+export const BUILTIN_TOOL_DEFINITIONS = [
   {
     name: 'Read',
     description: 'Read the contents of a file at the given absolute path.',
@@ -80,9 +80,11 @@ export const TOOL_DEFINITIONS = [
       required: ['command'],
     },
   },
-  {
-    name: 'Browser',
-    description: `Control a browser via Playwright. Actions (case-insensitive):
+];
+
+export const BROWSER_TOOL_DEFINITION = {
+  name: 'Browser',
+  description: `Control a browser via Playwright. Actions (case-insensitive):
 - open: Navigate to URL. Required: url
 - click: Click element. Required: selector
 - type: Fill input. Required: selector, text
@@ -95,36 +97,164 @@ export const TOOL_DEFINITIONS = [
 - screenshot: Capture page. Optional: file_path
 - wait: Delay. Required: timeMs
 - close: Close browser`,
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        action: { type: 'string', description: 'Action to perform (see description)' },
-        type: { type: 'string', description: 'Browser type: chromium | firefox | webkit (optional, config default)' },
-        url: { type: 'string', description: 'URL to open (open action)' },
-        selector: { type: 'string', description: 'CSS selector (click/type/waitFor/getText/scroll/select/hover)' },
-        text: { type: 'string', description: 'Text to type, wait for, or select value (type/waitFor/select)' },
-        script: { type: 'string', description: 'JavaScript code to evaluate in page (evaluate action)' },
-        direction: { type: 'string', description: 'Scroll direction: up or down (scroll action, default: down)' },
-        amount: { type: 'number', description: 'Pixels to scroll (scroll action, default: one viewport height)' },
-        file_path: { type: 'string', description: 'Absolute path to save screenshot (optional)' },
-        timeoutMs: { type: 'number', description: 'Timeout in ms (optional)' },
-        timeMs: { type: 'number', description: 'Time to wait in ms (wait action)' },
-        headless: { type: 'boolean', description: 'Override headless for open (optional)' },
-        slowMoMs: { type: 'number', description: 'Slow motion delay per action (ms) (optional)' },
-        userAgent: { type: 'string', description: 'Override user agent (optional)' },
-        viewport: {
-          type: 'object',
-          properties: {
-            width: { type: 'number' },
-            height: { type: 'number' },
-          },
+  input_schema: {
+    type: 'object' as const,
+    properties: {
+      action: { type: 'string', description: 'Action to perform (see description)' },
+      type: { type: 'string', description: 'Browser type: chromium | firefox | webkit (optional, config default)' },
+      url: { type: 'string', description: 'URL to open (open action)' },
+      selector: { type: 'string', description: 'CSS selector (click/type/waitFor/getText/scroll/select/hover)' },
+      text: { type: 'string', description: 'Text to type, wait for, or select value (type/waitFor/select)' },
+      script: { type: 'string', description: 'JavaScript code to evaluate in page (evaluate action)' },
+      direction: { type: 'string', description: 'Scroll direction: up or down (scroll action, default: down)' },
+      amount: { type: 'number', description: 'Pixels to scroll (scroll action, default: one viewport height)' },
+      file_path: { type: 'string', description: 'Absolute path to save screenshot (optional)' },
+      timeoutMs: { type: 'number', description: 'Timeout in ms (optional)' },
+      timeMs: { type: 'number', description: 'Time to wait in ms (wait action)' },
+      headless: { type: 'boolean', description: 'Override headless for open (optional)' },
+      slowMoMs: { type: 'number', description: 'Slow motion delay per action (ms) (optional)' },
+      userAgent: { type: 'string', description: 'Override user agent (optional)' },
+      viewport: {
+        type: 'object',
+        properties: {
+          width: { type: 'number' },
+          height: { type: 'number' },
         },
-        // executablePath and profileDir are config-only for security (no model overrides)
       },
-      required: ['action'],
+      // executablePath and profileDir are config-only for security (no model overrides)
     },
+    required: ['action'],
   },
-];
+};
+
+// Legacy export for backward compat — static list (built-ins + browser + no MCP)
+export const TOOL_DEFINITIONS = [...BUILTIN_TOOL_DEFINITIONS, BROWSER_TOOL_DEFINITION];
+
+// --- MCP (mcporter) ---
+
+let mcpRuntime: any = null;
+
+async function getMcpRuntime(): Promise<any> {
+  if (!mcpRuntime) {
+    const { createRuntime } = await import('mcporter');
+    mcpRuntime = await createRuntime({
+      configPath: join(homedir(), '.mcporter', 'mcporter.json'),
+    });
+  }
+  return mcpRuntime;
+}
+
+// --- MCP Auto-Discovery ---
+
+let discoveredMcpTools: any[] | null = null;
+
+/**
+ * Discover MCP tools from all servers registered in mcporter config.
+ * Caches the result — call clearMcpToolCache() to force re-discovery.
+ */
+/** Sanitize a name to match OpenAI/Codex tool name pattern: [a-zA-Z0-9_-] */
+function sanitizeToolName(name: string): string {
+  return name.replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
+// Maps sanitized tool name → { server (original), tool (original) } for routing
+const mcpToolNameMap = new Map<string, { server: string; tool: string }>();
+
+export async function discoverMcpTools(): Promise<any[]> {
+  if (discoveredMcpTools !== null) return discoveredMcpTools;
+
+  const tools: any[] = [];
+  mcpToolNameMap.clear();
+
+  try {
+    const runtime = await getMcpRuntime();
+    const servers = runtime.listServers();
+
+    for (const server of servers) {
+      try {
+        const serverTools = await runtime.listTools(server, { includeSchema: true });
+        const sanitizedServer = sanitizeToolName(server);
+        for (const tool of serverTools) {
+          const sanitizedTool = sanitizeToolName(tool.name);
+          const name = `mcp__${sanitizedServer}__${sanitizedTool}`;
+          // Store mapping from sanitized name to original names for routing
+          mcpToolNameMap.set(name, { server, tool: tool.name });
+          tools.push({
+            name,
+            description: tool.description || `MCP tool ${tool.name} from ${server}`,
+            input_schema: tool.inputSchema || { type: 'object' as const, properties: {} },
+          });
+        }
+      } catch (err) {
+        console.warn(`[mcp] Failed to list tools for server "${server}":`, err instanceof Error ? err.message : err);
+      }
+    }
+  } catch (err) {
+    console.warn('[mcp] Failed to create runtime for tool discovery:', err instanceof Error ? err.message : err);
+  }
+
+  discoveredMcpTools = tools;
+  return tools;
+}
+
+export function clearMcpToolCache(): void {
+  discoveredMcpTools = null;
+}
+
+/**
+ * Get all available tool definitions: built-ins + browser (if enabled) + MCP (auto-discovered).
+ * This is the primary way to get tools — replaces the static TOOL_DEFINITIONS export.
+ */
+export async function getToolDefinitions(config?: ToolConfig): Promise<any[]> {
+  const tools: any[] = [...BUILTIN_TOOL_DEFINITIONS];
+
+  // Include browser tool only when explicitly enabled
+  if (config?.browser?.enabled) {
+    tools.push(BROWSER_TOOL_DEFINITION);
+  }
+
+  // Auto-discover MCP tools from mcporter config
+  const mcpTools = await discoverMcpTools();
+  tools.push(...mcpTools);
+
+  return tools;
+}
+
+// --- MCP Tool Execution (generic) ---
+
+async function executeMcpToolGeneric(fullName: string, args: Record<string, any>): Promise<string> {
+  // Look up original server/tool names from the sanitized name map
+  const mapping = mcpToolNameMap.get(fullName);
+  if (!mapping) {
+    // Fallback: parse from the name directly (works when names don't need sanitizing)
+    const parts = fullName.split('__');
+    if (parts.length < 3) return `Error: Invalid MCP tool name "${fullName}"`;
+    const server = parts[1];
+    const toolName = parts.slice(2).join('__');
+    const runtime = await getMcpRuntime();
+    const result = await runtime.callTool(server, toolName, { args });
+    const content = (result as any)?.content;
+    if (Array.isArray(content)) {
+      return content.map((c: any) => c.text || JSON.stringify(c)).join('\n');
+    }
+    return JSON.stringify(result);
+  }
+
+  const runtime = await getMcpRuntime();
+  const result = await runtime.callTool(mapping.server, mapping.tool, { args });
+  const content = (result as any)?.content;
+  if (Array.isArray(content)) {
+    return content.map((c: any) => c.text || JSON.stringify(c)).join('\n');
+  }
+  return JSON.stringify(result);
+}
+
+export async function cleanupMcp(): Promise<void> {
+  if (mcpRuntime) {
+    await mcpRuntime.close().catch(() => {});
+    mcpRuntime = null;
+  }
+}
 
 // --- Path Validation ---
 
@@ -143,10 +273,15 @@ export async function executeTool(
   input: Record<string, any>,
   config: ToolConfig
 ): Promise<string> {
-  // Map Claude Code names to internal names
-  const internalName = fromClaudeCodeName(name).toLowerCase();
   try {
-    switch (internalName) {
+    // Route MCP tools BEFORE normalization to preserve server/tool name casing
+    if (name.startsWith('mcp__')) {
+      return await executeMcpToolGeneric(name, input);
+    }
+
+    // Map Claude Code names to internal names for built-in tools
+    const normalized = fromClaudeCodeName(name).toLowerCase().replace(/-/g, '_');
+    switch (normalized) {
       case 'read_file':
         return executeReadFile(input.file_path || input.path, config);
       case 'write_file':

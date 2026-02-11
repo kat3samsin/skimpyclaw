@@ -106,7 +106,7 @@ src/
   dashboard.ts    # dashboard frontend HTML
   agent.ts        # prompt assembly, model calls, tool loop, memory writes
   subagent.ts     # background task dispatch with typed presets + auto-setup
-  tools.ts        # Read/Write/Glob/Bash tool implementations
+  tools.ts        # Tool registry, MCP auto-discovery, built-in tool implementations
   channels.ts     # active channel selection + proactive routing
   telegram.ts     # Telegram commands and message handling
   discord.ts      # Discord commands and message handling
@@ -193,6 +193,9 @@ Common commands:
 - `skimpyclaw send "plan my day"`
 - `skimpyclaw cron list`
 - `skimpyclaw cron run morning`
+- `skimpyclaw tools list`
+- `skimpyclaw tools install <name> --command <cmd> [--args '<json>']`
+- `skimpyclaw tools remove <name>`
 
 ## Configuration overview
 
@@ -298,6 +301,70 @@ Security notes:
 - `file://` URLs are blocked unless `allowFile` is true **and** the path is inside `allowedPaths`.
 - Screenshots must be saved under `allowedPaths`.
 - `evaluate` runs arbitrary JS in the page context — same trust model as Bash.
+
+## MCP tools (mcporter)
+
+SkimpyClaw auto-discovers MCP tools at runtime via [mcporter](https://github.com/nicobrinkkemper/mcporter). Any MCP server registered in your mcporter config is automatically available to the agent — no code changes needed.
+
+### How it works
+
+1. On first tool request, SkimpyClaw creates a mcporter runtime from `~/.mcporter/mcporter.json`
+2. Calls `listServers()` to find all configured MCP servers
+3. For each server, calls `listTools(server)` to discover available tools with their schemas
+4. Maps each tool to Anthropic format as `mcp__{server}__{tool}` (e.g. `mcp__context-a8c__context-a8c-load-provider`)
+5. Results are cached for the lifetime of the process
+
+When the model calls an MCP tool, SkimpyClaw routes it through `runtime.callTool(server, tool, args)`.
+
+### mcporter config
+
+File: `~/.mcporter/mcporter.json`
+
+```json
+{
+  "mcpServers": {
+    "context-a8c": {
+      "command": "/bin/bash",
+      "args": ["/Users/you/.mcporter/run-context-a8c.sh"]
+    },
+    "my-server": {
+      "url": "http://localhost:3001/sse"
+    }
+  }
+}
+```
+
+Each entry is an MCP server. Two transport types:
+- **Stdio**: `command` + `args` — mcporter spawns the process and communicates over stdin/stdout
+- **SSE**: `url` — mcporter connects to an HTTP server-sent-events endpoint
+
+### CLI: managing tools
+
+```bash
+# List all available tools (built-in + MCP)
+skimpyclaw tools list
+
+# Install a new MCP server (stdio transport)
+skimpyclaw tools install my-server --command npx --args '["@some/mcp-server"]'
+
+# Install a new MCP server (SSE transport)
+skimpyclaw tools install my-server --url http://localhost:3001/sse
+
+# Remove an MCP server
+skimpyclaw tools remove my-server
+```
+
+`tools install` and `tools remove` modify `~/.mcporter/mcporter.json` directly. Restart SkimpyClaw after changes.
+
+### Tool architecture
+
+| Layer | Tools | When included |
+|-------|-------|---------------|
+| Built-in | Read, Write, Glob, Bash | Always |
+| Browser | Browser (Playwright) | When `tools.browser.enabled` is true |
+| MCP | Auto-discovered from mcporter | All servers in `~/.mcporter/mcporter.json` |
+
+Built-in tools are hardcoded — they're fundamental to the agent. Browser is opt-in via config. MCP tools are fully dynamic.
 
 ## HTTP endpoints
 

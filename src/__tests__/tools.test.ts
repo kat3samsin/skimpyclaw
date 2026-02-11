@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { existsSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'fs';
 import { join } from 'path';
-import { executeTool, TOOL_DEFINITIONS, fromClaudeCodeName, toClaudeCodeName } from '../tools.js';
+import { executeTool, BUILTIN_TOOL_DEFINITIONS, BROWSER_TOOL_DEFINITION, getToolDefinitions, fromClaudeCodeName, toClaudeCodeName } from '../tools.js';
 import type { ToolConfig } from '../types.js';
 
 const TEST_DIR = join(process.cwd(), '__test_sandbox__');
@@ -26,15 +26,48 @@ afterEach(() => {
   rmSync(OUTSIDE_DIR, { recursive: true, force: true });
 });
 
-describe('TOOL_DEFINITIONS', () => {
-  it('exports 5 tools with Claude Code names', () => {
-    expect(TOOL_DEFINITIONS).toHaveLength(5);
-    const names = TOOL_DEFINITIONS.map(t => t.name);
+describe('BUILTIN_TOOL_DEFINITIONS', () => {
+  it('exports 4 built-in tools', () => {
+    expect(BUILTIN_TOOL_DEFINITIONS).toHaveLength(4);
+    const names = BUILTIN_TOOL_DEFINITIONS.map(t => t.name);
     expect(names).toContain('Read');
     expect(names).toContain('Write');
     expect(names).toContain('Glob');
     expect(names).toContain('Bash');
-    expect(names).toContain('Browser');
+  });
+
+  it('exports Browser tool definition separately', () => {
+    expect(BROWSER_TOOL_DEFINITION.name).toBe('Browser');
+    expect(BROWSER_TOOL_DEFINITION.input_schema).toBeDefined();
+  });
+});
+
+describe('getToolDefinitions', () => {
+  it('returns at least the 4 built-in tools', async () => {
+    const tools = await getToolDefinitions();
+    expect(tools.length).toBeGreaterThanOrEqual(4);
+    const names = tools.map(t => t.name);
+    expect(names).toContain('Read');
+    expect(names).toContain('Write');
+    expect(names).toContain('Glob');
+    expect(names).toContain('Bash');
+  }, 15000);
+
+  it('includes Browser when browser.enabled is true', async () => {
+    const config: ToolConfig = { ...toolConfig, browser: { enabled: true } };
+    const tools = await getToolDefinitions(config);
+    expect(tools.map(t => t.name)).toContain('Browser');
+  });
+
+  it('excludes Browser when browser.enabled is false', async () => {
+    const config: ToolConfig = { ...toolConfig, browser: { enabled: false } };
+    const tools = await getToolDefinitions(config);
+    expect(tools.map(t => t.name)).not.toContain('Browser');
+  });
+
+  it('excludes Browser when no config provided', async () => {
+    const tools = await getToolDefinitions();
+    expect(tools.map(t => t.name)).not.toContain('Browser');
   });
 });
 
@@ -56,6 +89,28 @@ describe('tool name mapping', () => {
   it('passes through unknown names unchanged', () => {
     expect(fromClaudeCodeName('unknown')).toBe('unknown');
     expect(toClaudeCodeName('unknown')).toBe('unknown');
+  });
+});
+
+describe('MCP tool name parsing', () => {
+  it('routes mcp__server__tool names to MCP executor', async () => {
+    // This will fail because the MCP server doesn't exist, but the routing should work
+    const result = await executeTool('mcp__fake_server__fake_tool', { arg: 'test' }, toolConfig);
+    // Should get an MCP error, NOT "Unknown tool"
+    expect(result).toContain('Error:');
+    expect(result).not.toContain('Unknown tool');
+  });
+
+  it('routes mcp__ names with dashes correctly', async () => {
+    const result = await executeTool('mcp__my-server__my-tool', { arg: 'test' }, toolConfig);
+    expect(result).toContain('Error:');
+    expect(result).not.toContain('Unknown tool');
+  });
+
+  it('routes mcp__ names with multiple segments correctly', async () => {
+    const result = await executeTool('mcp__server__category__subtool', { arg: 'test' }, toolConfig);
+    expect(result).toContain('Error:');
+    expect(result).not.toContain('Unknown tool');
   });
 });
 

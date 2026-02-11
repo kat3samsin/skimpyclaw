@@ -8,7 +8,7 @@ import { homedir } from 'os';
 import { getAgentDir } from './config.js';
 import { buildSafeSystemPrompt, sanitizeUserInput } from './security.js';
 import type { Config, ChatMessage, ChatOptions, ToolConfig, AgentRunContext } from './types.js';
-import { TOOL_DEFINITIONS, executeTool } from './tools.js';
+import { getToolDefinitions, executeTool } from './tools.js';
 import { getLangfuseConfig, isLangfuseEnabled } from './langfuse.js';
 import { startActiveObservation, startObservation, updateActiveTrace } from '@langfuse/tracing';
 
@@ -224,8 +224,8 @@ let codexAuth: CodexAuth | null = null;
 /**
  * Convert Anthropic tool definitions to OpenAI function format for Responses API.
  */
-function getCodexToolDefinitions(): any[] {
-  return TOOL_DEFINITIONS.map(t => ({
+function toCodexToolDefinitions(tools: any[]): any[] {
+  return tools.map(t => ({
     type: 'function',
     name: t.name,
     description: t.description,
@@ -307,7 +307,7 @@ async function codexFetch(body: any): Promise<string> {
  * Call the Codex Responses API via ChatGPT backend.
  * Supports tool use via agentic loop.
  */
-async function codexChat(messages: ChatMessage[], model: string, toolConfig?: ToolConfig): Promise<{ response: string; toolCalls: string[] }> {
+async function codexChat(messages: ChatMessage[], model: string, toolConfig?: ToolConfig, toolDefs?: any[]): Promise<{ response: string; toolCalls: string[] }> {
   // Build input — system messages go to `instructions`, rest to `input`
   let instructions = 'You are a helpful assistant.';
   const input: any[] = [];
@@ -325,7 +325,7 @@ async function codexChat(messages: ChatMessage[], model: string, toolConfig?: To
   }
 
   const maxIterations = toolConfig?.maxIterations || 100;
-  const tools = toolConfig?.enabled ? getCodexToolDefinitions() : undefined;
+  const tools = toolConfig?.enabled && toolDefs ? toCodexToolDefinitions(toolDefs) : undefined;
   const toolLog: string[] = [];
 
   for (let i = 0; i < maxIterations; i++) {
@@ -672,6 +672,9 @@ export async function chatWithTools(
   const modelId = stripProvider(resolvedModel);
   const maxIterations = toolConfig.maxIterations || 20;
 
+  // Resolve tools once at start of agent loop
+  const toolDefs = await getToolDefinitions(toolConfig);
+
   // Build system param with OAuth identity guard
   const systemMessage = messages.find(m => m.role === 'system');
   const systemParam = buildSystemParam(systemMessage?.content);
@@ -689,7 +692,7 @@ export async function chatWithTools(
       model: modelId,
       max_tokens: options.maxTokens || 4096,
       messages: apiMessages,
-      tools: TOOL_DEFINITIONS,
+      tools: toolDefs,
     };
 
     if (systemParam) {
@@ -844,7 +847,8 @@ export async function runAgentTurn(
     } else if (toolConfig?.enabled && responsesApiProviders.has(provider)) {
       // Codex tool_use loop via Responses API
       console.log(`[agent] Running Codex with tools enabled (paths: ${toolConfig.allowedPaths.join(', ')})`);
-      const result = await codexChat(messages, modelId, toolConfig);
+      const toolDefs = await getToolDefinitions(toolConfig);
+      const result = await codexChat(messages, modelId, toolConfig, toolDefs);
       response = result.response;
       toolCalls = result.toolCalls;
     } else if (responsesApiProviders.has(provider)) {
