@@ -500,7 +500,26 @@ Or run the full local CI gate:
 pnpm run ci
 ```
 
-GitHub Actions runs the same `pnpm run ci` checks on every push and pull request.
+## Security scanning (secrets + hardcoded dirs + .env)
+
+Run manually:
+
+```bash
+pnpm run scan:security
+```
+
+Enable the local Git pre-push hook:
+
+```bash
+pnpm run hooks:enable
+```
+
+This blocks pushes when it finds:
+- tracked `.env` files (except `.env.example` / `.env.sample` / `.env.template`)
+- common credential patterns
+- hardcoded absolute user/system directories
+
+GitHub Actions also runs this via `pnpm run ci` on every push and pull request.
 
 Current tests cover:
 - Dashboard API behavior and auth

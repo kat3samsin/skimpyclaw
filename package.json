@@ -16,7 +16,9 @@
     "lint": "eslint \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "ci": "pnpm run lint && pnpm run typecheck && pnpm run test"
+    "scan:security": "node scripts/security-scan.mjs",
+    "hooks:enable": "git config core.hooksPath .githooks",
+    "ci": "pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run scan:security"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",
