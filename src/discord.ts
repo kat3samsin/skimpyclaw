@@ -1,12 +1,23 @@
 import { Client, GatewayIntentBits, Partials, type Message } from 'discord.js';
 import { join } from 'path';
 import { homedir } from 'os';
-import type { ChatMessage, Config, ToolConfig } from './types.js';
+import type { AgentRunContext, ChatMessage, Config, ToolConfig } from './types.js';
 import { getCurrentModel, setCurrentModel, getLastMessage } from './gateway.js';
 import { getCronJobs, runCronJob } from './cron.js';
 import { runAgentTurn } from './agent.js';
 import { runHeartbeatCheck } from './heartbeat.js';
 import { isAllowed, isRateLimited } from './security.js';
+
+function getDiscordRunContext(message: Message): AgentRunContext {
+  return {
+    userId: message.author.id,
+    sessionId: message.channel.id,
+    channel: 'discord',
+    metadata: {
+      username: message.author.username,
+    },
+  };
+}
 
 const BOT_COMMANDS: { command: string; description: string }[] = [
   { command: 'start', description: 'Show available commands' },
@@ -229,6 +240,9 @@ async function handleCommand(message: Message, command: string, args: string[]):
         `Summarize this conversation in 2-3 sentences so you can remember the context:\n\n${historyText}`,
         config,
         getCurrentModel(),
+        undefined,
+        undefined,
+        getDiscordRunContext(message),
       );
       clearHistory(key);
       chatHistory.set(key, [
@@ -262,6 +276,8 @@ async function handleCommand(message: Message, command: string, args: string[]):
         config,
         getCurrentModel(),
         getDiscordToolConfig(config),
+        undefined,
+        getDiscordRunContext(message),
       );
       await sendLongText(message, response);
     } catch (error) {
@@ -327,7 +343,8 @@ async function handleIncomingMessage(message: Message): Promise<void> {
       config,
       getCurrentModel(),
       getDiscordToolConfig(config),
-      history
+      history,
+      getDiscordRunContext(message)
     );
     addToHistory(key, text, response);
     await sendLongText(message, response);

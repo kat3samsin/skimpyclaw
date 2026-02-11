@@ -235,6 +235,70 @@ Traces are created per agent turn with tool calls captured as child observations
 
 **Costs:** We record token usage where providers report it. Costs may be blank unless Langfuse has model pricing configured (OAuth/Codex often won’t include costs).
 
+## Browser tool (Playwright)
+
+Optional, disabled by default. Enable via tool config:
+
+```json
+"channels": {
+  "telegram": {
+    "tools": {
+      "enabled": true,
+      "allowedPaths": ["${HOME}/.skimpyclaw"],
+      "browser": {
+        "enabled": true,
+        "type": "chromium",        // chromium, firefox, or webkit
+        "headless": true,
+        "allowFile": false,
+        "slowMoMs": 50,
+        "userAgent": "",
+        "viewport": { "width": 1280, "height": 720 },
+        "profileDir": "${HOME}/.skimpyclaw/browser-profile",
+        "executablePath": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+      }
+    }
+  }
+}
+```
+
+Actions: `open(url)`, `click(selector)`, `type(selector,text)`, `select(selector,value)`, `hover(selector)`, `scroll(selector?|direction?|amount?)`, `waitFor(selector|text)`, `evaluate(script)`, `getText(selector?)`, `screenshot(file_path?)`, `wait(timeMs)`, `close()`.
+
+Profile:
+- Uses a persistent browser profile directory so logins/cookies are remembered between runs.
+- Default: `~/.skimpyclaw/browser-profile` (set `browser.profileDir` to change).
+- **CLI limitation**: each CLI invocation launches a fresh browser process. For multi-step workflows, use the agent (Telegram) or chain commands in one session.
+
+CLI wrapper:
+```bash
+skimpyclaw browser open https://example.com --headful --slowmo 50
+skimpyclaw browser open https://example.com --browser firefox   # use Firefox
+skimpyclaw browser open https://example.com --executable "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+skimpyclaw browser waitFor "h1"
+skimpyclaw browser getText                    # get full page text
+skimpyclaw browser getText "h1"               # get text of specific element
+skimpyclaw browser evaluate --script "document.title"  # run JS in page
+skimpyclaw browser scroll                     # scroll down one viewport
+skimpyclaw browser scroll --direction up      # scroll up
+skimpyclaw browser scroll --amount 500        # scroll down 500px
+skimpyclaw browser scroll ".target"           # scroll element into view
+skimpyclaw browser select "#dropdown" "value" # pick dropdown option
+skimpyclaw browser hover ".menu-item"         # hover element
+skimpyclaw browser screenshot
+skimpyclaw browser wait --ms 30000   # manual login window
+skimpyclaw browser close
+```
+
+Example workflow — scraping X posts via agent:
+```
+Agent: open https://x.com → getText "article" → evaluate "document.querySelectorAll('article').length"
+       → scroll → getText "article" (repeat for more posts)
+```
+
+Security notes:
+- `file://` URLs are blocked unless `allowFile` is true **and** the path is inside `allowedPaths`.
+- Screenshots must be saved under `allowedPaths`.
+- `evaluate` runs arbitrary JS in the page context — same trust model as Bash.
+
 ## HTTP endpoints
 
 Gateway routes:
