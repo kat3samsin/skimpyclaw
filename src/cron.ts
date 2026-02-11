@@ -7,6 +7,7 @@ import { join } from 'path';
 import { getLogsDir } from './config.js';
 import type { Config, CronJob } from './types.js';
 import { runAgentTurn } from './agent.js';
+import { sendActiveChannelProactiveMessage, getActiveChannelId } from './channels.js';
 
 interface ScheduledJob {
   id: string;
@@ -131,7 +132,7 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
         jobDef.payload.tools,
         undefined,
         {
-          channel: 'cron',
+          channel: getActiveChannelId() || 'telegram',
           sessionId: jobDef.id,
           metadata: { jobName: jobDef.name },
         }
@@ -153,7 +154,27 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
     logEntry.durationMs = new Date(logEntry.finishedAt).getTime() - new Date(logEntry.startedAt).getTime();
     writeCronLog(logEntry);
     runningJobs.delete(jobDef.id);
-    console.log(`[cron] Job ${jobDef.id} finished: ${logEntry.status} (${(logEntry.durationMs / 1000).toFixed(1)}s)`);
+    const elapsed = (logEntry.durationMs / 1000).toFixed(1);
+    console.log(`[cron] Job ${jobDef.id} finished: ${logEntry.status} (${elapsed}s)`);
+
+    // Notify active channel
+    try {
+      const icon = logEntry.status === 'success' ? '✅' : logEntry.status === 'timeout' ? '⏰' : '❌';
+      let notification = `${icon} Cron: ${jobDef.name} — ${logEntry.status} (${elapsed}s)`;
+      if (logEntry.error) {
+        notification += `\nError: ${logEntry.error.slice(0, 200)}`;
+      }
+      // Send status + full output (truncated at 4000 chars for Telegram limit)
+      if (logEntry.status === 'success' && logEntry.output) {
+        const output = logEntry.output.length > 4000
+          ? logEntry.output.slice(0, 4000) + '...'
+          : logEntry.output;
+        notification += `\n\n${output}`;
+      }
+      await sendActiveChannelProactiveMessage(config, notification);
+    } catch (notifyErr) {
+      console.error(`[cron] Failed to send notification: ${notifyErr}`);
+    }
   }
 }
 

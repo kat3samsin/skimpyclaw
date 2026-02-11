@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { existsSync, mkdirSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { spawn, spawnSync } from 'child_process';
@@ -9,7 +9,7 @@ import { loadConfig, loadRawConfig, getConfigPath, saveConfig } from './config.j
 import type { Config, ToolConfig } from './types.js';
 import { startRuntime } from './service.js';
 import { runSetup } from './setup.js';
-import { executeTool } from './tools.js';
+import { executeTool, getToolDefinitions, BUILTIN_TOOL_DEFINITIONS, BROWSER_TOOL_DEFINITION } from './tools.js';
 
 const APP_NAME = 'skimpyclaw';
 const DEFAULT_PORT = 18790;
@@ -39,6 +39,9 @@ Commands:
   cron run <id>           Trigger cron job by id
   browser <action> ...    Run browser tool action (open/click/type/select/hover/scroll/waitFor/evaluate/getText/screenshot/wait/close)
   browser login [url]     Open real Chrome (no automation) for manual login. Cookies persist for agent use.
+  tools list              List available tools (built-in + MCP)
+  tools install <name>    Add MCP server (--command <cmd> [--args ...] or --url <url>)
+  tools remove <name>     Remove MCP server
   help                    Show this help
 `);
 }
@@ -557,6 +560,130 @@ async function commandBrowser(args: string[]): Promise<number> {
   return result.startsWith('Error') ? 1 : 0;
 }
 
+async function commandTools(args: string[]): Promise<number> {
+  const sub = args[0];
+
+  if (sub === 'list' || !sub) {
+    const config = loadConfig();
+    const toolConfig = getCliToolConfig(config);
+    const tools = await getToolDefinitions(toolConfig);
+
+    // Group tools
+    const builtinNames = new Set(BUILTIN_TOOL_DEFINITIONS.map(t => t.name));
+    const browserName = BROWSER_TOOL_DEFINITION.name;
+
+    console.log('Built-in tools:');
+    for (const t of tools.filter(t => builtinNames.has(t.name))) {
+      console.log(`  ${t.name.padEnd(20)} ${(t.description || '').split('\n')[0]}`);
+    }
+
+    const browser = tools.find(t => t.name === browserName);
+    if (browser) {
+      console.log('\nBrowser tool:');
+      console.log(`  ${browser.name.padEnd(20)} ${(browser.description || '').split('\n')[0]}`);
+    } else {
+      console.log('\nBrowser tool: disabled');
+    }
+
+    const mcpTools = tools.filter(t => t.name.startsWith('mcp__'));
+    if (mcpTools.length > 0) {
+      // Group by server
+      const byServer = new Map<string, any[]>();
+      for (const t of mcpTools) {
+        const parts = t.name.split('__');
+        const server = parts[1];
+        if (!byServer.has(server)) byServer.set(server, []);
+        byServer.get(server)!.push(t);
+      }
+
+      console.log('\nMCP tools:');
+      for (const [server, serverTools] of byServer) {
+        console.log(`  [${server}]`);
+        for (const t of serverTools) {
+          const toolName = t.name.split('__').slice(2).join('__');
+          console.log(`    ${toolName.padEnd(30)} ${(t.description || '').split('\n')[0]}`);
+        }
+      }
+    } else {
+      console.log('\nMCP tools: none discovered');
+    }
+
+    console.log(`\nTotal: ${tools.length} tools`);
+    return 0;
+  }
+
+  if (sub === 'install') {
+    const name = args[1];
+    if (!name) {
+      console.error('Usage: skimpyclaw tools install <name> --command <cmd> [--args <json-array>] | --url <url>');
+      return 1;
+    }
+
+    const mcpConfigPath = join(homedir(), '.mcporter', 'mcporter.json');
+    const rawConfig = existsSync(mcpConfigPath)
+      ? JSON.parse(readFileSync(mcpConfigPath, 'utf-8'))
+      : {};
+
+    const entry: Record<string, any> = {};
+    const commandIdx = args.indexOf('--command');
+    const urlIdx = args.indexOf('--url');
+    const argsIdx = args.indexOf('--args');
+
+    if (commandIdx !== -1 && commandIdx + 1 < args.length) {
+      entry.command = args[commandIdx + 1];
+      if (argsIdx !== -1 && argsIdx + 1 < args.length) {
+        try {
+          entry.args = JSON.parse(args[argsIdx + 1]);
+        } catch {
+          console.error('--args must be a valid JSON array');
+          return 1;
+        }
+      }
+    } else if (urlIdx !== -1 && urlIdx + 1 < args.length) {
+      entry.url = args[urlIdx + 1];
+    } else {
+      console.error('Provide --command <cmd> or --url <url>');
+      return 1;
+    }
+
+    if (!rawConfig.mcpServers) {
+      rawConfig.mcpServers = {};
+    }
+    rawConfig.mcpServers[name] = entry;
+    writeFileSync(mcpConfigPath, JSON.stringify(rawConfig, null, 2) + '\n');
+    console.log(`Installed MCP server "${name}" in ${mcpConfigPath}`);
+    return 0;
+  }
+
+  if (sub === 'remove') {
+    const name = args[1];
+    if (!name) {
+      console.error('Usage: skimpyclaw tools remove <name>');
+      return 1;
+    }
+
+    const mcpConfigPath = join(homedir(), '.mcporter', 'mcporter.json');
+    if (!existsSync(mcpConfigPath)) {
+      console.error(`mcporter config not found: ${mcpConfigPath}`);
+      return 1;
+    }
+    const rawConfig = JSON.parse(readFileSync(mcpConfigPath, 'utf-8'));
+
+    const servers = rawConfig.mcpServers;
+    if (!servers || !servers[name]) {
+      console.error(`MCP server "${name}" not found in config`);
+      return 1;
+    }
+    delete servers[name];
+    writeFileSync(mcpConfigPath, JSON.stringify(rawConfig, null, 2) + '\n');
+    console.log(`Removed MCP server "${name}" from ${mcpConfigPath}`);
+    return 0;
+  }
+
+  console.error('Usage: skimpyclaw tools <list|install|remove>');
+  return 1;
+}
+
 export async function runCli(argv: string[] = process.argv.slice(2)): Promise<number> {
   const [command, ...args] = argv;
 
@@ -616,6 +743,10 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<nu
 
     if (command === 'browser') {
       return await commandBrowser(args);
+    }
+
+    if (command === 'tools') {
+      return await commandTools(args);
     }
 
     console.error(`Unknown command: ${command}`);
