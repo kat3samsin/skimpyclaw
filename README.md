@@ -140,10 +140,15 @@ pnpm install
 pnpm run cli -- onboard
 ```
 
+Onboarding now includes preflight checks before finishing:
+- Telegram token validation (`getMe`)
+- Provider auth validation (Anthropic/OpenAI/MiniMax/Codex presence)
+- Core template presence (`SOUL.md`, `IDENTITY.md`, `USER.md`, `HEARTBEAT.md`)
+
 This creates and populates:
 - `~/.skimpyclaw/config.json`
 - `~/.skimpyclaw/.env`
-- `~/.skimpyclaw/agents/main/*.md` (from `templates/`)
+- `~/.skimpyclaw/agents/main/*.md` (from `templates/`, plus fallback core templates if missing)
 
 3. Start locally:
 
