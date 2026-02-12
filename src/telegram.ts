@@ -12,8 +12,7 @@ import { runAgentTurn } from './agent.js';
 import { getCronJobs, runCronJob } from './cron.js';
 import { getCurrentModel, setCurrentModel, getLastMessage } from './gateway.js';
 import { runHeartbeatCheck } from './heartbeat.js';
-import { initSubagentSystem, dispatchSubagent, cancelTask, getActiveTasks, getRecentTasks, getPresetDescriptions } from './subagent.js';
-import type { SubagentType } from './types.js';
+import { initSubagentSystem, cancelTask, getActiveTasks, getRecentTasks } from './subagent.js';
 
 const LAUNCHD_LABEL = 'com.skimpyclaw.gateway';
 
@@ -30,7 +29,6 @@ const BOT_COMMANDS: { command: string; description: string }[] = [
   { command: 'compact', description: 'Compress conversation history' },
   { command: 'silence', description: 'Pause proactive messages' },
   { command: 'cron', description: 'List or run scheduled jobs' },
-  { command: 'agent', description: 'Run a background agent task' },
   { command: 'tasks', description: 'Show active/recent agent tasks' },
   { command: 'cancel', description: 'Cancel a running agent task' },
   { command: 'heartbeat', description: 'Trigger heartbeat check' },
@@ -353,66 +351,13 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
     }
   });
 
-  // /agent command — dispatch a background agent task
-  bot.command('agent', async (ctx) => {
-    const raw = ctx.match.trim();
-    if (!raw) {
-      const presets = getPresetDescriptions();
-      await ctx.reply(
-        `Usage: /agent <type> [model:<alias>] <prompt>\n\nTypes:\n${presets}\n\n` +
-        `Example: /agent coding list TODOs in the codebase\n` +
-        `Example: /agent research model:claude-opus summarize my daily notes`
-      );
-      return;
-    }
-
-    // Parse: <type> [model:<alias>] <prompt>
-    const parts = raw.split(/\s+/);
-    const type = parts[0] as SubagentType;
-    if (!['coding', 'research', 'general'].includes(type)) {
-      await ctx.reply(`Unknown type: ${type}. Use: coding, research, general`);
-      return;
-    }
-
-    let modelOverride: string | undefined;
-    let promptStart = 1;
-
-    if (parts[1]?.startsWith('model:')) {
-      const alias = parts[1].slice(6);
-      modelOverride = cfg.models.aliases[alias] || alias;
-      promptStart = 2;
-    }
-
-    const prompt = parts.slice(promptStart).join(' ');
-    if (!prompt) {
-      await ctx.reply('Missing prompt. What should the agent do?');
-      return;
-    }
-
-    const chatId = ctx.chat?.id;
-    if (!chatId) return;
-
-    try {
-      const history = getHistory(chatId);
-      const task = dispatchSubagent(type, prompt, chatId, cfg, modelOverride, history);
-      await ctx.reply(
-        `🚀 Agent ${task.id} dispatched (${task.type}, model: ${task.model})\n` +
-        `Prompt: ${prompt.slice(0, 100)}${prompt.length > 100 ? '...' : ''}\n\n` +
-        `I'll send the result when it's done. Use /tasks to check status.`
-      );
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : 'Unknown error';
-      await ctx.reply(`Error: ${msg}`);
-    }
-  });
-
   // /tasks command — show active and recent agent tasks
   bot.command('tasks', async (ctx) => {
     const active = getActiveTasks();
     const recent = getRecentTasks(5);
 
     if (recent.length === 0) {
-      await ctx.reply('No agent tasks yet. Use /agent to start one.');
+      await ctx.reply('No agent tasks yet. Subagents spawn automatically for complex requests.');
       return;
     }
 
