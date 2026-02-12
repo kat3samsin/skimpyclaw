@@ -948,7 +948,7 @@ async function loadCronJobs() {
       '<div class="card"><div class="cron-card">' +
       '<div class="cron-info">' +
       '<div class="cron-name">' + esc(j.name || j.id) + '</div>' +
-      '<div class="cron-schedule">Schedule: ' + esc(j.schedule || '-') + '</div>' +
+      '<div class="cron-schedule">Schedule: ' + esc(j.schedule?.expr || '-') + (j.schedule?.tz ? ' (' + esc(j.schedule.tz) + ')' : '') + '</div>' +
       '<div class="cron-next">Next run: ' + formatDate(j.nextRun) + '</div>' +
       '</div>' +
       '<button class="btn btn-small" onclick="triggerCronJob(\\'' + esc(j.id) + '\\')">Run Now</button>' +

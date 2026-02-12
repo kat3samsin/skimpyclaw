@@ -130,6 +130,32 @@ export const BROWSER_TOOL_DEFINITION = {
 // Legacy export for backward compat — static list (built-ins + browser + no MCP)
 export const TOOL_DEFINITIONS = [...BUILTIN_TOOL_DEFINITIONS, BROWSER_TOOL_DEFINITION];
 
+// --- Spawn Subagent Tool ---
+
+export const SPAWN_SUBAGENT_TOOL = {
+  name: 'spawn_subagent',
+  description: 'Spawn a background subagent to handle a task independently. Returns immediately with a run ID. Results are announced back to this chat when done. Use for tasks that benefit from parallel work or long-running operations.',
+  input_schema: {
+    type: 'object' as const,
+    properties: {
+      task: { type: 'string', description: 'What the subagent should do — be specific and self-contained' },
+      type: {
+        type: 'string',
+        enum: ['coding', 'research', 'general'],
+        description: 'Agent type: coding (code/files/bash), research (investigation/reading), general (other)',
+      },
+      model: { type: 'string', description: 'Optional model override (e.g. claude-opus, claude-think)' },
+      label: { type: 'string', description: 'Short label for status display (e.g. "write tests", "check logs")' },
+      allowedPaths: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Additional file paths the subagent can access beyond defaults',
+      },
+    },
+    required: ['task', 'type'],
+  },
+};
+
 // --- MCP (mcporter) ---
 
 let mcpRuntime: any = null;
@@ -202,10 +228,11 @@ export function clearMcpToolCache(): void {
 }
 
 /**
- * Get all available tool definitions: built-ins + browser (if enabled) + MCP (auto-discovered).
+ * Get all available tool definitions: built-ins + browser (if enabled) + MCP (auto-discovered) + spawn_subagent.
  * This is the primary way to get tools — replaces the static TOOL_DEFINITIONS export.
+ * Pass includeSpawnSubagent: true to include the spawn_subagent tool (e.g. for Telegram conversations).
  */
-export async function getToolDefinitions(config?: ToolConfig): Promise<any[]> {
+export async function getToolDefinitions(config?: ToolConfig, options?: { includeSpawnSubagent?: boolean }): Promise<any[]> {
   const tools: any[] = [...BUILTIN_TOOL_DEFINITIONS];
 
   // Include browser tool only when explicitly enabled
@@ -216,6 +243,11 @@ export async function getToolDefinitions(config?: ToolConfig): Promise<any[]> {
   // Auto-discover MCP tools from mcporter config
   const mcpTools = await discoverMcpTools();
   tools.push(...mcpTools);
+
+  // Include spawn_subagent tool when requested
+  if (options?.includeSpawnSubagent) {
+    tools.push(SPAWN_SUBAGENT_TOOL);
+  }
 
   return tools;
 }
@@ -268,15 +300,32 @@ function isPathAllowed(filePath: string, allowedPaths: string[]): boolean {
 
 // --- Tool Executor ---
 
+export interface ExecuteToolContext {
+  /** Task ID for file lock acquisition (subagent writes) */
+  lockTaskId?: string;
+  /** Chat ID for spawn_subagent dispatch */
+  chatId?: number;
+  /** Full config for spawn_subagent */
+  fullConfig?: import('./types.js').Config;
+  /** Conversation history for spawn_subagent */
+  history?: import('./types.js').ChatMessage[];
+}
+
 export async function executeTool(
   name: string,
   input: Record<string, any>,
-  config: ToolConfig
+  config: ToolConfig,
+  context?: ExecuteToolContext
 ): Promise<string> {
   try {
     // Route MCP tools BEFORE normalization to preserve server/tool name casing
     if (name.startsWith('mcp__')) {
       return await executeMcpToolGeneric(name, input);
+    }
+
+    // Route spawn_subagent
+    if (name === 'spawn_subagent') {
+      return await executeSpawnSubagent(input, context);
     }
 
     // Map Claude Code names to internal names for built-in tools
@@ -285,7 +334,7 @@ export async function executeTool(
       case 'read_file':
         return executeReadFile(input.file_path || input.path, config);
       case 'write_file':
-        return executeWriteFile(input.file_path || input.path, input.content, config);
+        return await executeWriteFileLocked(input.file_path || input.path, input.content, config, context?.lockTaskId);
       case 'list_directory':
         return executeListDirectory(input.path, config);
       case 'bash':
@@ -326,6 +375,74 @@ function executeWriteFile(path: string, content: string, config: ToolConfig): st
   }
   writeFileSync(path, content, 'utf-8');
   return `Written: ${path} (${content.length} bytes)`;
+}
+
+/**
+ * Write with file locking when a lockTaskId is provided (subagent context).
+ * Falls back to unlocked write when no lockTaskId.
+ */
+async function executeWriteFileLocked(path: string, content: string, config: ToolConfig, lockTaskId?: string): Promise<string> {
+  if (!lockTaskId) {
+    return executeWriteFile(path, content, config);
+  }
+
+  const { acquireLock, releaseLock } = await import('./file-lock.js');
+  const acquired = await acquireLock(path, lockTaskId);
+  if (!acquired) {
+    return `Error: Could not acquire file lock on ${path} (timed out after 30s)`;
+  }
+
+  try {
+    return executeWriteFile(path, content, config);
+  } finally {
+    releaseLock(path, lockTaskId);
+  }
+}
+
+/**
+ * Execute spawn_subagent tool — dispatches a background subagent.
+ */
+async function executeSpawnSubagent(input: Record<string, any>, context?: ExecuteToolContext): Promise<string> {
+  if (!context?.fullConfig || !context?.chatId) {
+    return 'Error: spawn_subagent requires a chat context (not available in this mode)';
+  }
+
+  const { dispatchSubagent } = await import('./subagent.js');
+
+  const task = input.task as string;
+  const type = input.type as string;
+  const model = input.model as string | undefined;
+  const label = input.label as string | undefined;
+  const allowedPaths = input.allowedPaths as string[] | undefined;
+
+  if (!task || !type) {
+    return 'Error: task and type are required';
+  }
+  if (!['coding', 'research', 'general'].includes(type)) {
+    return `Error: Invalid type "${type}". Must be coding, research, or general.`;
+  }
+
+  try {
+    const subagentTask = dispatchSubagent(
+      type as import('./types.js').SubagentType,
+      task,
+      context.chatId,
+      context.fullConfig,
+      model,
+      context.history,
+      { label, allowedPaths }
+    );
+
+    const labelStr = label ? ` "${label}"` : '';
+    return JSON.stringify({
+      status: 'accepted',
+      runId: subagentTask.id,
+      label: label || subagentTask.type,
+      message: `Subagent ${subagentTask.id}${labelStr} dispatched (${subagentTask.type}, model: ${subagentTask.model}). Results will be announced when done.`,
+    });
+  } catch (err) {
+    return `Error: ${err instanceof Error ? err.message : String(err)}`;
+  }
 }
 
 function executeListDirectory(path: string, config: ToolConfig): string {

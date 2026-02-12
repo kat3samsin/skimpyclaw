@@ -9,6 +9,7 @@ import { loadConfig, loadRawConfig, getConfigPath, saveConfig } from './config.j
 import type { Config, ToolConfig } from './types.js';
 import { startRuntime } from './service.js';
 import { runSetup } from './setup.js';
+import { runDoctor as runDoctorCommand } from './doctor/index.js';
 import { executeTool, getToolDefinitions, BUILTIN_TOOL_DEFINITIONS, BROWSER_TOOL_DEFINITION } from './tools.js';
 
 const APP_NAME = 'skimpyclaw';
@@ -37,6 +38,7 @@ Commands:
   send <message>          Send a message to the local gateway
   cron list               List cron jobs from gateway status
   cron run <id>           Trigger cron job by id
+  doctor [--json]         Run preflight checks
   browser <action> ...    Run browser tool action (open/click/type/select/hover/scroll/waitFor/evaluate/getText/screenshot/wait/close)
   browser login [url]     Open real Chrome (no automation) for manual login. Cookies persist for agent use.
   tools list              List available tools (built-in + MCP)
@@ -739,6 +741,13 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<nu
 
     if (command === 'cron') {
       return await commandCron(args);
+    }
+
+    if (command === 'doctor') {
+      const json = args.includes('--json');
+      const result = await runDoctorCommand({ json });
+      console.log(result.output);
+      return result.exitCode;
     }
 
     if (command === 'browser') {
