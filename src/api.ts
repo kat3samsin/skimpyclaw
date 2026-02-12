@@ -464,6 +464,7 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
       return reply.code(500).send({ error: msg });
     }
   });
+
 }
 
 /**

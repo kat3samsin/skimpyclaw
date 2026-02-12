@@ -127,10 +127,12 @@ describe('subagent', () => {
     });
 
     it('rejects when max concurrent reached', () => {
-      dispatchSubagent('coding', 'task 1', 123, mockConfig);
-      dispatchSubagent('coding', 'task 2', 123, mockConfig);
-      dispatchSubagent('coding', 'task 3', 123, mockConfig);
-      expect(() => dispatchSubagent('coding', 'task 4', 123, mockConfig)).toThrow('Max concurrent');
+      // Set max concurrent to 3 to test the limit
+      const configWithLimit = { ...mockConfig, subagents: { maxConcurrent: 3 } };
+      dispatchSubagent('coding', 'task 1', 123, configWithLimit);
+      dispatchSubagent('coding', 'task 2', 123, configWithLimit);
+      dispatchSubagent('coding', 'task 3', 123, configWithLimit);
+      expect(() => dispatchSubagent('coding', 'task 4', 123, configWithLimit)).toThrow('Max concurrent');
     });
 
     it('delivers result on completion', async () => {

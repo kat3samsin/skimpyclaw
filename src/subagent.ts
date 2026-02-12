@@ -2,7 +2,7 @@
 
 import { homedir } from 'os';
 import { join } from 'path';
-import { existsSync, mkdirSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, writeFileSync, appendFileSync } from 'fs';
 import type {
   Config,
   SubagentType,
@@ -14,8 +14,11 @@ import type {
 import { runAgentTurn } from './agent.js';
 import { getCurrentModel } from './gateway.js';
 import { getAgentDir } from './config.js';
+import { releaseAllLocks } from './file-lock.js';
 
-const MAX_CONCURRENT = 3;
+const DEFAULT_MAX_CONCURRENT = 5;
+const DEFAULT_MAX_RETRIES = 2;
+const REGISTRY_PATH = join(homedir(), '.skimpyclaw', 'logs', 'subagent-runs.jsonl');
 
 // Preset configs per agent type
 interface SubagentPreset {
@@ -264,18 +267,45 @@ export function getPresetDescriptions(): string {
     .join('\n');
 }
 
+// --- Disk Registry ---
+
+function ensureRegistryDir(): void {
+  const dir = join(homedir(), '.skimpyclaw', 'logs');
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
+}
+
+function appendRegistryEvent(event: Record<string, unknown>): void {
+  try {
+    ensureRegistryDir();
+    const line = JSON.stringify({ ...event, timestamp: new Date().toISOString() }) + '\n';
+    appendFileSync(REGISTRY_PATH, line, 'utf-8');
+  } catch (err) {
+    console.warn('[subagent] Failed to write registry event:', err instanceof Error ? err.message : err);
+  }
+}
+
+// --- Dispatch ---
+
 export function dispatchSubagent(
   type: SubagentType,
   prompt: string,
   chatId: number,
   config: Config,
   modelOverride?: string,
-  history?: ChatMessage[]
+  history?: ChatMessage[],
+  options?: {
+    label?: string;
+    allowedPaths?: string[];
+    maxRetries?: number;
+  }
 ): SubagentTask {
+  const maxConcurrent = config.subagents?.maxConcurrent ?? DEFAULT_MAX_CONCURRENT;
   const running = [...tasks.values()].filter((t) => t.status === 'running');
-  if (running.length >= MAX_CONCURRENT) {
+  if (running.length >= maxConcurrent) {
     throw new Error(
-      `Max concurrent agents reached (${MAX_CONCURRENT}). Use /tasks to see running agents or /cancel to stop one.`
+      `Max concurrent agents reached (${maxConcurrent}). Use /tasks to see running agents or /cancel to stop one.`
     );
   }
 
@@ -289,6 +319,7 @@ export function dispatchSubagent(
   taskCounter++;
   const id = `t${taskCounter}`;
   const model = modelOverride || preset.defaultModel || getCurrentModel();
+  const maxRetries = options?.maxRetries ?? config.subagents?.maxRetries ?? DEFAULT_MAX_RETRIES;
 
   const task: SubagentTask = {
     id,
@@ -297,14 +328,36 @@ export function dispatchSubagent(
     status: 'pending',
     chatId,
     model,
+    label: options?.label,
     createdAt: new Date(),
+    retryCount: 0,
+    maxRetries,
     abortController: new AbortController()
   };
 
   tasks.set(id, task);
 
+  // Log to disk registry
+  appendRegistryEvent({
+    type: 'task_created',
+    taskId: id,
+    agentType: type,
+    model,
+    label: options?.label,
+    prompt: prompt.slice(0, 500),
+  });
+
+  // Build tool config with merged paths
+  const toolConfig: ToolConfig = {
+    ...preset.toolConfig,
+    allowedPaths: [
+      ...preset.toolConfig.allowedPaths,
+      ...(options?.allowedPaths || []),
+    ],
+  };
+
   // Fire and forget — don't await
-  executeTask(task, config, history).catch((err) => {
+  executeTask(task, config, toolConfig, history).catch((err) => {
     console.error(`[subagent] Unhandled error in task ${id}:`, err);
   });
 
@@ -314,12 +367,14 @@ export function dispatchSubagent(
 async function executeTask(
   task: SubagentTask,
   config: Config,
+  toolConfig: ToolConfig,
   history?: ChatMessage[]
 ): Promise<void> {
   task.status = 'running';
   task.startedAt = new Date();
+  const label = task.label ? ` "${task.label}"` : '';
   console.log(
-    `[subagent] Starting ${task.id} (${task.type}, model: ${task.model})`
+    `[subagent] Starting ${task.id}${label} (${task.type}, model: ${task.model})`
   );
 
   try {
@@ -327,27 +382,27 @@ async function executeTask(
     if (task.abortController.signal.aborted) {
       task.status = 'cancelled';
       task.completedAt = new Date();
+      appendRegistryEvent({ type: 'task_cancelled', taskId: task.id });
       return;
     }
-
-    const preset = PRESETS[task.type];
 
     // Ensure agent dir + templates exist, register in config
     ensureAgentSetup(task.type, config);
 
     const response = await runAgentTurn(
-      preset.agentId,
+      task.type, // agentId = preset.agentId = type name
       task.prompt,
       config,
       task.model,
-      preset.toolConfig,
+      toolConfig,
       history,
       {
         channel: 'subagent',
         sessionId: task.id,
         metadata: {
           type: task.type,
-          chatId: task.chatId
+          chatId: task.chatId,
+          label: task.label,
         }
       }
     );
@@ -356,6 +411,8 @@ async function executeTask(
     if (task.abortController.signal.aborted) {
       task.status = 'cancelled';
       task.completedAt = new Date();
+      releaseAllLocks(task.id);
+      appendRegistryEvent({ type: 'task_cancelled', taskId: task.id });
       return;
     }
 
@@ -363,19 +420,72 @@ async function executeTask(
     task.result = response;
     task.completedAt = new Date();
 
+    // Release any file locks held by this task
+    releaseAllLocks(task.id);
+
     const elapsed = Math.round(
       (task.completedAt.getTime() - task.startedAt!.getTime()) / 1000
     );
-    console.log(`[subagent] Completed ${task.id} in ${elapsed}s`);
+    console.log(`[subagent] Completed ${task.id}${label} in ${elapsed}s`);
+
+    appendRegistryEvent({
+      type: 'task_completed',
+      taskId: task.id,
+      elapsed,
+      resultLength: response.length,
+    });
 
     // Deliver result
     if (deliverMessage) {
-      const header = `✅ Agent ${task.id} (${task.type}) completed in ${elapsed}s:`;
+      const labelStr = task.label ? ` (${task.label})` : '';
+      const header = `✅ Agent ${task.id}${labelStr} completed in ${elapsed}s:`;
       await deliverMessage(task.chatId, `${header}\n\n${response}`);
     }
   } catch (error) {
+    // Release any file locks on error
+    releaseAllLocks(task.id);
+
+    const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+    const retryCount = task.retryCount ?? 0;
+    const maxRetries = task.maxRetries ?? DEFAULT_MAX_RETRIES;
+
+    // Retry if under limit and not cancelled
+    if (retryCount < maxRetries && !task.abortController.signal.aborted) {
+      task.retryCount = retryCount + 1;
+      const elapsed = Math.round(
+        (Date.now() - (task.startedAt?.getTime() || task.createdAt.getTime())) / 1000
+      );
+      console.log(
+        `[subagent] Task ${task.id} failed after ${elapsed}s (attempt ${retryCount + 1}/${maxRetries + 1}), retrying: ${errorMsg}`
+      );
+
+      appendRegistryEvent({
+        type: 'task_retry',
+        taskId: task.id,
+        attempt: task.retryCount,
+        error: errorMsg,
+      });
+
+      if (deliverMessage) {
+        await deliverMessage(
+          task.chatId,
+          `⚠️ Agent ${task.id} failed (attempt ${retryCount + 1}/${maxRetries + 1}), retrying...\n\nError: ${errorMsg}`
+        );
+      }
+
+      // Modify prompt to include error context for retry
+      const retryPrompt = `${task.prompt}\n\n---\nPrevious attempt failed with error: ${errorMsg}\nPlease try a different approach.`;
+      task.prompt = retryPrompt;
+      task.startedAt = new Date();
+
+      // Retry
+      return executeTask(task, config, {
+        ...PRESETS[task.type].toolConfig,
+      }, history);
+    }
+
     task.status = 'failed';
-    task.error = error instanceof Error ? error.message : 'Unknown error';
+    task.error = errorMsg;
     task.completedAt = new Date();
 
     const elapsed = Math.round(
@@ -384,9 +494,16 @@ async function executeTask(
         1000
     );
     console.error(
-      `[subagent] Failed ${task.id} after ${elapsed}s:`,
+      `[subagent] Failed ${task.id} after ${elapsed}s (all retries exhausted):`,
       task.error
     );
+
+    appendRegistryEvent({
+      type: 'task_failed',
+      taskId: task.id,
+      elapsed,
+      error: task.error,
+    });
 
     if (deliverMessage) {
       await deliverMessage(
@@ -405,6 +522,8 @@ export function cancelTask(id: string): SubagentTask | null {
   task.abortController.abort();
   task.status = 'cancelled';
   task.completedAt = new Date();
+  releaseAllLocks(task.id);
+  appendRegistryEvent({ type: 'task_cancelled', taskId: task.id });
   console.log(`[subagent] Cancelled ${task.id}`);
   return task;
 }

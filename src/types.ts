@@ -28,6 +28,10 @@ export interface Config {
   dashboard?: {
     token?: string;
   };
+  subagents?: {
+    maxConcurrent?: number;   // Max parallel subagents (default 5)
+    maxRetries?: number;      // Max retries on failure (default 2)
+  };
   langfuse?: {
     enabled?: boolean;
     publicKey?: string;
@@ -159,11 +163,14 @@ export interface SubagentTask {
   status: SubagentStatus;
   chatId: number;
   model: string;
+  label?: string;           // Short label for status display
   createdAt: Date;
   startedAt?: Date;
   completedAt?: Date;
   result?: string;
   error?: string;
+  retryCount?: number;      // Current retry attempt (0-based)
+  maxRetries?: number;      // Max retries on failure (default 2)
   abortController: AbortController;
 }
 
@@ -186,3 +193,4 @@ export interface AgentRunContext {
   tags?: string[];
   metadata?: Record<string, unknown>;
 }
+

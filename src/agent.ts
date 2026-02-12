@@ -8,7 +8,7 @@ import { homedir } from 'os';
 import { getAgentDir } from './config.js';
 import { buildSafeSystemPrompt, sanitizeUserInput } from './security.js';
 import type { Config, ChatMessage, ChatOptions, ToolConfig, AgentRunContext } from './types.js';
-import { getToolDefinitions, executeTool } from './tools.js';
+import { getToolDefinitions, executeTool, type ExecuteToolContext } from './tools.js';
 import { getLangfuseConfig, isLangfuseEnabled } from './langfuse.js';
 import { startActiveObservation, startObservation, updateActiveTrace } from '@langfuse/tracing';
 
@@ -662,7 +662,8 @@ export async function chatWithTools(
   messages: ChatMessage[],
   options: ChatOptions,
   config: Config,
-  toolConfig: ToolConfig
+  toolConfig: ToolConfig,
+  toolContext?: ExecuteToolContext
 ): Promise<ToolChatResult> {
   if (!anthropicClient) {
     throw new Error('Anthropic client not initialized');
@@ -673,7 +674,8 @@ export async function chatWithTools(
   const maxIterations = toolConfig.maxIterations || 20;
 
   // Resolve tools once at start of agent loop
-  const toolDefs = await getToolDefinitions(toolConfig);
+  const includeSpawn = !!(toolContext?.chatId && toolContext?.fullConfig);
+  const toolDefs = await getToolDefinitions(toolConfig, { includeSpawnSubagent: includeSpawn });
 
   // Build system param with OAuth identity guard
   const systemMessage = messages.find(m => m.role === 'system');
@@ -760,7 +762,7 @@ export async function chatWithTools(
         : null;
 
       try {
-        const result = await executeTool(block.name, block.input as Record<string, any>, toolConfig);
+        const result = await executeTool(block.name, block.input as Record<string, any>, toolConfig, toolContext);
         const resultPreview = result.slice(0, 200) + (result.length > 200 ? '...' : '');
         console.log(`[agent:tools] <- ${resultPreview}`);
         toolLog.push(`${block.name}(${inputStr}) → ${resultPreview}`);
@@ -841,7 +843,17 @@ export async function runAgentTurn(
     if (toolConfig?.enabled && provider === 'anthropic' && !!anthropicClient) {
       // Anthropic tool_use loop
       console.log(`[agent] Running with tools enabled (paths: ${toolConfig.allowedPaths.join(', ')})`);
-      const result = await chatWithTools(messages, chatOptions, config, toolConfig);
+      // Build tool context for spawn_subagent and file locking
+      // chatId comes from context metadata (set by telegram) or sessionId parse
+      const chatIdNum = (context?.metadata as any)?.chatId
+        ?? (context?.sessionId ? parseInt(context.sessionId, 10) : undefined);
+      const toolCtx: ExecuteToolContext = {
+        chatId: Number.isFinite(chatIdNum) ? chatIdNum : undefined,
+        fullConfig: config,
+        history,
+        lockTaskId: context?.sessionId,
+      };
+      const result = await chatWithTools(messages, chatOptions, config, toolConfig, toolCtx);
       response = result.response;
       toolCalls = result.toolCalls;
     } else if (toolConfig?.enabled && responsesApiProviders.has(provider)) {

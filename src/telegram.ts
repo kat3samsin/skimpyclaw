@@ -95,6 +95,7 @@ function getRunContext(ctx: Context): AgentRunContext {
     channel: 'telegram',
     metadata: {
       username: ctx.from?.username,
+      chatId: ctx.chat?.id,
     },
   };
 }
@@ -227,9 +228,14 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
       return;
     }
 
-    const resolved = cfg.models.aliases[modelAlias] || modelAlias;
+    const resolved = cfg.models.aliases[modelAlias];
+    if (!resolved) {
+      const aliases = Object.keys(cfg.models.aliases).join(', ');
+      await ctx.reply(`Unknown model alias: "${modelAlias}"\n\nAvailable: ${aliases}`);
+      return;
+    }
     setCurrentModel(resolved);
-    await ctx.reply(`Model switched to: ${resolved}`);
+    await ctx.reply(`Model switched to: ${modelAlias} (${resolved})`);
   });
 
   // /status command
