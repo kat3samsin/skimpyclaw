@@ -74,35 +74,11 @@ function startGenerationObservation(name: string, attributes: Record<string, any
   return startObservation(name, attributes, { asType: 'generation' });
 }
 
-function toUsageDetails(usage: OpenAI.Completions.CompletionUsage | null | undefined): Record<string, number> | undefined {
-  if (!usage) return undefined;
-
-  const usageDetails: Record<string, number> = {
-    prompt_tokens: usage.prompt_tokens,
-    completion_tokens: usage.completion_tokens,
-    total_tokens: usage.total_tokens,
-  };
-
-  if (usage.prompt_tokens_details) {
-    for (const [key, value] of Object.entries(usage.prompt_tokens_details)) {
-      if (typeof value === 'number') {
-        usageDetails[`prompt_tokens_details_${key}`] = value;
-      }
-    }
-  }
-
-  if (usage.completion_tokens_details) {
-    for (const [key, value] of Object.entries(usage.completion_tokens_details)) {
-      if (typeof value === 'number') {
-        usageDetails[`completion_tokens_details_${key}`] = value;
-      }
-    }
-  }
-
-  return usageDetails;
-}
-
-function toNumericUsageDetails(usage: unknown): Record<string, number> | undefined {
+/**
+ * Flatten a usage object into a flat Record<string, number> for Langfuse.
+ * Handles both OpenAI CompletionUsage and generic usage objects.
+ */
+function flattenUsage(usage: unknown): Record<string, number> | undefined {
   if (!usage || typeof usage !== 'object') return undefined;
 
   const details: Record<string, number> = {};
@@ -122,6 +98,45 @@ function toNumericUsageDetails(usage: unknown): Record<string, number> | undefin
 
   flatten(usage);
   return Object.keys(details).length > 0 ? details : undefined;
+}
+
+/**
+ * Execute a tool with observation logging.
+ * Handles logging, Langfuse observation, and error handling.
+ * Returns the result and a formatted log entry.
+ */
+async function executeToolWithObservation(
+  toolName: string,
+  toolArgs: Record<string, any>,
+  toolConfig: ToolConfig,
+  toolContext: ExecuteToolContext | undefined,
+  logPrefix: string
+): Promise<{ result: string; logEntry: string }> {
+  const inputStr = JSON.stringify(toolArgs).slice(0, 200);
+  console.log(`${logPrefix} -> ${toolName}(${inputStr})`);
+
+  const toolObs = isLangfuseEnabled()
+    ? startObservation(`tool:${toolName}`, { input: toolArgs, metadata: { tool: toolName } }, { asType: 'tool' })
+    : null;
+
+  try {
+    const result = await executeTool(toolName, toolArgs, toolConfig, toolContext) || '';
+    const resultPreview = result.slice(0, 200) + (result.length > 200 ? '...' : '');
+    console.log(`${logPrefix} <- ${resultPreview}`);
+
+    toolObs?.update({ output: result });
+    toolObs?.end();
+
+    return {
+      result,
+      logEntry: `${toolName}(${inputStr}) → ${resultPreview}`,
+    };
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    toolObs?.update({ level: 'ERROR', statusMessage: errorMessage, output: { error: errorMessage } });
+    toolObs?.end();
+    throw err;
+  }
 }
 
 /**
@@ -355,7 +370,7 @@ async function codexChat(messages: ChatMessage[], model: string, toolConfig?: To
       parsed = parseCodexSSE(sseText);
       genObs?.update({
         output: { text: parsed.outputText },
-        usageDetails: toNumericUsageDetails(parsed.response?.usage),
+        usageDetails: flattenUsage(parsed.response?.usage),
       });
       genObs?.end();
     } catch (err) {
@@ -386,33 +401,20 @@ async function codexChat(messages: ChatMessage[], model: string, toolConfig?: To
         args = {};
       }
 
-      const inputStr = (fc.arguments || JSON.stringify(args)).slice(0, 200);
-      console.log(`[codex:tools] -> ${fc.name}(${inputStr})`);
+      const { result, logEntry } = await executeToolWithObservation(
+        fc.name,
+        args,
+        toolConfig!,
+        toolContext,
+        '[codex:tools]'
+      );
 
-      const toolObs = isLangfuseEnabled()
-        ? startObservation(`tool:${fc.name}`, { input: args, metadata: { tool: fc.name } }, { asType: 'tool' })
-        : null;
-
-      try {
-        const result = await executeTool(fc.name, args, toolConfig!, toolContext) || '';
-        const resultPreview = result.slice(0, 200) + (result.length > 200 ? '...' : '');
-        console.log(`[codex:tools] <- ${resultPreview}`);
-        toolLog.push(`${fc.name}(${inputStr}) → ${resultPreview}`);
-
-        toolObs?.update({ output: result });
-        toolObs?.end();
-
-        input.push({
-          type: 'function_call_output',
-          call_id: fc.callId,
-          output: result,
-        });
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : String(err);
-        toolObs?.update({ level: 'ERROR', statusMessage: errorMessage, output: { error: errorMessage } });
-        toolObs?.end();
-        throw err;
-      }
+      toolLog.push(logEntry);
+      input.push({
+        type: 'function_call_output',
+        call_id: fc.callId,
+        output: result,
+      });
     }
   }
 
@@ -635,7 +637,7 @@ export async function chat(
       const content = response.choices[0]?.message?.content || '';
       genObs?.update({
         output: response.choices[0]?.message,
-        usageDetails: toUsageDetails(response.usage),
+        usageDetails: flattenUsage(response.usage),
       });
       genObs?.end();
 
@@ -754,33 +756,20 @@ export async function chatWithTools(
     for (const block of response.content) {
       if (block.type !== 'tool_use') continue;
 
-      const inputStr = JSON.stringify(block.input).slice(0, 200);
-      console.log(`[agent:tools] -> ${block.name}(${inputStr})`);
+      const { result, logEntry } = await executeToolWithObservation(
+        block.name,
+        block.input as Record<string, any>,
+        toolConfig,
+        toolContext,
+        '[agent:tools]'
+      );
 
-      const toolObs = isLangfuseEnabled()
-        ? startObservation(`tool:${block.name}`, { input: block.input, metadata: { tool: block.name } }, { asType: 'tool' })
-        : null;
-
-      try {
-        const result = await executeTool(block.name, block.input as Record<string, any>, toolConfig, toolContext);
-        const resultPreview = result.slice(0, 200) + (result.length > 200 ? '...' : '');
-        console.log(`[agent:tools] <- ${resultPreview}`);
-        toolLog.push(`${block.name}(${inputStr}) → ${resultPreview}`);
-
-        toolObs?.update({ output: result });
-        toolObs?.end();
-
-        toolResults.push({
-          type: 'tool_result',
-          tool_use_id: block.id,
-          content: result,
-        });
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : String(err);
-        toolObs?.update({ level: 'ERROR', statusMessage: errorMessage, output: { error: errorMessage } });
-        toolObs?.end();
-        throw err;
-      }
+      toolLog.push(logEntry);
+      toolResults.push({
+        type: 'tool_result',
+        tool_use_id: block.id,
+        content: result,
+      });
     }
 
     // Send tool results back

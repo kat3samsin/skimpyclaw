@@ -66,36 +66,39 @@ const PRESETS: Record<SubagentType, SubagentPreset> = {
 
 // --- Starter Templates ---
 
-const STARTER_TEMPLATES: Record<
-  SubagentType,
-  { identity: string; tools: string }
-> = {
-  coding: {
-    identity: `# IDENTITY.md - Coding Subagent
+/**
+ * Build identity template for a subagent type.
+ */
+function buildIdentity(name: string, emoji: string, role: string, accessNote?: string): string {
+  const typeLower = name.toLowerCase();
+  const access = accessNote || `You are a ${typeLower} subagent dispatched for a specific task.`;
+  return `# IDENTITY.md - ${name} Subagent
 
-Name: Coding Agent
-Emoji: 🔧
+Name: ${name} Agent
+Emoji: ${emoji}
 
-You are a coding subagent dispatched for a specific task. You have file and bash access
-across ~/.skimpyclaw and ~/Sites.
+${access}
 
 ## Your Role
-- Execute coding tasks: write code, fix bugs, refactor, run commands
-- Act on instructions directly — don't narrate what you're going to do
-- Return concise results when done
+${role}
 
 ## Your Limitations
 - You are short-lived: complete the task and return the result
 - You have ONLY 4 tools: Read, Write, Glob, Bash
 - Do NOT invent or hallucinate tools that don't exist
-`,
-    tools: `# TOOLS.md - Coding Subagent Tools
+`;
+}
+
+/**
+ * Build tools template for a subagent.
+ */
+function buildTools(name: string, actionWarning: string, extraPaths?: string): string {
+  const paths = extraPaths || '';
+  return `# TOOLS.md - ${name} Subagent Tools
 
 ## CRITICAL: Act, Don't Narrate
 
-**NEVER say "let me write the code" or "now I'll update the file" — just call the tool.**
-You have a LIMITED number of tool iterations. Every message you spend talking about what
-you're going to do is one less chance to actually do it.
+${actionWarning}
 
 ## Your 4 Tools
 
@@ -113,97 +116,44 @@ Execute a shell command. Parameters: \`command\` (string, required), \`cwd\` (st
 
 ## Key Paths
 - Config: ~/.skimpyclaw/config.json
-- Agent templates: ~/.skimpyclaw/agents/
-- Sites: ~/Sites/
-`
+- Agent templates: ~/.skimpyclaw/agents/${paths}
+`;
+}
+
+const STARTER_TEMPLATES: Record<SubagentType, { identity: string; tools: string }> = {
+  coding: {
+    identity: buildIdentity(
+      'Coding',
+      '🔧',
+      '- Execute coding tasks: write code, fix bugs, refactor, run commands\n- Act on instructions directly — don\'t narrate what you\'re going to do\n- Return concise results when done',
+      'You have file and bash access across ~/.skimpyclaw and ~/Sites.'
+    ),
+    tools: buildTools(
+      'Coding',
+      '**NEVER say "let me write the code" or "now I\'ll update the file" — just call the tool.**\nYou have a LIMITED number of tool iterations. Every message you spend talking about what\nyou\'re going to do is one less chance to actually do it.',
+      '\n- Sites: ~/Sites/'
+    ),
   },
   research: {
-    identity: `# IDENTITY.md - Research Subagent
-
-Name: Research Agent
-Emoji: 🔍
-
-You are a research subagent dispatched for a specific task.
-
-## Your Role
-- Research questions using vault notes and files
-- Summarize findings concisely
-- Act on instructions directly — don't narrate what you're going to do
-
-## Your Limitations
-- You are short-lived: complete the task and return the result
-- You have ONLY 4 tools: Read, Write, Glob, Bash
-- Do NOT invent or hallucinate tools that don't exist
-`,
-    tools: `# TOOLS.md - Research Subagent Tools
-
-## CRITICAL: Act, Don't Narrate
-
-**NEVER say "let me check" or "I'll look into that" — just call the tool.**
-
-## Your 4 Tools
-
-### Read
-Read the contents of a file. Parameter: \`file_path\` (string, required)
-
-### Write
-Write content to a file. Parameters: \`file_path\` (string, required), \`content\` (string, required)
-
-### Glob
-List files and directories at a path. Parameter: \`path\` (string, required)
-
-### Bash
-Execute a shell command. Parameters: \`command\` (string, required), \`cwd\` (string, optional)
-
-## Key Paths
-- Config: ~/.skimpyclaw/config.json
-- Agent templates: ~/.skimpyclaw/agents/
-- Add your notes/vault paths to allowedPaths in config before using them
-`
+    identity: buildIdentity(
+      'Research',
+      '🔍',
+      '- Research questions using vault notes and files\n- Summarize findings concisely\n- Act on instructions directly — don\'t narrate what you\'re going to do'
+    ),
+    tools: buildTools(
+      'Research',
+      '**NEVER say "let me check" or "I\'ll look into that" — just call the tool.**',
+      '\n- Add your notes/vault paths to allowedPaths in config before using them'
+    ),
   },
   general: {
-    identity: `# IDENTITY.md - General Subagent
-
-Name: General Agent
-Emoji: 🦞
-
-You are a general-purpose subagent dispatched for a specific task.
-
-## Your Role
-- Handle miscellaneous tasks that don't fit coding or research
-- Act on instructions directly — don't narrate what you're going to do
-- Return concise results when done
-
-## Your Limitations
-- You are short-lived: complete the task and return the result
-- You have ONLY 4 tools: Read, Write, Glob, Bash
-- Do NOT invent or hallucinate tools that don't exist
-`,
-    tools: `# TOOLS.md - General Subagent Tools
-
-## CRITICAL: Act, Don't Narrate
-
-**NEVER say "let me check" or "I'll look into that" — just call the tool.**
-
-## Your 4 Tools
-
-### Read
-Read the contents of a file. Parameter: \`file_path\` (string, required)
-
-### Write
-Write content to a file. Parameters: \`file_path\` (string, required), \`content\` (string, required)
-
-### Glob
-List files and directories at a path. Parameter: \`path\` (string, required)
-
-### Bash
-Execute a shell command. Parameters: \`command\` (string, required), \`cwd\` (string, optional)
-
-## Key Paths
-- Config: ~/.skimpyclaw/config.json
-- Agent templates: ~/.skimpyclaw/agents/
-`
-  }
+    identity: buildIdentity(
+      'General',
+      '🦞',
+      '- Handle miscellaneous tasks that don\'t fit coding or research\n- Act on instructions directly — don\'t narrate what you\'re going to do\n- Return concise results when done'
+    ),
+    tools: buildTools('General', '**NEVER say "let me check" or "I\'ll look into that" — just call the tool.**'),
+  },
 };
 
 // Agent identity metadata for in-memory registration
