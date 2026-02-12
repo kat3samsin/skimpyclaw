@@ -51,13 +51,14 @@ function renderGatewayPlist(workspaceDir: string): string {
     .replaceAll('__HOME_DIR__', homeDir);
 }
 
-type ProviderChoice = 'anthropic-api' | 'anthropic-oauth' | 'openai-api' | 'codex-oauth';
+type ProviderChoice = 'anthropic-api' | 'anthropic-oauth' | 'openai-api' | 'codex-oauth' | 'minimax-api';
 
 const PROVIDER_OPTIONS: { key: ProviderChoice; label: string }[] = [
   { key: 'anthropic-api', label: 'Anthropic API key' },
   { key: 'anthropic-oauth', label: 'Anthropic OAuth (Claude Code)' },
   { key: 'openai-api', label: 'OpenAI API key' },
   { key: 'codex-oauth', label: 'OpenAI Codex OAuth' },
+  { key: 'minimax-api', label: 'MiniMax API key' },
 ];
 
 async function askProviders(rl: readline.Interface): Promise<Set<ProviderChoice>> {
@@ -90,6 +91,7 @@ async function askProviders(rl: readline.Interface): Promise<Set<ProviderChoice>
 interface ProviderSecrets {
   anthropicKey?: string;
   openaiKey?: string;
+  minimaxKey?: string;
 }
 
 interface SetupBuildInput {
@@ -131,6 +133,13 @@ async function collectProviderSecrets(
     console.log(`   ✓ ${maskInput(secrets.openaiKey)}`);
   }
 
+  if (providers.has('minimax-api')) {
+    console.log('\n   MiniMax API Key');
+    console.log('   Get one from: https://platform.minimax.io/user-center/basic-information/interface-key');
+    secrets.minimaxKey = await ask(rl, '   Enter key: ');
+    console.log(`   ✓ ${maskInput(secrets.minimaxKey)}`);
+  }
+
   if (providers.has('codex-oauth')) {
     console.log('\n   OpenAI Codex OAuth');
     console.log('   No key needed — uses ~/.codex/auth.json at runtime.');
@@ -154,6 +163,10 @@ function buildProviders(providers: Set<ProviderChoice>): Record<string, Record<s
     result.openai = { apiKey: '${OPENAI_API_KEY}', baseURL: 'https://api.openai.com/v1' };
   }
 
+  if (providers.has('minimax-api')) {
+    result.minimax = { apiKey: '${MINIMAX_API_KEY}', baseURL: 'https://api.minimax.chat/v1' };
+  }
+
   if (providers.has('codex-oauth')) {
     result.codex = {
       authToken: 'codex',
@@ -169,6 +182,7 @@ function buildDefaultModel(providers: Set<ProviderChoice>): string {
   const hasAnthropic = providers.has('anthropic-api') || providers.has('anthropic-oauth');
   if (hasAnthropic) return 'anthropic/claude-opus-4-6';
   if (providers.has('codex-oauth')) return 'codex/codex-5.3';
+  if (providers.has('minimax-api')) return 'minimax/MiniMax-M2.1';
   return 'openai/gpt-4o';
 }
 
@@ -190,6 +204,10 @@ function buildAliases(providers: Set<ProviderChoice>): Record<string, string> {
 
   if (providers.has('codex-oauth')) {
     aliases.codex = 'codex/codex-5.3';
+  }
+
+  if (providers.has('minimax-api')) {
+    aliases.minimax = 'minimax/MiniMax-M2.1';
   }
 
   return aliases;
@@ -214,6 +232,10 @@ function buildEnvContent(
 
   if (providers.has('openai-api') && secrets.openaiKey) {
     lines.push(`OPENAI_API_KEY=${secrets.openaiKey}`);
+  }
+
+  if (providers.has('minimax-api') && secrets.minimaxKey) {
+    lines.push(`MINIMAX_API_KEY=${secrets.minimaxKey}`);
   }
 
   lines.push(`TELEGRAM_BOT_TOKEN=${telegramToken}`);
@@ -296,6 +318,98 @@ export function buildSetupArtifacts(input: SetupBuildInput): { configJson: strin
     configJson: JSON.stringify(config, null, 2),
     envContent: buildEnvContent(input.telegramToken, input.selectedProviders, input.providerSecrets, input.discordToken),
   };
+}
+
+const REQUIRED_TEMPLATE_DEFAULTS: Record<string, string> = {
+  'SOUL.md': '# SOUL\n\nBe direct, resourceful, and helpful. Keep it concise.\n',
+  'IDENTITY.md': '# IDENTITY\n\nName: Claw\nEmoji: 👙🦞\n',
+  'USER.md': '# USER\n\nName: User\n',
+  'HEARTBEAT.md': '# HEARTBEAT\n\nIf nothing needs attention, reply HEARTBEAT_OK.\n',
+};
+
+function ensureCoreTemplates(agentDir: string): string[] {
+  const created: string[] = [];
+  for (const [file, content] of Object.entries(REQUIRED_TEMPLATE_DEFAULTS)) {
+    const dst = join(agentDir, file);
+    if (!existsSync(dst)) {
+      writeFileSync(dst, content, 'utf-8');
+      created.push(file);
+    }
+  }
+  return created;
+}
+
+async function quickFetch(url: string, init?: RequestInit): Promise<Response> {
+  return await fetch(url, { ...init, signal: AbortSignal.timeout(12000) });
+}
+
+async function validateTelegramToken(token: string): Promise<{ ok: boolean; detail: string }> {
+  try {
+    const res = await quickFetch(`https://api.telegram.org/bot${token}/getMe`);
+    const text = await res.text();
+    if (!res.ok) return { ok: false, detail: `HTTP ${res.status}: ${text.slice(0, 140)}` };
+    const body = JSON.parse(text) as { ok?: boolean; result?: { username?: string } };
+    if (!body.ok) return { ok: false, detail: text.slice(0, 140) };
+    return { ok: true, detail: body.result?.username ? `@${body.result.username}` : 'valid token' };
+  } catch (err) {
+    return { ok: false, detail: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+async function validateProviderAuth(providers: Set<ProviderChoice>, secrets: ProviderSecrets): Promise<Array<{ name: string; ok: boolean; detail: string }>> {
+  const checks: Array<{ name: string; ok: boolean; detail: string }> = [];
+
+  if (providers.has('anthropic-api') && secrets.anthropicKey) {
+    try {
+      const res = await quickFetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': secrets.anthropicKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({ model: 'claude-3-5-haiku-20241022', max_tokens: 8, messages: [{ role: 'user', content: 'ping' }] }),
+      });
+      checks.push({ name: 'Anthropic API', ok: res.ok, detail: res.ok ? 'auth ok' : `HTTP ${res.status}` });
+    } catch (err) {
+      checks.push({ name: 'Anthropic API', ok: false, detail: err instanceof Error ? err.message : String(err) });
+    }
+  }
+
+  if (providers.has('openai-api') && secrets.openaiKey) {
+    try {
+      const res = await quickFetch('https://api.openai.com/v1/models', {
+        headers: { authorization: `Bearer ${secrets.openaiKey}` },
+      });
+      checks.push({ name: 'OpenAI API', ok: res.ok, detail: res.ok ? 'auth ok' : `HTTP ${res.status}` });
+    } catch (err) {
+      checks.push({ name: 'OpenAI API', ok: false, detail: err instanceof Error ? err.message : String(err) });
+    }
+  }
+
+  if (providers.has('minimax-api') && secrets.minimaxKey) {
+    try {
+      const res = await quickFetch('https://api.minimax.io/anthropic/v1/messages', {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${secrets.minimaxKey}`,
+          'content-type': 'application/json',
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({ model: 'MiniMax-M2.1', max_tokens: 8, messages: [{ role: 'user', content: 'ping' }] }),
+      });
+      checks.push({ name: 'MiniMax API', ok: res.ok, detail: res.ok ? 'auth ok' : `HTTP ${res.status}` });
+    } catch (err) {
+      checks.push({ name: 'MiniMax API', ok: false, detail: err instanceof Error ? err.message : String(err) });
+    }
+  }
+
+  if (providers.has('codex-oauth')) {
+    const authPath = join(homedir(), '.codex', 'auth.json');
+    checks.push({ name: 'Codex OAuth', ok: existsSync(authPath), detail: existsSync(authPath) ? authPath : `missing ${authPath}` });
+  }
+
+  return checks;
 }
 
 export async function runSetup(options: SetupOptions = {}): Promise<void> {
@@ -409,6 +523,11 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
       console.log(`⚠ Templates directory not found. Create templates manually in ${AGENTS_DIR}`);
     }
 
+    const createdFallbackTemplates = ensureCoreTemplates(AGENTS_DIR);
+    if (createdFallbackTemplates.length > 0) {
+      console.log(`✓ Added missing core templates: ${createdFallbackTemplates.join(', ')}`);
+    }
+
     // Create .env file for secrets
     const envPath = join(CONFIG_DIR, '.env');
     writeFileSync(envPath, envContent);
@@ -425,6 +544,15 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
     writeFileSync(plistPath, plistContent);
     console.log(`✓ Daemon plist written to ${plistPath}`);
 
+    console.log('\nRunning preflight checks...');
+    const telegramCheck = await validateTelegramToken(telegramToken);
+    const providerChecks = await validateProviderAuth(selectedProviders, providerSecrets);
+
+    console.log(`- Telegram token: ${telegramCheck.ok ? 'PASS' : 'FAIL'} (${telegramCheck.detail})`);
+    for (const check of providerChecks) {
+      console.log(`- ${check.name}: ${check.ok ? 'PASS' : 'FAIL'} (${check.detail})`);
+    }
+
     console.log('\n✅ Setup complete!\n');
     console.log('Next steps:');
     console.log('1. Review templates in ~/.skimpyclaw/agents/main/');
@@ -433,6 +561,7 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
     console.log('3. Check health:');
     console.log('   curl http://localhost:18790/health');
     console.log(`4. Send /help in your ${useDiscord ? 'Discord bot DM/server' : 'Telegram bot'}`);
+    console.log('5. If any preflight check failed, fix it before relying on automation.');
     console.log('\n👙🦞 Enjoy!');
   } finally {
     rl.close();

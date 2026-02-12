@@ -126,32 +126,77 @@ dist/             # compiled output
 - Telegram bot token (from @BotFather) and/or Discord bot token
 - Anthropic API key (or compatible auth token config)
 
+## Installation
+
+### Via npm (recommended)
+
+```bash
+npm install -g skimpyclaw
+skimpyclaw onboard
+```
+
+### Via pnpm
+
+```bash
+pnpm add -g skimpyclaw
+skimpyclaw onboard
+```
+
+### Via Homebrew (macOS/Linux)
+
+```bash
+brew tap kat3samsin/skimpyclaw
+brew install skimpyclaw
+skimpyclaw onboard
+```
+
+### Via curl (one-liner install)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kat3samsin/skimpyclaw/main/install.sh | bash
+```
+
+### From source
+
+```bash
+git clone https://github.com/kat3samsin/skimpyclaw.git
+cd skimpyclaw
+pnpm install
+pnpm run build
+pnpm link --global
+```
+
 ## Quick start
 
-1. Install dependencies:
+1. Run onboarding (if not already done):
 
 ```bash
-pnpm install
+skimpyclaw onboard
 ```
 
-2. Run onboarding:
-
-```bash
-pnpm run cli -- onboard
-```
+Onboarding now includes preflight checks before finishing:
+- Telegram token validation (`getMe`)
+- Provider auth validation (Anthropic/OpenAI/MiniMax/Codex presence)
+- Core template presence (`SOUL.md`, `IDENTITY.md`, `USER.md`, `HEARTBEAT.md`)
 
 This creates and populates:
 - `~/.skimpyclaw/config.json`
 - `~/.skimpyclaw/.env`
-- `~/.skimpyclaw/agents/main/*.md` (from `templates/`)
+- `~/.skimpyclaw/agents/main/*.md` (from `templates/`, plus fallback core templates if missing)
 
-3. Start locally:
+2. Start the service:
 
 ```bash
-pnpm run dev
+skimpyclaw start
 ```
 
-4. Verify health:
+Or in development mode with watch:
+
+```bash
+skimpyclaw dev
+```
+
+3. Verify health:
 
 ```bash
 curl http://127.0.0.1:18790/health

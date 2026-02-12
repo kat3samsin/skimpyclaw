@@ -3,9 +3,17 @@
   "version": "0.1.0",
   "description": "Lightweight personal AI assistant with Telegram and Discord integration",
   "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "bin": {
     "skimpyclaw": "dist/cli.js"
   },
+  "files": [
+    "dist",
+    "templates",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "cli": "tsx src/cli.ts",
     "start": "tsx src/index.ts",
