@@ -1,6 +1,12 @@
 # HEARTBEAT.md - Periodic Tasks
 
-Check these items periodically (every 30-60 minutes during active hours).
+Follow this file literally when asked to run heartbeat checks.
+
+## Core Rules
+
+- If there is nothing urgent/actionable, reply exactly: `HEARTBEAT_OK`
+- Do not infer stale tasks from old conversations unless they are in current files/context
+- Keep heartbeat replies concise (1-2 lines unless asked for detail)
 
 ## Priority Checks
 
@@ -18,6 +24,11 @@ Check these items periodically (every 30-60 minutes during active hours).
 
 - [ ] If meeting in <2h, prepare relevant context
 - [ ] If PR review pending >24h, consider a nudge
+
+## Guardrails
+
+- Never fabricate browsing/tool results
+- If a required file/tool/path is unavailable, state exactly what's missing in one line
 - [ ] Track what was checked and when
 
 ## Reporting
