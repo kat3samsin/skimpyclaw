@@ -58,4 +58,23 @@ describe('setup config generation', () => {
     expect(envContent).toContain('CLAUDE_CODE_OAUTH_TOKEN=');
     expect(envContent).not.toContain('ANTHROPIC_API_KEY=');
   });
+
+  it('builds MiniMax-only config and env content', () => {
+    const selectedProviders = new Set(['minimax-api'] as const);
+    const { configJson, envContent } = buildSetupArtifacts({
+      workspaceDir: '/tmp/workspace',
+      telegramId: '123',
+      telegramToken: 'tg-token',
+      agentName: 'Claw',
+      selectedProviders,
+      providerSecrets: { minimaxKey: 'sk-cp-test' },
+    });
+    const config = JSON.parse(configJson);
+
+    expect(config.agents.list.main.model).toBe('minimax/MiniMax-M2.1');
+    expect(config.models.providers.minimax.apiKey).toBe('${MINIMAX_API_KEY}');
+    expect(config.models.providers.minimax.baseURL).toBe('https://api.minimax.chat/v1');
+    expect(config.models.aliases.minimax).toBe('minimax/MiniMax-M2.1');
+    expect(envContent).toContain('MINIMAX_API_KEY=sk-cp-test');
+  });
 });

@@ -51,12 +51,13 @@ function renderGatewayPlist(workspaceDir: string): string {
     .replaceAll('__HOME_DIR__', homeDir);
 }
 
-type ProviderChoice = 'anthropic-api' | 'anthropic-oauth' | 'openai-api' | 'codex-oauth';
+type ProviderChoice = 'anthropic-api' | 'anthropic-oauth' | 'openai-api' | 'minimax-api' | 'codex-oauth';
 
 const PROVIDER_OPTIONS: { key: ProviderChoice; label: string }[] = [
   { key: 'anthropic-api', label: 'Anthropic API key' },
   { key: 'anthropic-oauth', label: 'Anthropic OAuth (Claude Code)' },
   { key: 'openai-api', label: 'OpenAI API key' },
+  { key: 'minimax-api', label: 'MiniMax API key' },
   { key: 'codex-oauth', label: 'OpenAI Codex OAuth' },
 ];
 
@@ -90,6 +91,7 @@ async function askProviders(rl: readline.Interface): Promise<Set<ProviderChoice>
 interface ProviderSecrets {
   anthropicKey?: string;
   openaiKey?: string;
+  minimaxKey?: string;
 }
 
 interface SetupBuildInput {
@@ -131,6 +133,13 @@ async function collectProviderSecrets(
     console.log(`   ✓ ${maskInput(secrets.openaiKey)}`);
   }
 
+  if (providers.has('minimax-api')) {
+    console.log('\n   MiniMax API Key');
+    console.log('   Get one from: https://platform.minimax.io/');
+    secrets.minimaxKey = await ask(rl, '   Enter key: ');
+    console.log(`   ✓ ${maskInput(secrets.minimaxKey)}`);
+  }
+
   if (providers.has('codex-oauth')) {
     console.log('\n   OpenAI Codex OAuth');
     console.log('   No key needed — uses ~/.codex/auth.json at runtime.');
@@ -154,6 +163,10 @@ function buildProviders(providers: Set<ProviderChoice>): Record<string, Record<s
     result.openai = { apiKey: '${OPENAI_API_KEY}', baseURL: 'https://api.openai.com/v1' };
   }
 
+  if (providers.has('minimax-api')) {
+    result.minimax = { apiKey: '${MINIMAX_API_KEY}', baseURL: 'https://api.minimax.chat/v1' };
+  }
+
   if (providers.has('codex-oauth')) {
     result.codex = {
       authToken: 'codex',
@@ -169,6 +182,7 @@ function buildDefaultModel(providers: Set<ProviderChoice>): string {
   const hasAnthropic = providers.has('anthropic-api') || providers.has('anthropic-oauth');
   if (hasAnthropic) return 'anthropic/claude-opus-4-6';
   if (providers.has('codex-oauth')) return 'codex/codex-5.3';
+  if (providers.has('minimax-api')) return 'minimax/MiniMax-M2.1';
   return 'openai/gpt-4o';
 }
 
@@ -194,6 +208,10 @@ function buildAliases(providers: Set<ProviderChoice>): Record<string, string> {
   if (providers.has('openai-api')) {
     aliases['gpt-fast'] = 'openai/gpt-4o-mini';
     aliases.gpt = 'openai/gpt-4o';
+  }
+
+  if (providers.has('minimax-api')) {
+    aliases.minimax = 'minimax/MiniMax-M2.1';
   }
 
   if (providers.has('codex-oauth')) {
@@ -222,6 +240,10 @@ function buildEnvContent(
 
   if (providers.has('openai-api') && secrets.openaiKey) {
     lines.push(`OPENAI_API_KEY=${secrets.openaiKey}`);
+  }
+
+  if (providers.has('minimax-api') && secrets.minimaxKey) {
+    lines.push(`MINIMAX_API_KEY=${secrets.minimaxKey}`);
   }
 
   lines.push(`TELEGRAM_BOT_TOKEN=${telegramToken}`);

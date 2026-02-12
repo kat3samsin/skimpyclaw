@@ -215,6 +215,8 @@ Top-level sections:
 
 Environment placeholders in JSON are supported:
 - `${ANTHROPIC_API_KEY}`
+- `${OPENAI_API_KEY}`
+- `${MINIMAX_API_KEY}`
 - `${TELEGRAM_BOT_TOKEN}`
 - `${DISCORD_BOT_TOKEN}`
 - `${HOME}`
