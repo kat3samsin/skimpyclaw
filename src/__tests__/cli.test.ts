@@ -6,11 +6,13 @@ const {
   mockLoadRawConfig,
   mockSaveConfig,
   mockRunSetup,
+  mockRunDoctor,
 } = vi.hoisted(() => ({
   mockLoadConfig: vi.fn(),
   mockLoadRawConfig: vi.fn(),
   mockSaveConfig: vi.fn(),
   mockRunSetup: vi.fn(),
+  mockRunDoctor: vi.fn(),
 }));
 
 vi.mock('../config.js', () => ({
@@ -26,6 +28,10 @@ vi.mock('../setup.js', () => ({
 
 vi.mock('../service.js', () => ({
   startRuntime: vi.fn(),
+}));
+
+vi.mock('../doctor/index.js', () => ({
+  runDoctor: mockRunDoctor,
 }));
 
 import { parseConfigValue, setDeepValue, getDeepValue, runCli } from '../cli.js';
@@ -84,6 +90,7 @@ describe('runCli', () => {
     mockLoadRawConfig.mockReset();
     mockSaveConfig.mockReset();
     mockRunSetup.mockReset();
+    mockRunDoctor.mockReset();
 
     mockLoadConfig.mockReturnValue({
       gateway: { port: 18790 },
@@ -180,6 +187,35 @@ describe('runCli', () => {
     const runCode = await runCli(['cron', 'run', 'morning']);
     expect(runCode).toBe(0);
     expect(console.log).toHaveBeenCalledWith('triggered: morning');
+  });
+
+  it('routes doctor command in human mode and preserves exit code', async () => {
+    mockRunDoctor.mockResolvedValue({ output: 'doctor ok', exitCode: 0 });
+
+    const code = await runCli(['doctor']);
+
+    expect(mockRunDoctor).toHaveBeenCalledWith({ json: false });
+    expect(console.log).toHaveBeenCalledWith('doctor ok');
+    expect(code).toBe(0);
+  });
+
+  it('routes doctor command in JSON mode and preserves non-zero exit code', async () => {
+    mockRunDoctor.mockResolvedValue({ output: '{"ok":false}', exitCode: 1 });
+
+    const code = await runCli(['doctor', '--json']);
+
+    expect(mockRunDoctor).toHaveBeenCalledWith({ json: true });
+    expect(console.log).toHaveBeenCalledWith('{"ok":false}');
+    expect(code).toBe(1);
+  });
+
+  it('returns non-zero when doctor command throws', async () => {
+    mockRunDoctor.mockRejectedValue(new Error('doctor exploded'));
+
+    const code = await runCli(['doctor']);
+
+    expect(code).toBe(1);
+    expect(console.error).toHaveBeenCalledWith('doctor exploded');
   });
 
   it('returns non-zero for unknown command', async () => {
