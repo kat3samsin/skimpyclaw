@@ -1,6 +1,7 @@
 // Telegram bot using Grammy
 
 import { Bot, Context, GrammyError, HttpError } from 'grammy';
+import { run, RunnerHandle } from '@grammyjs/runner';
 import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
@@ -40,6 +41,7 @@ const KNOWN_COMMANDS = new Set(
 
 
 let bot: Bot | null = null;
+let runner: RunnerHandle | null = null;
 let silenceUntil: Date | null = null;
 
 // Conversation history per chat — last N user/assistant message pairs
@@ -588,17 +590,18 @@ async function sendLongMessage(ctx: Context, text: string): Promise<void> {
 export async function startTelegram(): Promise<void> {
   if (!bot) return;
 
-  console.log('[telegram] Starting bot...');
-  bot.start({
-    onStart: (botInfo) => {
-      console.log(`[telegram] Bot started as @${botInfo.username}`);
-    },
-  });
+  console.log('[telegram] Starting bot with concurrent runner...');
+  const botInfo = await bot.api.getMe();
+  console.log(`[telegram] Bot starting as @${botInfo.username}`);
+  runner = run(bot);
 }
 
 export async function stopTelegram(): Promise<void> {
-  if (!bot) return;
-  await bot.stop();
+  if (runner) {
+    runner.stop();
+    runner = null;
+  }
+  bot = null;
   console.log('[telegram] Bot stopped');
 }
 
