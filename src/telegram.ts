@@ -243,14 +243,39 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
     const model = getCurrentModel();
     const last = getLastMessage();
     const jobs = getCronJobs();
+    const activeTasks = getActiveTasks();
+    const recentTasks = getRecentTasks(20);
 
     const jobList = jobs.map(j => `  - ${j.name}: ${j.nextRun?.toLocaleString() || 'unknown'}`).join('\n');
+
+    const pendingCount = activeTasks.filter(t => t.status === 'pending').length;
+    const runningCount = activeTasks.filter(t => t.status === 'running').length;
+    const maxConcurrent = cfg.subagents?.maxConcurrent ?? 5;
+
+    const recentCompleted = recentTasks.filter(t => t.status === 'completed').length;
+    const recentFailed = recentTasks.filter(t => t.status === 'failed').length;
+    const recentCancelled = recentTasks.filter(t => t.status === 'cancelled').length;
+
+    const activePreview = activeTasks
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, 3)
+      .map((task) => {
+        const started = task.startedAt || task.createdAt;
+        const elapsedSeconds = Math.max(0, Math.round((Date.now() - started.getTime()) / 1000));
+        const elapsed = elapsedSeconds < 60 ? `${elapsedSeconds}s` : `${Math.round(elapsedSeconds / 60)}m`;
+        const label = task.label ? ` (${task.label})` : '';
+        return `  - ${task.id} [${task.type}] ${task.status}${label} • ${elapsed}`;
+      })
+      .join('\n');
 
     await ctx.reply(
       `Agent: ${cfg.agents.default}\n` +
       `Model: ${model}\n` +
       `Last message: ${last?.toLocaleString() || 'never'}\n` +
       `Silence until: ${silenceUntil?.toLocaleString() || 'not silenced'}\n\n` +
+      `Subagents: ${activeTasks.length}/${maxConcurrent} active (running: ${runningCount}, pending: ${pendingCount})\n` +
+      `Recent (last ${recentTasks.length}): ✅ ${recentCompleted} • ❌ ${recentFailed} • 🚫 ${recentCancelled}\n` +
+      `${activePreview ? `Active now:\n${activePreview}\n\n` : '\n'}` +
       `Scheduled jobs:\n${jobList || '  (none)'}`
     );
   });

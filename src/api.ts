@@ -22,6 +22,7 @@ import {
 import { getCronJobs, getCronJobDetails, runCronJob } from './cron.js';
 import { getCurrentModel, setCurrentModel, getLastMessage } from './gateway.js';
 import { redactSecrets } from './security.js';
+import { getActiveTasks, getRecentTasks } from './subagent.js';
 
 function validateFilename(filename: string): boolean {
   return !filename.includes('..') && filename === basename(filename);
@@ -100,12 +101,49 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
   fastify.get('/api/dashboard/status', async () => {
     const jobs = getCronJobs();
     const uptime = process.uptime();
+    const activeTasks = getActiveTasks();
+    const recentTasks = getRecentTasks(20);
+    const pendingCount = activeTasks.filter(t => t.status === 'pending').length;
+    const runningCount = activeTasks.filter(t => t.status === 'running').length;
+    const recentCompleted = recentTasks.filter(t => t.status === 'completed').length;
+    const recentFailed = recentTasks.filter(t => t.status === 'failed').length;
+    const recentCancelled = recentTasks.filter(t => t.status === 'cancelled').length;
+    const maxConcurrent = config.subagents?.maxConcurrent ?? 5;
+
     return {
       uptime,
       model: getCurrentModel(),
       agent: config.agents.default,
       lastMessage: getLastMessage(),
       cronJobs: jobs,
+      subagents: {
+        maxConcurrent,
+        active: activeTasks.length,
+        running: runningCount,
+        pending: pendingCount,
+        recentTotal: recentTasks.length,
+        recentCompleted,
+        recentFailed,
+        recentCancelled,
+      },
+      activeSubagents: activeTasks
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+        .map(task => {
+          const started = task.startedAt || task.createdAt;
+          return {
+            id: task.id,
+            type: task.type,
+            status: task.status,
+            model: task.model,
+            label: task.label,
+            promptPreview: task.prompt.slice(0, 120),
+            retryCount: task.retryCount ?? 0,
+            maxRetries: task.maxRetries ?? 2,
+            createdAt: task.createdAt,
+            startedAt: task.startedAt,
+            elapsedSeconds: Math.max(0, Math.round((Date.now() - started.getTime()) / 1000)),
+          };
+        }),
     };
   });
 

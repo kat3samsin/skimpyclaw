@@ -307,7 +307,7 @@ async function codexFetch(body: any): Promise<string> {
  * Call the Codex Responses API via ChatGPT backend.
  * Supports tool use via agentic loop.
  */
-async function codexChat(messages: ChatMessage[], model: string, toolConfig?: ToolConfig, toolDefs?: any[]): Promise<{ response: string; toolCalls: string[] }> {
+async function codexChat(messages: ChatMessage[], model: string, toolConfig?: ToolConfig, toolDefs?: any[], toolContext?: ExecuteToolContext): Promise<{ response: string; toolCalls: string[] }> {
   // Build input — system messages go to `instructions`, rest to `input`
   let instructions = 'You are a helpful assistant.';
   const input: any[] = [];
@@ -386,7 +386,7 @@ async function codexChat(messages: ChatMessage[], model: string, toolConfig?: To
         args = {};
       }
 
-      const inputStr = fc.arguments.slice(0, 200);
+      const inputStr = (fc.arguments || JSON.stringify(args)).slice(0, 200);
       console.log(`[codex:tools] -> ${fc.name}(${inputStr})`);
 
       const toolObs = isLangfuseEnabled()
@@ -394,7 +394,7 @@ async function codexChat(messages: ChatMessage[], model: string, toolConfig?: To
         : null;
 
       try {
-        const result = await executeTool(fc.name, args, toolConfig!);
+        const result = await executeTool(fc.name, args, toolConfig!, toolContext) || '';
         const resultPreview = result.slice(0, 200) + (result.length > 200 ? '...' : '');
         console.log(`[codex:tools] <- ${resultPreview}`);
         toolLog.push(`${fc.name}(${inputStr}) → ${resultPreview}`);
@@ -839,28 +839,29 @@ export async function runAgentTurn(
   let response: string = '';
   let toolCalls: string[] = [];
 
+  // Build tool context once — used by all providers for spawn_subagent and file locking
+  const chatIdNum = (context?.metadata as any)?.chatId
+    ?? (context?.sessionId ? parseInt(context.sessionId, 10) : undefined);
+  const toolCtx: ExecuteToolContext = {
+    chatId: Number.isFinite(chatIdNum) ? chatIdNum : undefined,
+    fullConfig: config,
+    history,
+    lockTaskId: context?.sessionId,
+  };
+
   const runTurn = async (): Promise<string> => {
     if (toolConfig?.enabled && provider === 'anthropic' && !!anthropicClient) {
       // Anthropic tool_use loop
       console.log(`[agent] Running with tools enabled (paths: ${toolConfig.allowedPaths.join(', ')})`);
-      // Build tool context for spawn_subagent and file locking
-      // chatId comes from context metadata (set by telegram) or sessionId parse
-      const chatIdNum = (context?.metadata as any)?.chatId
-        ?? (context?.sessionId ? parseInt(context.sessionId, 10) : undefined);
-      const toolCtx: ExecuteToolContext = {
-        chatId: Number.isFinite(chatIdNum) ? chatIdNum : undefined,
-        fullConfig: config,
-        history,
-        lockTaskId: context?.sessionId,
-      };
       const result = await chatWithTools(messages, chatOptions, config, toolConfig, toolCtx);
       response = result.response;
       toolCalls = result.toolCalls;
     } else if (toolConfig?.enabled && responsesApiProviders.has(provider)) {
       // Codex tool_use loop via Responses API
       console.log(`[agent] Running Codex with tools enabled (paths: ${toolConfig.allowedPaths.join(', ')})`);
-      const toolDefs = await getToolDefinitions(toolConfig);
-      const result = await codexChat(messages, modelId, toolConfig, toolDefs);
+      const includeSpawn = !!(toolCtx.chatId && toolCtx.fullConfig);
+      const toolDefs = await getToolDefinitions(toolConfig, { includeSpawnSubagent: includeSpawn });
+      const result = await codexChat(messages, modelId, toolConfig, toolDefs, toolCtx);
       response = result.response;
       toolCalls = result.toolCalls;
     } else if (responsesApiProviders.has(provider)) {
