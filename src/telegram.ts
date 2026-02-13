@@ -508,7 +508,6 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
   // Handle plain text messages (treat as /ask)
   bot.on('message:text', async (ctx) => {
     const text = ctx.message.text;
-
     // Catch-all for unknown commands — respond instead of silently ignoring
     if (text.startsWith('/')) {
       const command = text.split(/[\s@]/)[0].slice(1).toLowerCase();
