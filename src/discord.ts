@@ -101,25 +101,50 @@ function buildHelpText(cfg: Config): string {
   return `${emoji} ${name} online.\n\nSend a message to chat, or use a command:\n\n${commandList}`;
 }
 
-async function sendLongText(message: Message, text: string): Promise<void> {
-  const MAX_LENGTH = 1900;
-  if (text.length <= MAX_LENGTH) {
-    await message.reply(text);
-    return;
-  }
+function splitToChunks(text: string, maxLength: number): string[] {
+  if (text.length <= maxLength) return [text];
 
-  let current = '';
   const chunks: string[] = [];
+  let current = '';
+
   for (const paragraph of text.split('\n\n')) {
-    if (current.length + paragraph.length + 2 > MAX_LENGTH) {
+    if (current.length + paragraph.length + 2 > maxLength) {
       if (current) chunks.push(current.trim());
-      current = paragraph;
+      // If a single paragraph exceeds maxLength, split it on newlines or hard-cut
+      if (paragraph.length > maxLength) {
+        const lines = paragraph.split('\n');
+        let lineBuf = '';
+        for (const line of lines) {
+          if (lineBuf.length + line.length + 1 > maxLength) {
+            if (lineBuf) chunks.push(lineBuf.trim());
+            // If a single line still exceeds, hard-cut it
+            if (line.length > maxLength) {
+              for (let i = 0; i < line.length; i += maxLength) {
+                chunks.push(line.slice(i, i + maxLength));
+              }
+              lineBuf = '';
+            } else {
+              lineBuf = line;
+            }
+          } else {
+            lineBuf += (lineBuf ? '\n' : '') + line;
+          }
+        }
+        current = lineBuf;
+      } else {
+        current = paragraph;
+      }
     } else {
       current += (current ? '\n\n' : '') + paragraph;
     }
   }
   if (current) chunks.push(current.trim());
 
+  return chunks.filter(c => c.length > 0);
+}
+
+async function sendLongText(message: Message, text: string): Promise<void> {
+  const chunks = splitToChunks(text, 1900);
   for (const chunk of chunks) {
     await message.reply(chunk);
   }
@@ -419,24 +444,7 @@ export function getDiscordDefaultTarget(cfg: Config): string | null {
 }
 
 async function sendChunked(target: { send: (content: string) => Promise<unknown> }, text: string): Promise<void> {
-  const MAX_LENGTH = 1900;
-  if (text.length <= MAX_LENGTH) {
-    await target.send(text);
-    return;
-  }
-
-  let current = '';
-  const chunks: string[] = [];
-  for (const paragraph of text.split('\n\n')) {
-    if (current.length + paragraph.length + 2 > MAX_LENGTH) {
-      if (current) chunks.push(current.trim());
-      current = paragraph;
-    } else {
-      current += (current ? '\n\n' : '') + paragraph;
-    }
-  }
-  if (current) chunks.push(current.trim());
-
+  const chunks = splitToChunks(text, 1900);
   for (const chunk of chunks) {
     await target.send(chunk);
   }
