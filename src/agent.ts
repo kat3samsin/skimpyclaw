@@ -257,7 +257,7 @@ function parseCodexSSE(text: string): { outputText: string; functionCalls: any[]
     } catch { /* skip non-JSON lines */ }
   }
 
-  // Extract function calls from completed response output items
+  // Extract function calls and output_text items from completed response
   const functionCalls: any[] = [];
   if (completedResponse?.output) {
     for (const item of completedResponse.output) {
@@ -267,6 +267,9 @@ function parseCodexSSE(text: string): { outputText: string; functionCalls: any[]
           name: item.name,
           arguments: item.arguments,
         });
+      } else if (item.type === 'output_text' && item.text) {
+        // Capture output_text items that may not appear at top-level
+        if (!outputText) outputText = item.text;
       }
     }
   }
@@ -367,7 +370,16 @@ async function codexChat(messages: ChatMessage[], model: string, toolConfig?: To
 
     // No function calls — we're done
     if (parsed.functionCalls.length === 0) {
-      return { response: parsed.outputText || '[No response from Codex]', toolCalls: toolLog };
+      // Debug: log what Codex actually returned when outputText is empty
+      if (!parsed.outputText) {
+        console.log(`[codex] Empty outputText. Response output items:`, JSON.stringify(parsed.response?.output?.map((i: any) => ({ type: i.type, text: i.text?.slice(0, 200) })), null, 2));
+      }
+      // If no text output, use the last tool result as the response
+      let finalText = parsed.outputText;
+      if (!finalText && toolLog.length > 0) {
+        finalText = `[Codex completed via tools]\n\nLast tool: ${toolLog[toolLog.length - 1]}`;
+      }
+      return { response: finalText || '[No response from Codex]', toolCalls: toolLog };
     }
 
     // Add the assistant's output items to input for next turn

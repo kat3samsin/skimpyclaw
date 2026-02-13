@@ -21,8 +21,6 @@ const BOT_COMMANDS: { command: string; description: string }[] = [
   { command: 'help', description: 'Show available commands' },
   { command: 'model', description: 'Switch model (fast/smart/opus)' },
   { command: 'status', description: 'Show bot status' },
-  { command: 'morning', description: 'Run morning routine' },
-  { command: 'eod', description: 'Run EOD review' },
   { command: 'focus', description: 'Plan your day' },
   { command: 'memory', description: 'View recent memory entries' },
   { command: 'new', description: 'Clear conversation history' },
@@ -40,24 +38,6 @@ const KNOWN_COMMANDS = new Set(
   BOT_COMMANDS.map(c => c.command).concat(['start'])
 );
 
-function getTodayDailyNote(cfg: Config): string | null {
-  const dailyNotesDir = cfg.channels.telegram.dailyNotesDir;
-  if (!dailyNotesDir) {
-    return null;
-  }
-
-  const now = new Date();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  const year = now.getFullYear();
-  const filename = `${month}-${day}-${year}.md`;
-  const filePath = join(dailyNotesDir, filename);
-
-  if (!existsSync(filePath)) {
-    return null;
-  }
-  return readFileSync(filePath, 'utf-8');
-}
 
 let bot: Bot | null = null;
 let silenceUntil: Date | null = null;
@@ -453,50 +433,6 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
     await ctx.reply(`Proactive messages silenced until ${silenceUntil.toLocaleTimeString()}`);
   });
 
-  // /morning command
-  bot.command('morning', async (ctx) => {
-    await ctx.reply('Starting morning routine via Claude Code in vault... (this takes a few minutes)');
-
-    let cronError: string | null = null;
-    try {
-      await runCronJob('morning', cfg);
-    } catch (error) {
-      cronError = error instanceof Error ? error.message : 'Unknown error';
-    }
-
-    // Always check for the daily note — claude -p may succeed but exit non-zero
-    const dailyNote = getTodayDailyNote(cfg);
-    if (dailyNote) {
-      await ctx.reply('Morning routine complete. Here\'s your daily note:');
-      await sendLongMessage(ctx, dailyNote);
-    } else if (cronError) {
-      await ctx.reply(`Morning routine failed: ${cronError}\n\nCheck logs at ~/.skimpyclaw/logs/cron/`);
-    } else {
-      await ctx.reply('Morning routine completed but no daily note was created for today.');
-    }
-  });
-
-  // /eod command
-  bot.command('eod', async (ctx) => {
-    const stopTyping = startTypingIndicator(ctx);
-    try {
-      const response = await runAgentTurn(
-        cfg.agents.default,
-        'run EOD review',
-        cfg,
-        getCurrentModel(),
-        getTelegramToolConfig(cfg),
-        undefined,
-        getRunContext(ctx)
-      );
-      await sendLongMessage(ctx, response);
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : 'Unknown error';
-      await ctx.reply(`Error: ${msg}`);
-    } finally {
-      stopTyping();
-    }
-  });
 
   // /focus command
   bot.command('focus', async (ctx) => {
