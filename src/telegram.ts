@@ -1,6 +1,7 @@
 // Telegram bot using Grammy
 
 import { Bot, Context, GrammyError, HttpError } from 'grammy';
+import { run, RunnerHandle } from '@grammyjs/runner';
 import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
@@ -40,6 +41,7 @@ const KNOWN_COMMANDS = new Set(
 
 
 let bot: Bot | null = null;
+let runnerHandle: RunnerHandle | null = null;
 let silenceUntil: Date | null = null;
 
 // Conversation history per chat — last N user/assistant message pairs
@@ -589,18 +591,25 @@ async function sendLongMessage(ctx: Context, text: string): Promise<void> {
 export async function startTelegram(): Promise<void> {
   if (!bot) return;
 
-  console.log('[telegram] Starting bot...');
-  bot.start({
-    onStart: (botInfo) => {
-      console.log(`[telegram] Bot started as @${botInfo.username}`);
-    },
-  });
+  console.log('[telegram] Starting bot (concurrent runner)...');
+  // Use @grammyjs/runner for concurrent update processing
+  // bot.start() processes updates sequentially — one at a time.
+  // run(bot) processes them concurrently so cron jobs and long agent
+  // turns don't block incoming messages.
+  runnerHandle = run(bot);
+  const botInfo = await bot.api.getMe();
+  console.log(`[telegram] Bot started as @${botInfo.username}`);
 }
 
 export async function stopTelegram(): Promise<void> {
-  if (!bot) return;
-  await bot.stop();
-  console.log('[telegram] Bot stopped');
+  if (runnerHandle) {
+    runnerHandle.stop();
+    console.log('[telegram] Bot stopped');
+    runnerHandle = null;
+  } else if (bot) {
+    await bot.stop();
+    console.log('[telegram] Bot stopped');
+  }
 }
 
 export function isSilenced(): boolean {
