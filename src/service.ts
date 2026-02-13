@@ -14,17 +14,23 @@ export interface SkimpyClawRuntime {
 }
 
 export async function startRuntime(config: Config): Promise<SkimpyClawRuntime> {
+  const smokeTest = process.env.SKIMPYCLAW_SMOKE_TEST === '1';
+
   initLangfuse(config);
   initProviders(config);
 
+  const port = smokeTest ? (parseInt(process.env.SKIMPYCLAW_SMOKE_PORT || '19999', 10)) : config.gateway.port;
   const gateway = await createGateway(config);
-  await gateway.listen({ port: config.gateway.port, host: '127.0.0.1' });
+  await gateway.listen({ port, host: '127.0.0.1' });
 
-  initCron(config);
-
-  await initActiveChannel(config);
-  await startActiveChannel();
-  initHeartbeat(config);
+  if (!smokeTest) {
+    initCron(config);
+    await initActiveChannel(config);
+    await startActiveChannel();
+    initHeartbeat(config);
+  } else {
+    console.log('[smoke-test] Skipping channels, cron, and heartbeat');
+  }
 
   return {
     config,
