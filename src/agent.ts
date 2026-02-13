@@ -377,7 +377,7 @@ async function codexChat(messages: ChatMessage[], model: string, toolConfig?: To
       // If no text output, use the last tool result as the response
       let finalText = parsed.outputText;
       if (!finalText && toolLog.length > 0) {
-        finalText = `[Codex completed via tools]\n\nLast tool: ${toolLog[toolLog.length - 1]}`;
+        finalText = `[Completed with ${toolLog.length} tool calls, no text response]\n\nLast tool: ${toolLog[toolLog.length - 1]}`;
       }
       return { response: finalText || '[No response from Codex]', toolCalls: toolLog };
     }
@@ -391,14 +391,15 @@ async function codexChat(messages: ChatMessage[], model: string, toolConfig?: To
 
     // Execute each function call and add results to input
     for (const fc of parsed.functionCalls) {
+      const argsStr = fc.arguments || '{}';
       let args: Record<string, any>;
       try {
-        args = JSON.parse(fc.arguments);
+        args = JSON.parse(argsStr);
       } catch {
         args = {};
       }
 
-      const inputStr = (fc.arguments || JSON.stringify(args)).slice(0, 200);
+      const inputStr = argsStr.slice(0, 200);
       console.log(`[codex:tools] -> ${fc.name}(${inputStr})`);
 
       const toolObs = isLangfuseEnabled()
@@ -702,9 +703,17 @@ export async function chatWithTools(
   const toolLog: string[] = [];
 
   for (let i = 0; i < maxIterations; i++) {
+    // Check abort signal before each iteration
+    if (toolContext?.abortSignal?.aborted) {
+      return {
+        response: `[Cancelled after ${toolLog.length} tool calls]`,
+        toolCalls: toolLog,
+      };
+    }
+
     const params: any = {
       model: modelId,
-      max_tokens: options.maxTokens || 4096,
+      max_tokens: options.maxTokens || 16384,
       messages: apiMessages,
       tools: toolDefs,
     };
@@ -752,8 +761,13 @@ export async function chatWithTools(
     // If no tool use, we're done — extract text
     if (response.stop_reason !== 'tool_use') {
       const textBlocks = response.content.filter((c: any) => c.type === 'text');
+      let responseText = textBlocks.map((b: any) => b.text).join('\n') || '';
+      // Fallback when model did tool work but returned no text summary
+      if (!responseText && toolLog.length > 0) {
+        responseText = `[Completed with ${toolLog.length} tool calls, no text response]`;
+      }
       return {
-        response: textBlocks.map((b: any) => b.text).join('\n') || '',
+        response: responseText,
         toolCalls: toolLog,
       };
     }
@@ -858,6 +872,7 @@ export async function runAgentTurn(
     chatId: Number.isFinite(chatIdNum) ? chatIdNum : undefined,
     fullConfig: config,
     history,
+    abortSignal: context?.abortSignal,
     lockTaskId: context?.sessionId,
   };
 

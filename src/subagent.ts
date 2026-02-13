@@ -302,8 +302,8 @@ export function dispatchSubagent(
   }
 ): SubagentTask {
   const maxConcurrent = config.subagents?.maxConcurrent ?? DEFAULT_MAX_CONCURRENT;
-  const running = [...tasks.values()].filter((t) => t.status === 'running');
-  if (running.length >= maxConcurrent) {
+  const active = [...tasks.values()].filter((t) => t.status === 'running' || t.status === 'pending');
+  if (active.length >= maxConcurrent) {
     throw new Error(
       `Max concurrent agents reached (${maxConcurrent}). Use /tasks to see running agents or /cancel to stop one.`
     );
@@ -403,7 +403,8 @@ async function executeTask(
           type: task.type,
           chatId: task.chatId,
           label: task.label,
-        }
+        },
+        abortSignal: task.abortController.signal,
       }
     );
 

@@ -192,5 +192,6 @@ export interface AgentRunContext {
   channel?: string;
   tags?: string[];
   metadata?: Record<string, unknown>;
+  abortSignal?: AbortSignal;
 }
 

@@ -60,6 +60,9 @@ export function getConfigPath(): string {
 }
 
 export function getAgentDir(agentId: string): string {
+  if (!/^[a-zA-Z0-9_-]+$/.test(agentId)) {
+    throw new Error('Invalid agent ID');
+  }
   return join(homedir(), '.skimpyclaw', 'agents', agentId);
 }
 
@@ -120,6 +123,10 @@ export function listMemoryFiles(agentId: string): { name: string; date: string; 
 }
 
 export function readMemoryFile(agentId: string, filename: string): string {
+  // Validate agentId is a safe identifier
+  if (!/^[a-zA-Z0-9_-]+$/.test(agentId)) {
+    throw new Error('Invalid agent ID');
+  }
   // Validate no path traversal
   if (filename.includes('..') || filename !== basename(filename)) {
     throw new Error('Invalid filename');

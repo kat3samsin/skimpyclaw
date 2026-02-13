@@ -105,7 +105,8 @@ src/
   api.ts          # dashboard API routes
   dashboard.ts    # dashboard frontend HTML
   agent.ts        # prompt assembly, model calls, tool loop, memory writes
-  subagent.ts     # background task dispatch with typed presets + auto-setup
+  subagent.ts     # background task dispatch with retry, concurrency, disk registry
+  file-lock.ts    # in-memory file lock manager for concurrent subagent writes
   tools.ts        # Tool registry, MCP auto-discovery, built-in tool implementations
   channels.ts     # active channel selection + proactive routing
   telegram.ts     # Telegram commands and message handling
@@ -140,20 +141,6 @@ skimpyclaw onboard
 ```bash
 pnpm add -g skimpyclaw
 skimpyclaw onboard
-```
-
-### Via Homebrew (macOS/Linux)
-
-```bash
-brew tap kat3samsin/skimpyclaw
-brew install skimpyclaw
-skimpyclaw onboard
-```
-
-### Via curl (one-liner install)
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/kat3samsin/skimpyclaw/main/install.sh | bash
 ```
 
 ### From source
@@ -356,7 +343,7 @@ SkimpyClaw auto-discovers MCP tools at runtime via [mcporter](https://github.com
 1. On first tool request, SkimpyClaw creates a mcporter runtime from `~/.mcporter/mcporter.json`
 2. Calls `listServers()` to find all configured MCP servers
 3. For each server, calls `listTools(server)` to discover available tools with their schemas
-4. Maps each tool to Anthropic format as `mcp__{server}__{tool}` (e.g. `mcp__context-a8c__context-a8c-load-provider`)
+4. Maps each tool to Anthropic format as `mcp__{server}__{tool}` (e.g. `mcp__my-server__search`)
 5. Results are cached for the lifetime of the process
 
 When the model calls an MCP tool, SkimpyClaw routes it through `runtime.callTool(server, tool, args)`.
@@ -368,9 +355,9 @@ File: `~/.mcporter/mcporter.json`
 ```json
 {
   "mcpServers": {
-    "context-a8c": {
-      "command": "/bin/bash",
-      "args": ["/Users/you/.mcporter/run-context-a8c.sh"]
+    "my-tools": {
+      "command": "npx",
+      "args": ["@example/mcp-server"]
     },
     "my-server": {
       "url": "http://localhost:3001/sse"
@@ -444,22 +431,18 @@ Dashboard API routes (Bearer token protected when configured):
 
 - `/start`
 - `/model <alias-or-model>`
-- `/status`
+- `/status` (includes subagent stats: active, running, pending, recent completed/failed)
 - `/cron list`
 - `/cron run <job-id>`
 - `/heartbeat`
 - `/silence <minutes>`
-- `/morning`
-- `/eod`
 - `/focus`
-- `/agent <type> [model:<alias>] <prompt>` (dispatch a background subagent)
 - `/tasks` (list recent subagent tasks)
 - `/cancel <id>` (cancel a running subagent task)
 - `/new` (clear conversation history)
 - `/compact` (summarize + compress conversation history)
 
 Telegram-only:
-- `/morning`
 - `/memory`
 - `/memory <filename>`
 
@@ -467,17 +450,21 @@ Any non-command text message is treated as a chat prompt to the agent and uses r
 
 ## Subagents
 
-Background agents dispatched via `/agent` for async tasks. Each type has its own identity, tool config, and auto-generated templates under `~/.skimpyclaw/agents/<type>/`.
+The model calls `spawn_subagent` autonomously when it needs to delegate work — no special commands needed. Each type has its own identity, tool config, and auto-generated templates under `~/.skimpyclaw/agents/<type>/`.
 
 | Type | Emoji | Default Model | Allowed Paths | Description |
 |------|-------|---------------|---------------|-------------|
-| `coding` | 🔧 | claude-think | ~/.skimpyclaw, ~/Sites | Code tasks with broad file + bash access |
+| `coding` | 🔧 | claude-opus | ~/.skimpyclaw, ~/Sites | Code tasks with broad file + bash access |
 | `research` | 🔍 | claude-think | ~/.skimpyclaw, Obsidian vault | Research with vault access for notes |
 | `general` | 🦞 | current model | ~/.skimpyclaw | General tasks with config access |
 
-On first dispatch, the agent directory is auto-created with starter IDENTITY.md and TOOLS.md templates. The agent is registered in-memory (no config file write). You can customize templates by editing the files in `~/.skimpyclaw/agents/<type>/`.
+On first dispatch, the agent directory is auto-created with starter IDENTITY.md and TOOLS.md templates. You can customize templates by editing the files in `~/.skimpyclaw/agents/<type>/`.
 
-Max 3 concurrent subagents. Results are delivered back to the Telegram chat on completion.
+- Max 5 concurrent subagents (configurable via `config.subagents.maxConcurrent`)
+- Retry on failure (default 2 retries, configurable via `config.subagents.maxRetries`)
+- Disk registry at `~/.skimpyclaw/logs/subagent-runs.jsonl`
+- File locking via `src/file-lock.ts` for concurrent writes
+- Results are delivered back to the chat on completion
 
 ## Data and logs
 
@@ -492,6 +479,7 @@ Under `~/.skimpyclaw`:
 - `sessions/*.json` - session records (dashboard-readable)
 - `logs/` - app logs
 - `logs/cron/<job>-YYYY-MM-DD.log` - cron execution logs
+- `logs/subagent-runs.jsonl` - subagent task lifecycle events
 
 ## Security notes
 

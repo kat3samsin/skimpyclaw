@@ -303,6 +303,8 @@ function isPathAllowed(filePath: string, allowedPaths: string[]): boolean {
 export interface ExecuteToolContext {
   /** Task ID for file lock acquisition (subagent writes) */
   lockTaskId?: string;
+  /** Abort signal for cancelling long-running tool loops */
+  abortSignal?: AbortSignal;
   /** Chat ID for spawn_subagent dispatch */
   chatId?: number;
   /** Full config for spawn_subagent */

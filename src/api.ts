@@ -2,7 +2,7 @@
 
 import { FastifyInstance } from 'fastify';
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'fs';
-import { join, basename } from 'path';
+import { join, basename, resolve } from 'path';
 import type { Config } from './types.js';
 import {
   loadConfig,
@@ -448,7 +448,6 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
     const filePath = join(logsDir, filename);
 
     // Ensure resolved path stays within logs dir
-    const { resolve } = await import('path');
     if (!resolve(filePath).startsWith(resolve(logsDir))) {
       return reply.code(400).send({ error: 'Invalid filename' });
     }
