@@ -12,7 +12,7 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>SkimpyClaw 👙🦞 Dashboard</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
@@ -464,47 +464,199 @@ td {
 }
 td:first-child { color: var(--highlight); }
 
+/* Enhanced Mobile Styles */
 @media (max-width: 1024px) {
   .app-shell {
     grid-template-columns: 1fr;
   }
+  
   .tabs {
     position: static;
     height: auto;
     border-right: none;
     border-bottom: 1px solid var(--border);
-    flex-direction: column;
-    gap: 8px;
-    padding: 10px 10px;
+    padding: 12px;
+    flex-direction: row;
+    gap: 12px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
   }
+  
   .tab-group {
     flex-direction: row;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0;
+    flex-wrap: nowrap;
+    gap: 6px;
+    min-width: max-content;
   }
+  
   .tab-group-header {
-    width: 100%;
-    padding-bottom: 2px;
+    display: none;
   }
-  .tab { min-width: max-content; margin: 2px; }
-  .tab-static { margin: 2px; }
-  .content { padding: 14px 16px 24px; }
+  
+  .tab {
+    white-space: nowrap;
+    padding: 10px 16px;
+    margin: 0;
+    font-size: 15px;
+  }
+  
+  .content {
+    padding: 16px;
+  }
+  
   .split {
     grid-template-columns: 1fr;
     height: auto;
+    gap: 16px;
   }
-  .split-list { max-height: 280px; }
-  .split-detail { min-height: 360px; }
+  
+  .split-list {
+    max-height: 50vh;
+  }
+  
+  .split-detail {
+    min-height: 60vh;
+  }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 768px) {
   .header {
-    padding: 0 14px;
+    padding: 0 16px;
+    height: 56px;
   }
-  .header h1 { font-size: 26px; }
-  .section-title { font-size: 22px; }
-  .grid { grid-template-columns: 1fr; }
+  
+  .header h1 {
+    font-size: 22px;
+  }
+  
+  .header-controls {
+    gap: 8px;
+    font-size: 13px;
+  }
+  
+  .theme-toggle {
+    padding: 8px 12px;
+    font-size: 16px;
+  }
+  
+  .section-title {
+    font-size: 20px;
+  }
+  
+  .grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  
+  .card {
+    padding: 14px;
+  }
+  
+  .card-value {
+    font-size: 24px;
+  }
+  
+  .btn {
+    padding: 10px 16px;
+    font-size: 15px;
+    min-height: 44px;
+  }
+  
+  .btn-small {
+    padding: 8px 12px;
+    font-size: 14px;
+    min-height: 38px;
+  }
+  
+  select,
+  input,
+  textarea {
+    padding: 12px;
+    font-size: 16px;
+  }
+  
+  .toolbar {
+    gap: 10px;
+  }
+  
+  .toolbar select,
+  .toolbar input {
+    min-width: 100%;
+  }
+  
+  .cron-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  
+  .cron-card .btn {
+    width: 100%;
+  }
+  
+  .list-item {
+    padding: 14px;
+  }
+  
+  .chat-bubble {
+    max-width: 90%;
+    font-size: 15px;
+    padding: 12px 14px;
+  }
+  
+  .split-list {
+    max-height: 40vh;
+  }
+  
+  .log-viewer {
+    font-size: 12px;
+    padding: 10px;
+    max-height: 60vh;
+  }
+}
+
+@media (max-width: 480px) {
+  .header h1 {
+    font-size: 18px;
+  }
+  
+  .header-controls span {
+    display: none;
+  }
+  
+  .tabs {
+    padding: 8px;
+    gap: 8px;
+  }
+  
+  .tab {
+    padding: 8px 12px;
+    font-size: 14px;
+  }
+  
+  .content {
+    padding: 12px;
+  }
+  
+  .section-title {
+    font-size: 18px;
+  }
+  
+  .card {
+    padding: 12px;
+  }
+  
+  .card-value {
+    font-size: 20px;
+  }
+  
+  .toast {
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
+    text-align: center;
+  }
 }
 </style>
 </head>

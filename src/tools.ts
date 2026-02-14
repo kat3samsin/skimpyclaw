@@ -3,7 +3,7 @@
 import { readFileSync, writeFileSync, readdirSync, existsSync, statSync, mkdirSync } from 'fs';
 import { join, resolve, dirname, sep } from 'path';
 import { homedir } from 'os';
-import { exec } from 'child_process';
+import { exec, spawn } from 'child_process';
 import { isBashCommandSafe } from './security.js';
 import type { ToolConfig } from './types.js';
 
@@ -156,6 +156,25 @@ export const SPAWN_SUBAGENT_TOOL = {
   },
 };
 
+// --- Code With Agent Tool ---
+
+export const CODE_WITH_AGENT_TOOL = {
+  name: 'code_with_agent',
+  description: 'Delegate a coding task to a coding agent CLI (Claude Code or Codex). The agent will edit files, run commands, and return results. Always use this for code changes instead of writing code directly.',
+  input_schema: {
+    type: 'object' as const,
+    properties: {
+      task: { type: 'string', description: 'Detailed coding task. Be specific: what to change, why, which files, expected behavior.' },
+      agent: { type: 'string', enum: ['claude', 'codex'], description: 'Which coding CLI to use (default: claude)' },
+      workdir: { type: 'string', description: 'Working directory (default: SkimpyClaw repo root)' },
+      model: { type: 'string', description: 'Model override (e.g. opus, gpt-5.3-codex)' },
+      max_turns: { type: 'number', description: 'Max agentic turns, Claude only (default: 30)' },
+      validate: { type: 'boolean', description: 'Run pnpm build && pnpm test after (default: true)' },
+    },
+    required: ['task'],
+  },
+};
+
 // --- MCP (mcporter) ---
 
 let mcpRuntime: any = null;
@@ -244,9 +263,10 @@ export async function getToolDefinitions(config?: ToolConfig, options?: { includ
   const mcpTools = await discoverMcpTools();
   tools.push(...mcpTools);
 
-  // Include spawn_subagent tool when requested
+  // Include spawn_subagent and code_with_agent tools when requested
   if (options?.includeSpawnSubagent) {
     tools.push(SPAWN_SUBAGENT_TOOL);
+    tools.push(CODE_WITH_AGENT_TOOL);
   }
 
   return tools;
@@ -328,6 +348,11 @@ export async function executeTool(
     // Route spawn_subagent
     if (name === 'spawn_subagent') {
       return await executeSpawnSubagent(input, context);
+    }
+
+    // Route code_with_agent
+    if (name === 'code_with_agent') {
+      return await executeCodeWithAgent(input, config);
     }
 
     // Map Claude Code names to internal names for built-in tools
@@ -444,6 +469,168 @@ async function executeSpawnSubagent(input: Record<string, any>, context?: Execut
     });
   } catch (err) {
     return `Error: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
+// --- Code With Agent Executor ---
+
+const SKIMPYCLAW_ROOT = resolve(join(import.meta.dirname || process.cwd(), '..'));
+const CODE_AGENT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+const VALIDATE_TIMEOUT_MS = 60 * 1000; // 60 seconds
+
+/** Build CLI args for code_with_agent. Exported for testing. */
+export function buildCodeAgentArgs(input: {
+  task: string;
+  agent?: string;
+  workdir?: string;
+  model?: string;
+  max_turns?: number;
+}): { cmd: string; args: string[] } {
+  const agent = input.agent || 'claude';
+  const maxTurns = String(input.max_turns || 30);
+
+  if (agent === 'codex') {
+    const args = [
+      'exec',
+      '--full-auto',
+      '--json',
+      '--color', 'never',
+    ];
+    if (input.workdir) args.push('-C', input.workdir);
+    if (input.model) args.push('-m', input.model);
+    args.push(input.task);
+    return { cmd: 'codex', args };
+  }
+
+  // Default: claude
+  const args = [
+    '-p',
+    '--output-format', 'json',
+    '--dangerously-skip-permissions',
+    '--allowedTools', 'Edit', 'Read', 'Write', 'Bash', 'Glob', 'Grep',
+    '--max-turns', maxTurns,
+    '--append-system-prompt', 'Output text only. Never use say or TTS. Focus on the coding task. Run pnpm build && pnpm test to verify changes.',
+  ];
+  if (input.model) args.push('--model', input.model);
+  args.push(input.task);
+  return { cmd: 'claude', args };
+}
+
+async function executeCodeWithAgent(
+  input: Record<string, any>,
+  config: ToolConfig,
+): Promise<string> {
+  const task = input.task as string;
+  if (!task) return 'Error: task is required';
+
+  const agent = (input.agent as string) || 'claude';
+  if (!['claude', 'codex'].includes(agent)) {
+    return `Error: Invalid agent "${agent}". Must be claude or codex.`;
+  }
+
+  const workdir = resolve(input.workdir || SKIMPYCLAW_ROOT);
+  if (!isPathAllowed(workdir, config.allowedPaths)) {
+    return `Error: Working directory not allowed. Permitted: ${config.allowedPaths.join(', ')}`;
+  }
+
+  const validate = input.validate !== false; // default true
+  const { cmd, args } = buildCodeAgentArgs({
+    task,
+    agent,
+    workdir,
+    model: input.model,
+    max_turns: input.max_turns,
+  });
+
+  // Spawn the coding agent
+  let stdout = '';
+  let stderr = '';
+
+  try {
+    const exitCode = await new Promise<number | null>((resolvePromise, reject) => {
+      const proc = spawn(cmd, args, {
+        cwd: workdir,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: { ...process.env },
+      });
+
+      proc.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString(); });
+      proc.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
+
+      const timer = setTimeout(() => {
+        proc.kill('SIGTERM');
+        reject(new Error(`${agent} agent timed out after 5 minutes`));
+      }, CODE_AGENT_TIMEOUT_MS);
+
+      proc.on('close', (code) => {
+        clearTimeout(timer);
+        resolvePromise(code);
+      });
+
+      proc.on('error', (err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
+    });
+
+    // Parse output
+    let agentOutput: string;
+    if (agent === 'claude') {
+      // Claude JSON output: parse result field
+      try {
+        const parsed = JSON.parse(stdout);
+        agentOutput = parsed.result || parsed.content || stdout;
+      } catch {
+        agentOutput = stdout || stderr || '(no output)';
+      }
+    } else {
+      // Codex JSONL: extract output_text lines
+      const lines = stdout.trim().split('\n');
+      const outputs: string[] = [];
+      for (const line of lines) {
+        try {
+          const obj = JSON.parse(line);
+          if (obj.type === 'output_text' || obj.output_text) {
+            outputs.push(obj.output_text || obj.text || '');
+          }
+        } catch {
+          // Non-JSON line, include as-is
+          if (line.trim()) outputs.push(line);
+        }
+      }
+      agentOutput = outputs.join('\n') || stdout || '(no output)';
+    }
+
+    if (exitCode !== 0) {
+      return `Error: ${agent} exited with code ${exitCode}\n\nSTDOUT:\n${agentOutput.slice(0, 10_000)}\n\nSTDERR:\n${stderr.slice(0, 5_000)}`;
+    }
+
+    // Post-validation gate
+    if (validate) {
+      const validateResult = await new Promise<string>((res) => {
+        exec('pnpm build && pnpm test', {
+          cwd: workdir,
+          timeout: VALIDATE_TIMEOUT_MS,
+          maxBuffer: 5 * 1024 * 1024,
+        }, (error, vStdout, vStderr) => {
+          if (error) {
+            res(`VALIDATION FAILED (exit ${error.code}):\n${vStdout}\n${vStderr}`.slice(0, 15_000));
+          } else {
+            res('PASS');
+          }
+        });
+      });
+
+      if (validateResult !== 'PASS') {
+        return `Agent completed but validation failed.\n\nAgent output:\n${agentOutput.slice(0, 10_000)}\n\n${validateResult}`;
+      }
+
+      return `${agentOutput.slice(0, 20_000)}\n\nBuild and tests pass.`;
+    }
+
+    return agentOutput.slice(0, 20_000);
+  } catch (err) {
+    return `Error: ${err instanceof Error ? err.message : String(err)}\n\nSTDOUT:\n${stdout.slice(0, 5_000)}\n\nSTDERR:\n${stderr.slice(0, 5_000)}`;
   }
 }
 

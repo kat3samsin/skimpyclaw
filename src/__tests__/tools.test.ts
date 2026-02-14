@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { existsSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'fs';
 import { join } from 'path';
-import { executeTool, BUILTIN_TOOL_DEFINITIONS, BROWSER_TOOL_DEFINITION, getToolDefinitions, fromClaudeCodeName, toClaudeCodeName } from '../tools.js';
+import { executeTool, BUILTIN_TOOL_DEFINITIONS, BROWSER_TOOL_DEFINITION, CODE_WITH_AGENT_TOOL, getToolDefinitions, fromClaudeCodeName, toClaudeCodeName, buildCodeAgentArgs } from '../tools.js';
 import type { ToolConfig } from '../types.js';
 
 const TEST_DIR = join(process.cwd(), '__test_sandbox__');
@@ -317,5 +317,117 @@ describe('browser', () => {
   it('maps Browser name correctly', () => {
     expect(fromClaudeCodeName('Browser')).toBe('browser');
     expect(toClaudeCodeName('browser')).toBe('Browser');
+  });
+});
+
+describe('code_with_agent', () => {
+  describe('tool definition', () => {
+    it('has correct name and required fields', () => {
+      expect(CODE_WITH_AGENT_TOOL.name).toBe('code_with_agent');
+      expect(CODE_WITH_AGENT_TOOL.input_schema.required).toEqual(['task']);
+    });
+
+    it('has all expected properties in schema', () => {
+      const props = Object.keys(CODE_WITH_AGENT_TOOL.input_schema.properties);
+      expect(props).toContain('task');
+      expect(props).toContain('agent');
+      expect(props).toContain('workdir');
+      expect(props).toContain('model');
+      expect(props).toContain('max_turns');
+      expect(props).toContain('validate');
+    });
+
+    it('is included in getToolDefinitions when includeSpawnSubagent is true', async () => {
+      const tools = await getToolDefinitions(toolConfig, { includeSpawnSubagent: true });
+      expect(tools.map(t => t.name)).toContain('code_with_agent');
+    });
+
+    it('is excluded from getToolDefinitions when includeSpawnSubagent is false', async () => {
+      const tools = await getToolDefinitions(toolConfig);
+      expect(tools.map(t => t.name)).not.toContain('code_with_agent');
+    });
+  });
+
+  describe('buildCodeAgentArgs', () => {
+    it('builds claude args with defaults', () => {
+      const { cmd, args } = buildCodeAgentArgs({ task: 'fix the bug' });
+      expect(cmd).toBe('claude');
+      expect(args).toContain('-p');
+      expect(args).toContain('--output-format');
+      expect(args).toContain('json');
+      expect(args).toContain('--dangerously-skip-permissions');
+      expect(args).toContain('--max-turns');
+      expect(args).toContain('30');
+      expect(args[args.length - 1]).toBe('fix the bug');
+    });
+
+    it('builds claude args with model override', () => {
+      const { cmd, args } = buildCodeAgentArgs({ task: 'fix it', model: 'opus' });
+      expect(cmd).toBe('claude');
+      expect(args).toContain('--model');
+      expect(args).toContain('opus');
+    });
+
+    it('builds claude args with custom max_turns', () => {
+      const { args } = buildCodeAgentArgs({ task: 'fix it', max_turns: 10 });
+      const idx = args.indexOf('--max-turns');
+      expect(args[idx + 1]).toBe('10');
+    });
+
+    it('builds codex args with defaults', () => {
+      const { cmd, args } = buildCodeAgentArgs({ task: 'fix the bug', agent: 'codex' });
+      expect(cmd).toBe('codex');
+      expect(args[0]).toBe('exec');
+      expect(args).toContain('--full-auto');
+      expect(args).toContain('--json');
+      expect(args).toContain('--color');
+      expect(args).toContain('never');
+      expect(args[args.length - 1]).toBe('fix the bug');
+    });
+
+    it('builds codex args with workdir', () => {
+      const { args } = buildCodeAgentArgs({ task: 'fix it', agent: 'codex', workdir: '/tmp/project' });
+      expect(args).toContain('-C');
+      expect(args).toContain('/tmp/project');
+    });
+
+    it('builds codex args with model override', () => {
+      const { args } = buildCodeAgentArgs({ task: 'fix it', agent: 'codex', model: 'gpt-5.3-codex' });
+      expect(args).toContain('-m');
+      expect(args).toContain('gpt-5.3-codex');
+    });
+
+    it('does not include --allowedTools for codex', () => {
+      const { args } = buildCodeAgentArgs({ task: 'fix it', agent: 'codex' });
+      expect(args).not.toContain('--allowedTools');
+    });
+
+    it('includes --append-system-prompt for claude', () => {
+      const { args } = buildCodeAgentArgs({ task: 'fix it' });
+      expect(args).toContain('--append-system-prompt');
+    });
+  });
+
+  describe('executeTool routing', () => {
+    it('rejects workdir outside allowed paths', async () => {
+      const result = await executeTool('code_with_agent', {
+        task: 'fix it',
+        workdir: '/tmp/not-allowed',
+      }, toolConfig);
+      expect(result).toContain('Error: Working directory not allowed');
+    });
+
+    it('returns error when task is missing', async () => {
+      const result = await executeTool('code_with_agent', {}, toolConfig);
+      expect(result).toContain('Error: task is required');
+    });
+
+    it('returns error for invalid agent', async () => {
+      const result = await executeTool('code_with_agent', {
+        task: 'fix it',
+        agent: 'gpt',
+      }, toolConfig);
+      expect(result).toContain('Error: Invalid agent "gpt"');
+    });
   });
 });
