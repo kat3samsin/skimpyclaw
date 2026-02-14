@@ -60,6 +60,12 @@ function writeCronLog(entry: CronLogEntry): void {
   appendFileSync(logPath, lines + '\n');
 }
 
+function appendCronLogLine(jobId: string, line: string): void {
+  const logPath = getCronLogPath(jobId);
+  const timestamp = new Date().toISOString();
+  appendFileSync(logPath, `[${timestamp}] ${line}\n`);
+}
+
 // Track currently running jobs for status queries
 const runningJobs: Map<string, CronLogEntry> = new Map();
 
@@ -121,9 +127,22 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
   };
   runningJobs.set(jobDef.id, logEntry);
 
+  // Log start immediately
+  appendCronLogLine(jobDef.id, `=== STARTED: ${jobDef.name} (${jobDef.id}) ===`);
+  appendCronLogLine(jobDef.id, `Model: ${jobDef.model || 'default'}`);
+  appendCronLogLine(jobDef.id, `Payload: ${jobDef.payload.kind}`);
+
+  // Notify channel at start
+  try {
+    await sendActiveChannelProactiveMessage(config, `🔄 Cron starting: ${jobDef.name}`);
+  } catch {
+    // Non-critical
+  }
+
   try {
     if (jobDef.payload.kind === 'agentTurn') {
       const message = expandVariables(jobDef.payload.message || '');
+      appendCronLogLine(jobDef.id, `Agent turn started (prompt: ${message.slice(0, 100)}...)`);
       const response = await runAgentTurn(
         config.agents.default,
         message,
@@ -138,16 +157,21 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
         }
       );
       logEntry.output = response.slice(0, 5000);
+      appendCronLogLine(jobDef.id, `Agent turn completed (${response.length} chars)`);
     } else if (jobDef.payload.kind === 'script') {
+      appendCronLogLine(jobDef.id, `Script started: ${(jobDef.payload.script || '').slice(0, 100)}`);
       const output = await executeScript(jobDef);
       logEntry.output = output.slice(0, 50000);
+      appendCronLogLine(jobDef.id, `Script completed (${output.length} chars)`);
     }
 
     logEntry.status = 'success';
+    appendCronLogLine(jobDef.id, `=== COMPLETED: success ===`);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     logEntry.status = msg.includes('TIMEOUT') || msg.includes('timed out') ? 'timeout' : 'error';
     logEntry.error = msg;
+    appendCronLogLine(jobDef.id, `=== FAILED: ${logEntry.status} — ${msg.slice(0, 200)} ===`);
     throw err;
   } finally {
     logEntry.finishedAt = new Date().toISOString();
@@ -164,7 +188,7 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
       if (logEntry.error) {
         notification += `\nError: ${logEntry.error.slice(0, 200)}`;
       }
-      // Send status + full output (truncated at 4000 chars for Telegram limit)
+      // Send status + output preview (truncated at 4000 chars for Telegram limit)
       if (logEntry.status === 'success' && logEntry.output) {
         const output = logEntry.output.length > 4000
           ? logEntry.output.slice(0, 4000) + '...'
