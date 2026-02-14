@@ -488,6 +488,10 @@ export function initProviders(config: Config): void {
 
     const opts: Record<string, any> = { apiKey };
     if (providerConfig.baseURL) opts.baseURL = providerConfig.baseURL;
+    // Kimi Code API requires a coding-agent User-Agent with version string
+    if (providerConfig.baseURL?.includes('kimi.com')) {
+      opts.defaultHeaders = { 'User-Agent': 'claude-code/2.1.42' };
+    }
     openaiClients.set(name, new OpenAI(opts));
     console.log(`[providers] Initialized ${name}${providerConfig.baseURL ? ` (${providerConfig.baseURL})` : ''}`);
   }
@@ -645,7 +649,9 @@ export async function chat(
         temperature: options.temperature,
       });
 
-      const content = response.choices[0]?.message?.content || '';
+      let content = response.choices[0]?.message?.content || '';
+      // Strip <think>...</think> reasoning blocks (e.g. MiniMax M2.x)
+      content = content.replace(/<think>[\s\S]*?<\/think>\s*/g, '').trim();
       genObs?.update({
         output: response.choices[0]?.message,
         usageDetails: toUsageDetails(response.usage),
