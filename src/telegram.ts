@@ -22,7 +22,6 @@ const BOT_COMMANDS: { command: string; description: string }[] = [
   { command: 'help', description: 'Show available commands' },
   { command: 'model', description: 'Switch model (fast/smart/opus)' },
   { command: 'status', description: 'Show bot status' },
-  { command: 'focus', description: 'Plan your day' },
   { command: 'memory', description: 'View recent memory entries' },
   { command: 'new', description: 'Clear conversation history' },
   { command: 'compact', description: 'Compress conversation history' },
@@ -435,28 +434,6 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
     await ctx.reply(`Proactive messages silenced until ${silenceUntil.toLocaleTimeString()}`);
   });
 
-
-  // /focus command
-  bot.command('focus', async (ctx) => {
-    const stopTyping = startTypingIndicator(ctx);
-    try {
-      const response = await runAgentTurn(
-        cfg.agents.default,
-        'plan my day',
-        cfg,
-        getCurrentModel(),
-        getTelegramToolConfig(cfg),
-        undefined,
-        getRunContext(ctx)
-      );
-      await sendLongMessage(ctx, response);
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : 'Unknown error';
-      await ctx.reply(`Error: ${msg}`);
-    } finally {
-      stopTyping();
-    }
-  });
 
   // /memory command — show recent memory entries
   bot.command('memory', async (ctx) => {

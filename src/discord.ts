@@ -20,7 +20,6 @@ function getDiscordRunContext(message: Message): AgentRunContext {
 }
 
 const BOT_COMMANDS: { command: string; description: string }[] = [
-  { command: 'start', description: 'Show available commands' },
   { command: 'help', description: 'Show available commands' },
   { command: 'model', description: 'Switch model (fast/smart/opus)' },
   { command: 'status', description: 'Show bot status' },
@@ -29,8 +28,6 @@ const BOT_COMMANDS: { command: string; description: string }[] = [
   { command: 'silence', description: 'Pause proactive messages' },
   { command: 'cron', description: 'List or run scheduled jobs' },
   { command: 'heartbeat', description: 'Trigger heartbeat check' },
-  { command: 'eod', description: 'Run EOD review' },
-  { command: 'focus', description: 'Plan your day' },
 ];
 
 const KNOWN_COMMANDS = new Set(BOT_COMMANDS.map(c => c.command));
@@ -288,29 +285,6 @@ async function handleCommand(message: Message, command: string, args: string[]):
     const minutes = parseInt(rawArgs, 10) || 30;
     silenceUntil = new Date(Date.now() + minutes * 60 * 1000);
     await message.reply(`Proactive messages silenced until ${silenceUntil.toLocaleTimeString()}`);
-    return;
-  }
-
-  if (command === 'eod' || command === 'focus') {
-    const stopTyping = startTypingIndicator(message);
-    try {
-      const prompt = command === 'eod' ? 'run EOD review' : 'plan my day';
-      const response = await runAgentTurn(
-        config.agents.default,
-        prompt,
-        config,
-        getCurrentModel(),
-        getDiscordToolConfig(config),
-        undefined,
-        getDiscordRunContext(message),
-      );
-      await sendLongText(message, response);
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : 'Unknown error';
-      await message.reply(`Error: ${msg}`);
-    } finally {
-      stopTyping();
-    }
     return;
   }
 
