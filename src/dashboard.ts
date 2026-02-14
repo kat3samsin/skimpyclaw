@@ -658,6 +658,217 @@ td:first-child { color: var(--highlight); }
     text-align: center;
   }
 }
+
+/* --- Coding Agent Tab --- */
+.ca-status-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 20px 24px;
+  margin-bottom: 16px;
+}
+
+.ca-status-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.ca-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.ca-status-badge.idle { background: var(--surface-alt); color: var(--text-dim); }
+.ca-status-badge.running { background: rgba(44, 104, 246, 0.16); color: var(--highlight); }
+.ca-status-badge.validating { background: rgba(176, 124, 26, 0.16); color: var(--warning); }
+.ca-status-badge.completed { background: rgba(15, 156, 102, 0.16); color: var(--success); }
+.ca-status-badge.failed { background: rgba(202, 61, 79, 0.16); color: var(--error); }
+.ca-status-badge.timeout { background: rgba(202, 61, 79, 0.16); color: var(--error); }
+
+.ca-spinner {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: ca-spin 0.8s linear infinite;
+}
+@keyframes ca-spin { to { transform: rotate(360deg); } }
+
+.ca-task {
+  font-size: 14px;
+  line-height: 1.6;
+  margin-bottom: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.ca-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  font-family: var(--mono);
+  color: var(--text-dim);
+  margin-bottom: 12px;
+}
+
+.ca-output {
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.ca-error {
+  background: rgba(202, 61, 79, 0.08);
+  border: 1px solid rgba(202, 61, 79, 0.2);
+  color: var(--error);
+}
+
+.audit-entry {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 18px;
+  margin-bottom: 10px;
+  transition: background 0.18s ease;
+}
+
+.audit-entry:hover {
+  background: var(--surface-alt);
+}
+
+.audit-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.audit-id {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--highlight);
+  font-weight: 600;
+}
+
+.audit-meta {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 12px;
+  color: var(--text-dim);
+  font-family: var(--mono);
+}
+
+.audit-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.audit-badge.ok { background: rgba(15, 156, 102, 0.16); color: var(--success); }
+.audit-badge.error { background: rgba(202, 61, 79, 0.16); color: var(--error); }
+
+.audit-trigger {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.audit-trigger.telegram { background: rgba(44, 104, 246, 0.16); color: var(--highlight); }
+.audit-trigger.cron { background: rgba(176, 124, 26, 0.16); color: var(--warning); }
+.audit-trigger.api { background: rgba(15, 156, 102, 0.16); color: var(--success); }
+.audit-trigger.system { background: var(--surface-alt); color: var(--text-dim); border: 1px solid var(--border); }
+.audit-trigger.discord { background: rgba(88, 101, 242, 0.16); color: #7289da; }
+
+.audit-summary {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+
+.audit-events-toggle {
+  font-size: 13px;
+  color: var(--highlight);
+  cursor: pointer;
+  user-select: none;
+  margin-top: 6px;
+  font-family: var(--mono);
+}
+
+.audit-events-toggle:hover { text-decoration: underline; }
+
+.audit-events {
+  display: none;
+  margin-top: 8px;
+  padding: 10px 0 0 0;
+  border-top: 1px solid var(--border);
+}
+
+.audit-events.expanded { display: block; }
+
+.audit-event {
+  display: grid;
+  grid-template-columns: 80px 1fr auto;
+  gap: 8px;
+  padding: 6px 0;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border);
+  align-items: center;
+}
+
+.audit-event:last-child { border-bottom: none; }
+
+.audit-event-type {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--highlight);
+  font-weight: 500;
+}
+
+.audit-event-summary {
+  color: var(--text);
+  line-height: 1.4;
+}
+
+.audit-event-duration {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-dim);
+  text-align: right;
+  white-space: nowrap;
+}
 </style>
 </head>
 <body>
@@ -688,6 +899,8 @@ td:first-child { color: var(--highlight); }
       <span class="tab-group-title"><span class="tab-group-icon">◔</span> Operations</span>
     </div>
     <button class="tab" data-tab="cron">Cron</button>
+    <button class="tab" data-tab="coding-agent">Coding Agent</button>
+    <button class="tab" data-tab="audit">Audit</button>
     <button class="tab" data-tab="logs">Logs</button>
   </div>
 </div>
@@ -763,6 +976,39 @@ td:first-child { color: var(--highlight); }
       <div class="split-detail" id="templateEditor">
         <div class="empty">Select a template to edit</div>
       </div>
+    </div>
+  </div>
+
+  <!-- Coding Agent Tab -->
+  <div class="tab-panel" id="panel-coding-agent">
+    <div id="caStatus">
+      <div class="ca-status-card">
+        <div class="ca-status-header">
+          <span class="ca-status-badge idle">IDLE</span>
+        </div>
+        <div class="empty">No coding agent has run yet. Send a coding task via Telegram or Discord.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Audit Tab -->
+  <div class="tab-panel" id="panel-audit">
+    <div class="toolbar">
+      <label style="margin-bottom:0;">Trigger:</label>
+      <select id="auditTriggerFilter" style="width:160px;">
+        <option value="">All</option>
+        <option value="telegram">Telegram</option>
+        <option value="cron">Cron</option>
+        <option value="api">API</option>
+        <option value="system">System</option>
+        <option value="discord">Discord</option>
+      </select>
+      <button class="btn btn-small" id="auditRefreshBtn">Refresh</button>
+      <span id="auditCount" style="font-size:13px;color:var(--text-dim);margin-left:auto;"></span>
+    </div>
+    <div id="auditEntries"></div>
+    <div style="text-align:center;margin-top:12px;">
+      <button class="btn btn-small" id="auditLoadMoreBtn" style="display:none;">Load More</button>
     </div>
   </div>
 
@@ -960,6 +1206,8 @@ function onTabActivated(tab) {
   else if (tab === 'cron') loadCronJobs();
   else if (tab === 'model') loadModel();
   else if (tab === 'templates') loadTemplates();
+  else if (tab === 'coding-agent') startCaPolling();
+  else if (tab === 'audit') loadAudit();
   else if (tab === 'logs') loadLogFiles();
   else if (tab === 'config') loadConfig();
 }
@@ -1292,6 +1540,191 @@ document.getElementById('logAutoRefresh').addEventListener('change', (e) => {
     logAutoRefreshInterval = null;
   }
 });
+
+// --- Coding Agent Tab ---
+let caPollingInterval = null;
+
+function stopCaPolling() {
+  if (caPollingInterval) {
+    clearInterval(caPollingInterval);
+    caPollingInterval = null;
+  }
+}
+
+function startCaPolling() {
+  loadCaStatus();
+  stopCaPolling();
+  caPollingInterval = setInterval(loadCaStatus, 3000);
+}
+
+async function loadCaStatus() {
+  try {
+    const data = await api('code-agent-status');
+    renderCaStatus(data);
+  } catch {
+    document.getElementById('caStatus').innerHTML =
+      '<div class="ca-status-card"><div class="empty">Failed to load status</div></div>';
+  }
+}
+
+function renderCaStatus(data) {
+  var el = document.getElementById('caStatus');
+  if (!data || data.status === 'idle') {
+    el.innerHTML = '<div class="ca-status-card">' +
+      '<div class="ca-status-header"><span class="ca-status-badge idle">IDLE</span></div>' +
+      '<div class="empty">No coding agent has run yet.</div></div>';
+    return;
+  }
+
+  var isActive = data.status === 'running' || data.status === 'validating';
+  var spinner = isActive ? '<span class="ca-spinner"></span>' : '';
+  var elapsed = '';
+  if (data.startedAt) {
+    var secs = data.durationSeconds != null ? data.durationSeconds
+      : Math.round((Date.now() - new Date(data.startedAt).getTime()) / 1000);
+    elapsed = secs < 60 ? secs + 's' : Math.floor(secs / 60) + 'm ' + (secs % 60) + 's';
+  }
+
+  var metaHtml = '<div class="ca-meta">';
+  metaHtml += '<span>Agent: ' + esc(data.agent || '-') + '</span>';
+  if (elapsed) metaHtml += '<span>Duration: ' + elapsed + '</span>';
+  if (data.startedAt) metaHtml += '<span>Started: ' + formatDate(data.startedAt) + '</span>';
+  if (data.endedAt) metaHtml += '<span>Ended: ' + formatDate(data.endedAt) + '</span>';
+  if (data.validationPassed != null) metaHtml += '<span>Tests: ' + (data.validationPassed ? 'PASS' : 'FAIL') + '</span>';
+  metaHtml += '</div>';
+
+  var outputHtml = '';
+  var output = data.liveOutput || data.outputPreview;
+  if (output) {
+    outputHtml = '<div class="ca-output">' + esc(output) + '</div>';
+  }
+
+  var errorHtml = '';
+  if (data.error) {
+    errorHtml = '<div class="ca-output ca-error">' + esc(data.error) + '</div>';
+  }
+
+  el.innerHTML = '<div class="ca-status-card">' +
+    '<div class="ca-status-header">' +
+      '<span class="ca-status-badge ' + esc(data.status) + '">' + spinner + ' ' + esc(data.status.toUpperCase()) + '</span>' +
+    '</div>' +
+    '<div class="ca-task">' + esc(data.task || '') + '</div>' +
+    metaHtml +
+    outputHtml +
+    errorHtml +
+  '</div>';
+
+  // Auto-scroll output to bottom if active
+  if (isActive) {
+    var outputEl = el.querySelector('.ca-output');
+    if (outputEl) outputEl.scrollTop = outputEl.scrollHeight;
+  }
+}
+
+// Stop polling when leaving the tab
+var origOnTab = onTabActivated;
+onTabActivated = function(tab) {
+  if (tab !== 'coding-agent') stopCaPolling();
+  origOnTab(tab);
+};
+
+// --- Audit Tab ---
+let auditOffset = 0;
+const AUDIT_PAGE_SIZE = 30;
+
+function toggleAuditEvents(el, eventsId, count) {
+  var eventsEl = document.getElementById(eventsId);
+  var expanded = eventsEl.classList.toggle('expanded');
+  el.textContent = (expanded ? '\\u25BC' : '\\u25B6') + ' Events (' + count + ')';
+}
+
+function formatDuration(ms) {
+  if (ms == null) return '-';
+  if (ms < 1000) return ms + 'ms';
+  if (ms < 60000) return (ms / 1000).toFixed(1) + 's';
+  return (ms / 60000).toFixed(1) + 'm';
+}
+
+async function loadAudit(append) {
+  if (!append) {
+    auditOffset = 0;
+    document.getElementById('auditEntries').innerHTML = '';
+  }
+
+  const triggerFilter = document.getElementById('auditTriggerFilter').value;
+  let path = 'audit?limit=' + AUDIT_PAGE_SIZE + '&offset=' + auditOffset;
+  if (triggerFilter) path += '&trigger=' + encodeURIComponent(triggerFilter);
+
+  try {
+    const data = await api(path);
+    const el = document.getElementById('auditEntries');
+    const countEl = document.getElementById('auditCount');
+    const moreBtn = document.getElementById('auditLoadMoreBtn');
+
+    if (!data.traces || data.traces.length === 0) {
+      if (!append) {
+        el.innerHTML = '<div class="empty">No audit traces found</div>';
+      }
+      countEl.textContent = 'Total: ' + (data.total || 0);
+      moreBtn.style.display = 'none';
+      return;
+    }
+
+    const html = data.traces.map(function(t) {
+      const evtCount = t.events ? t.events.length : 0;
+      const traceId = t.traceId || '-';
+      const eventsId = 'evt-' + traceId.replace(/[^a-zA-Z0-9]/g, '');
+
+      var eventsHtml = '';
+      if (t.events && t.events.length > 0) {
+        eventsHtml = '<div class="audit-events-toggle" onclick="toggleAuditEvents(this, \\'' + eventsId + '\\', ' + evtCount + ')">\\u25B6 Events (' + evtCount + ')</div>' +
+          '<div class="audit-events" id="' + eventsId + '">' +
+          t.events.map(function(ev) {
+            return '<div class="audit-event">' +
+              '<span class="audit-event-type">' + esc(ev.type || '-') + '</span>' +
+              '<span class="audit-event-summary">' + esc(ev.summary || '') + '</span>' +
+              '<span class="audit-event-duration">' + formatDuration(ev.durationMs) + '</span>' +
+            '</div>';
+          }).join('') +
+          '</div>';
+      }
+
+      return '<div class="audit-entry">' +
+        '<div class="audit-header">' +
+          '<div style="display:flex;gap:8px;align-items:center;">' +
+            '<span class="audit-id">' + esc(traceId) + '</span>' +
+            '<span class="audit-trigger ' + esc(t.trigger || '') + '">' + esc(t.trigger || '-') + '</span>' +
+            '<span class="audit-badge ' + esc(t.status || '') + '">' + esc(t.status || '-') + '</span>' +
+          '</div>' +
+          '<div class="audit-meta">' +
+            '<span>' + formatDuration(t.durationMs) + '</span>' +
+            '<span>' + evtCount + ' event' + (evtCount !== 1 ? 's' : '') + '</span>' +
+            '<span>' + formatDate(t.startedAt || t.endedAt) + '</span>' +
+          '</div>' +
+        '</div>' +
+        eventsHtml +
+      '</div>';
+    }).join('');
+
+    if (append) {
+      el.innerHTML += html;
+    } else {
+      el.innerHTML = html;
+    }
+
+    countEl.textContent = 'Showing ' + (auditOffset + data.traces.length) + ' of ' + data.total;
+    auditOffset += data.traces.length;
+    moreBtn.style.display = auditOffset < data.total ? '' : 'none';
+  } catch (e) {
+    if (!append) {
+      document.getElementById('auditEntries').innerHTML = '<div class="empty">Failed to load audit log</div>';
+    }
+  }
+}
+
+document.getElementById('auditRefreshBtn').addEventListener('click', function() { loadAudit(false); });
+document.getElementById('auditTriggerFilter').addEventListener('change', function() { loadAudit(false); });
+document.getElementById('auditLoadMoreBtn').addEventListener('click', function() { loadAudit(true); });
 
 // --- Config Tab ---
 async function loadConfig() {

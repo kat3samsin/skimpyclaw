@@ -7,6 +7,7 @@ import { join } from 'path';
 import { getLogsDir } from './config.js';
 import type { Config, CronJob } from './types.js';
 import { runAgentTurn } from './agent.js';
+import { startTrace, addEvent, endTrace } from './audit.js';
 import { sendActiveChannelProactiveMessage, getActiveChannelId } from './channels.js';
 
 interface ScheduledJob {
@@ -152,6 +153,7 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
         undefined,
         {
           channel: getActiveChannelId() || 'telegram',
+          trigger: 'cron',
           sessionId: jobDef.id,
           metadata: { jobName: jobDef.name },
         }
@@ -159,10 +161,33 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
       logEntry.output = response.slice(0, 5000);
       appendCronLogLine(jobDef.id, `Agent turn completed (${response.length} chars)`);
     } else if (jobDef.payload.kind === 'script') {
+      const scriptTraceId = startTrace('cron');
+      addEvent(scriptTraceId, {
+        type: 'script_start',
+        summary: `${jobDef.name}: ${(jobDef.payload.script || '').slice(0, 100)}`,
+        durationMs: 0,
+      });
       appendCronLogLine(jobDef.id, `Script started: ${(jobDef.payload.script || '').slice(0, 100)}`);
-      const output = await executeScript(jobDef);
-      logEntry.output = output.slice(0, 50000);
-      appendCronLogLine(jobDef.id, `Script completed (${output.length} chars)`);
+      try {
+        const output = await executeScript(jobDef);
+        logEntry.output = output.slice(0, 50000);
+        appendCronLogLine(jobDef.id, `Script completed (${output.length} chars)`);
+        addEvent(scriptTraceId, {
+          type: 'script_complete',
+          summary: `Output: ${output.slice(0, 150)}`,
+          durationMs: 0,
+        });
+        await endTrace(scriptTraceId, 'ok');
+      } catch (scriptErr) {
+        const scriptErrMsg = scriptErr instanceof Error ? scriptErr.message : String(scriptErr);
+        addEvent(scriptTraceId, {
+          type: 'script_error',
+          summary: scriptErrMsg.slice(0, 150),
+          durationMs: 0,
+        });
+        await endTrace(scriptTraceId, 'error');
+        throw scriptErr;
+      }
     }
 
     logEntry.status = 'success';

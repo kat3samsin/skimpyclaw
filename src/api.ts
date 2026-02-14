@@ -23,6 +23,8 @@ import { getCronJobs, getCronJobDetails, runCronJob } from './cron.js';
 import { getCurrentModel, setCurrentModel, getLastMessage } from './gateway.js';
 import { redactSecrets } from './security.js';
 import { getActiveTasks, getRecentTasks } from './subagent.js';
+import { readAuditTraces } from './audit.js';
+import { readCodeAgentStatus } from './tools.js';
 
 function validateFilename(filename: string): boolean {
   return !filename.includes('..') && filename === basename(filename);
@@ -500,6 +502,25 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
       const msg = error instanceof Error ? error.message : 'Unknown error';
       return reply.code(500).send({ error: msg });
     }
+  });
+
+  // --- Audit Log ---
+  // Reads from ~/.skimpyclaw/logs/audit/YYYY-MM-DD.jsonl files
+  fastify.get<{
+    Querystring: { limit?: string; offset?: string; trigger?: string };
+  }>('/api/dashboard/audit', async (request) => {
+    const limit = Math.min(parseInt(request.query.limit || '50', 10), 200);
+    const offset = parseInt(request.query.offset || '0', 10);
+    const triggerFilter = request.query.trigger;
+
+    const { traces, total } = await readAuditTraces({ limit, offset, trigger: triggerFilter });
+
+    return { traces, total, limit, offset };
+  });
+
+  // --- Code Agent Status ---
+  fastify.get('/api/dashboard/code-agent-status', async () => {
+    return readCodeAgentStatus() || { status: 'idle' };
   });
 
 }

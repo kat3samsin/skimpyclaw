@@ -9,6 +9,7 @@ import { getAgentDir } from './config.js';
 import { buildSafeSystemPrompt, sanitizeUserInput } from './security.js';
 import type { Config, ChatMessage, ChatOptions, ToolConfig, AgentRunContext } from './types.js';
 import { getToolDefinitions, executeTool, type ExecuteToolContext } from './tools.js';
+import { startTrace, addEvent, endTrace } from './audit.js';
 import { getLangfuseConfig, isLangfuseEnabled } from './langfuse.js';
 import { startActiveObservation, startObservation, updateActiveTrace } from '@langfuse/tracing';
 
@@ -406,6 +407,7 @@ async function codexChat(messages: ChatMessage[], model: string, toolConfig?: To
         ? startObservation(`tool:${fc.name}`, { input: args, metadata: { tool: fc.name } }, { asType: 'tool' })
         : null;
 
+      const toolStart = Date.now();
       try {
         const result = await executeTool(fc.name, args, toolConfig!, toolContext) || '';
         const resultPreview = result.slice(0, 200) + (result.length > 200 ? '...' : '');
@@ -414,6 +416,14 @@ async function codexChat(messages: ChatMessage[], model: string, toolConfig?: To
 
         toolObs?.update({ output: result });
         toolObs?.end();
+
+        if (toolContext?.auditTraceId) {
+          addEvent(toolContext.auditTraceId, {
+            type: 'tool_use',
+            summary: `${fc.name}(${inputStr})`,
+            durationMs: Date.now() - toolStart,
+          });
+        }
 
         input.push({
           type: 'function_call_output',
@@ -424,6 +434,14 @@ async function codexChat(messages: ChatMessage[], model: string, toolConfig?: To
         const errorMessage = err instanceof Error ? err.message : String(err);
         toolObs?.update({ level: 'ERROR', statusMessage: errorMessage, output: { error: errorMessage } });
         toolObs?.end();
+
+        if (toolContext?.auditTraceId) {
+          addEvent(toolContext.auditTraceId, {
+            type: 'tool_error',
+            summary: `${fc.name} error: ${errorMessage.slice(0, 150)}`,
+            durationMs: Date.now() - toolStart,
+          });
+        }
         throw err;
       }
     }
@@ -793,6 +811,7 @@ export async function chatWithTools(
         ? startObservation(`tool:${block.name}`, { input: block.input, metadata: { tool: block.name } }, { asType: 'tool' })
         : null;
 
+      const toolStart = Date.now();
       try {
         const result = await executeTool(block.name, block.input as Record<string, any>, toolConfig, toolContext);
         const resultPreview = result.slice(0, 200) + (result.length > 200 ? '...' : '');
@@ -801,6 +820,15 @@ export async function chatWithTools(
 
         toolObs?.update({ output: result });
         toolObs?.end();
+
+        // Record audit event
+        if (toolContext?.auditTraceId) {
+          addEvent(toolContext.auditTraceId, {
+            type: 'tool_use',
+            summary: `${block.name}(${inputStr})`,
+            durationMs: Date.now() - toolStart,
+          });
+        }
 
         toolResults.push({
           type: 'tool_result',
@@ -811,6 +839,14 @@ export async function chatWithTools(
         const errorMessage = err instanceof Error ? err.message : String(err);
         toolObs?.update({ level: 'ERROR', statusMessage: errorMessage, output: { error: errorMessage } });
         toolObs?.end();
+
+        if (toolContext?.auditTraceId) {
+          addEvent(toolContext.auditTraceId, {
+            type: 'tool_error',
+            summary: `${block.name} error: ${errorMessage.slice(0, 150)}`,
+            durationMs: Date.now() - toolStart,
+          });
+        }
         throw err;
       }
     }
@@ -954,6 +990,7 @@ export async function openaiChatWithTools(
         ? startObservation(`tool:${fnName}`, { input: args, metadata: { tool: fnName } }, { asType: 'tool' })
         : null;
 
+      const toolStart = Date.now();
       try {
         const result = await executeTool(fnName, args, toolConfig, toolContext) || '';
         const resultPreview = result.slice(0, 200) + (result.length > 200 ? '...' : '');
@@ -962,6 +999,14 @@ export async function openaiChatWithTools(
 
         toolObs?.update({ output: result });
         toolObs?.end();
+
+        if (toolContext?.auditTraceId) {
+          addEvent(toolContext.auditTraceId, {
+            type: 'tool_use',
+            summary: `${fnName}(${inputStr})`,
+            durationMs: Date.now() - toolStart,
+          });
+        }
 
         // Add tool result in OpenAI format
         apiMessages.push({
@@ -973,6 +1018,14 @@ export async function openaiChatWithTools(
         const errorMessage = err instanceof Error ? err.message : String(err);
         toolObs?.update({ level: 'ERROR', statusMessage: errorMessage, output: { error: errorMessage } });
         toolObs?.end();
+
+        if (toolContext?.auditTraceId) {
+          addEvent(toolContext.auditTraceId, {
+            type: 'tool_error',
+            summary: `${fnName} error: ${errorMessage.slice(0, 150)}`,
+            durationMs: Date.now() - toolStart,
+          });
+        }
         throw err;
       }
     }
@@ -1030,6 +1083,10 @@ export async function runAgentTurn(
   let response: string = '';
   let toolCalls: string[] = [];
 
+  // Start audit trace
+  const auditTrigger = context?.trigger || 'system';
+  const auditTraceId = startTrace(auditTrigger);
+
   // Build tool context once — used by all providers for spawn_subagent and file locking
   const chatIdNum = (context?.metadata as any)?.chatId
     ?? (context?.sessionId ? parseInt(context.sessionId, 10) : undefined);
@@ -1039,6 +1096,7 @@ export async function runAgentTurn(
     history,
     abortSignal: context?.abortSignal,
     lockTaskId: context?.sessionId,
+    auditTraceId,
   };
 
   const runTurn = async (): Promise<string> => {
@@ -1082,7 +1140,14 @@ export async function runAgentTurn(
   };
 
   if (!isLangfuseEnabled()) {
-    return runTurn();
+    try {
+      const result = await runTurn();
+      await endTrace(auditTraceId, 'ok');
+      return result;
+    } catch (err) {
+      await endTrace(auditTraceId, 'error');
+      throw err;
+    }
   }
 
   const lfConfig = getLangfuseConfig();
@@ -1127,6 +1192,7 @@ export async function runAgentTurn(
           output: { response: result },
           metadata: { toolCallsCount: toolCalls.length },
         });
+        await endTrace(auditTraceId, 'ok');
         return result;
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err);
@@ -1136,6 +1202,7 @@ export async function runAgentTurn(
           output: { error: errorMessage },
         });
         updateActiveTrace({ output: { error: errorMessage } });
+        await endTrace(auditTraceId, 'error');
         throw err;
       }
     },

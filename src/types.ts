@@ -193,5 +193,24 @@ export interface AgentRunContext {
   tags?: string[];
   metadata?: Record<string, unknown>;
   abortSignal?: AbortSignal;
+  /** Audit trigger label (e.g. "telegram", "cron", "discord", "system") */
+  trigger?: AuditTrace['trigger'];
+}
+
+export interface AuditEvent {
+  type: string;
+  summary: string;
+  durationMs: number;
+  detail?: Record<string, unknown>;
+}
+
+export interface AuditTrace {
+  traceId: string;
+  trigger: 'telegram' | 'cron' | 'api' | 'system' | 'discord';
+  status: 'ok' | 'error';
+  startedAt: string;
+  endedAt: string;
+  durationMs: number;
+  events: AuditEvent[];
 }
 

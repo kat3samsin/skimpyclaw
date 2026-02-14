@@ -7,12 +7,14 @@ import { getCronJobs, runCronJob } from './cron.js';
 import { runAgentTurn } from './agent.js';
 import { runHeartbeatCheck } from './heartbeat.js';
 import { isAllowed, isRateLimited } from './security.js';
+import { readCodeAgentStatus } from './tools.js';
 
 function getDiscordRunContext(message: Message): AgentRunContext {
   return {
     userId: message.author.id,
     sessionId: message.channel.id,
     channel: 'discord',
+    trigger: 'discord',
     metadata: {
       username: message.author.username,
     },
@@ -183,11 +185,28 @@ async function handleCommand(message: Message, command: string, args: string[]):
     const last = getLastMessage();
     const jobs = getCronJobs();
     const jobList = jobs.map(j => `- ${j.name}: ${j.nextRun?.toLocaleString() || 'unknown'}`).join('\n');
+
+    const caStatus = readCodeAgentStatus();
+    let caLine = 'Coding Agent: idle';
+    if (caStatus && (caStatus.status as string) !== 'idle') {
+      const isActive = caStatus.status === 'running' || caStatus.status === 'validating';
+      if (isActive) {
+        const elapsed = Math.round((Date.now() - new Date(caStatus.startedAt).getTime()) / 1000);
+        const elapsedStr = elapsed < 60 ? `${elapsed}s` : `${Math.floor(elapsed / 60)}m ${elapsed % 60}s`;
+        caLine = `Coding Agent: ${caStatus.status.toUpperCase()} (${caStatus.agent}, ${elapsedStr})\n  Task: ${caStatus.task.slice(0, 100)}`;
+      } else {
+        const dur = caStatus.durationSeconds != null ? `${caStatus.durationSeconds}s` : '-';
+        const validation = caStatus.validationPassed != null ? (caStatus.validationPassed ? ' ✅' : ' ❌') : '';
+        caLine = `Coding Agent: ${caStatus.status.toUpperCase()} (${dur}${validation})\n  Task: ${caStatus.task.slice(0, 100)}`;
+      }
+    }
+
     await message.reply(
       `Agent: ${config.agents.default}\n` +
       `Model: ${model}\n` +
       `Last message: ${last?.toLocaleString() || 'never'}\n` +
       `Silence until: ${silenceUntil?.toLocaleString() || 'not silenced'}\n\n` +
+      `${caLine}\n\n` +
       `Scheduled jobs:\n${jobList || '(none)'}`
     );
     return;

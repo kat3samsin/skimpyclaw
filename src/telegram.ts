@@ -14,6 +14,7 @@ import { getCronJobs, runCronJob } from './cron.js';
 import { getCurrentModel, setCurrentModel, getLastMessage } from './gateway.js';
 import { runHeartbeatCheck } from './heartbeat.js';
 import { initSubagentSystem, cancelTask, getActiveTasks, getRecentTasks } from './subagent.js';
+import { readCodeAgentStatus } from './tools.js';
 
 const LAUNCHD_LABEL = 'com.skimpyclaw.gateway';
 
@@ -72,6 +73,7 @@ function getRunContext(ctx: Context): AgentRunContext {
     userId: ctx.from?.id ? String(ctx.from.id) : undefined,
     sessionId: ctx.chat?.id ? String(ctx.chat.id) : undefined,
     channel: 'telegram',
+    trigger: 'telegram',
     metadata: {
       username: ctx.from?.username,
       chatId: ctx.chat?.id,
@@ -247,11 +249,28 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
       })
       .join('\n');
 
+    // Coding agent status
+    const caStatus = readCodeAgentStatus();
+    let caLine = 'Coding Agent: idle';
+    if (caStatus && caStatus.status !== 'idle' as any) {
+      const isActive = caStatus.status === 'running' || caStatus.status === 'validating';
+      if (isActive) {
+        const elapsed = Math.round((Date.now() - new Date(caStatus.startedAt).getTime()) / 1000);
+        const elapsedStr = elapsed < 60 ? `${elapsed}s` : `${Math.floor(elapsed / 60)}m ${elapsed % 60}s`;
+        caLine = `Coding Agent: ${caStatus.status.toUpperCase()} (${caStatus.agent}, ${elapsedStr})\n  Task: ${caStatus.task.slice(0, 100)}`;
+      } else {
+        const dur = caStatus.durationSeconds != null ? `${caStatus.durationSeconds}s` : '-';
+        const validation = caStatus.validationPassed != null ? (caStatus.validationPassed ? ' ✅' : ' ❌') : '';
+        caLine = `Coding Agent: ${caStatus.status.toUpperCase()} (${dur}${validation})\n  Task: ${caStatus.task.slice(0, 100)}`;
+      }
+    }
+
     await ctx.reply(
       `Agent: ${cfg.agents.default}\n` +
       `Model: ${model}\n` +
       `Last message: ${last?.toLocaleString() || 'never'}\n` +
       `Silence until: ${silenceUntil?.toLocaleString() || 'not silenced'}\n\n` +
+      `${caLine}\n\n` +
       `Subagents: ${activeTasks.length}/${maxConcurrent} active (running: ${runningCount}, pending: ${pendingCount})\n` +
       `Recent (last ${recentTasks.length}): ✅ ${recentCompleted} • ❌ ${recentFailed} • 🚫 ${recentCancelled}\n` +
       `${activePreview ? `Active now:\n${activePreview}\n\n` : '\n'}` +

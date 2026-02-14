@@ -331,6 +331,8 @@ export interface ExecuteToolContext {
   fullConfig?: import('./types.js').Config;
   /** Conversation history for spawn_subagent */
   history?: import('./types.js').ChatMessage[];
+  /** Audit trace ID for recording tool events */
+  auditTraceId?: string;
 }
 
 export async function executeTool(
@@ -477,6 +479,37 @@ async function executeSpawnSubagent(input: Record<string, any>, context?: Execut
 const SKIMPYCLAW_ROOT = resolve(join(import.meta.dirname || process.cwd(), '..'));
 const CODE_AGENT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 const VALIDATE_TIMEOUT_MS = 60 * 1000; // 60 seconds
+const CODE_AGENT_STATUS_PATH = join(homedir(), '.skimpyclaw', 'logs', 'code-agent-status.json');
+
+export interface CodeAgentStatus {
+  status: 'running' | 'validating' | 'completed' | 'failed' | 'timeout';
+  agent: string;
+  task: string;
+  startedAt: string;
+  endedAt?: string;
+  durationSeconds?: number;
+  exitCode?: number | null;
+  validationPassed?: boolean;
+  outputPreview?: string;
+  liveOutput?: string;
+  error?: string;
+}
+
+function writeCodeAgentStatus(s: CodeAgentStatus): void {
+  try {
+    const dir = dirname(CODE_AGENT_STATUS_PATH);
+    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    writeFileSync(CODE_AGENT_STATUS_PATH, JSON.stringify(s, null, 2), 'utf-8');
+  } catch { /* best effort */ }
+}
+
+/** Read the current code agent status. Exported for API use. */
+export function readCodeAgentStatus(): CodeAgentStatus | null {
+  try {
+    if (!existsSync(CODE_AGENT_STATUS_PATH)) return null;
+    return JSON.parse(readFileSync(CODE_AGENT_STATUS_PATH, 'utf-8'));
+  } catch { return null; }
+}
 
 /** Build CLI args for code_with_agent. Exported for testing. */
 export function buildCodeAgentArgs(input: {
@@ -503,11 +536,14 @@ export function buildCodeAgentArgs(input: {
   }
 
   // Default: claude
+  // Each --allowedTools flag takes one tool name — repeat the flag per tool
+  const allowedTools = ['Edit', 'Read', 'Write', 'Bash', 'Glob', 'Grep'];
+  const toolArgs = allowedTools.flatMap(t => ['--allowedTools', t]);
   const args = [
     '-p',
     '--output-format', 'json',
     '--dangerously-skip-permissions',
-    '--allowedTools', 'Edit', 'Read', 'Write', 'Bash', 'Glob', 'Grep',
+    ...toolArgs,
     '--max-turns', maxTurns,
     '--append-system-prompt', 'Output text only. Never use say or TTS. Focus on the coding task. Run pnpm build && pnpm test to verify changes.',
   ];
@@ -545,16 +581,44 @@ async function executeCodeWithAgent(
   // Spawn the coding agent
   let stdout = '';
   let stderr = '';
+  const startedAt = new Date();
+
+  writeCodeAgentStatus({
+    status: 'running',
+    agent,
+    task: task.slice(0, 200),
+    startedAt: startedAt.toISOString(),
+  });
 
   try {
     const exitCode = await new Promise<number | null>((resolvePromise, reject) => {
+      // Clean env: strip CLAUDECODE (nested session detection) and sensitive keys
+      const spawnEnv = { ...process.env };
+      delete spawnEnv.CLAUDECODE;
       const proc = spawn(cmd, args, {
         cwd: workdir,
-        stdio: ['pipe', 'pipe', 'pipe'],
-        env: { ...process.env },
+        stdio: ['ignore', 'pipe', 'pipe'],  // ignore stdin — non-interactive
+        env: spawnEnv,
       });
 
-      proc.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString(); });
+      // Stream live output to status file every 3 seconds
+      let lastStatusWrite = 0;
+      const STATUS_WRITE_INTERVAL = 3000;
+
+      proc.stdout.on('data', (chunk: Buffer) => {
+        stdout += chunk.toString();
+        const now = Date.now();
+        if (now - lastStatusWrite > STATUS_WRITE_INTERVAL) {
+          lastStatusWrite = now;
+          writeCodeAgentStatus({
+            status: 'running',
+            agent,
+            task,
+            startedAt: startedAt.toISOString(),
+            liveOutput: stdout.slice(-5000), // last 5KB of output
+          });
+        }
+      });
       proc.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
 
       const timer = setTimeout(() => {
@@ -602,11 +666,30 @@ async function executeCodeWithAgent(
     }
 
     if (exitCode !== 0) {
+      writeCodeAgentStatus({
+        status: 'failed',
+        agent,
+        task: task.slice(0, 200),
+        startedAt: startedAt.toISOString(),
+        endedAt: new Date().toISOString(),
+        durationSeconds: Math.round((Date.now() - startedAt.getTime()) / 1000),
+        exitCode,
+        outputPreview: agentOutput.slice(0, 500),
+        error: `Exited with code ${exitCode}`,
+      });
       return `Error: ${agent} exited with code ${exitCode}\n\nSTDOUT:\n${agentOutput.slice(0, 10_000)}\n\nSTDERR:\n${stderr.slice(0, 5_000)}`;
     }
 
     // Post-validation gate
     if (validate) {
+      writeCodeAgentStatus({
+        status: 'validating',
+        agent,
+        task: task.slice(0, 200),
+        startedAt: startedAt.toISOString(),
+        outputPreview: agentOutput.slice(0, 500),
+      });
+
       const validateResult = await new Promise<string>((res) => {
         exec('pnpm build && pnpm test', {
           cwd: workdir,
@@ -621,15 +704,61 @@ async function executeCodeWithAgent(
         });
       });
 
+      const endedAt = new Date();
+      const duration = Math.round((endedAt.getTime() - startedAt.getTime()) / 1000);
+
       if (validateResult !== 'PASS') {
+        writeCodeAgentStatus({
+          status: 'failed',
+          agent,
+          task: task.slice(0, 200),
+          startedAt: startedAt.toISOString(),
+          endedAt: endedAt.toISOString(),
+          durationSeconds: duration,
+          exitCode,
+          validationPassed: false,
+          outputPreview: agentOutput.slice(0, 500),
+          error: 'Validation failed',
+        });
         return `Agent completed but validation failed.\n\nAgent output:\n${agentOutput.slice(0, 10_000)}\n\n${validateResult}`;
       }
 
+      writeCodeAgentStatus({
+        status: 'completed',
+        agent,
+        task: task.slice(0, 200),
+        startedAt: startedAt.toISOString(),
+        endedAt: endedAt.toISOString(),
+        durationSeconds: duration,
+        exitCode,
+        validationPassed: true,
+        outputPreview: agentOutput.slice(0, 500),
+      });
       return `${agentOutput.slice(0, 20_000)}\n\nBuild and tests pass.`;
     }
 
+    // No validation — mark complete
+    writeCodeAgentStatus({
+      status: 'completed',
+      agent,
+      task: task.slice(0, 200),
+      startedAt: startedAt.toISOString(),
+      endedAt: new Date().toISOString(),
+      durationSeconds: Math.round((Date.now() - startedAt.getTime()) / 1000),
+      exitCode,
+      outputPreview: agentOutput.slice(0, 500),
+    });
     return agentOutput.slice(0, 20_000);
   } catch (err) {
+    writeCodeAgentStatus({
+      status: err instanceof Error && err.message.includes('timed out') ? 'timeout' : 'failed',
+      agent,
+      task: task.slice(0, 200),
+      startedAt: startedAt.toISOString(),
+      endedAt: new Date().toISOString(),
+      durationSeconds: Math.round((Date.now() - startedAt.getTime()) / 1000),
+      error: err instanceof Error ? err.message : String(err),
+    });
     return `Error: ${err instanceof Error ? err.message : String(err)}\n\nSTDOUT:\n${stdout.slice(0, 5_000)}\n\nSTDERR:\n${stderr.slice(0, 5_000)}`;
   }
 }
