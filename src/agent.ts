@@ -826,6 +826,165 @@ export async function chatWithTools(
   };
 }
 
+// --- OpenAI-Compatible Tool Use Loop ---
+
+/**
+ * Convert Anthropic-format tool definitions to OpenAI function calling format.
+ */
+export function toOpenAITools(toolDefs: any[]): any[] {
+  return toolDefs.map(t => ({
+    type: 'function' as const,
+    function: {
+      name: t.name,
+      description: t.description,
+      parameters: t.input_schema,
+    },
+  }));
+}
+
+/**
+ * Agentic tool use loop for OpenAI-compatible providers (Kimi, MiniMax, etc.).
+ * Mirrors chatWithTools() but uses OpenAI function calling format.
+ */
+export async function openaiChatWithTools(
+  messages: ChatMessage[],
+  options: ChatOptions,
+  config: Config,
+  toolConfig: ToolConfig,
+  toolContext?: ExecuteToolContext
+): Promise<ToolChatResult> {
+  const resolvedModel = resolveModel(options.model, config);
+  const provider = getProvider(resolvedModel);
+  const modelId = stripProvider(resolvedModel);
+  const maxIterations = toolConfig.maxIterations || 20;
+
+  const client = openaiClients.get(provider);
+  if (!client) {
+    throw new Error(`OpenAI client not initialized for provider: ${provider}`);
+  }
+
+  // Resolve tools once at start
+  const includeSpawn = !!(toolContext?.chatId && toolContext?.fullConfig);
+  const toolDefs = await getToolDefinitions(toolConfig, { includeSpawnSubagent: includeSpawn });
+  const openaiTools = toOpenAITools(toolDefs);
+
+  // Build messages for OpenAI format
+  const apiMessages: any[] = messages.map(m => ({
+    role: m.role,
+    content: m.content,
+  }));
+
+  const toolLog: string[] = [];
+
+  for (let i = 0; i < maxIterations; i++) {
+    // Check abort signal
+    if (toolContext?.abortSignal?.aborted) {
+      return {
+        response: `[Cancelled after ${toolLog.length} tool calls]`,
+        toolCalls: toolLog,
+      };
+    }
+
+    console.log(`[agent:openai-tools] Iteration ${i + 1}/${maxIterations} (provider: ${provider}, model: ${modelId})`);
+
+    const genObs = startGenerationObservation(`openai:${modelId}`, {
+      input: { messages: apiMessages },
+      model: modelId,
+      modelParameters: {
+        max_tokens: options.maxTokens || 4096,
+        temperature: options.temperature,
+      },
+      metadata: { provider, iteration: i + 1 },
+    });
+
+    let completion: any;
+    try {
+      completion = await client.chat.completions.create({
+        model: modelId,
+        messages: apiMessages,
+        tools: openaiTools,
+        max_tokens: options.maxTokens || 4096,
+        temperature: options.temperature,
+      });
+      genObs?.update({
+        output: completion.choices[0]?.message,
+        usageDetails: toUsageDetails(completion.usage),
+      });
+      genObs?.end();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      genObs?.update({ level: 'ERROR', statusMessage: errorMessage, output: { error: errorMessage } });
+      genObs?.end();
+      throw err;
+    }
+
+    const message = completion.choices[0]?.message;
+    if (!message) {
+      return { response: '[No response from model]', toolCalls: toolLog };
+    }
+
+    // No tool calls — return the text response
+    if (completion.choices[0]?.finish_reason !== 'tool_calls' || !message.tool_calls?.length) {
+      let content = message.content || '';
+      // Strip <think>...</think> reasoning blocks (e.g. MiniMax M2.x)
+      content = content.replace(/<think>[\s\S]*?<\/think>\s*/g, '').trim();
+      if (!content && toolLog.length > 0) {
+        content = `[Completed with ${toolLog.length} tool calls, no text response]`;
+      }
+      return { response: content, toolCalls: toolLog };
+    }
+
+    // Append assistant message with tool_calls to conversation
+    apiMessages.push(message);
+
+    // Execute each tool call
+    for (const toolCall of message.tool_calls) {
+      const fnName = toolCall.function.name;
+      let args: Record<string, any>;
+      try {
+        args = JSON.parse(toolCall.function.arguments || '{}');
+      } catch {
+        args = {};
+      }
+
+      const inputStr = JSON.stringify(args).slice(0, 200);
+      console.log(`[agent:openai-tools] -> ${fnName}(${inputStr})`);
+
+      const toolObs = isLangfuseEnabled()
+        ? startObservation(`tool:${fnName}`, { input: args, metadata: { tool: fnName } }, { asType: 'tool' })
+        : null;
+
+      try {
+        const result = await executeTool(fnName, args, toolConfig, toolContext) || '';
+        const resultPreview = result.slice(0, 200) + (result.length > 200 ? '...' : '');
+        console.log(`[agent:openai-tools] <- ${resultPreview}`);
+        toolLog.push(`${fnName}(${inputStr}) → ${resultPreview}`);
+
+        toolObs?.update({ output: result });
+        toolObs?.end();
+
+        // Add tool result in OpenAI format
+        apiMessages.push({
+          role: 'tool',
+          tool_call_id: toolCall.id,
+          content: result,
+        });
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        toolObs?.update({ level: 'ERROR', statusMessage: errorMessage, output: { error: errorMessage } });
+        toolObs?.end();
+        throw err;
+      }
+    }
+  }
+
+  console.warn(`[agent:openai-tools] Max iterations (${maxIterations}) reached`);
+  return {
+    response: '[Tool use loop reached maximum iterations]',
+    toolCalls: toolLog,
+  };
+}
+
 // --- Agent Turn ---
 
 export async function runAgentTurn(
@@ -901,6 +1060,12 @@ export async function runAgentTurn(
       // Codex without tools
       const result = await codexChat(messages, modelId);
       response = result.response;
+    } else if (toolConfig?.enabled && openaiClients.has(provider)) {
+      // OpenAI-compatible tool_use loop (Kimi, MiniMax, etc.)
+      console.log(`[agent] Running OpenAI-compatible tools (provider: ${provider}, paths: ${toolConfig.allowedPaths.join(', ')})`);
+      const result = await openaiChatWithTools(messages, chatOptions, config, toolConfig, toolCtx);
+      response = result.response;
+      toolCalls = result.toolCalls;
     } else {
       response = await chat(messages, chatOptions, config);
     }
