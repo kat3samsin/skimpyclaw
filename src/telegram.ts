@@ -502,6 +502,73 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
     );
   });
 
+  // Handle photo messages
+  bot.on('message:photo', async (ctx) => {
+    const photos = ctx.message.photo;
+    if (!photos || photos.length === 0) return;
+
+    const chatId = ctx.chat?.id;
+    const stopTyping = startTypingIndicator(ctx);
+
+    try {
+      // Get the largest photo size (last element)
+      const photo = photos[photos.length - 1];
+
+      // Download the photo
+      const file = await bot!.api.getFile(photo.file_id);
+      const token = cfg.channels.telegram.token;
+      const imageUrl = `https://api.telegram.org/file/bot${token}/${file.file_path}`;
+      const imageResponse = await fetch(imageUrl);
+      const imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
+      const base64Image = imageBuffer.toString('base64');
+
+      // Determine media type from file path
+      const ext = file.file_path?.split('.').pop()?.toLowerCase() || 'jpg';
+      const mediaType = ext === 'png' ? 'image/png' : 'image/jpeg';
+
+      // Get caption or use default
+      const caption = ctx.message.caption || "What's in this image?";
+
+      // Build multi-part content array
+      const content: import('./types.js').ContentBlock[] = [
+        {
+          type: 'image' as const,
+          source: {
+            type: 'base64' as const,
+            media_type: mediaType,
+            data: base64Image,
+          },
+        },
+        {
+          type: 'text' as const,
+          text: caption,
+        },
+      ];
+
+      const history = chatId ? getHistory(chatId) : [];
+      const response = await runAgentTurn(
+        cfg.agents.default,
+        content,
+        cfg,
+        getCurrentModel(),
+        getTelegramToolConfig(cfg),
+        history,
+        getRunContext(ctx)
+      );
+
+      if (chatId) {
+        addToHistory(chatId, `[Image: ${caption}]`, response);
+      }
+
+      await sendLongMessage(ctx, response);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      await ctx.reply(`Error processing image: ${msg}`);
+    } finally {
+      stopTyping();
+    }
+  });
+
   // Handle plain text messages (treat as /ask)
   bot.on('message:text', async (ctx) => {
     const text = ctx.message.text;

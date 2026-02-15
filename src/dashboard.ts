@@ -808,6 +808,7 @@ td:first-child { color: var(--highlight); }
 .audit-trigger.api { background: rgba(15, 156, 102, 0.16); color: var(--success); }
 .audit-trigger.system { background: var(--surface-alt); color: var(--text-dim); border: 1px solid var(--border); }
 .audit-trigger.discord { background: rgba(88, 101, 242, 0.16); color: #7289da; }
+.audit-trigger.code_agent { background: rgba(147, 51, 234, 0.16); color: #9333ea; }
 
 .audit-summary {
   display: flex;
@@ -1002,6 +1003,7 @@ td:first-child { color: var(--highlight); }
         <option value="api">API</option>
         <option value="system">System</option>
         <option value="discord">Discord</option>
+        <option value="code_agent">Coding Agent</option>
       </select>
       <button class="btn btn-small" id="auditRefreshBtn">Refresh</button>
       <span id="auditCount" style="font-size:13px;color:var(--text-dim);margin-left:auto;"></span>

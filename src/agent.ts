@@ -7,7 +7,7 @@ import { join } from 'path';
 import { homedir } from 'os';
 import { getAgentDir } from './config.js';
 import { buildSafeSystemPrompt, sanitizeUserInput } from './security.js';
-import type { Config, ChatMessage, ChatOptions, ToolConfig, AgentRunContext } from './types.js';
+import type { Config, ChatMessage, ChatOptions, ToolConfig, AgentRunContext, ContentBlock } from './types.js';
 import { getToolDefinitions, executeTool, type ExecuteToolContext } from './tools.js';
 import { startTrace, addEvent, endTrace } from './audit.js';
 import { getLangfuseConfig, isLangfuseEnabled } from './langfuse.js';
@@ -317,13 +317,13 @@ async function codexChat(messages: ChatMessage[], model: string, toolConfig?: To
   const input: any[] = [];
   for (const m of messages) {
     if (m.role === 'system') {
-      instructions = m.content;
+      instructions = contentToText(m.content);
     } else {
       const contentType = m.role === 'assistant' ? 'output_text' : 'input_text';
       input.push({
         type: 'message',
         role: m.role,
-        content: [{ type: contentType, text: m.content }],
+        content: [{ type: contentType, text: contentToText(m.content) }],
       });
     }
   }
@@ -552,6 +552,44 @@ function stripProvider(model: string): string {
   return model;
 }
 
+/**
+ * Convert content array to OpenAI vision-compatible format.
+ * Preserves images as data URIs for multimodal models (Kimi, MiniMax, etc.).
+ */
+function toOpenAIContent(content: string | ContentBlock[]): string | Array<{ type: string; text?: string; image_url?: { url: string } }> {
+  if (typeof content === 'string') return content;
+
+  const parts: Array<{ type: string; text?: string; image_url?: { url: string } }> = [];
+  for (const block of content) {
+    if (block.type === 'text') {
+      parts.push({ type: 'text', text: block.text });
+    } else if (block.type === 'image') {
+      parts.push({
+        type: 'image_url',
+        image_url: { url: `data:${block.source.media_type};base64,${block.source.data}` },
+      });
+    }
+  }
+  return parts;
+}
+
+/**
+ * Convert content array to text-only for non-vision models.
+ */
+function contentToText(content: string | ContentBlock[]): string {
+  if (typeof content === 'string') return content;
+
+  const textParts: string[] = [];
+  for (const block of content) {
+    if (block.type === 'text') {
+      textParts.push(block.text);
+    } else if (block.type === 'image') {
+      textParts.push('[Image attached — vision not supported with this provider]');
+    }
+  }
+  return textParts.join('\n');
+}
+
 // --- Chat ---
 
 export async function chat(
@@ -573,7 +611,7 @@ export async function chat(
       .filter(m => m.role !== 'system')
       .map(m => ({
         role: m.role as 'user' | 'assistant',
-        content: m.content,
+        content: m.content as any,
       }));
 
     // Build request parameters
@@ -583,7 +621,7 @@ export async function chat(
       messages: chatMessages,
     };
 
-    const systemParam = buildSystemParam(systemMessage?.content);
+    const systemParam = buildSystemParam(contentToText(systemMessage?.content || ''));
     if (systemParam) {
       params.system = systemParam;
     }
@@ -644,9 +682,9 @@ export async function chat(
   // All other non-Anthropic providers use OpenAI-compatible API
   const client = openaiClients.get(provider);
   if (client) {
-    const openaiMessages = messages.map(m => ({
+    const openaiMessages: any[] = messages.map(m => ({
       role: m.role,
-      content: m.content,
+      content: toOpenAIContent(m.content),
     }));
 
     const genObs = startGenerationObservation(`openai:${modelId}`, {
@@ -716,9 +754,9 @@ export async function chatWithTools(
 
   // Build system param with OAuth identity guard
   const systemMessage = messages.find(m => m.role === 'system');
-  const systemParam = buildSystemParam(systemMessage?.content);
+  const systemParam = buildSystemParam(contentToText(systemMessage?.content || ''));
 
-  // Build initial messages (exclude system)
+  // Build initial messages (exclude system) — content arrays pass through for Anthropic vision
   const apiMessages: any[] = messages
     .filter(m => m.role !== 'system')
     .map(m => ({ role: m.role, content: m.content }));
@@ -904,10 +942,10 @@ export async function openaiChatWithTools(
   const toolDefs = await getToolDefinitions(toolConfig, { includeSpawnSubagent: includeSpawn });
   const openaiTools = toOpenAITools(toolDefs);
 
-  // Build messages for OpenAI format
+  // Build messages for OpenAI format — preserve images for vision models
   const apiMessages: any[] = messages.map(m => ({
     role: m.role,
-    content: m.content,
+    content: toOpenAIContent(m.content),
   }));
 
   const toolLog: string[] = [];
@@ -1042,7 +1080,7 @@ export async function openaiChatWithTools(
 
 export async function runAgentTurn(
   agentId: string,
-  userMessage: string,
+  userMessage: string | ContentBlock[],
   config: Config,
   modelOverride?: string,
   toolConfig?: ToolConfig,
@@ -1065,12 +1103,28 @@ export async function runAgentTurn(
     systemPrompt += channelHints[context.channel] || '';
   }
 
-  const sanitizedMessage = sanitizeUserInput(userMessage);
+  // Build user content — support both string and content arrays (for images)
+  let userContent: string | ContentBlock[];
+  let sanitizedMessage: string;
+  if (typeof userMessage === 'string') {
+    sanitizedMessage = sanitizeUserInput(userMessage);
+    userContent = sanitizedMessage;
+  } else {
+    // Content array (image + text) — sanitize text blocks only
+    userContent = userMessage.map(block => {
+      if (block.type === 'text') {
+        return { ...block, text: sanitizeUserInput(block.text) };
+      }
+      return block;
+    });
+    const textBlock = userMessage.find(b => b.type === 'text');
+    sanitizedMessage = textBlock?.type === 'text' ? textBlock.text : '[Image]';
+  }
 
   const messages: ChatMessage[] = [
     { role: 'system', content: systemPrompt },
     ...(history || []),
-    { role: 'user', content: sanitizedMessage },
+    { role: 'user', content: userContent },
   ];
 
   const model = modelOverride || agentConfig.model;

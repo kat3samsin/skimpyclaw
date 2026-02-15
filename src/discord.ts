@@ -330,6 +330,66 @@ async function handleIncomingMessage(message: Message): Promise<void> {
     return;
   }
 
+  // Check for image attachments
+  const imageAttachments = message.attachments.filter(
+    a => a.contentType?.startsWith('image/')
+  );
+
+  if (imageAttachments.size > 0) {
+    const attachment = imageAttachments.first()!;
+    const stopTyping = startTypingIndicator(message);
+
+    try {
+      // Download the image
+      const imageResponse = await fetch(attachment.url);
+      const imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
+      const base64Image = imageBuffer.toString('base64');
+
+      // Determine media type
+      const mediaType = attachment.contentType || 'image/jpeg';
+
+      // Get message text or use default
+      const caption = message.content.trim() || "What's in this image?";
+
+      // Build multi-part content array
+      const content: import('./types.js').ContentBlock[] = [
+        {
+          type: 'image' as const,
+          source: {
+            type: 'base64' as const,
+            media_type: mediaType,
+            data: base64Image,
+          },
+        },
+        {
+          type: 'text' as const,
+          text: caption,
+        },
+      ];
+
+      const key = conversationKey(message);
+      const history = getHistory(key);
+      const response = await runAgentTurn(
+        config.agents.default,
+        content,
+        config,
+        getCurrentModel(),
+        getDiscordToolConfig(config),
+        history,
+        getDiscordRunContext(message)
+      );
+
+      addToHistory(key, `[Image: ${caption}]`, response);
+      await sendLongText(message, response);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      await message.reply(`Error processing image: ${msg}`);
+    } finally {
+      stopTyping();
+    }
+    return;
+  }
+
   const text = message.content.trim();
   if (!text) return;
 

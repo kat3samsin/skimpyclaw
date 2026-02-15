@@ -5,6 +5,7 @@ import { join, resolve, dirname, sep } from 'path';
 import { homedir } from 'os';
 import { exec, spawn } from 'child_process';
 import { isBashCommandSafe } from './security.js';
+import { startTrace, addEvent, endTrace } from './audit.js';
 import type { ToolConfig } from './types.js';
 
 // Claude Code canonical tool names (stealth mode for OAuth compatibility)
@@ -477,7 +478,7 @@ async function executeSpawnSubagent(input: Record<string, any>, context?: Execut
 // --- Code With Agent Executor ---
 
 const SKIMPYCLAW_ROOT = resolve(join(import.meta.dirname || process.cwd(), '..'));
-const CODE_AGENT_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+const CODE_AGENT_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
 const VALIDATE_TIMEOUT_MS = 60 * 1000; // 60 seconds
 const CODE_AGENT_STATUS_PATH = join(homedir(), '.skimpyclaw', 'logs', 'code-agent-status.json');
 
@@ -585,6 +586,16 @@ async function executeCodeWithAgent(
   }
 
   const validate = input.validate !== false; // default true
+
+  // Start audit trace
+  const traceId = startTrace('code_agent');
+  addEvent(traceId, {
+    type: 'spawn',
+    summary: `${agent}: ${task.slice(0, 150)}`,
+    durationMs: 0,
+    detail: { agent, workdir, model: input.model, validate },
+  });
+
   const { cmd, args } = buildCodeAgentArgs({
     task,
     agent,
@@ -636,14 +647,19 @@ async function executeCodeWithAgent(
       });
       proc.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
 
+      let timedOut = false;
       const timer = setTimeout(() => {
+        timedOut = true;
         proc.kill('SIGTERM');
-        reject(new Error(`${agent} agent timed out after 5 minutes`));
       }, CODE_AGENT_TIMEOUT_MS);
 
       proc.on('close', (code) => {
         clearTimeout(timer);
-        resolvePromise(code);
+        if (timedOut) {
+          reject(new Error(`${agent} agent timed out after ${CODE_AGENT_TIMEOUT_MS / 60000} minutes`));
+        } else {
+          resolvePromise(code);
+        }
       });
 
       proc.on('error', (err) => {
@@ -681,6 +697,8 @@ async function executeCodeWithAgent(
     }
 
     if (exitCode !== 0) {
+      addEvent(traceId, { type: 'error', summary: `${agent} exited with code ${exitCode}`, durationMs: Date.now() - startedAt.getTime() });
+      await endTrace(traceId, 'error');
       writeCodeAgentStatus({
         status: 'failed',
         agent,
@@ -723,6 +741,8 @@ async function executeCodeWithAgent(
       const duration = Math.round((endedAt.getTime() - startedAt.getTime()) / 1000);
 
       if (validateResult !== 'PASS') {
+        addEvent(traceId, { type: 'validation', summary: 'Build/test validation failed', durationMs: Date.now() - startedAt.getTime() });
+        await endTrace(traceId, 'error');
         writeCodeAgentStatus({
           status: 'failed',
           agent,
@@ -738,6 +758,8 @@ async function executeCodeWithAgent(
         return `Agent completed but validation failed.\n\nAgent output:\n${agentOutput.slice(0, 10_000)}\n\n${validateResult}`;
       }
 
+      addEvent(traceId, { type: 'validation', summary: 'Build/test validation passed', durationMs: Date.now() - startedAt.getTime() });
+      await endTrace(traceId, 'ok');
       writeCodeAgentStatus({
         status: 'completed',
         agent,
@@ -753,6 +775,8 @@ async function executeCodeWithAgent(
     }
 
     // No validation — mark complete
+    addEvent(traceId, { type: 'complete', summary: `${agent} completed (no validation)`, durationMs: Date.now() - startedAt.getTime() });
+    await endTrace(traceId, 'ok');
     writeCodeAgentStatus({
       status: 'completed',
       agent,
@@ -765,6 +789,9 @@ async function executeCodeWithAgent(
     });
     return agentOutput.slice(0, 20_000);
   } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    addEvent(traceId, { type: 'error', summary: errMsg.slice(0, 200), durationMs: Date.now() - startedAt.getTime() });
+    await endTrace(traceId, 'error');
     writeCodeAgentStatus({
       status: err instanceof Error && err.message.includes('timed out') ? 'timeout' : 'failed',
       agent,
@@ -772,9 +799,9 @@ async function executeCodeWithAgent(
       startedAt: startedAt.toISOString(),
       endedAt: new Date().toISOString(),
       durationSeconds: Math.round((Date.now() - startedAt.getTime()) / 1000),
-      error: err instanceof Error ? err.message : String(err),
+      error: errMsg,
     });
-    return `Error: ${err instanceof Error ? err.message : String(err)}\n\nSTDOUT:\n${stdout.slice(0, 5_000)}\n\nSTDERR:\n${stderr.slice(0, 5_000)}`;
+    return `Error: ${errMsg}\n\nSTDOUT:\n${stdout.slice(0, 5_000)}\n\nSTDERR:\n${stderr.slice(0, 5_000)}`;
   }
 }
 

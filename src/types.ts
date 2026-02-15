@@ -174,9 +174,25 @@ export interface SubagentTask {
   abortController: AbortController;
 }
 
+export type ImageContentBlock = {
+  type: 'image';
+  source: {
+    type: 'base64';
+    media_type: string;
+    data: string;
+  };
+};
+
+export type TextContentBlock = {
+  type: 'text';
+  text: string;
+};
+
+export type ContentBlock = TextContentBlock | ImageContentBlock;
+
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
-  content: string;
+  content: string | ContentBlock[];
 }
 
 export interface ChatOptions {
@@ -206,7 +222,7 @@ export interface AuditEvent {
 
 export interface AuditTrace {
   traceId: string;
-  trigger: 'telegram' | 'cron' | 'api' | 'system' | 'discord';
+  trigger: 'telegram' | 'cron' | 'api' | 'system' | 'discord' | 'code_agent';
   status: 'ok' | 'error';
   startedAt: string;
   endedAt: string;
