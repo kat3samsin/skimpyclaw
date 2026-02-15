@@ -507,7 +507,22 @@ function writeCodeAgentStatus(s: CodeAgentStatus): void {
 export function readCodeAgentStatus(): CodeAgentStatus | null {
   try {
     if (!existsSync(CODE_AGENT_STATUS_PATH)) return null;
-    return JSON.parse(readFileSync(CODE_AGENT_STATUS_PATH, 'utf-8'));
+    const status = JSON.parse(readFileSync(CODE_AGENT_STATUS_PATH, 'utf-8')) as CodeAgentStatus;
+
+    // Detect stale "running" status — process died without updating
+    if ((status.status === 'running' || status.status === 'validating') && status.startedAt) {
+      const elapsed = Date.now() - new Date(status.startedAt).getTime();
+      const staleThreshold = CODE_AGENT_TIMEOUT_MS + 60_000; // timeout + 1 min buffer
+      if (elapsed > staleThreshold) {
+        status.status = 'failed';
+        status.error = 'Process appears to have died (status stuck for >' + Math.round(staleThreshold / 60000) + 'm)';
+        status.endedAt = new Date().toISOString();
+        status.durationSeconds = Math.round(elapsed / 1000);
+        writeCodeAgentStatus(status); // persist the fix
+      }
+    }
+
+    return status;
   } catch { return null; }
 }
 
