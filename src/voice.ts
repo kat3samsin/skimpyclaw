@@ -1,0 +1,333 @@
+// Voice transcription — local Whisper CLI (free) with API fallback
+import { existsSync, readFileSync, unlinkSync } from 'fs';
+import { execSync } from 'child_process';
+import { basename, dirname, join } from 'path';
+import type { VoiceConfig, VoiceProviderConfig } from './types.js';
+
+export interface TranscriptionResult {
+  text: string;
+  duration?: number;
+  provider: string;
+}
+
+// --- Local Whisper CLI ---
+
+/** Detect available local transcription CLI. Priority: whisper-cli (C++) > whisper (Python). */
+interface LocalWhisperInfo {
+  path: string;
+  type: 'cpp' | 'python';
+}
+
+function detectLocalWhisper(): LocalWhisperInfo | null {
+  // Prefer whisper.cpp (much faster)
+  try {
+    const cppPath = execSync('which whisper-cli', { encoding: 'utf-8' }).trim();
+    if (cppPath) return { path: cppPath, type: 'cpp' };
+  } catch { /* not found */ }
+
+  // Fallback to Python whisper
+  try {
+    const pyPath = execSync('which whisper', { encoding: 'utf-8' }).trim();
+    if (pyPath) return { path: pyPath, type: 'python' };
+  } catch { /* not found */ }
+
+  return null;
+}
+
+const LOCAL_WHISPER = detectLocalWhisper();
+
+/** Detect if ffmpeg is available for audio conversion. */
+const HAS_FFMPEG = (() => {
+  try {
+    execSync('which ffmpeg', { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] });
+    return true;
+  } catch { return false; }
+})();
+
+/** Formats that whisper-cli can read natively. */
+const WHISPER_CPP_NATIVE_FORMATS = new Set(['wav', 'mp3', 'ogg', 'flac']);
+
+/**
+ * Convert audio to 16kHz mono WAV for whisper-cli.
+ * Telegram sends .oga (Ogg/Opus) which whisper-cli can't read despite claiming ogg support.
+ * Returns the WAV path (caller must clean up) or the original path if already compatible.
+ */
+function convertToWav(audioPath: string): { wavPath: string; needsCleanup: boolean } {
+  const ext = audioPath.split('.').pop()?.toLowerCase() || '';
+
+  // WAV is already native — no conversion needed
+  if (ext === 'wav') {
+    return { wavPath: audioPath, needsCleanup: false };
+  }
+
+  // For formats whisper-cli claims to support natively, try them as-is
+  // (but .oga is NOT in this list — it's Ogg/Opus, not Ogg/Vorbis)
+  if (WHISPER_CPP_NATIVE_FORMATS.has(ext)) {
+    return { wavPath: audioPath, needsCleanup: false };
+  }
+
+  // Need conversion — requires ffmpeg
+  if (!HAS_FFMPEG) {
+    throw new Error(`Audio format .${ext} requires ffmpeg for conversion, but ffmpeg is not installed`);
+  }
+
+  const wavPath = audioPath.replace(/\.[^.]+$/, '.wav');
+  try {
+    execSync(
+      `ffmpeg -i "${audioPath}" -ar 16000 -ac 1 -c:a pcm_s16le "${wavPath}" -y`,
+      { encoding: 'utf-8', timeout: 30_000, stdio: ['ignore', 'pipe', 'pipe'] }
+    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`ffmpeg conversion failed: ${msg}`);
+  }
+
+  if (!existsSync(wavPath)) {
+    throw new Error(`ffmpeg conversion produced no output: ${wavPath}`);
+  }
+
+  return { wavPath, needsCleanup: true };
+}
+
+// whisper.cpp model path — use small model if available, fall back to tiny
+const WHISPER_CPP_MODEL = (() => {
+  const shareDir = '/opt/homebrew/share/whisper-cpp';
+  for (const model of ['ggml-small.bin', 'ggml-base.bin', 'for-tests-ggml-tiny.bin']) {
+    const p = join(shareDir, model);
+    if (existsSync(p)) return p;
+  }
+  return process.env.WHISPER_CPP_MODEL || '';
+})();
+
+/**
+ * Transcribe using whisper.cpp (whisper-cli).
+ * Much faster than Python whisper — runs in ~1-3s for short audio.
+ */
+async function transcribeWithWhisperCpp(audioPath: string, cliPath: string): Promise<TranscriptionResult> {
+  const startTime = Date.now();
+
+  if (!WHISPER_CPP_MODEL) {
+    throw new Error('No whisper.cpp model found. Download one to /opt/homebrew/share/whisper-cpp/');
+  }
+
+  // Convert to WAV if needed (Telegram sends .oga which whisper-cli can't read)
+  const { wavPath, needsCleanup } = convertToWav(audioPath);
+
+  const outputDir = dirname(wavPath);
+  const baseName = basename(wavPath).replace(/\.[^.]+$/, '');
+  const outputBase = join(outputDir, baseName);
+
+  try {
+    execSync(
+      `"${cliPath}" -m "${WHISPER_CPP_MODEL}" -otxt -of "${outputBase}" -np -nt "${wavPath}"`,
+      { encoding: 'utf-8', timeout: 60_000, stdio: ['ignore', 'pipe', 'pipe'] }
+    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`whisper-cli failed: ${msg}`);
+  } finally {
+    // Clean up converted WAV if we created one
+    if (needsCleanup) {
+      try { unlinkSync(wavPath); } catch { /* best effort */ }
+    }
+  }
+
+  const txtPath = `${outputBase}.txt`;
+  if (!existsSync(txtPath)) {
+    throw new Error(`whisper-cli output not found: ${txtPath}`);
+  }
+
+  const text = readFileSync(txtPath, 'utf-8').trim();
+  try { unlinkSync(txtPath); } catch { /* best effort */ }
+
+  const modelName = basename(WHISPER_CPP_MODEL).replace('ggml-', '').replace('.bin', '');
+  return {
+    text,
+    duration: (Date.now() - startTime) / 1000,
+    provider: `whisper.cpp (${modelName})`,
+  };
+}
+
+/**
+ * Transcribe using Python whisper CLI (openai-whisper package).
+ * Slower but works as fallback.
+ */
+async function transcribeWithPythonWhisper(audioPath: string, cliPath: string): Promise<TranscriptionResult> {
+  const startTime = Date.now();
+  const outputDir = dirname(audioPath);
+  const baseName = basename(audioPath).replace(/\.[^.]+$/, '');
+
+  try {
+    execSync(
+      `"${cliPath}" "${audioPath}" --model turbo --output_format txt --output_dir "${outputDir}"`,
+      { encoding: 'utf-8', timeout: 120_000, stdio: ['ignore', 'pipe', 'pipe'] }
+    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`Python whisper failed: ${msg}`);
+  }
+
+  const txtPath = join(outputDir, `${baseName}.txt`);
+  if (!existsSync(txtPath)) {
+    throw new Error(`Whisper output not found: ${txtPath}`);
+  }
+
+  const text = readFileSync(txtPath, 'utf-8').trim();
+  try { unlinkSync(txtPath); } catch { /* best effort */ }
+
+  return {
+    text,
+    duration: (Date.now() - startTime) / 1000,
+    provider: 'whisper (turbo)',
+  };
+}
+
+/** Transcribe using the best available local whisper. */
+async function transcribeWithLocalWhisper(audioPath: string): Promise<TranscriptionResult> {
+  if (!LOCAL_WHISPER) {
+    throw new Error('No local whisper available');
+  }
+
+  if (LOCAL_WHISPER.type === 'cpp') {
+    return transcribeWithWhisperCpp(audioPath, LOCAL_WHISPER.path);
+  }
+  return transcribeWithPythonWhisper(audioPath, LOCAL_WHISPER.path);
+}
+
+// --- API-based transcription ---
+
+/**
+ * Resolve the STT provider config from the voice config.
+ */
+function getSTTProvider(config: VoiceConfig): { name: string; provider: VoiceProviderConfig } | null {
+  const providers = config.providers;
+  if (!providers || Object.keys(providers).length === 0) {
+    return null;
+  }
+
+  const providerName = config.defaultProvider || Object.keys(providers)[0];
+  const provider = providers[providerName];
+  if (!provider) return null;
+
+  return { name: providerName, provider };
+}
+
+/**
+ * Resolve the API key, supporting ${ENV_VAR} syntax.
+ */
+function resolveApiKey(apiKey: string | undefined): string | undefined {
+  if (!apiKey) return undefined;
+  const envMatch = apiKey.match(/^\$\{(\w+)\}$/);
+  if (envMatch) {
+    return process.env[envMatch[1]];
+  }
+  return apiKey;
+}
+
+/**
+ * Transcribe audio using OpenAI-compatible Whisper API.
+ */
+async function transcribeWithAPI(
+  audioPath: string,
+  providerName: string,
+  provider: VoiceProviderConfig
+): Promise<TranscriptionResult> {
+  const startTime = Date.now();
+  const apiKey = resolveApiKey(provider.apiKey);
+
+  if (!apiKey) {
+    throw new Error(`No API key configured for voice provider "${providerName}"`);
+  }
+
+  const OpenAI = (await import('openai')).default;
+  const openai = new OpenAI({
+    apiKey,
+    ...(provider.baseURL ? { baseURL: provider.baseURL } : {}),
+  });
+
+  const model = provider.stt?.model || 'whisper-1';
+
+  const response = await openai.audio.transcriptions.create({
+    file: await OpenAI.toFile(readFileSync(audioPath), 'audio.ogg'),
+    model,
+  });
+
+  return {
+    text: response.text,
+    duration: (Date.now() - startTime) / 1000,
+    provider: `${providerName} (${model})`,
+  };
+}
+
+// --- Main entry point ---
+
+/**
+ * Transcribe audio file to text.
+ * Priority: local whisper CLI (free) → configured API provider.
+ */
+export async function transcribeAudio(
+  audioPath: string,
+  config: VoiceConfig
+): Promise<TranscriptionResult> {
+  if (!existsSync(audioPath)) {
+    throw new Error(`Audio file not found: ${audioPath}`);
+  }
+
+  // Try local whisper first (free, no API key needed)
+  if (LOCAL_WHISPER) {
+    try {
+      return await transcribeWithLocalWhisper(audioPath);
+    } catch (err) {
+      // Check if API fallback is actually available before swallowing the error
+      const sttProvider = getSTTProvider(config);
+      const apiKey = sttProvider ? resolveApiKey(sttProvider.provider.apiKey) : undefined;
+
+      if (!sttProvider || !apiKey) {
+        // No API configured — throw the original local whisper error
+        throw err;
+      }
+
+      console.warn('[voice] Local whisper failed, trying API fallback:', err instanceof Error ? err.message : err);
+      return transcribeWithAPI(audioPath, sttProvider.name, sttProvider.provider);
+    }
+  }
+
+  // No local whisper — try API provider directly
+  const sttProvider = getSTTProvider(config);
+  if (!sttProvider) {
+    throw new Error('No voice transcription available. Install whisper (pip install openai-whisper) or configure an API provider.');
+  }
+
+  return transcribeWithAPI(audioPath, sttProvider.name, sttProvider.provider);
+}
+
+/**
+ * Check if voice transcription is available.
+ */
+export function checkVoiceDependencies(config: VoiceConfig): { ok: boolean; missing: string[]; localWhisper: boolean } {
+  const missing: string[] = [];
+  const hasLocalWhisper = !!LOCAL_WHISPER;
+
+  if (hasLocalWhisper) {
+    // Local whisper available — no API needed
+    return { ok: true, missing: [], localWhisper: true };
+  }
+
+  // Check for API fallback
+  const sttProvider = getSTTProvider(config);
+  if (!sttProvider) {
+    missing.push('No local whisper CLI and no API providers configured. Install: pip install openai-whisper');
+    return { ok: false, missing, localWhisper: false };
+  }
+
+  const apiKey = resolveApiKey(sttProvider.provider.apiKey);
+  if (!apiKey) {
+    missing.push(`No local whisper and no API key for "${sttProvider.name}" (set ${sttProvider.provider.apiKey} env var)`);
+  }
+
+  return {
+    ok: missing.length === 0,
+    missing,
+    localWhisper: false,
+  };
+}
