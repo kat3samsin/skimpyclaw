@@ -710,7 +710,7 @@ async function executeCodeWithAgent(
         outputPreview: agentOutput.slice(0, 500),
         error: `Exited with code ${exitCode}`,
       });
-      return `Error: ${agent} exited with code ${exitCode}\n\nSTDOUT:\n${agentOutput.slice(0, 10_000)}\n\nSTDERR:\n${stderr.slice(0, 5_000)}`;
+      return `[CODING AGENT FAILED] Tell the user the coding agent failed.\n\nError: ${agent} exited with code ${exitCode}\n\nSTDOUT:\n${agentOutput.slice(0, 10_000)}\n\nSTDERR:\n${stderr.slice(0, 5_000)}`;
     }
 
     // Post-validation gate
@@ -755,7 +755,7 @@ async function executeCodeWithAgent(
           outputPreview: agentOutput.slice(0, 500),
           error: 'Validation failed',
         });
-        return `Agent completed but validation failed.\n\nAgent output:\n${agentOutput.slice(0, 10_000)}\n\n${validateResult}`;
+        return `[CODING AGENT FAILED] Tell the user the coding agent completed but build/test validation failed.\n\nAgent output:\n${agentOutput.slice(0, 10_000)}\n\n${validateResult}`;
       }
 
       addEvent(traceId, { type: 'validation', summary: 'Build/test validation passed', durationMs: Date.now() - startedAt.getTime() });
@@ -771,7 +771,7 @@ async function executeCodeWithAgent(
         validationPassed: true,
         outputPreview: agentOutput.slice(0, 500),
       });
-      return `${agentOutput.slice(0, 20_000)}\n\nBuild and tests pass.`;
+      return `[CODING AGENT COMPLETED] Summarize the results below for the user.\n\n${agentOutput.slice(0, 20_000)}\n\nBuild and tests pass.`;
     }
 
     // No validation — mark complete
@@ -787,7 +787,7 @@ async function executeCodeWithAgent(
       exitCode,
       outputPreview: agentOutput.slice(0, 500),
     });
-    return agentOutput.slice(0, 20_000);
+    return `[CODING AGENT COMPLETED] Summarize the results below for the user.\n\n${agentOutput.slice(0, 20_000)}`;
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
     addEvent(traceId, { type: 'error', summary: errMsg.slice(0, 200), durationMs: Date.now() - startedAt.getTime() });
@@ -801,7 +801,7 @@ async function executeCodeWithAgent(
       durationSeconds: Math.round((Date.now() - startedAt.getTime()) / 1000),
       error: errMsg,
     });
-    return `Error: ${errMsg}\n\nSTDOUT:\n${stdout.slice(0, 5_000)}\n\nSTDERR:\n${stderr.slice(0, 5_000)}`;
+    return `[CODING AGENT ERROR] Tell the user the coding agent encountered an error.\n\nError: ${errMsg}\n\nSTDOUT:\n${stdout.slice(0, 5_000)}\n\nSTDERR:\n${stderr.slice(0, 5_000)}`;
   }
 }
 

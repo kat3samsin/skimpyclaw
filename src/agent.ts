@@ -940,7 +940,14 @@ export async function openaiChatWithTools(
   // Resolve tools once at start
   const includeSpawn = !!(toolContext?.chatId && toolContext?.fullConfig);
   const toolDefs = await getToolDefinitions(toolConfig, { includeSpawnSubagent: includeSpawn });
-  const openaiTools = toOpenAITools(toolDefs);
+  const openaiTools: any[] = toOpenAITools(toolDefs);
+
+  // Inject Kimi $web_search builtin tool when using Moonshot/Kimi provider
+  const providerBaseURL = config.models.providers[provider]?.baseURL || '';
+  if (providerBaseURL.includes('kimi.com') || providerBaseURL.includes('moonshot.ai')) {
+    openaiTools.push({ type: 'builtin_function', function: { name: '$web_search' } });
+    console.log('[agent:openai-tools] Injected Kimi $web_search builtin tool');
+  }
 
   // Build messages for OpenAI format — preserve images for vision models
   const apiMessages: any[] = messages.map(m => ({
