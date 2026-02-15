@@ -24,7 +24,7 @@ import { getCurrentModel, setCurrentModel, getLastMessage } from './gateway.js';
 import { redactSecrets } from './security.js';
 import { getActiveTasks, getRecentTasks } from './subagent.js';
 import { readAuditTraces } from './audit.js';
-import { readCodeAgentStatus } from './tools.js';
+import { getAllCodeAgents, getCodeAgent } from './tools.js';
 
 function validateFilename(filename: string): boolean {
   return !filename.includes('..') && filename === basename(filename);
@@ -518,9 +518,19 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
     return { traces, total, limit, offset };
   });
 
-  // --- Code Agent Status ---
-  fastify.get('/api/dashboard/code-agent-status', async () => {
-    return readCodeAgentStatus() || { status: 'idle' };
+  // --- Code Agents (Multi-Agent) ---
+  fastify.get('/api/dashboard/code-agents', async () => {
+    const agents = getAllCodeAgents();
+    return { agents };
+  });
+
+  fastify.get<{ Params: { id: string } }>('/api/dashboard/code-agents/:id', async (request, reply) => {
+    const { id } = request.params;
+    const agent = getCodeAgent(id);
+    if (!agent) {
+      return reply.code(404).send({ error: 'Code agent not found' });
+    }
+    return agent;
   });
 
 }

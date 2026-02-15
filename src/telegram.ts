@@ -14,7 +14,7 @@ import { getCronJobs, runCronJob } from './cron.js';
 import { getCurrentModel, setCurrentModel, getLastMessage } from './gateway.js';
 import { runHeartbeatCheck } from './heartbeat.js';
 import { initSubagentSystem, cancelTask, getActiveTasks, getRecentTasks } from './subagent.js';
-import { readCodeAgentStatus } from './tools.js';
+import { getActiveCodeAgents, getRecentCodeAgents } from './tools.js';
 
 const LAUNCHD_LABEL = 'com.skimpyclaw.gateway';
 
@@ -249,20 +249,28 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
       })
       .join('\n');
 
-    // Coding agent status
-    const caStatus = readCodeAgentStatus();
-    let caLine = 'Coding Agent: idle';
-    if (caStatus && caStatus.status !== 'idle' as any) {
-      const isActive = caStatus.status === 'running' || caStatus.status === 'validating';
-      if (isActive) {
-        const elapsed = Math.round((Date.now() - new Date(caStatus.startedAt).getTime()) / 1000);
-        const elapsedStr = elapsed < 60 ? `${elapsed}s` : `${Math.floor(elapsed / 60)}m ${elapsed % 60}s`;
-        caLine = `Coding Agent: ${caStatus.status.toUpperCase()} (${caStatus.agent}, ${elapsedStr})\n  Task: ${caStatus.task.slice(0, 100)}`;
-      } else {
-        const dur = caStatus.durationSeconds != null ? `${caStatus.durationSeconds}s` : '-';
-        const validation = caStatus.validationPassed != null ? (caStatus.validationPassed ? ' ✅' : ' ❌') : '';
-        caLine = `Coding Agent: ${caStatus.status.toUpperCase()} (${dur}${validation})\n  Task: ${caStatus.task.slice(0, 100)}`;
-      }
+    // Coding agents status (multi-agent)
+    const caActive = getActiveCodeAgents();
+    const caRecent = getRecentCodeAgents(3);
+    const caAll = [...caActive, ...caRecent];
+    let caLine = 'Coding Agents: idle';
+    if (caAll.length > 0) {
+      const runningCount = caActive.length;
+      const completedCount = caRecent.filter(t => t.status === 'completed').length;
+      const failedCount = caRecent.filter(t => t.status === 'failed' || t.status === 'timeout').length;
+      const parts: string[] = [];
+      if (runningCount) parts.push(`${runningCount} running`);
+      if (completedCount) parts.push(`${completedCount} completed`);
+      if (failedCount) parts.push(`${failedCount} failed`);
+      caLine = `Coding Agents: ${parts.join(', ') || 'idle'}`;
+      const caPreview = caAll.slice(0, 5).map(t => {
+        const elapsed = t.durationSeconds != null
+          ? (t.durationSeconds < 60 ? `${t.durationSeconds}s` : `${Math.floor(t.durationSeconds / 60)}m ${t.durationSeconds % 60}s`)
+          : (Math.round((Date.now() - new Date(t.startedAt).getTime()) / 1000) + 's');
+        const taskPreview = t.task.length > 50 ? t.task.slice(0, 50) + '...' : t.task;
+        return `  ${t.id}: ${t.status.toUpperCase()} (${t.agent}, ${elapsed}) — ${taskPreview}`;
+      }).join('\n');
+      if (caPreview) caLine += '\n' + caPreview;
     }
 
     await ctx.reply(

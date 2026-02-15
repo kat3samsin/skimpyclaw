@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { existsSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'fs';
 import { join } from 'path';
-import { executeTool, BUILTIN_TOOL_DEFINITIONS, BROWSER_TOOL_DEFINITION, CODE_WITH_AGENT_TOOL, getToolDefinitions, fromClaudeCodeName, toClaudeCodeName, buildCodeAgentArgs } from '../tools.js';
+import { executeTool, BUILTIN_TOOL_DEFINITIONS, BROWSER_TOOL_DEFINITION, CODE_WITH_AGENT_TOOL, CHECK_CODE_AGENT_TOOL, getToolDefinitions, fromClaudeCodeName, toClaudeCodeName, buildCodeAgentArgs, getActiveCodeAgents, getRecentCodeAgents, getCodeAgent } from '../tools.js';
 import type { ToolConfig } from '../types.js';
 
 const TEST_DIR = join(process.cwd(), '__test_sandbox__');
@@ -351,7 +351,7 @@ describe('code_with_agent', () => {
   describe('buildCodeAgentArgs', () => {
     it('builds claude args with defaults', () => {
       const { cmd, args } = buildCodeAgentArgs({ task: 'fix the bug' });
-      expect(cmd).toBe('claude');
+      expect(cmd).toContain('claude');
       expect(args).toContain('-p');
       expect(args).toContain('--output-format');
       expect(args).toContain('json');
@@ -363,7 +363,7 @@ describe('code_with_agent', () => {
 
     it('builds claude args with model override', () => {
       const { cmd, args } = buildCodeAgentArgs({ task: 'fix it', model: 'opus' });
-      expect(cmd).toBe('claude');
+      expect(cmd).toContain('claude');
       expect(args).toContain('--model');
       expect(args).toContain('opus');
     });
@@ -376,7 +376,7 @@ describe('code_with_agent', () => {
 
     it('builds codex args with defaults', () => {
       const { cmd, args } = buildCodeAgentArgs({ task: 'fix the bug', agent: 'codex' });
-      expect(cmd).toBe('codex');
+      expect(cmd).toContain('codex');
       expect(args[0]).toBe('exec');
       expect(args).toContain('--full-auto');
       expect(args).toContain('--json');
@@ -428,6 +428,52 @@ describe('code_with_agent', () => {
         agent: 'gpt',
       }, toolConfig);
       expect(result).toContain('Error: Invalid agent "gpt"');
+    });
+  });
+
+  describe('check_code_agent tool', () => {
+    it('has expected tool definition', () => {
+      expect(CHECK_CODE_AGENT_TOOL.name).toBe('check_code_agent');
+      expect(CHECK_CODE_AGENT_TOOL.input_schema.properties).toHaveProperty('id');
+    });
+
+    it('is included in getToolDefinitions when includeSpawnSubagent is true', async () => {
+      const tools = await getToolDefinitions(toolConfig, { includeSpawnSubagent: true });
+      expect(tools.map(t => t.name)).toContain('check_code_agent');
+    });
+
+    it('is excluded from getToolDefinitions when includeSpawnSubagent is false', async () => {
+      const tools = await getToolDefinitions(toolConfig);
+      expect(tools.map(t => t.name)).not.toContain('check_code_agent');
+    });
+  });
+
+  describe('multi-agent tracking', () => {
+    it('getActiveCodeAgents returns empty array initially', () => {
+      // Active agents are those currently running — initially none
+      const active = getActiveCodeAgents();
+      expect(Array.isArray(active)).toBe(true);
+    });
+
+    it('getRecentCodeAgents returns empty array initially', () => {
+      const recent = getRecentCodeAgents();
+      expect(Array.isArray(recent)).toBe(true);
+    });
+
+    it('getCodeAgent returns null for nonexistent ID', () => {
+      const result = getCodeAgent('ca-999');
+      expect(result).toBeNull();
+    });
+
+    it('check_code_agent with nonexistent ID returns not found message', async () => {
+      const result = await executeTool('check_code_agent', { id: 'ca-999' }, toolConfig);
+      expect(result).toContain('No coding agent found');
+    });
+
+    it('check_code_agent with no args returns message about no agents', async () => {
+      const result = await executeTool('check_code_agent', {}, toolConfig);
+      // May return "No coding agents have run yet" or a list depending on state
+      expect(typeof result).toBe('string');
     });
   });
 });

@@ -6,6 +6,7 @@ import { initHeartbeat, stopHeartbeat } from './heartbeat.js';
 import { initActiveChannel, startActiveChannel, stopActiveChannel } from './channels.js';
 import { initProviders } from './agent.js';
 import { initLangfuse, shutdownLangfuse } from './langfuse.js';
+import { restoreCodeAgentTasks, setCodeAgentConfig } from './tools.js';
 
 export interface SkimpyClawRuntime {
   config: Config;
@@ -18,6 +19,8 @@ export async function startRuntime(config: Config): Promise<SkimpyClawRuntime> {
 
   initLangfuse(config);
   initProviders(config);
+  restoreCodeAgentTasks();
+  setCodeAgentConfig(config);
 
   const port = smokeTest ? (parseInt(process.env.SKIMPYCLAW_SMOKE_PORT || '19999', 10)) : config.gateway.port;
   const gateway = await createGateway(config);

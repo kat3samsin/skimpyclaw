@@ -36,7 +36,7 @@ export const MODEL_PRICING: Record<string, ModelPricing> = {
 
   // MiniMax models (https://platform.minimax.io/docs/pricing/pay-as-you-go)
   'minimax-m2.1': { inputPerMTok: 0.3, outputPerMTok: 1.2 },
-  'minimax-m2.5': { inputPerMTok: 0.2, outputPerMTok: 0.8 },
+  'minimax-m2.5': { inputPerMTok: 0.3, outputPerMTok: 1.2 },
   // Kimi/Moonshot models (https://platform.moonshot.ai/docs/pricing/chat.en-US)
   // kimi-k2.5 series - using cache miss pricing for input (non-cached)
   'kimi-k2.5': { inputPerMTok: 0.6, outputPerMTok: 3.0 }

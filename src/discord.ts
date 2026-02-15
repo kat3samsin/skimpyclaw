@@ -7,7 +7,8 @@ import { getCronJobs, runCronJob } from './cron.js';
 import { runAgentTurn } from './agent.js';
 import { runHeartbeatCheck } from './heartbeat.js';
 import { isAllowed, isRateLimited } from './security.js';
-import { readCodeAgentStatus } from './tools.js';
+import { getActiveCodeAgents, getRecentCodeAgents } from './tools.js';
+import { getActiveTasks, getRecentTasks, cancelTask } from './subagent.js';
 
 function getDiscordRunContext(message: Message): AgentRunContext {
   return {
@@ -29,6 +30,8 @@ const BOT_COMMANDS: { command: string; description: string }[] = [
   { command: 'compact', description: 'Compress conversation history' },
   { command: 'silence', description: 'Pause proactive messages' },
   { command: 'cron', description: 'List or run scheduled jobs' },
+  { command: 'tasks', description: 'Show active/recent agent tasks' },
+  { command: 'cancel', description: 'Cancel a running agent task' },
   { command: 'heartbeat', description: 'Trigger heartbeat check' },
 ];
 
@@ -186,19 +189,28 @@ async function handleCommand(message: Message, command: string, args: string[]):
     const jobs = getCronJobs();
     const jobList = jobs.map(j => `- ${j.name}: ${j.nextRun?.toLocaleString() || 'unknown'}`).join('\n');
 
-    const caStatus = readCodeAgentStatus();
-    let caLine = 'Coding Agent: idle';
-    if (caStatus && (caStatus.status as string) !== 'idle') {
-      const isActive = caStatus.status === 'running' || caStatus.status === 'validating';
-      if (isActive) {
-        const elapsed = Math.round((Date.now() - new Date(caStatus.startedAt).getTime()) / 1000);
-        const elapsedStr = elapsed < 60 ? `${elapsed}s` : `${Math.floor(elapsed / 60)}m ${elapsed % 60}s`;
-        caLine = `Coding Agent: ${caStatus.status.toUpperCase()} (${caStatus.agent}, ${elapsedStr})\n  Task: ${caStatus.task.slice(0, 100)}`;
-      } else {
-        const dur = caStatus.durationSeconds != null ? `${caStatus.durationSeconds}s` : '-';
-        const validation = caStatus.validationPassed != null ? (caStatus.validationPassed ? ' ✅' : ' ❌') : '';
-        caLine = `Coding Agent: ${caStatus.status.toUpperCase()} (${dur}${validation})\n  Task: ${caStatus.task.slice(0, 100)}`;
-      }
+    // Coding agents status (multi-agent)
+    const caActive = getActiveCodeAgents();
+    const caRecent = getRecentCodeAgents(3);
+    const caAll = [...caActive, ...caRecent];
+    let caLine = 'Coding Agents: idle';
+    if (caAll.length > 0) {
+      const runningCount = caActive.length;
+      const completedCount = caRecent.filter(t => t.status === 'completed').length;
+      const failedCount = caRecent.filter(t => t.status === 'failed' || t.status === 'timeout').length;
+      const parts: string[] = [];
+      if (runningCount) parts.push(`${runningCount} running`);
+      if (completedCount) parts.push(`${completedCount} completed`);
+      if (failedCount) parts.push(`${failedCount} failed`);
+      caLine = `Coding Agents: ${parts.join(', ') || 'idle'}`;
+      const caPreview = caAll.slice(0, 5).map(t => {
+        const elapsed = t.durationSeconds != null
+          ? (t.durationSeconds < 60 ? `${t.durationSeconds}s` : `${Math.floor(t.durationSeconds / 60)}m ${t.durationSeconds % 60}s`)
+          : (Math.round((Date.now() - new Date(t.startedAt).getTime()) / 1000) + 's');
+        const taskPreview = t.task.length > 50 ? t.task.slice(0, 50) + '...' : t.task;
+        return `  ${t.id}: ${t.status.toUpperCase()} (${t.agent}, ${elapsed}) — ${taskPreview}`;
+      }).join('\n');
+      if (caPreview) caLine += '\n' + caPreview;
     }
 
     await message.reply(
@@ -255,6 +267,55 @@ async function handleCommand(message: Message, command: string, args: string[]):
       await message.reply(`Heartbeat error: ${msg}`);
     } finally {
       stopTyping();
+    }
+    return;
+  }
+
+  if (command === 'tasks') {
+    const active = getActiveTasks();
+    const recent = getRecentTasks(5);
+
+    if (recent.length === 0) {
+      await message.reply('No agent tasks yet. Subagents spawn automatically for complex requests.');
+      return;
+    }
+
+    const formatTask = (t: typeof recent[0]) => {
+      const elapsed = ((t.completedAt || new Date()).getTime() - t.createdAt.getTime()) / 1000;
+      const elapsedStr = elapsed < 60 ? `${Math.round(elapsed)}s` : `${Math.round(elapsed / 60)}m`;
+      const status: Record<string, string> = {
+        pending: '⏳ Pending',
+        running: `🔄 Running (${elapsedStr})`,
+        completed: `✅ Done (${elapsedStr})`,
+        failed: `❌ Failed (${elapsedStr})`,
+        cancelled: '🚫 Cancelled',
+      };
+      const promptPreview = t.prompt.slice(0, 60) + (t.prompt.length > 60 ? '...' : '');
+      return `${t.id}: ${status[t.status] || t.status} [${t.type}] ${promptPreview}`;
+    };
+
+    const lines = recent.map(formatTask).join('\n');
+    await sendLongText(message, `Agent tasks:\n\n${lines}`);
+    return;
+  }
+
+  if (command === 'cancel') {
+    const id = rawArgs;
+    if (!id) {
+      await message.reply('Usage: /cancel <task-id>\nExample: /cancel t1');
+      return;
+    }
+
+    const task = cancelTask(id);
+    if (!task) {
+      await message.reply(`No task found: ${id}`);
+      return;
+    }
+
+    if (task.status === 'cancelled') {
+      await message.reply(`Cancelled ${id}.`);
+    } else {
+      await message.reply(`Task ${id} is already ${task.status}.`);
     }
     return;
   }

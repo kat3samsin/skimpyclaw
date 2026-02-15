@@ -1,4 +1,8 @@
-// Heartbeat: periodic health check that alerts via the active chat channel when needed
+/*
+ * Heartbeat module — periodically pings the AI agent to confirm the service
+ * is alive and responsive. Sends alerts via the active Telegram channel if
+ * the agent fails to reply with the expected HEARTBEAT_OK response.
+ */
 
 import type { Config, ToolConfig } from './types.js';
 import { join } from 'path';

@@ -1,3 +1,9 @@
+/*
+ * Channel management for messaging integrations (Telegram, Discord).
+ * Tracks the active channel, provides a unified adapter interface for
+ * initializing, starting, stopping, and sending proactive messages
+ * across supported platforms.
+ */
 import type { ChannelId, Config } from './types.js';
 
 type ChannelTarget = string | number;

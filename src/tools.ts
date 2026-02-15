@@ -4,7 +4,21 @@ import { readFileSync, writeFileSync, readdirSync, existsSync, statSync, mkdirSy
 import { join, resolve, dirname, sep } from 'path';
 import { homedir } from 'os';
 import { exec, spawn } from 'child_process';
+import { execSync } from 'child_process';
 import { isBashCommandSafe } from './security.js';
+
+/** Resolve full path for a CLI command. Falls back to the name itself if not found. */
+function resolveCliPath(name: string): string {
+  try {
+    return execSync(`which ${name}`, { encoding: 'utf-8' }).trim();
+  } catch {
+    return name;
+  }
+}
+
+// Resolve CLI paths once at import time so spawn doesn't get ENOENT
+const CLAUDE_CLI_PATH = resolveCliPath('claude');
+const CODEX_CLI_PATH = resolveCliPath('codex');
 import { startTrace, addEvent, endTrace } from './audit.js';
 import type { ToolConfig } from './types.js';
 
@@ -176,6 +190,19 @@ export const CODE_WITH_AGENT_TOOL = {
   },
 };
 
+// --- Check Code Agent Tool ---
+
+export const CHECK_CODE_AGENT_TOOL = {
+  name: 'check_code_agent',
+  description: 'Check status of running coding agents. Call with no args to list all, or with id to get details.',
+  input_schema: {
+    type: 'object' as const,
+    properties: {
+      id: { type: 'string', description: 'Agent ID (e.g. ca-1). Omit to list all active agents.' },
+    },
+  },
+};
+
 // --- MCP (mcporter) ---
 
 let mcpRuntime: any = null;
@@ -264,10 +291,11 @@ export async function getToolDefinitions(config?: ToolConfig, options?: { includ
   const mcpTools = await discoverMcpTools();
   tools.push(...mcpTools);
 
-  // Include spawn_subagent and code_with_agent tools when requested
+  // Include spawn_subagent, code_with_agent, and check_code_agent tools when requested
   if (options?.includeSpawnSubagent) {
     tools.push(SPAWN_SUBAGENT_TOOL);
     tools.push(CODE_WITH_AGENT_TOOL);
+    tools.push(CHECK_CODE_AGENT_TOOL);
   }
 
   return tools;
@@ -355,7 +383,12 @@ export async function executeTool(
 
     // Route code_with_agent
     if (name === 'code_with_agent') {
-      return await executeCodeWithAgent(input, config);
+      return await executeCodeWithAgent(input, config, context);
+    }
+
+    // Route check_code_agent
+    if (name === 'check_code_agent') {
+      return executeCheckCodeAgent(input);
     }
 
     // Map Claude Code names to internal names for built-in tools
@@ -475,56 +508,101 @@ async function executeSpawnSubagent(input: Record<string, any>, context?: Execut
   }
 }
 
-// --- Code With Agent Executor ---
+// --- Code With Agent Executor (Multi-Agent, Async) ---
 
 const SKIMPYCLAW_ROOT = resolve(join(import.meta.dirname || process.cwd(), '..'));
 const CODE_AGENT_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
 const VALIDATE_TIMEOUT_MS = 60 * 1000; // 60 seconds
-const CODE_AGENT_STATUS_PATH = join(homedir(), '.skimpyclaw', 'logs', 'code-agent-status.json');
+const CODE_AGENTS_DIR = join(homedir(), '.skimpyclaw', 'logs', 'code-agents');
 
-export interface CodeAgentStatus {
+export interface CodeAgentTask {
+  id: string;                    // "ca-1", "ca-2"
+  agent: string;                 // "claude" | "codex"
+  task: string;                  // full prompt
   status: 'running' | 'validating' | 'completed' | 'failed' | 'timeout';
-  agent: string;
-  task: string;
+  chatId?: number;               // for notification delivery
   startedAt: string;
   endedAt?: string;
   durationSeconds?: number;
   exitCode?: number | null;
   validationPassed?: boolean;
-  outputPreview?: string;
-  liveOutput?: string;
+  outputPreview?: string;        // first 500 chars of result
+  liveOutput?: string;           // last 5KB for streaming
   error?: string;
+  workdir: string;
+  model?: string;
 }
 
-function writeCodeAgentStatus(s: CodeAgentStatus): void {
+// In-memory tracking
+let codeAgentCounter = 0;
+const codeAgentTasks = new Map<string, CodeAgentTask>();
+
+// Reference to config for notifications — set via setCodeAgentConfig()
+let _codeAgentConfig: import('./types.js').Config | null = null;
+
+/** Set the config reference used for auto-notifications on completion. */
+export function setCodeAgentConfig(config: import('./types.js').Config): void {
+  _codeAgentConfig = config;
+}
+
+function writeCodeAgentTask(task: CodeAgentTask): void {
   try {
-    const dir = dirname(CODE_AGENT_STATUS_PATH);
-    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-    writeFileSync(CODE_AGENT_STATUS_PATH, JSON.stringify(s, null, 2), 'utf-8');
+    if (!existsSync(CODE_AGENTS_DIR)) mkdirSync(CODE_AGENTS_DIR, { recursive: true });
+    const filePath = join(CODE_AGENTS_DIR, `${task.id}.json`);
+    writeFileSync(filePath, JSON.stringify(task, null, 2), 'utf-8');
   } catch { /* best effort */ }
 }
 
-/** Read the current code agent status. Exported for API use. */
-export function readCodeAgentStatus(): CodeAgentStatus | null {
+/** Get all active (running/validating) code agents. */
+export function getActiveCodeAgents(): CodeAgentTask[] {
+  return Array.from(codeAgentTasks.values())
+    .filter(t => t.status === 'running' || t.status === 'validating');
+}
+
+/** Get recent code agents (completed/failed/timeout), newest first. */
+export function getRecentCodeAgents(limit = 20): CodeAgentTask[] {
+  return Array.from(codeAgentTasks.values())
+    .filter(t => t.status !== 'running' && t.status !== 'validating')
+    .sort((a, b) => (b.endedAt || b.startedAt).localeCompare(a.endedAt || a.startedAt))
+    .slice(0, limit);
+}
+
+/** Get all code agents (active + recent), newest first. */
+export function getAllCodeAgents(): CodeAgentTask[] {
+  return Array.from(codeAgentTasks.values())
+    .sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+}
+
+/** Get a single code agent by ID. */
+export function getCodeAgent(id: string): CodeAgentTask | null {
+  return codeAgentTasks.get(id) || null;
+}
+
+/** Restore code agent tasks from disk on startup. */
+export function restoreCodeAgentTasks(): void {
   try {
-    if (!existsSync(CODE_AGENT_STATUS_PATH)) return null;
-    const status = JSON.parse(readFileSync(CODE_AGENT_STATUS_PATH, 'utf-8')) as CodeAgentStatus;
-
-    // Detect stale "running" status — process died without updating
-    if ((status.status === 'running' || status.status === 'validating') && status.startedAt) {
-      const elapsed = Date.now() - new Date(status.startedAt).getTime();
-      const staleThreshold = CODE_AGENT_TIMEOUT_MS + 60_000; // timeout + 1 min buffer
-      if (elapsed > staleThreshold) {
-        status.status = 'failed';
-        status.error = 'Process appears to have died (status stuck for >' + Math.round(staleThreshold / 60000) + 'm)';
-        status.endedAt = new Date().toISOString();
-        status.durationSeconds = Math.round(elapsed / 1000);
-        writeCodeAgentStatus(status); // persist the fix
-      }
+    if (!existsSync(CODE_AGENTS_DIR)) return;
+    const files = readdirSync(CODE_AGENTS_DIR).filter(f => f.endsWith('.json'));
+    let maxCounter = 0;
+    for (const file of files) {
+      try {
+        const task = JSON.parse(readFileSync(join(CODE_AGENTS_DIR, file), 'utf-8')) as CodeAgentTask;
+        // On startup, any task still "running" or "validating" means the managing process died
+        if (task.status === 'running' || task.status === 'validating') {
+          const elapsed = task.startedAt ? Date.now() - new Date(task.startedAt).getTime() : 0;
+          task.status = 'failed';
+          task.error = 'Process interrupted (server restarted)';
+          task.endedAt = new Date().toISOString();
+          task.durationSeconds = Math.round(elapsed / 1000);
+          writeCodeAgentTask(task);
+        }
+        codeAgentTasks.set(task.id, task);
+        const num = parseInt(task.id.replace('ca-', ''), 10);
+        if (num > maxCounter) maxCounter = num;
+      } catch { /* skip corrupt files */ }
     }
-
-    return status;
-  } catch { return null; }
+    codeAgentCounter = maxCounter;
+  } catch { /* best effort */ }
 }
 
 /** Build CLI args for code_with_agent. Exported for testing. */
@@ -548,7 +626,7 @@ export function buildCodeAgentArgs(input: {
     if (input.workdir) args.push('-C', input.workdir);
     if (input.model) args.push('-m', input.model);
     args.push(input.task);
-    return { cmd: 'codex', args };
+    return { cmd: CODEX_CLI_PATH, args };
   }
 
   // Default: claude
@@ -565,12 +643,13 @@ export function buildCodeAgentArgs(input: {
   ];
   if (input.model) args.push('--model', input.model);
   args.push(input.task);
-  return { cmd: 'claude', args };
+  return { cmd: CLAUDE_CLI_PATH, args };
 }
 
 async function executeCodeWithAgent(
   input: Record<string, any>,
   config: ToolConfig,
+  context?: ExecuteToolContext,
 ): Promise<string> {
   const task = input.task as string;
   if (!task) return 'Error: task is required';
@@ -585,7 +664,76 @@ async function executeCodeWithAgent(
     return `Error: Working directory not allowed. Permitted: ${config.allowedPaths.join(', ')}`;
   }
 
+  // Concurrency check — share limit with subagents
+  const maxConcurrent = context?.fullConfig?.subagents?.maxConcurrent ?? 5;
+  const activeCount = getActiveCodeAgents().length;
+  if (activeCount >= maxConcurrent) {
+    return `Error: Concurrency limit reached (${activeCount}/${maxConcurrent} coding agents running). Wait for one to finish or increase subagents.maxConcurrent.`;
+  }
+
   const validate = input.validate !== false; // default true
+
+  // Create task with unique ID
+  const id = `ca-${++codeAgentCounter}`;
+  const startedAt = new Date();
+  const caTask: CodeAgentTask = {
+    id,
+    agent,
+    task,
+    status: 'running',
+    chatId: context?.chatId,
+    startedAt: startedAt.toISOString(),
+    workdir,
+    model: input.model,
+  };
+  codeAgentTasks.set(id, caTask);
+  writeCodeAgentTask(caTask);
+
+  // Fire-and-forget: spawn background process
+  runCodeAgentBackground(id, agent, task, workdir, validate, input, startedAt).catch((err) => {
+    console.error(`[code-agent] Background error for ${id}:`, err);
+  });
+
+  const taskPreview = task.length > 100 ? task.slice(0, 100) + '...' : task;
+  return `Started coding agent ${id} (${agent}). Task: ${taskPreview}\n\nUse check_code_agent to poll status.`;
+}
+
+/** Send auto-notification to active channel on completion/failure. */
+async function notifyCodeAgentResult(task: CodeAgentTask): Promise<void> {
+  if (!_codeAgentConfig) return;
+  const { sendActiveChannelProactiveMessage } = await import('./channels.js');
+
+  const dur = task.durationSeconds != null
+    ? (task.durationSeconds < 60 ? `${task.durationSeconds}s` : `${Math.floor(task.durationSeconds / 60)}m ${task.durationSeconds % 60}s`)
+    : '?';
+  const taskPreview = task.task.length > 120 ? task.task.slice(0, 120) + '...' : task.task;
+
+  let message: string;
+  if (task.status === 'completed') {
+    const validation = task.validationPassed ? ' Build/tests pass.' : '';
+    message = `✅ Coding agent ${task.id} completed (${dur}).${validation}\n\nTask: ${taskPreview}`;
+    if (task.outputPreview) message += `\n\nResult: ${task.outputPreview}`;
+  } else if (task.status === 'timeout') {
+    message = `⏰ Coding agent ${task.id} timed out after ${dur}.\n\nTask: ${taskPreview}`;
+  } else {
+    message = `❌ Coding agent ${task.id} failed (${dur}).\n\nTask: ${taskPreview}`;
+    if (task.error) message += `\n\nError: ${task.error}`;
+  }
+
+  await sendActiveChannelProactiveMessage(_codeAgentConfig, message).catch(() => {});
+}
+
+/** Background execution of a coding agent. Updates task status throughout. */
+async function runCodeAgentBackground(
+  id: string,
+  agent: string,
+  task: string,
+  workdir: string,
+  validate: boolean,
+  input: Record<string, any>,
+  startedAt: Date,
+): Promise<void> {
+  const caTask = codeAgentTasks.get(id)!;
 
   // Start audit trace
   const traceId = startTrace('code_agent');
@@ -604,30 +752,19 @@ async function executeCodeWithAgent(
     max_turns: input.max_turns,
   });
 
-  // Spawn the coding agent
   let stdout = '';
   let stderr = '';
-  const startedAt = new Date();
-
-  writeCodeAgentStatus({
-    status: 'running',
-    agent,
-    task: task.slice(0, 200),
-    startedAt: startedAt.toISOString(),
-  });
 
   try {
     const exitCode = await new Promise<number | null>((resolvePromise, reject) => {
-      // Clean env: strip CLAUDECODE (nested session detection) and sensitive keys
       const spawnEnv = { ...process.env };
       delete spawnEnv.CLAUDECODE;
       const proc = spawn(cmd, args, {
         cwd: workdir,
-        stdio: ['ignore', 'pipe', 'pipe'],  // ignore stdin — non-interactive
+        stdio: ['ignore', 'pipe', 'pipe'],
         env: spawnEnv,
       });
 
-      // Stream live output to status file every 3 seconds
       let lastStatusWrite = 0;
       const STATUS_WRITE_INTERVAL = 3000;
 
@@ -636,13 +773,8 @@ async function executeCodeWithAgent(
         const now = Date.now();
         if (now - lastStatusWrite > STATUS_WRITE_INTERVAL) {
           lastStatusWrite = now;
-          writeCodeAgentStatus({
-            status: 'running',
-            agent,
-            task,
-            startedAt: startedAt.toISOString(),
-            liveOutput: stdout.slice(-5000), // last 5KB of output
-          });
+          caTask.liveOutput = stdout.slice(-5000);
+          writeCodeAgentTask(caTask);
         }
       });
       proc.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
@@ -671,7 +803,6 @@ async function executeCodeWithAgent(
     // Parse output
     let agentOutput: string;
     if (agent === 'claude') {
-      // Claude JSON output: parse result field
       try {
         const parsed = JSON.parse(stdout);
         agentOutput = parsed.result || parsed.content || stdout;
@@ -679,7 +810,6 @@ async function executeCodeWithAgent(
         agentOutput = stdout || stderr || '(no output)';
       }
     } else {
-      // Codex JSONL: extract output_text lines
       const lines = stdout.trim().split('\n');
       const outputs: string[] = [];
       for (const line of lines) {
@@ -689,7 +819,6 @@ async function executeCodeWithAgent(
             outputs.push(obj.output_text || obj.text || '');
           }
         } catch {
-          // Non-JSON line, include as-is
           if (line.trim()) outputs.push(line);
         }
       }
@@ -699,29 +828,26 @@ async function executeCodeWithAgent(
     if (exitCode !== 0) {
       addEvent(traceId, { type: 'error', summary: `${agent} exited with code ${exitCode}`, durationMs: Date.now() - startedAt.getTime() });
       await endTrace(traceId, 'error');
-      writeCodeAgentStatus({
+      Object.assign(caTask, {
         status: 'failed',
-        agent,
-        task: task.slice(0, 200),
-        startedAt: startedAt.toISOString(),
         endedAt: new Date().toISOString(),
         durationSeconds: Math.round((Date.now() - startedAt.getTime()) / 1000),
         exitCode,
         outputPreview: agentOutput.slice(0, 500),
         error: `Exited with code ${exitCode}`,
+        liveOutput: undefined,
       });
-      return `[CODING AGENT FAILED] Tell the user the coding agent failed.\n\nError: ${agent} exited with code ${exitCode}\n\nSTDOUT:\n${agentOutput.slice(0, 10_000)}\n\nSTDERR:\n${stderr.slice(0, 5_000)}`;
+      writeCodeAgentTask(caTask);
+      await notifyCodeAgentResult(caTask);
+      return;
     }
 
     // Post-validation gate
     if (validate) {
-      writeCodeAgentStatus({
-        status: 'validating',
-        agent,
-        task: task.slice(0, 200),
-        startedAt: startedAt.toISOString(),
-        outputPreview: agentOutput.slice(0, 500),
-      });
+      caTask.status = 'validating';
+      caTask.outputPreview = agentOutput.slice(0, 500);
+      caTask.liveOutput = undefined;
+      writeCodeAgentTask(caTask);
 
       const validateResult = await new Promise<string>((res) => {
         exec('pnpm build && pnpm test', {
@@ -743,11 +869,8 @@ async function executeCodeWithAgent(
       if (validateResult !== 'PASS') {
         addEvent(traceId, { type: 'validation', summary: 'Build/test validation failed', durationMs: Date.now() - startedAt.getTime() });
         await endTrace(traceId, 'error');
-        writeCodeAgentStatus({
+        Object.assign(caTask, {
           status: 'failed',
-          agent,
-          task: task.slice(0, 200),
-          startedAt: startedAt.toISOString(),
           endedAt: endedAt.toISOString(),
           durationSeconds: duration,
           exitCode,
@@ -755,54 +878,95 @@ async function executeCodeWithAgent(
           outputPreview: agentOutput.slice(0, 500),
           error: 'Validation failed',
         });
-        return `[CODING AGENT FAILED] Tell the user the coding agent completed but build/test validation failed.\n\nAgent output:\n${agentOutput.slice(0, 10_000)}\n\n${validateResult}`;
+        writeCodeAgentTask(caTask);
+        await notifyCodeAgentResult(caTask);
+        return;
       }
 
       addEvent(traceId, { type: 'validation', summary: 'Build/test validation passed', durationMs: Date.now() - startedAt.getTime() });
       await endTrace(traceId, 'ok');
-      writeCodeAgentStatus({
+      Object.assign(caTask, {
         status: 'completed',
-        agent,
-        task: task.slice(0, 200),
-        startedAt: startedAt.toISOString(),
         endedAt: endedAt.toISOString(),
         durationSeconds: duration,
         exitCode,
         validationPassed: true,
         outputPreview: agentOutput.slice(0, 500),
       });
-      return `[CODING AGENT COMPLETED] Summarize the results below for the user.\n\n${agentOutput.slice(0, 20_000)}\n\nBuild and tests pass.`;
+      writeCodeAgentTask(caTask);
+      await notifyCodeAgentResult(caTask);
+      return;
     }
 
     // No validation — mark complete
     addEvent(traceId, { type: 'complete', summary: `${agent} completed (no validation)`, durationMs: Date.now() - startedAt.getTime() });
     await endTrace(traceId, 'ok');
-    writeCodeAgentStatus({
+    Object.assign(caTask, {
       status: 'completed',
-      agent,
-      task: task.slice(0, 200),
-      startedAt: startedAt.toISOString(),
       endedAt: new Date().toISOString(),
       durationSeconds: Math.round((Date.now() - startedAt.getTime()) / 1000),
       exitCode,
       outputPreview: agentOutput.slice(0, 500),
+      liveOutput: undefined,
     });
-    return `[CODING AGENT COMPLETED] Summarize the results below for the user.\n\n${agentOutput.slice(0, 20_000)}`;
+    writeCodeAgentTask(caTask);
+    await notifyCodeAgentResult(caTask);
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
     addEvent(traceId, { type: 'error', summary: errMsg.slice(0, 200), durationMs: Date.now() - startedAt.getTime() });
     await endTrace(traceId, 'error');
-    writeCodeAgentStatus({
-      status: err instanceof Error && err.message.includes('timed out') ? 'timeout' : 'failed',
-      agent,
-      task: task.slice(0, 200),
-      startedAt: startedAt.toISOString(),
+    Object.assign(caTask, {
+      status: errMsg.includes('timed out') ? 'timeout' : 'failed',
       endedAt: new Date().toISOString(),
       durationSeconds: Math.round((Date.now() - startedAt.getTime()) / 1000),
       error: errMsg,
+      liveOutput: undefined,
     });
-    return `[CODING AGENT ERROR] Tell the user the coding agent encountered an error.\n\nError: ${errMsg}\n\nSTDOUT:\n${stdout.slice(0, 5_000)}\n\nSTDERR:\n${stderr.slice(0, 5_000)}`;
+    writeCodeAgentTask(caTask);
+    await notifyCodeAgentResult(caTask);
   }
+}
+
+/** Execute check_code_agent tool — list all or get details for one agent. */
+function executeCheckCodeAgent(input: Record<string, any>): string {
+  const id = input.id as string | undefined;
+
+  if (id) {
+    const task = getCodeAgent(id);
+    if (!task) return `No coding agent found with ID "${id}".`;
+    return JSON.stringify({
+      id: task.id,
+      agent: task.agent,
+      status: task.status,
+      task: task.task,
+      workdir: task.workdir,
+      model: task.model,
+      startedAt: task.startedAt,
+      endedAt: task.endedAt,
+      durationSeconds: task.durationSeconds,
+      exitCode: task.exitCode,
+      validationPassed: task.validationPassed,
+      outputPreview: task.outputPreview,
+      error: task.error,
+    }, null, 2);
+  }
+
+  // List all agents (active first, then recent)
+  const active = getActiveCodeAgents();
+  const recent = getRecentCodeAgents(10);
+  const all = [...active, ...recent];
+
+  if (all.length === 0) return 'No coding agents have run yet.';
+
+  const lines = all.map(t => {
+    const elapsed = t.durationSeconds != null
+      ? (t.durationSeconds < 60 ? `${t.durationSeconds}s` : `${Math.floor(t.durationSeconds / 60)}m`)
+      : (Math.round((Date.now() - new Date(t.startedAt).getTime()) / 1000) + 's');
+    const taskPreview = t.task.length > 60 ? t.task.slice(0, 60) + '...' : t.task;
+    return `${t.id}: ${t.status.toUpperCase()} (${t.agent}, ${elapsed}) — ${taskPreview}`;
+  });
+
+  return lines.join('\n');
 }
 
 function executeListDirectory(path: string, config: ToolConfig): string {

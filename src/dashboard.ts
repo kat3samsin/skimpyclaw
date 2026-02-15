@@ -983,12 +983,7 @@ td:first-child { color: var(--highlight); }
   <!-- Coding Agent Tab -->
   <div class="tab-panel" id="panel-coding-agent">
     <div id="caStatus">
-      <div class="ca-status-card">
-        <div class="ca-status-header">
-          <span class="ca-status-badge idle">IDLE</span>
-        </div>
-        <div class="empty">No coding agent has run yet. Send a coding task via Telegram or Discord.</div>
-      </div>
+      <div class="empty">No coding agents have run yet. Send a coding task via Telegram or Discord.</div>
     </div>
   </div>
 
@@ -1543,7 +1538,7 @@ document.getElementById('logAutoRefresh').addEventListener('change', (e) => {
   }
 });
 
-// --- Coding Agent Tab ---
+// --- Coding Agent Tab (Multi-Agent) ---
 let caPollingInterval = null;
 
 function stopCaPolling() {
@@ -1554,72 +1549,91 @@ function stopCaPolling() {
 }
 
 function startCaPolling() {
-  loadCaStatus();
+  loadCaAgents();
   stopCaPolling();
-  caPollingInterval = setInterval(loadCaStatus, 3000);
+  caPollingInterval = setInterval(loadCaAgents, 3000);
 }
 
-async function loadCaStatus() {
+async function loadCaAgents() {
   try {
-    const data = await api('code-agent-status');
-    renderCaStatus(data);
+    const data = await api('code-agents');
+    renderCaAgents(data.agents || []);
   } catch {
     document.getElementById('caStatus').innerHTML =
-      '<div class="ca-status-card"><div class="empty">Failed to load status</div></div>';
+      '<div class="empty">Failed to load coding agents</div>';
   }
 }
 
-function renderCaStatus(data) {
+function renderCaAgents(agents) {
   var el = document.getElementById('caStatus');
-  if (!data || data.status === 'idle') {
-    el.innerHTML = '<div class="ca-status-card">' +
-      '<div class="ca-status-header"><span class="ca-status-badge idle">IDLE</span></div>' +
-      '<div class="empty">No coding agent has run yet.</div></div>';
+  if (!agents || agents.length === 0) {
+    el.innerHTML = '<div class="empty">No coding agents have run yet.</div>';
     return;
   }
 
-  var isActive = data.status === 'running' || data.status === 'validating';
-  var spinner = isActive ? '<span class="ca-spinner"></span>' : '';
-  var elapsed = '';
-  if (data.startedAt) {
-    var secs = data.durationSeconds != null ? data.durationSeconds
-      : Math.round((Date.now() - new Date(data.startedAt).getTime()) / 1000);
-    elapsed = secs < 60 ? secs + 's' : Math.floor(secs / 60) + 'm ' + (secs % 60) + 's';
+  var html = '<table style="width:100%;border-collapse:collapse;font-size:14px;">' +
+    '<thead><tr style="border-bottom:2px solid var(--border);text-align:left;">' +
+    '<th style="padding:8px 12px;">ID</th>' +
+    '<th style="padding:8px 12px;">Status</th>' +
+    '<th style="padding:8px 12px;">Agent</th>' +
+    '<th style="padding:8px 12px;">Task</th>' +
+    '<th style="padding:8px 12px;">Duration</th>' +
+    '</tr></thead><tbody>';
+
+  for (var i = 0; i < agents.length; i++) {
+    var a = agents[i];
+    var isActive = a.status === 'running' || a.status === 'validating';
+    var spinner = isActive ? '<span class="ca-spinner"></span> ' : '';
+    var secs = a.durationSeconds != null ? a.durationSeconds
+      : Math.round((Date.now() - new Date(a.startedAt).getTime()) / 1000);
+    var elapsed = secs < 60 ? secs + 's' : Math.floor(secs / 60) + 'm ' + (secs % 60) + 's';
+    var taskPreview = (a.task || '').length > 80 ? a.task.slice(0, 80) + '...' : (a.task || '');
+
+    html += '<tr style="border-bottom:1px solid var(--border);cursor:pointer;" onclick="toggleCaDetail(\\'' + esc(a.id) + '\\')">' +
+      '<td style="padding:8px 12px;font-family:var(--mono);font-weight:600;">' + esc(a.id) + '</td>' +
+      '<td style="padding:8px 12px;"><span class="ca-status-badge ' + esc(a.status) + '">' + spinner + esc(a.status.toUpperCase()) + '</span></td>' +
+      '<td style="padding:8px 12px;">' + esc(a.agent || '-') + '</td>' +
+      '<td style="padding:8px 12px;">' + esc(taskPreview) + '</td>' +
+      '<td style="padding:8px 12px;font-family:var(--mono);">' + elapsed + '</td>' +
+      '</tr>';
+
+    // Expandable detail row
+    html += '<tr id="ca-detail-' + esc(a.id) + '" style="display:none;"><td colspan="5" style="padding:12px 16px;">';
+    html += '<div class="ca-meta">';
+    if (a.model) html += '<span>Model: ' + esc(a.model) + '</span>';
+    if (a.startedAt) html += '<span>Started: ' + formatDate(a.startedAt) + '</span>';
+    if (a.endedAt) html += '<span>Ended: ' + formatDate(a.endedAt) + '</span>';
+    if (a.validationPassed != null) html += '<span>Tests: ' + (a.validationPassed ? 'PASS' : 'FAIL') + '</span>';
+    if (a.workdir) html += '<span>Dir: ' + esc(a.workdir) + '</span>';
+    html += '</div>';
+
+    if (a.task) html += '<div class="ca-task" style="margin-top:8px;">' + esc(a.task) + '</div>';
+
+    var output = a.liveOutput || a.outputPreview;
+    if (output) html += '<div class="ca-output" style="margin-top:8px;">' + esc(output) + '</div>';
+    if (a.error) html += '<div class="ca-output ca-error" style="margin-top:8px;">' + esc(a.error) + '</div>';
+    html += '</td></tr>';
   }
 
-  var metaHtml = '<div class="ca-meta">';
-  metaHtml += '<span>Agent: ' + esc(data.agent || '-') + '</span>';
-  if (elapsed) metaHtml += '<span>Duration: ' + elapsed + '</span>';
-  if (data.startedAt) metaHtml += '<span>Started: ' + formatDate(data.startedAt) + '</span>';
-  if (data.endedAt) metaHtml += '<span>Ended: ' + formatDate(data.endedAt) + '</span>';
-  if (data.validationPassed != null) metaHtml += '<span>Tests: ' + (data.validationPassed ? 'PASS' : 'FAIL') + '</span>';
-  metaHtml += '</div>';
+  html += '</tbody></table>';
+  el.innerHTML = html;
 
-  var outputHtml = '';
-  var output = data.liveOutput || data.outputPreview;
-  if (output) {
-    outputHtml = '<div class="ca-output">' + esc(output) + '</div>';
+  // Auto-scroll live output for active agents
+  for (var j = 0; j < agents.length; j++) {
+    if (agents[j].status === 'running' || agents[j].status === 'validating') {
+      var detailEl = document.getElementById('ca-detail-' + agents[j].id);
+      if (detailEl && detailEl.style.display !== 'none') {
+        var outputEl = detailEl.querySelector('.ca-output');
+        if (outputEl) outputEl.scrollTop = outputEl.scrollHeight;
+      }
+    }
   }
+}
 
-  var errorHtml = '';
-  if (data.error) {
-    errorHtml = '<div class="ca-output ca-error">' + esc(data.error) + '</div>';
-  }
-
-  el.innerHTML = '<div class="ca-status-card">' +
-    '<div class="ca-status-header">' +
-      '<span class="ca-status-badge ' + esc(data.status) + '">' + spinner + ' ' + esc(data.status.toUpperCase()) + '</span>' +
-    '</div>' +
-    '<div class="ca-task">' + esc(data.task || '') + '</div>' +
-    metaHtml +
-    outputHtml +
-    errorHtml +
-  '</div>';
-
-  // Auto-scroll output to bottom if active
-  if (isActive) {
-    var outputEl = el.querySelector('.ca-output');
-    if (outputEl) outputEl.scrollTop = outputEl.scrollHeight;
+function toggleCaDetail(id) {
+  var row = document.getElementById('ca-detail-' + id);
+  if (row) {
+    row.style.display = row.style.display === 'none' ? '' : 'none';
   }
 }
 
