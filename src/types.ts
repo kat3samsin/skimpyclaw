@@ -58,6 +58,7 @@ export interface Config {
   subagents?: {
     maxConcurrent?: number;   // Max parallel subagents (default 5)
     maxRetries?: number;      // Max retries on failure (default 2)
+    defaultCodeAgent?: string; // Default coding agent CLI: "claude" | "codex" | "kimi" (default: "claude")
   };
   langfuse?: {
     enabled?: boolean;

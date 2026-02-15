@@ -181,7 +181,7 @@ export const CODE_WITH_AGENT_TOOL = {
     type: 'object' as const,
     properties: {
       task: { type: 'string', description: 'Detailed coding task. Be specific: what to change, why, which files, expected behavior.' },
-      agent: { type: 'string', enum: ['claude', 'codex', 'kimi'], description: 'Which coding CLI to use (default: claude)' },
+      agent: { type: 'string', enum: ['claude', 'codex', 'kimi'], description: 'Which coding CLI to use. Omit to use configured default.' },
       workdir: { type: 'string', description: 'Working directory (default: SkimpyClaw repo root)' },
       model: { type: 'string', description: 'Model override (e.g. opus, gpt-5.3-codex)' },
       max_turns: { type: 'number', description: 'Max agentic turns, Claude only (default: 30)' },
@@ -634,7 +634,6 @@ export function buildCodeAgentArgs(input: {
     const args = [
       '--yolo',
       '-p', input.task,
-      '--final-message-only',
     ];
     if (input.workdir) args.push('-w', input.workdir);
     if (input.model) args.push('-m', input.model);
@@ -666,7 +665,8 @@ async function executeCodeWithAgent(
   const task = input.task as string;
   if (!task) return 'Error: task is required';
 
-  const agent = (input.agent as string) || 'claude';
+  const configDefault = context?.fullConfig?.subagents?.defaultCodeAgent || 'claude';
+  const agent = (input.agent as string) || configDefault;
   if (!['claude', 'codex', 'kimi'].includes(agent)) {
     return `Error: Invalid agent "${agent}". Must be claude, codex, or kimi.`;
   }
