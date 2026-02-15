@@ -19,6 +19,7 @@ function resolveCliPath(name: string): string {
 // Resolve CLI paths once at import time so spawn doesn't get ENOENT
 const CLAUDE_CLI_PATH = resolveCliPath('claude');
 const CODEX_CLI_PATH = resolveCliPath('codex');
+const KIMI_CLI_PATH = resolveCliPath('kimi');
 import { startTrace, addEvent, endTrace } from './audit.js';
 import type { ToolConfig } from './types.js';
 
@@ -180,7 +181,7 @@ export const CODE_WITH_AGENT_TOOL = {
     type: 'object' as const,
     properties: {
       task: { type: 'string', description: 'Detailed coding task. Be specific: what to change, why, which files, expected behavior.' },
-      agent: { type: 'string', enum: ['claude', 'codex'], description: 'Which coding CLI to use (default: claude)' },
+      agent: { type: 'string', enum: ['claude', 'codex', 'kimi'], description: 'Which coding CLI to use (default: claude)' },
       workdir: { type: 'string', description: 'Working directory (default: SkimpyClaw repo root)' },
       model: { type: 'string', description: 'Model override (e.g. opus, gpt-5.3-codex)' },
       max_turns: { type: 'number', description: 'Max agentic turns, Claude only (default: 30)' },
@@ -629,6 +630,17 @@ export function buildCodeAgentArgs(input: {
     return { cmd: CODEX_CLI_PATH, args };
   }
 
+  if (agent === 'kimi') {
+    const args = [
+      '--yolo',
+      '-p', input.task,
+      '--final-message-only',
+    ];
+    if (input.workdir) args.push('-w', input.workdir);
+    if (input.model) args.push('-m', input.model);
+    return { cmd: KIMI_CLI_PATH, args };
+  }
+
   // Default: claude
   // Each --allowedTools flag takes one tool name — repeat the flag per tool
   const allowedTools = ['Edit', 'Read', 'Write', 'Bash', 'Glob', 'Grep'];
@@ -655,8 +667,8 @@ async function executeCodeWithAgent(
   if (!task) return 'Error: task is required';
 
   const agent = (input.agent as string) || 'claude';
-  if (!['claude', 'codex'].includes(agent)) {
-    return `Error: Invalid agent "${agent}". Must be claude or codex.`;
+  if (!['claude', 'codex', 'kimi'].includes(agent)) {
+    return `Error: Invalid agent "${agent}". Must be claude, codex, or kimi.`;
   }
 
   const workdir = resolve(input.workdir || SKIMPYCLAW_ROOT);

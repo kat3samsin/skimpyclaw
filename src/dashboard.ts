@@ -1571,15 +1571,20 @@ function renderCaAgents(agents) {
     return;
   }
 
-  var html = '<table style="width:100%;border-collapse:collapse;font-size:14px;">' +
-    '<thead><tr style="border-bottom:2px solid var(--border);text-align:left;">' +
-    '<th style="padding:8px 12px;">ID</th>' +
-    '<th style="padding:8px 12px;">Status</th>' +
-    '<th style="padding:8px 12px;">Agent</th>' +
-    '<th style="padding:8px 12px;">Task</th>' +
-    '<th style="padding:8px 12px;">Duration</th>' +
-    '</tr></thead><tbody>';
+  // Save expanded states and scroll positions before re-rendering
+  var expandedIds = new Set();
+  var scrollPositions = {};
+  document.querySelectorAll('.audit-events.expanded').forEach(function(detailEl) {
+    if (detailEl.id) {
+      expandedIds.add(detailEl.id);
+      var outputEl = detailEl.querySelector('.ca-output');
+      if (outputEl) {
+        scrollPositions[detailEl.id] = outputEl.scrollTop;
+      }
+    }
+  });
 
+  var html = '';
   for (var i = 0; i < agents.length; i++) {
     var a = agents[i];
     var isActive = a.status === 'running' || a.status === 'validating';
@@ -1588,41 +1593,87 @@ function renderCaAgents(agents) {
       : Math.round((Date.now() - new Date(a.startedAt).getTime()) / 1000);
     var elapsed = secs < 60 ? secs + 's' : Math.floor(secs / 60) + 'm ' + (secs % 60) + 's';
     var taskPreview = (a.task || '').length > 80 ? a.task.slice(0, 80) + '...' : (a.task || '');
+    var detailId = 'ca-detail-' + (a.id || '').replace(/[^a-zA-Z0-9]/g, '');
 
-    html += '<tr style="border-bottom:1px solid var(--border);cursor:pointer;" onclick="toggleCaDetail(\\'' + esc(a.id) + '\\')">' +
-      '<td style="padding:8px 12px;font-family:var(--mono);font-weight:600;">' + esc(a.id) + '</td>' +
-      '<td style="padding:8px 12px;"><span class="ca-status-badge ' + esc(a.status) + '">' + spinner + esc(a.status.toUpperCase()) + '</span></td>' +
-      '<td style="padding:8px 12px;">' + esc(a.agent || '-') + '</td>' +
-      '<td style="padding:8px 12px;">' + esc(taskPreview) + '</td>' +
-      '<td style="padding:8px 12px;font-family:var(--mono);">' + elapsed + '</td>' +
-      '</tr>';
-
-    // Expandable detail row
-    html += '<tr id="ca-detail-' + esc(a.id) + '" style="display:none;"><td colspan="5" style="padding:12px 16px;">';
-    html += '<div class="ca-meta">';
-    if (a.model) html += '<span>Model: ' + esc(a.model) + '</span>';
-    if (a.startedAt) html += '<span>Started: ' + formatDate(a.startedAt) + '</span>';
-    if (a.endedAt) html += '<span>Ended: ' + formatDate(a.endedAt) + '</span>';
-    if (a.validationPassed != null) html += '<span>Tests: ' + (a.validationPassed ? 'PASS' : 'FAIL') + '</span>';
-    if (a.workdir) html += '<span>Dir: ' + esc(a.workdir) + '</span>';
+    html += '<div class="audit-entry">';
+    html += '<div class="audit-header">';
+    html += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">';
+    html += '<span class="audit-id">' + esc(a.id) + '</span>';
+    html += '<span class="ca-status-badge ' + esc(a.status) + '">' + spinner + esc(a.status.toUpperCase()) + '</span>';
+    if (a.agent) html += '<span style="font-size:13px;color:var(--text-dim);">' + esc(a.agent) + '</span>';
+    html += '</div>';
+    html += '<div class="audit-meta">';
+    html += '<span>' + elapsed + '</span>';
+    if (a.model) html += '<span>' + esc(a.model) + '</span>';
+    if (a.startedAt) html += '<span>' + formatDate(a.startedAt) + '</span>';
+    html += '</div>';
     html += '</div>';
 
-    if (a.task) html += '<div class="ca-task" style="margin-top:8px;">' + esc(a.task) + '</div>';
+    // Task preview
+    if (taskPreview) {
+      html += '<div class="audit-summary"><span>' + esc(taskPreview) + '</span></div>';
+    }
 
-    var output = a.liveOutput || a.outputPreview;
-    if (output) html += '<div class="ca-output" style="margin-top:8px;">' + esc(output) + '</div>';
-    if (a.error) html += '<div class="ca-output ca-error" style="margin-top:8px;">' + esc(a.error) + '</div>';
-    html += '</td></tr>';
+    // Expandable details
+    var hasDetails = a.task || a.liveOutput || a.outputPreview || a.error || a.endedAt || a.validationPassed != null;
+    if (hasDetails) {
+      html += '<div class="audit-events-toggle" onclick="toggleCaDetail(\\'' + detailId + '\\', this)">\\u25B6 Details</div>';
+      html += '<div class="audit-events" id="' + detailId + '">';
+
+      // Meta details
+      html += '<div class="ca-meta" style="margin-bottom:8px;">';
+      if (a.startedAt) html += '<span>Started: ' + formatDate(a.startedAt) + '</span>';
+      if (a.endedAt) html += '<span>Ended: ' + formatDate(a.endedAt) + '</span>';
+      if (a.validationPassed != null) html += '<span>Tests: ' + (a.validationPassed ? 'PASS' : 'FAIL') + '</span>';
+      if (a.workdir) html += '<span>Dir: ' + esc(a.workdir) + '</span>';
+      html += '</div>';
+
+      // Full task
+      if (a.task) html += '<div class="ca-task">' + esc(a.task) + '</div>';
+
+      // Output
+      var output = a.liveOutput || a.outputPreview;
+      if (output) html += '<div class="ca-output" style="margin-top:8px;">' + esc(output) + '</div>';
+      if (a.error) html += '<div class="ca-output ca-error" style="margin-top:8px;">' + esc(a.error) + '</div>';
+
+      html += '</div>';
+    }
+
+    html += '</div>';
   }
 
-  html += '</tbody></table>';
   el.innerHTML = html;
 
-  // Auto-scroll live output for active agents
+  // Restore expanded states and scroll positions
+  expandedIds.forEach(function(id) {
+    var detailEl = document.getElementById(id);
+    if (detailEl) {
+      detailEl.classList.add('expanded');
+      var toggle = detailEl.previousElementSibling;
+      if (toggle && toggle.classList.contains('audit-events-toggle')) {
+        toggle.textContent = '\u25BC Details';
+      }
+      // Restore scroll position
+      if (scrollPositions[id] !== undefined) {
+        var outputEl = detailEl.querySelector('.ca-output');
+        if (outputEl) {
+          outputEl.scrollTop = scrollPositions[id];
+        }
+      }
+    }
+  });
+
+  // Auto-expand and auto-scroll live output for active agents
   for (var j = 0; j < agents.length; j++) {
     if (agents[j].status === 'running' || agents[j].status === 'validating') {
-      var detailEl = document.getElementById('ca-detail-' + agents[j].id);
-      if (detailEl && detailEl.style.display !== 'none') {
+      var detailId2 = 'ca-detail-' + (agents[j].id || '').replace(/[^a-zA-Z0-9]/g, '');
+      var detailEl = document.getElementById(detailId2);
+      if (detailEl) {
+        detailEl.classList.add('expanded');
+        var toggle = detailEl.previousElementSibling;
+        if (toggle && toggle.classList.contains('audit-events-toggle')) {
+          toggle.textContent = '\\u25BC Details';
+        }
         var outputEl = detailEl.querySelector('.ca-output');
         if (outputEl) outputEl.scrollTop = outputEl.scrollHeight;
       }
@@ -1630,10 +1681,13 @@ function renderCaAgents(agents) {
   }
 }
 
-function toggleCaDetail(id) {
-  var row = document.getElementById('ca-detail-' + id);
-  if (row) {
-    row.style.display = row.style.display === 'none' ? '' : 'none';
+function toggleCaDetail(id, toggleEl) {
+  var el = document.getElementById(id);
+  if (el) {
+    var expanded = el.classList.toggle('expanded');
+    if (toggleEl) {
+      toggleEl.textContent = (expanded ? '\\u25BC' : '\\u25B6') + ' Details';
+    }
   }
 }
 

@@ -39,7 +39,8 @@ export const MODEL_PRICING: Record<string, ModelPricing> = {
   'minimax-m2.5': { inputPerMTok: 0.3, outputPerMTok: 1.2 },
   // Kimi/Moonshot models (https://platform.moonshot.ai/docs/pricing/chat.en-US)
   // kimi-k2.5 series - using cache miss pricing for input (non-cached)
-  'kimi-k2.5': { inputPerMTok: 0.6, outputPerMTok: 3.0 }
+  'kimi-k2.5': { inputPerMTok: 0.6, outputPerMTok: 3.0 },
+  'kimi-for-coding': { inputPerMTok: 0.6, outputPerMTok: 3.0 }
 };
 
 /** Map of common aliases/shorthand to canonical model IDs in MODEL_PRICING */

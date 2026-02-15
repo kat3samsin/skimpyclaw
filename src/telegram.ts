@@ -146,7 +146,7 @@ function buildHelpText(cfg: Config): string {
 function getRecentMemoryFiles(
   count: number = 5
 ): { name: string; path: string; date: string; size: number }[] {
-  const memoryDir = join(homedir(), '.skimpyclaw', 'agents', 'main', 'memory');
+  const memoryDir = join(homedir(), '.skimpyclaw', 'agents', 'main', 'memory', 'logs');
 
   if (!existsSync(memoryDir)) {
     return [];

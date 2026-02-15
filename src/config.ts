@@ -105,7 +105,7 @@ export function ensureDashboardToken(config: Config): string {
 }
 
 export function listMemoryFiles(agentId: string): { name: string; date: string; size: number }[] {
-  const memoryDir = join(getAgentDir(agentId), 'memory');
+  const memoryDir = join(getAgentDir(agentId), 'memory', 'logs');
   if (!existsSync(memoryDir)) {
     return [];
   }
@@ -132,7 +132,7 @@ export function readMemoryFile(agentId: string, filename: string): string {
     throw new Error('Invalid filename');
   }
 
-  const filePath = join(getAgentDir(agentId), 'memory', filename);
+  const filePath = join(getAgentDir(agentId), 'memory', 'logs', filename);
   if (!existsSync(filePath)) {
     throw new Error('File not found');
   }

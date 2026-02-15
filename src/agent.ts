@@ -10,7 +10,7 @@ import { buildSafeSystemPrompt, sanitizeUserInput } from './security.js';
 import type { Config, ChatMessage, ChatOptions, ToolConfig, AgentRunContext, ContentBlock } from './types.js';
 import { getToolDefinitions, executeTool, type ExecuteToolContext } from './tools.js';
 import { startTrace, addEvent, endTrace } from './audit.js';
-import { getLangfuseConfig, isLangfuseEnabled } from './langfuse.js';
+import { calculateUsageCost, getLangfuseConfig, isLangfuseEnabled } from './langfuse.js';
 import { startActiveObservation, startObservation, updateActiveTrace } from '@langfuse/tracing';
 
 // --- Template Loading ---
@@ -69,6 +69,14 @@ You are NOT the full Claude Code CLI. Do NOT roleplay as Claude Code.
 - NEVER invent tools that are not in your tool list (no str_replace_editor, no view, etc.)
 - If a Browser tool is available, you DO have web-browsing access via that tool. Use it instead of claiming you can’t browse.
 - If you need information, use a tool to get it. Do not guess.`;
+
+/** Build Langfuse costDetails from model + token usage. Returns undefined if no pricing data. */
+function toCostDetails(model: string, usage: { prompt_tokens?: number; completion_tokens?: number } | null | undefined): { input: number; output: number; total: number } | undefined {
+  if (!usage?.prompt_tokens && !usage?.completion_tokens) return undefined;
+  const cost = calculateUsageCost(model, usage?.prompt_tokens ?? 0, usage?.completion_tokens ?? 0);
+  if (cost.totalCost === 0) return undefined;
+  return { input: cost.inputCost, output: cost.outputCost, total: cost.totalCost };
+}
 
 function startGenerationObservation(name: string, attributes: Record<string, any>) {
   if (!isLangfuseEnabled()) return null;
@@ -146,7 +154,7 @@ export function buildSystemParam(systemContent: string | undefined): string | Ar
 // --- Memory Management ---
 
 export function getMemoryDir(agentId: string): string {
-  return join(getAgentDir(agentId), 'memory');
+  return join(getAgentDir(agentId), 'memory', 'logs');
 }
 
 export function getTodayMemoryPath(agentId: string): string {
@@ -360,6 +368,7 @@ async function codexChat(messages: ChatMessage[], model: string, toolConfig?: To
       genObs?.update({
         output: { text: parsed.outputText },
         usageDetails: toNumericUsageDetails(parsed.response?.usage),
+        costDetails: toCostDetails(model, parsed.response?.usage),
       });
       genObs?.end();
     } catch (err) {
@@ -711,6 +720,7 @@ export async function chat(
       genObs?.update({
         output: response.choices[0]?.message,
         usageDetails: toUsageDetails(response.usage),
+        costDetails: toCostDetails(modelId, response.usage),
       });
       genObs?.end();
 
@@ -990,6 +1000,7 @@ export async function openaiChatWithTools(
       genObs?.update({
         output: completion.choices[0]?.message,
         usageDetails: toUsageDetails(completion.usage),
+        costDetails: toCostDetails(modelId, completion.usage),
       });
       genObs?.end();
     } catch (err) {

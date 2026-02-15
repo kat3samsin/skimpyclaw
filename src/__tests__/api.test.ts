@@ -9,7 +9,7 @@ const TEST_ROOT = join(tmpdir(), `skimpyclaw-test-${Date.now()}`);
 const SESSIONS_DIR = join(TEST_ROOT, 'sessions');
 const LOGS_DIR = join(TEST_ROOT, 'logs');
 const AGENT_DIR = join(TEST_ROOT, 'agents', 'default');
-const MEMORY_DIR = join(AGENT_DIR, 'memory');
+const MEMORY_DIR = join(AGENT_DIR, 'memory', 'logs');
 const CONFIG_PATH = join(TEST_ROOT, 'config.json');
 const TODO_PATH = join(TEST_ROOT, 'TODO.md');
 
@@ -76,7 +76,7 @@ vi.mock('../config.js', () => ({
   getAgentDir: (agentId: string) => join(TEST_ROOT, 'agents', agentId),
   listMemoryFiles: (agentId: string) => {
     const { existsSync, readdirSync, statSync } = require('fs');
-    const memDir = join(TEST_ROOT, 'agents', agentId, 'memory');
+    const memDir = join(TEST_ROOT, 'agents', agentId, 'memory', 'logs');
     if (!existsSync(memDir)) return [];
     return readdirSync(memDir)
       .filter((f: string) => f.endsWith('.md'))
@@ -91,7 +91,7 @@ vi.mock('../config.js', () => ({
     if (filename.includes('..') || filename !== basename(filename)) {
       throw new Error('Invalid filename');
     }
-    const filePath = join(TEST_ROOT, 'agents', agentId, 'memory', filename);
+    const filePath = join(TEST_ROOT, 'agents', agentId, 'memory', 'logs', filename);
     if (!existsSync(filePath)) {
       throw new Error('File not found');
     }
