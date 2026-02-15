@@ -2,7 +2,15 @@
 
 import { Bot, Context, GrammyError, HttpError } from 'grammy';
 import { run, RunnerHandle } from '@grammyjs/runner';
-import { readFileSync, existsSync, readdirSync, statSync, writeFileSync, unlinkSync, mkdirSync } from 'fs';
+import {
+  readFileSync,
+  existsSync,
+  readdirSync,
+  statSync,
+  writeFileSync,
+  unlinkSync,
+  mkdirSync
+} from 'fs';
 import { join } from 'path';
 import { homedir, tmpdir } from 'os';
 import { transcribeAudio } from './voice.js';
@@ -14,7 +22,12 @@ import { runAgentTurn } from './agent.js';
 import { getCronJobs, runCronJob } from './cron.js';
 import { getCurrentModel, setCurrentModel, getLastMessage } from './gateway.js';
 import { runHeartbeatCheck } from './heartbeat.js';
-import { initSubagentSystem, cancelTask, getActiveTasks, getRecentTasks } from './subagent.js';
+import {
+  initSubagentSystem,
+  cancelTask,
+  getActiveTasks,
+  getRecentTasks
+} from './subagent.js';
 import { getActiveCodeAgents, getRecentCodeAgents } from './tools.js';
 
 const LAUNCHD_LABEL = 'com.skimpyclaw.gateway';
@@ -32,14 +45,13 @@ const BOT_COMMANDS: { command: string; description: string }[] = [
   { command: 'tasks', description: 'Show active/recent agent tasks' },
   { command: 'cancel', description: 'Cancel a running agent task' },
   { command: 'heartbeat', description: 'Trigger heartbeat check' },
-  { command: 'restart', description: 'Restart the gateway' },
+  { command: 'restart', description: 'Restart the gateway' }
 ];
 
 // Set of known command names for catch-all routing
 const KNOWN_COMMANDS = new Set(
-  BOT_COMMANDS.map(c => c.command).concat(['start'])
+  BOT_COMMANDS.map((c) => c.command).concat(['start'])
 );
-
 
 let bot: Bot | null = null;
 let runnerHandle: RunnerHandle | null = null;
@@ -53,7 +65,11 @@ function getHistory(chatId: number): ChatMessage[] {
   return chatHistory.get(chatId) || [];
 }
 
-function addToHistory(chatId: number, userMsg: string, assistantMsg: string): void {
+function addToHistory(
+  chatId: number,
+  userMsg: string,
+  assistantMsg: string
+): void {
   const history = getHistory(chatId);
   history.push({ role: 'user', content: userMsg });
   history.push({ role: 'assistant', content: assistantMsg });
@@ -77,8 +93,8 @@ function getRunContext(ctx: Context): AgentRunContext {
     trigger: 'telegram',
     metadata: {
       username: ctx.from?.username,
-      chatId: ctx.chat?.id,
-    },
+      chatId: ctx.chat?.id
+    }
   };
 }
 
@@ -95,7 +111,7 @@ const DEFAULT_TELEGRAM_TOOLS: ToolConfig = {
   enabled: true,
   allowedPaths: [join(homedir(), '.skimpyclaw'), process.cwd()],
   maxIterations: 100,
-  bashTimeout: 15000,
+  bashTimeout: 15000
 };
 
 function getTelegramToolConfig(cfg: Config): ToolConfig | undefined {
@@ -106,7 +122,7 @@ function getTelegramToolConfig(cfg: Config): ToolConfig | undefined {
   if (cfg.channels.telegram.defaultAllowedPaths?.length) {
     return {
       ...DEFAULT_TELEGRAM_TOOLS,
-      allowedPaths: cfg.channels.telegram.defaultAllowedPaths,
+      allowedPaths: cfg.channels.telegram.defaultAllowedPaths
     };
   }
 
@@ -119,15 +135,17 @@ function buildHelpText(cfg: Config): string {
   const emoji = agentConfig?.identity?.emoji || '🦞';
   const name = agentConfig?.identity?.name || 'SkimpyClaw';
 
-  const commandList = BOT_COMMANDS
-    .map(c => `/${c.command} — ${c.description}`)
-    .join('\n');
+  const commandList = BOT_COMMANDS.map(
+    (c) => `/${c.command} — ${c.description}`
+  ).join('\n');
 
   return `${emoji} ${name} online.\n\nSend a message to chat, or use a command:\n\n${commandList}`;
 }
 
 /** Get recent memory files (sorted newest first). */
-function getRecentMemoryFiles(count: number = 5): { name: string; path: string; date: string; size: number }[] {
+function getRecentMemoryFiles(
+  count: number = 5
+): { name: string; path: string; date: string; size: number }[] {
   const memoryDir = join(homedir(), '.skimpyclaw', 'agents', 'main', 'memory');
 
   if (!existsSync(memoryDir)) {
@@ -135,15 +153,15 @@ function getRecentMemoryFiles(count: number = 5): { name: string; path: string; 
   }
 
   const files = readdirSync(memoryDir)
-    .filter(f => f.endsWith('.md'))
-    .map(f => {
+    .filter((f) => f.endsWith('.md'))
+    .map((f) => {
       const filePath = join(memoryDir, f);
       const stats = statSync(filePath);
       return {
         name: f,
         path: filePath,
         date: f.replace('.md', ''),
-        size: stats.size,
+        size: stats.size
       };
     })
     .sort((a, b) => b.date.localeCompare(a.date))
@@ -163,7 +181,10 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
   // Initialize subagent system with message delivery callback
   initSubagentSystem(async (chatId: number, message: string) => {
     if (!bot) return;
-    await sendLongMessage({ reply: (text: string) => bot!.api.sendMessage(chatId, text) } as any, message);
+    await sendLongMessage(
+      { reply: (text: string) => bot!.api.sendMessage(chatId, text) } as any,
+      message
+    );
   });
 
   // Register commands with Telegram for the / menu
@@ -176,8 +197,13 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
     const senderId = ctx.from?.id;
     const senderUsername = ctx.from?.username;
 
-    if (!senderId || !isAllowed(cfg.channels.telegram.allowFrom, senderId, senderUsername)) {
-      console.log(`[telegram] Blocked message from ${senderId} (@${senderUsername})`);
+    if (
+      !senderId ||
+      !isAllowed(cfg.channels.telegram.allowFrom, senderId, senderUsername)
+    ) {
+      console.log(
+        `[telegram] Blocked message from ${senderId} (@${senderUsername})`
+      );
       return; // Silently ignore
     }
 
@@ -206,14 +232,18 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
     if (!modelAlias) {
       const current = getCurrentModel();
       const aliases = Object.keys(cfg.models.aliases).join(', ');
-      await ctx.reply(`Current: ${current}\nAliases: ${aliases}\n\nUsage: /model <alias>`);
+      await ctx.reply(
+        `Current: ${current}\nAliases: ${aliases}\n\nUsage: /model <alias>`
+      );
       return;
     }
 
     const resolved = cfg.models.aliases[modelAlias];
     if (!resolved) {
       const aliases = Object.keys(cfg.models.aliases).join(', ');
-      await ctx.reply(`Unknown model alias: "${modelAlias}"\n\nAvailable: ${aliases}`);
+      await ctx.reply(
+        `Unknown model alias: "${modelAlias}"\n\nAvailable: ${aliases}`
+      );
       return;
     }
     setCurrentModel(resolved);
@@ -228,23 +258,41 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
     const activeTasks = getActiveTasks();
     const recentTasks = getRecentTasks(20);
 
-    const jobList = jobs.map(j => `  - ${j.name}: ${j.nextRun?.toLocaleString() || 'unknown'}`).join('\n');
+    const jobList = jobs
+      .map((j) => `  - ${j.name}: ${j.nextRun?.toLocaleString() || 'unknown'}`)
+      .join('\n');
 
-    const pendingCount = activeTasks.filter(t => t.status === 'pending').length;
-    const runningCount = activeTasks.filter(t => t.status === 'running').length;
+    const pendingCount = activeTasks.filter(
+      (t) => t.status === 'pending'
+    ).length;
+    const runningCount = activeTasks.filter(
+      (t) => t.status === 'running'
+    ).length;
     const maxConcurrent = cfg.subagents?.maxConcurrent ?? 5;
 
-    const recentCompleted = recentTasks.filter(t => t.status === 'completed').length;
-    const recentFailed = recentTasks.filter(t => t.status === 'failed').length;
-    const recentCancelled = recentTasks.filter(t => t.status === 'cancelled').length;
+    const recentCompleted = recentTasks.filter(
+      (t) => t.status === 'completed'
+    ).length;
+    const recentFailed = recentTasks.filter(
+      (t) => t.status === 'failed'
+    ).length;
+    const recentCancelled = recentTasks.filter(
+      (t) => t.status === 'cancelled'
+    ).length;
 
     const activePreview = activeTasks
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
       .slice(0, 3)
       .map((task) => {
         const started = task.startedAt || task.createdAt;
-        const elapsedSeconds = Math.max(0, Math.round((Date.now() - started.getTime()) / 1000));
-        const elapsed = elapsedSeconds < 60 ? `${elapsedSeconds}s` : `${Math.round(elapsedSeconds / 60)}m`;
+        const elapsedSeconds = Math.max(
+          0,
+          Math.round((Date.now() - started.getTime()) / 1000)
+        );
+        const elapsed =
+          elapsedSeconds < 60
+            ? `${elapsedSeconds}s`
+            : `${Math.round(elapsedSeconds / 60)}m`;
         const label = task.label ? ` (${task.label})` : '';
         return `  - ${task.id} [${task.type}] ${task.status}${label} • ${elapsed}`;
       })
@@ -257,33 +305,46 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
     let caLine = 'Coding Agents: idle';
     if (caAll.length > 0) {
       const runningCount = caActive.length;
-      const completedCount = caRecent.filter(t => t.status === 'completed').length;
-      const failedCount = caRecent.filter(t => t.status === 'failed' || t.status === 'timeout').length;
+      const completedCount = caRecent.filter(
+        (t) => t.status === 'completed'
+      ).length;
+      const failedCount = caRecent.filter(
+        (t) => t.status === 'failed' || t.status === 'timeout'
+      ).length;
       const parts: string[] = [];
       if (runningCount) parts.push(`${runningCount} running`);
       if (completedCount) parts.push(`${completedCount} completed`);
       if (failedCount) parts.push(`${failedCount} failed`);
       caLine = `Coding Agents: ${parts.join(', ') || 'idle'}`;
-      const caPreview = caAll.slice(0, 5).map(t => {
-        const elapsed = t.durationSeconds != null
-          ? (t.durationSeconds < 60 ? `${t.durationSeconds}s` : `${Math.floor(t.durationSeconds / 60)}m ${t.durationSeconds % 60}s`)
-          : (Math.round((Date.now() - new Date(t.startedAt).getTime()) / 1000) + 's');
-        const taskPreview = t.task.length > 50 ? t.task.slice(0, 50) + '...' : t.task;
-        return `  ${t.id}: ${t.status.toUpperCase()} (${t.agent}, ${elapsed}) — ${taskPreview}`;
-      }).join('\n');
+      const caPreview = caAll
+        .slice(0, 5)
+        .map((t) => {
+          const elapsed =
+            t.durationSeconds != null
+              ? t.durationSeconds < 60
+                ? `${t.durationSeconds}s`
+                : `${Math.floor(t.durationSeconds / 60)}m ${t.durationSeconds % 60}s`
+              : Math.round(
+                  (Date.now() - new Date(t.startedAt).getTime()) / 1000
+                ) + 's';
+          const taskPreview =
+            t.task.length > 50 ? t.task.slice(0, 50) + '...' : t.task;
+          return `  ${t.id}: ${t.status.toUpperCase()} (${t.agent}, ${elapsed}) — ${taskPreview}`;
+        })
+        .join('\n');
       if (caPreview) caLine += '\n' + caPreview;
     }
 
     await ctx.reply(
       `Agent: ${cfg.agents.default}\n` +
-      `Model: ${model}\n` +
-      `Last message: ${last?.toLocaleString() || 'never'}\n` +
-      `Silence until: ${silenceUntil?.toLocaleString() || 'not silenced'}\n\n` +
-      `${caLine}\n\n` +
-      `Subagents: ${activeTasks.length}/${maxConcurrent} active (running: ${runningCount}, pending: ${pendingCount})\n` +
-      `Recent (last ${recentTasks.length}): ✅ ${recentCompleted} • ❌ ${recentFailed} • 🚫 ${recentCancelled}\n` +
-      `${activePreview ? `Active now:\n${activePreview}\n\n` : '\n'}` +
-      `Scheduled jobs:\n${jobList || '  (none)'}`
+        `Model: ${model}\n` +
+        `Last message: ${last?.toLocaleString() || 'never'}\n` +
+        `Silence until: ${silenceUntil?.toLocaleString() || 'not silenced'}\n\n` +
+        `${caLine}\n\n` +
+        `Subagents: ${activeTasks.length}/${maxConcurrent} active (running: ${runningCount}, pending: ${pendingCount})\n` +
+        `Recent (last ${recentTasks.length}): ✅ ${recentCompleted} • ❌ ${recentFailed} • 🚫 ${recentCancelled}\n` +
+        `${activePreview ? `Active now:\n${activePreview}\n\n` : '\n'}` +
+        `Scheduled jobs:\n${jobList || '  (none)'}`
     );
   });
 
@@ -299,7 +360,12 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
         return;
       }
 
-      const list = jobs.map(j => `${j.id}: ${j.name} (next: ${j.nextRun?.toLocaleString() || '?'})`).join('\n');
+      const list = jobs
+        .map(
+          (j) =>
+            `${j.id}: ${j.name} (next: ${j.nextRun?.toLocaleString() || '?'})`
+        )
+        .join('\n');
       await ctx.reply(`Scheduled jobs:\n${list}`);
       return;
     }
@@ -344,14 +410,18 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
     const isLaunchd = !!process.env.SKIMPYCLAW_LAUNCHD;
     if (isLaunchd) {
       await ctx.reply('🦞 Restarting via launchd...');
-      const uid = typeof process.getuid === 'function' ? process.getuid() : undefined;
-      const target = uid !== undefined ? `gui/${uid}/${LAUNCHD_LABEL}` : LAUNCHD_LABEL;
+      const uid =
+        typeof process.getuid === 'function' ? process.getuid() : undefined;
+      const target =
+        uid !== undefined ? `gui/${uid}/${LAUNCHD_LABEL}` : LAUNCHD_LABEL;
       const res = spawnSync('launchctl', ['kickstart', '-k', target], {
         encoding: 'utf8',
-        timeout: 3000,
+        timeout: 3000
       });
       if (res.error || res.status !== 0) {
-        await ctx.reply(`Restart failed: ${res.stderr || res.error?.message || 'unknown error'}`);
+        await ctx.reply(
+          `Restart failed: ${res.stderr || res.error?.message || 'unknown error'}`
+        );
       }
       // If kickstart succeeded, process is already dead — this won't run
     } else {
@@ -366,21 +436,29 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
     const recent = getRecentTasks(5);
 
     if (recent.length === 0) {
-      await ctx.reply('No agent tasks yet. Subagents spawn automatically for complex requests.');
+      await ctx.reply(
+        'No agent tasks yet. Subagents spawn automatically for complex requests.'
+      );
       return;
     }
 
-    const formatTask = (t: typeof recent[0]) => {
-      const elapsed = ((t.completedAt || new Date()).getTime() - t.createdAt.getTime()) / 1000;
-      const elapsedStr = elapsed < 60 ? `${Math.round(elapsed)}s` : `${Math.round(elapsed / 60)}m`;
+    const formatTask = (t: (typeof recent)[0]) => {
+      const elapsed =
+        ((t.completedAt || new Date()).getTime() - t.createdAt.getTime()) /
+        1000;
+      const elapsedStr =
+        elapsed < 60
+          ? `${Math.round(elapsed)}s`
+          : `${Math.round(elapsed / 60)}m`;
       const status = {
         pending: '⏳ Pending',
         running: `🔄 Running (${elapsedStr})`,
         completed: `✅ Done (${elapsedStr})`,
         failed: `❌ Failed (${elapsedStr})`,
-        cancelled: '🚫 Cancelled',
+        cancelled: '🚫 Cancelled'
       }[t.status];
-      const promptPreview = t.prompt.slice(0, 60) + (t.prompt.length > 60 ? '...' : '');
+      const promptPreview =
+        t.prompt.slice(0, 60) + (t.prompt.length > 60 ? '...' : '');
       return `${t.id}: ${status} [${t.type}] ${promptPreview}`;
     };
 
@@ -430,7 +508,9 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
     const stopTyping = startTypingIndicator(ctx);
     try {
       // Ask the agent to summarize the conversation so far
-      const historyText = history.map(m => `${m.role}: ${m.content}`).join('\n');
+      const historyText = history
+        .map((m) => `${m.role}: ${m.content}`)
+        .join('\n');
       const summary = await runAgentTurn(
         cfg.agents.default,
         `Summarize this conversation in 2-3 sentences so you can remember the context:\n\n${historyText}`,
@@ -444,7 +524,7 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
       clearHistory(chatId);
       chatHistory.set(chatId, [
         { role: 'user', content: 'Summary of our previous conversation:' },
-        { role: 'assistant', content: summary },
+        { role: 'assistant', content: summary }
       ]);
       await ctx.reply(`Compacted ${history.length} messages into a summary.`);
     } catch (error) {
@@ -459,9 +539,10 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
   bot.command('silence', async (ctx) => {
     const minutes = parseInt(ctx.match) || 30;
     silenceUntil = new Date(Date.now() + minutes * 60 * 1000);
-    await ctx.reply(`Proactive messages silenced until ${silenceUntil.toLocaleTimeString()}`);
+    await ctx.reply(
+      `Proactive messages silenced until ${silenceUntil.toLocaleTimeString()}`
+    );
   });
-
 
   // /memory command — show recent memory entries
   bot.command('memory', async (ctx) => {
@@ -475,18 +556,23 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
 
     // If a date was specified, show that entry
     if (arg) {
-      const match = recentFiles.find(f => f.date === arg || f.name === arg || f.name === `${arg}.md`);
+      const match = recentFiles.find(
+        (f) => f.date === arg || f.name === arg || f.name === `${arg}.md`
+      );
       if (!match) {
-        await ctx.reply(`No memory entry for "${arg}".\n\nAvailable: ${recentFiles.map(f => f.date).join(', ')}`);
+        await ctx.reply(
+          `No memory entry for "${arg}".\n\nAvailable: ${recentFiles.map((f) => f.date).join(', ')}`
+        );
         return;
       }
 
       try {
         const content = readFileSync(match.path, 'utf-8');
         // Show first ~3500 chars to stay within Telegram limits
-        const preview = content.length > 3500
-          ? content.slice(0, 3500) + '\n\n... (truncated)'
-          : content;
+        const preview =
+          content.length > 3500
+            ? content.slice(0, 3500) + '\n\n... (truncated)'
+            : content;
         await sendLongMessage(ctx, `📝 Memory: ${match.date}\n\n${preview}`);
       } catch (error) {
         const msg = error instanceof Error ? error.message : 'Unknown error';
@@ -502,12 +588,12 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
     };
 
     const list = recentFiles
-      .map(f => `  ${f.date} (${formatSize(f.size)})`)
+      .map((f) => `  ${f.date} (${formatSize(f.size)})`)
       .join('\n');
 
     await ctx.reply(
       `📝 Recent memory entries:\n\n${list}\n\n` +
-      `View one: /memory <date>\nExample: /memory ${recentFiles[0].date}`
+        `View one: /memory <date>\nExample: /memory ${recentFiles[0].date}`
     );
   });
 
@@ -522,7 +608,9 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
     try {
       // Check voice config
       if (!cfg.voice) {
-        await ctx.reply('Voice transcription not configured. Add a "voice" section to config.json.');
+        await ctx.reply(
+          'Voice transcription not configured. Add a "voice" section to config.json.'
+        );
         return;
       }
 
@@ -544,6 +632,7 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
         // Transcribe
         const result = await transcribeAudio(tempPath, cfg.voice);
         const transcription = result.text.trim();
+        console.log(`[telegram] Transcription result: ${transcription}`);
 
         if (!transcription) {
           await ctx.reply('Could not transcribe audio — no speech detected.');
@@ -562,12 +651,14 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
         );
         if (chatId) addToHistory(chatId, transcription, agentResponse);
 
-        // Show transcription as a header block with separator
-        const reply = `🎤 "${transcription}"\n—————————————————————\n${agentResponse}`;
-        await sendLongMessage(ctx, reply);
+        // Single message: blockquote transcription + agent response (no reply to voice note)
+        const combined = `<blockquote>🎤 ${transcription}</blockquote>\n\n${escapeHtml(agentResponse)}`;
+        await sendLongMessageHtml(ctx, combined);
       } finally {
         // Clean up temp file
-        try { unlinkSync(tempPath); } catch {}
+        try {
+          unlinkSync(tempPath);
+        } catch {}
       }
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Unknown error';
@@ -611,13 +702,13 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
           source: {
             type: 'base64' as const,
             media_type: mediaType,
-            data: base64Image,
-          },
+            data: base64Image
+          }
         },
         {
           type: 'text' as const,
-          text: caption,
-        },
+          text: caption
+        }
       ];
 
       const history = chatId ? getHistory(chatId) : [];
@@ -652,7 +743,9 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
     if (text.startsWith('/')) {
       const command = text.split(/[\s@]/)[0].slice(1).toLowerCase();
       if (!KNOWN_COMMANDS.has(command)) {
-        await ctx.reply(`Unknown command: /${command}\n\nType /help to see available commands.`);
+        await ctx.reply(
+          `Unknown command: /${command}\n\nType /help to see available commands.`
+        );
       }
       return;
     }
@@ -684,7 +777,9 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
   // Error handling
   bot.catch((err) => {
     const ctx = err.ctx;
-    console.error(`[telegram] Error while handling update ${ctx.update.update_id}:`);
+    console.error(
+      `[telegram] Error while handling update ${ctx.update.update_id}:`
+    );
     const e = err.error;
     if (e instanceof GrammyError) {
       console.error('[telegram] Error in request:', e.description);
@@ -698,12 +793,64 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
   return bot;
 }
 
-// Helper to send long messages (Telegram has 4096 char limit)
-async function sendLongMessage(ctx: Context, text: string): Promise<void> {
+// Escape HTML entities for Telegram HTML parse mode
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+// Send long message with HTML parse mode (for blockquotes etc.)
+async function sendLongMessageHtml(
+  ctx: Context,
+  html: string,
+  replyToMessageId?: number
+): Promise<void> {
   const MAX_LENGTH = 4000;
+  const replyOpts = replyToMessageId
+    ? { reply_parameters: { message_id: replyToMessageId } }
+    : {};
+
+  if (html.length <= MAX_LENGTH) {
+    await ctx.reply(html, { parse_mode: 'HTML', ...replyOpts });
+    return;
+  }
+
+  // For HTML we can't safely split mid-tag, so just send as chunks at paragraph boundaries
+  const chunks: string[] = [];
+  let current = '';
+  for (const paragraph of html.split('\n\n')) {
+    if (current.length + paragraph.length + 2 > MAX_LENGTH) {
+      if (current) chunks.push(current.trim());
+      current = paragraph;
+    } else {
+      current += (current ? '\n\n' : '') + paragraph;
+    }
+  }
+  if (current) chunks.push(current.trim());
+
+  for (let i = 0; i < chunks.length; i++) {
+    await ctx.reply(chunks[i], {
+      parse_mode: 'HTML',
+      ...(i === 0 ? replyOpts : {})
+    });
+  }
+}
+
+// Helper to send long messages (Telegram has 4096 char limit)
+async function sendLongMessage(
+  ctx: Context,
+  text: string,
+  replyToMessageId?: number
+): Promise<void> {
+  const MAX_LENGTH = 4000;
+  const replyOpts = replyToMessageId
+    ? { reply_parameters: { message_id: replyToMessageId } }
+    : {};
 
   if (text.length <= MAX_LENGTH) {
-    await ctx.reply(text);
+    await ctx.reply(text, replyOpts);
     return;
   }
 
@@ -721,8 +868,9 @@ async function sendLongMessage(ctx: Context, text: string): Promise<void> {
   }
   if (current) chunks.push(current.trim());
 
-  for (const chunk of chunks) {
-    await ctx.reply(chunk);
+  for (let i = 0; i < chunks.length; i++) {
+    // Only reply-to on the first chunk
+    await ctx.reply(chunks[i], i === 0 ? replyOpts : {});
   }
 }
 
@@ -755,7 +903,10 @@ export function isSilenced(): boolean {
   return new Date() < silenceUntil;
 }
 
-export async function sendProactiveMessage(chatId: string | number, message: string): Promise<void> {
+export async function sendProactiveMessage(
+  chatId: string | number,
+  message: string
+): Promise<void> {
   if (!bot || isSilenced()) return;
   const resolvedChatId = typeof chatId === 'number' ? chatId : Number(chatId);
   if (!Number.isFinite(resolvedChatId)) return;
