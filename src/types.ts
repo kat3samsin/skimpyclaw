@@ -1,5 +1,32 @@
 // SkimpyClaw Type Definitions
 
+export interface VoiceProviderConfig {
+  apiKey?: string;
+  baseURL?: string;
+  tts?: {
+    model?: string;
+    voice?: string;
+    speed?: number;
+    voiceId?: string;  // ElevenLabs
+  };
+  stt?: {
+    model?: string;
+  };
+}
+
+export interface VoiceChannelConfig {
+  enabled?: boolean;
+  acceptVoice?: boolean;
+  sendVoice?: boolean;
+}
+
+export interface VoiceConfig {
+  enabled?: boolean;
+  providers?: Record<string, VoiceProviderConfig>;
+  defaultProvider?: string;
+  channels?: Record<string, VoiceChannelConfig>;
+}
+
 export interface Config {
   gateway: {
     port: number;
@@ -41,6 +68,7 @@ export interface Config {
     release?: string;
     exportMode?: 'immediate' | 'batched';
   };
+  voice?: VoiceConfig;
 }
 
 export interface AgentConfig {
@@ -229,4 +257,3 @@ export interface AuditTrace {
   durationMs: number;
   events: AuditEvent[];
 }
-

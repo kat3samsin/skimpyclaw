@@ -2,9 +2,10 @@
 
 import { Bot, Context, GrammyError, HttpError } from 'grammy';
 import { run, RunnerHandle } from '@grammyjs/runner';
-import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
+import { readFileSync, existsSync, readdirSync, statSync, writeFileSync, unlinkSync, mkdirSync } from 'fs';
 import { join } from 'path';
-import { homedir } from 'os';
+import { homedir, tmpdir } from 'os';
+import { transcribeAudio } from './voice.js';
 import { spawnSync } from 'child_process';
 import type { Config, ToolConfig, AgentRunContext } from './types.js';
 import { isAllowed, isRateLimited } from './security.js';
@@ -508,6 +509,72 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
       `📝 Recent memory entries:\n\n${list}\n\n` +
       `View one: /memory <date>\nExample: /memory ${recentFiles[0].date}`
     );
+  });
+
+  // Handle voice messages — transcribe and pass to agent
+  bot.on('message:voice', async (ctx) => {
+    const voice = ctx.message.voice;
+    if (!voice) return;
+
+    const chatId = ctx.chat?.id;
+    const stopTyping = startTypingIndicator(ctx);
+
+    try {
+      // Check voice config
+      if (!cfg.voice) {
+        await ctx.reply('Voice transcription not configured. Add a "voice" section to config.json.');
+        return;
+      }
+
+      // Download the voice file from Telegram
+      const file = await bot!.api.getFile(voice.file_id);
+      const token = cfg.channels.telegram.token;
+      const fileUrl = `https://api.telegram.org/file/bot${token}/${file.file_path}`;
+      const response = await fetch(fileUrl);
+      const buffer = Buffer.from(await response.arrayBuffer());
+
+      // Save to temp file
+      const ext = file.file_path?.split('.').pop() || 'oga';
+      const tempDir = join(tmpdir(), 'skimpyclaw-voice');
+      if (!existsSync(tempDir)) mkdirSync(tempDir, { recursive: true });
+      const tempPath = join(tempDir, `voice-${Date.now()}.${ext}`);
+      writeFileSync(tempPath, buffer);
+
+      try {
+        // Transcribe
+        const result = await transcribeAudio(tempPath, cfg.voice);
+        const transcription = result.text.trim();
+
+        if (!transcription) {
+          await ctx.reply('Could not transcribe audio — no speech detected.');
+          return;
+        }
+
+        const history = chatId ? getHistory(chatId) : [];
+        const agentResponse = await runAgentTurn(
+          cfg.agents.default,
+          transcription,
+          cfg,
+          getCurrentModel(),
+          getTelegramToolConfig(cfg),
+          history,
+          getRunContext(ctx)
+        );
+        if (chatId) addToHistory(chatId, transcription, agentResponse);
+
+        // Show transcription as a header block with separator
+        const reply = `🎤 "${transcription}"\n—————————————————————\n${agentResponse}`;
+        await sendLongMessage(ctx, reply);
+      } finally {
+        // Clean up temp file
+        try { unlinkSync(tempPath); } catch {}
+      }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      await ctx.reply(`Voice transcription error: ${msg}`);
+    } finally {
+      stopTyping();
+    }
   });
 
   // Handle photo messages
