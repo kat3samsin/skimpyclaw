@@ -9,6 +9,7 @@ import type { Config, CronJob } from './types.js';
 import { runAgentTurn } from './agent.js';
 import { startTrace, addEvent, endTrace } from './audit.js';
 import { sendActiveChannelProactiveMessage, getActiveChannelId } from './channels.js';
+import { parseAndSaveDigest } from './digests.js';
 
 interface ScheduledJob {
   id: string;
@@ -160,6 +161,14 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
       );
       logEntry.output = response.slice(0, 5000);
       appendCronLogLine(jobDef.id, `Agent turn completed (${response.length} chars)`);
+      // Parse and save digest from the response
+      try {
+        parseAndSaveDigest(jobDef.id, jobDef.name, response);
+        appendCronLogLine(jobDef.id, 'Digest saved');
+      } catch (digestErr) {
+        const errMsg = digestErr instanceof Error ? digestErr.message : String(digestErr);
+        appendCronLogLine(jobDef.id, `Failed to save digest: ${errMsg}`);
+      }
     } else if (jobDef.payload.kind === 'script') {
       const scriptTraceId = startTrace('cron');
       addEvent(scriptTraceId, {

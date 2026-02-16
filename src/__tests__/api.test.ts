@@ -12,6 +12,7 @@ const AGENT_DIR = join(TEST_ROOT, 'agents', 'default');
 const MEMORY_DIR = join(AGENT_DIR, 'memory', 'logs');
 const CONFIG_PATH = join(TEST_ROOT, 'config.json');
 const TODO_PATH = join(TEST_ROOT, 'TODO.md');
+const SKILLS_DIR = join(TEST_ROOT, 'skills');
 
 const TEST_CONFIG = {
   gateway: { port: 18790, mode: 'local' as const },
@@ -48,6 +49,7 @@ const TEST_CONFIG = {
   },
   heartbeat: { intervalMs: 60000, prompt: 'heartbeat' },
   dashboard: { token: 'test-dashboard-token-123' },
+  skills: { enabled: true, directory: SKILLS_DIR, entries: {} },
 };
 
 const AUTH_HEADERS = { authorization: 'Bearer test-dashboard-token-123' };
@@ -230,6 +232,33 @@ beforeAll(async () => {
   // Seed template files
   writeFileSync(join(AGENT_DIR, 'SOUL.md'), 'You are a helpful assistant.');
   writeFileSync(join(AGENT_DIR, 'IDENTITY.md'), 'Name: TestBot');
+
+  // Seed skills
+  mkdirSync(join(SKILLS_DIR, 'test-skill'), { recursive: true });
+  writeFileSync(join(SKILLS_DIR, 'test-skill', 'SKILL.md'), [
+    '---',
+    'name: test-skill',
+    'description: A test skill for API tests',
+    'emoji: "🧪"',
+    'tags: ["test"]',
+    'priority: 10',
+    '---',
+    '',
+    '# Test Skill',
+    '',
+    'This is a test skill body.',
+  ].join('\n'));
+
+  mkdirSync(join(SKILLS_DIR, 'disabled-skill'), { recursive: true });
+  writeFileSync(join(SKILLS_DIR, 'disabled-skill', 'SKILL.md'), [
+    '---',
+    'name: disabled-skill',
+    'description: A disabled test skill',
+    'enabled: false',
+    '---',
+    '',
+    'Disabled skill body.',
+  ].join('\n'));
 
   // Seed log files
   writeFileSync(join(LOGS_DIR, 'app.log'), 'line1\nline2\nline3\nline4\nline5\n');

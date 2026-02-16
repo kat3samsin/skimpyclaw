@@ -10,6 +10,8 @@ import { buildSafeSystemPrompt, sanitizeUserInput } from './security.js';
 import type { Config, ChatMessage, ChatOptions, ToolConfig, AgentRunContext, ContentBlock } from './types.js';
 import { getToolDefinitions, executeTool, type ExecuteToolContext } from './tools.js';
 import { startTrace, addEvent, endTrace } from './audit.js';
+import { loadSkills, getSkillsForContext, formatSkillsPrompt } from './skills.js';
+import type { SkillConfig } from './skills-types.js';
 import { calculateUsageCost, getLangfuseConfig, isLangfuseEnabled } from './langfuse.js';
 import { startActiveObservation, startObservation, updateActiveTrace } from '@langfuse/tracing';
 
@@ -38,7 +40,16 @@ export function setUsingOAuth(value: boolean): void {
   usingOAuth = value;
 }
 
-export function buildSystemPrompt(agentId: string): string {
+/** Context for skills injection into the system prompt */
+export interface SkillsPromptContext {
+  channel?: string;
+  cronJobId?: string;
+  tags?: string[];
+  toolConfig?: ToolConfig;
+  skillConfig?: SkillConfig;
+}
+
+export function buildSystemPrompt(agentId: string, skillsContext?: SkillsPromptContext): string {
   const templates = loadAgentTemplates(agentId);
 
   const soul = templates.SOUL || '';
@@ -47,7 +58,19 @@ export function buildSystemPrompt(agentId: string): string {
   const tools = templates.TOOLS || '';
   const memory = templates.MEMORY || '';
 
-  const base = [soul, identity, tools].filter(Boolean).join('\n\n---\n\n');
+  // Load and filter skills
+  let skillsSection = '';
+  if (skillsContext?.skillConfig?.enabled !== false) {
+    const allSkills = loadSkills(skillsContext?.skillConfig, skillsContext?.toolConfig);
+    const contextSkills = getSkillsForContext(allSkills, {
+      channel: skillsContext?.channel,
+      cronJobId: skillsContext?.cronJobId,
+      tags: skillsContext?.tags,
+    });
+    skillsSection = formatSkillsPrompt(contextSkills, skillsContext?.skillConfig?.maxPromptTokens);
+  }
+
+  const base = [soul, identity, tools, skillsSection].filter(Boolean).join('\n\n---\n\n');
   const userContext = [user, memory].filter(Boolean).join('\n\n');
 
   const prompt = buildSafeSystemPrompt(base, userContext);
@@ -70,6 +93,10 @@ You are NOT the full Claude Code CLI. Do NOT roleplay as Claude Code.
 - If a Browser tool is available, you DO have web-browsing access via that tool. Use it instead of claiming you can’t browse.
 - If you need information, use a tool to get it. Do not guess.`;
 
+// --- Langfuse App Tagging ---
+const LANGFUSE_APP_NAME = 'skimpyclaw';
+const LANGFUSE_APP_TAG = 'app:skimpyclaw';
+
 /** Build Langfuse costDetails from model + token usage. Returns undefined if no pricing data. */
 function toCostDetails(model: string, usage: { prompt_tokens?: number; completion_tokens?: number } | null | undefined): { input: number; output: number; total: number } | undefined {
   if (!usage?.prompt_tokens && !usage?.completion_tokens) return undefined;
@@ -80,6 +107,7 @@ function toCostDetails(model: string, usage: { prompt_tokens?: number; completio
 
 function startGenerationObservation(name: string, attributes: Record<string, any>) {
   if (!isLangfuseEnabled()) return null;
+  attributes.metadata = { app: LANGFUSE_APP_NAME, ...attributes.metadata };
   return startObservation(name, attributes, { asType: 'generation' });
 }
 
@@ -413,7 +441,7 @@ async function codexChat(messages: ChatMessage[], model: string, toolConfig?: To
       console.log(`[codex:tools] -> ${fc.name}(${inputStr})`);
 
       const toolObs = isLangfuseEnabled()
-        ? startObservation(`tool:${fc.name}`, { input: args, metadata: { tool: fc.name } }, { asType: 'tool' })
+        ? startObservation(`tool:${fc.name}`, { input: args, metadata: { app: LANGFUSE_APP_NAME, tool: fc.name } }, { asType: 'tool' })
         : null;
 
       const toolStart = Date.now();
@@ -856,7 +884,7 @@ export async function chatWithTools(
       console.log(`[agent:tools] -> ${block.name}(${inputStr})`);
 
       const toolObs = isLangfuseEnabled()
-        ? startObservation(`tool:${block.name}`, { input: block.input, metadata: { tool: block.name } }, { asType: 'tool' })
+        ? startObservation(`tool:${block.name}`, { input: block.input, metadata: { app: LANGFUSE_APP_NAME, tool: block.name } }, { asType: 'tool' })
         : null;
 
       const toolStart = Date.now();
@@ -1043,7 +1071,7 @@ export async function openaiChatWithTools(
       console.log(`[agent:openai-tools] -> ${fnName}(${inputStr})`);
 
       const toolObs = isLangfuseEnabled()
-        ? startObservation(`tool:${fnName}`, { input: args, metadata: { tool: fnName } }, { asType: 'tool' })
+        ? startObservation(`tool:${fnName}`, { input: args, metadata: { app: LANGFUSE_APP_NAME, tool: fnName } }, { asType: 'tool' })
         : null;
 
       const toolStart = Date.now();
@@ -1110,7 +1138,12 @@ export async function runAgentTurn(
     throw new Error(`Agent not found: ${agentId}`);
   }
 
-  let systemPrompt = buildSystemPrompt(agentId);
+  let systemPrompt = buildSystemPrompt(agentId, {
+    channel: context?.channel,
+    tags: context?.tags,
+    toolConfig,
+    skillConfig: config.skills,
+  });
 
   // Inject channel-specific formatting context
   if (context?.channel) {
@@ -1226,6 +1259,7 @@ export async function runAgentTurn(
   const traceName = `agent:${agentId}`;
   const traceInput = { message: sanitizedMessage };
   const traceMetadata = {
+    app: LANGFUSE_APP_NAME,
     agentId,
     model: resolvedModel,
     provider,
@@ -1243,7 +1277,7 @@ export async function runAgentTurn(
         sessionId: context?.sessionId,
         input: traceInput,
         metadata: traceMetadata,
-        tags: context?.tags,
+        tags: [...new Set([...(context?.tags || []), LANGFUSE_APP_TAG])],
         environment: lfConfig?.environment,
         release: lfConfig?.release,
       });

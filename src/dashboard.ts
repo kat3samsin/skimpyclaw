@@ -870,6 +870,289 @@ td:first-child { color: var(--highlight); }
   text-align: right;
   white-space: nowrap;
 }
+
+/* --- Digests Tab --- */
+.digest-header {
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.digest-title {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.digest-meta {
+  font-size: 13px;
+  color: var(--text-dim);
+  font-family: var(--mono);
+}
+
+.digest-reader {
+  font-size: 15px;
+  line-height: 1.8;
+  color: var(--text);
+  padding: 0 4px;
+  max-width: 720px;
+}
+
+.digest-reader h3.digest-h3 {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 28px 0 12px 0;
+  color: var(--highlight);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 6px;
+}
+
+.digest-reader h4.digest-h4 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 20px 0 8px 0;
+  color: var(--text);
+}
+
+.digest-reader hr.digest-hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 20px 0;
+}
+
+.digest-reader a.digest-link {
+  color: var(--highlight);
+  word-break: break-all;
+  font-size: 13px;
+  font-family: var(--mono);
+}
+
+.digest-reader a.digest-link:hover {
+  text-decoration: underline;
+}
+
+.digest-reader strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.digest-section-header {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--highlight);
+  margin: 24px 0 12px 0;
+  padding: 8px 12px;
+  background: var(--surface-alt);
+  border-radius: 8px;
+  border-left: 3px solid var(--highlight);
+}
+
+.digest-section-header:first-child {
+  margin-top: 0;
+}
+
+.digest-item-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  margin-top: 12px;
+  line-height: 1.4;
+}
+
+.digest-stats {
+  font-size: 13px;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  margin: 2px 0;
+}
+
+.digest-link-line {
+  font-size: 13px;
+  margin: 2px 0 8px 0;
+}
+
+.digest-link-line .digest-link-icon {
+  margin-right: 2px;
+}
+
+.digest-link-line .digest-link {
+  color: var(--highlight);
+  font-family: var(--mono);
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.digest-link-line .digest-link:hover {
+  text-decoration: underline;
+}
+
+.digest-line {
+  font-size: 14px;
+  color: var(--text-dim);
+  line-height: 1.5;
+  margin: 1px 0;
+}
+
+.digest-spacer {
+  height: 4px;
+}
+
+.digest-hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 16px 0;
+}
+
+.digest-articles {
+  padding: 8px 0;
+}
+
+.digest-article-card {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.digest-article-card:last-child {
+  border-bottom: none;
+}
+
+.digest-article-card .source-badge {
+  font-size: 11px;
+  color: var(--highlight);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.digest-article-card .article-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  text-decoration: none;
+  line-height: 1.3;
+}
+
+.digest-article-card .article-title:hover {
+  text-decoration: underline;
+  color: var(--highlight);
+}
+
+.digest-article-card .article-stats {
+  font-size: 13px;
+  color: var(--text-dim);
+  font-family: var(--mono);
+}
+
+.article-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.article-item {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+
+.article-item:hover {
+  background: var(--surface-alt);
+  border-color: var(--highlight);
+}
+
+.article-item.read {
+  opacity: 0.7;
+}
+
+.article-item.read .article-title {
+  text-decoration: line-through;
+  color: var(--text-dim);
+}
+
+.article-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.article-title {
+  font-weight: 600;
+  font-size: 15px;
+  line-height: 1.4;
+  flex: 1;
+}
+
+.article-title a {
+  color: var(--text);
+}
+
+.article-title a:hover {
+  color: var(--highlight);
+}
+
+.article-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.article-meta {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--text-dim);
+  font-family: var(--mono);
+  margin-bottom: 6px;
+}
+
+.article-source {
+  color: var(--highlight);
+  font-weight: 500;
+}
+
+.article-score, .article-comments {
+  background: var(--surface-alt);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.article-summary {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
+.read-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+  border-radius: 6px;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.read-btn:hover {
+  background: var(--highlight);
+  color: #fff;
+  border-color: var(--highlight);
+}
+
+.read-btn.mark-unread {
+  background: var(--success);
+  color: #fff;
+  border-color: var(--success);
+}
 </style>
 </head>
 <body>
@@ -903,6 +1186,8 @@ td:first-child { color: var(--highlight); }
     <button class="tab" data-tab="coding-agent">Coding Agent</button>
     <button class="tab" data-tab="audit">Audit</button>
     <button class="tab" data-tab="logs">Logs</button>
+    <button class="tab" data-tab="digests">Digests</button>
+    <button class="tab" data-tab="skills">Skills</button>
   </div>
 </div>
 
@@ -1007,6 +1292,42 @@ td:first-child { color: var(--highlight); }
     <div style="text-align:center;margin-top:12px;">
       <button class="btn btn-small" id="auditLoadMoreBtn" style="display:none;">Load More</button>
     </div>
+  </div>
+
+  <!-- Digests Tab -->
+  <div class="tab-panel" id="panel-digests">
+    <div class="split">
+      <div class="split-list" id="digestList"></div>
+      <div class="split-detail" id="digestDetail">
+        <div class="empty">Select a digest to view articles</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Skills Tab -->
+  <div class="tab-panel" id="panel-skills">
+    <div class="toolbar">
+      <button class="btn btn-small" id="skillsRefreshBtn">Refresh</button>
+      <button class="btn btn-small btn-success" id="skillsCreateBtn">Create Skill</button>
+      <span id="skillsCount" style="font-size:13px;color:var(--text-dim);margin-left:auto;"></span>
+    </div>
+    <div id="skillsList"></div>
+    <div id="skillsCreateForm" style="display:none;margin-top:16px;">
+      <div class="card">
+        <div class="card-title">Create New Skill</div>
+        <div style="margin-bottom:8px;">
+          <label>Name (alphanumeric + hyphens):</label>
+          <input type="text" id="skillNameInput" placeholder="my-skill" style="width:300px;">
+        </div>
+        <label>SKILL.md content:</label>
+        <textarea id="skillContentInput" style="min-height:300px;" placeholder="---\\nname: my-skill\\ndescription: What this skill does\\nemoji: \\"🔧\\"\\ntags: [\\"example\\"]\\n---\\n\\n# My Skill\\n\\nSkill documentation here..."></textarea>
+        <div class="toolbar" style="margin-top:8px;">
+          <button class="btn btn-success" id="skillSaveNewBtn">Save</button>
+          <button class="btn btn-small" id="skillCancelCreateBtn">Cancel</button>
+        </div>
+      </div>
+    </div>
+    <div id="skillDetail" style="display:none;margin-top:16px;"></div>
   </div>
 
   <!-- Logs Tab -->
@@ -1206,6 +1527,8 @@ function onTabActivated(tab) {
   else if (tab === 'coding-agent') startCaPolling();
   else if (tab === 'audit') loadAudit();
   else if (tab === 'logs') loadLogFiles();
+  else if (tab === 'digests') loadDigests();
+  else if (tab === 'skills') loadSkills();
   else if (tab === 'config') loadConfig();
 }
 
@@ -1870,6 +2193,297 @@ async function populateAgentSelects() {
 
 document.getElementById('memoryAgentSelect').addEventListener('change', loadMemory);
 document.getElementById('templateAgentSelect').addEventListener('change', loadTemplates);
+
+// --- Digests Tab ---
+async function loadDigests() {
+  try {
+    const data = await api('digests');
+    const list = document.getElementById('digestList');
+    if (!data.digests || data.digests.length === 0) {
+      list.innerHTML = '<div class="empty">No digests found</div>';
+      document.getElementById('digestDetail').innerHTML = '<div class="empty">Select a digest to view articles</div>';
+      return;
+    }
+    list.innerHTML = data.digests.map(d =>
+      '<div class="list-item" data-id="' + esc(d.id) + '">' +
+      '<div class="list-item-title">' + esc(d.jobName) + '</div>' +
+      '<div class="list-item-sub">' + d.articleCount + ' articles &middot; ' + formatDate(d.createdAt) + '</div>' +
+      '</div>'
+    ).join('');
+
+    list.querySelectorAll('.list-item').forEach(item => {
+      item.addEventListener('click', () => loadDigestDetail(item.dataset.id));
+    });
+  } catch (e) {
+    document.getElementById('digestList').innerHTML = '<div class="empty">Failed to load digests</div>';
+  }
+}
+
+function extractTitleFromUrl(url) {
+  try {
+    var u = new URL(url);
+    var p = u.pathname.replace(/\\/+$/, '');
+    var segs = p.split('/').filter(Boolean);
+
+    // Reddit: /r/sub/comments/id/title_slug
+    if (u.hostname.includes('reddit.com') && segs.length >= 5) {
+      return decodeURIComponent((segs[4] || segs[segs.length - 1]).replace(/_/g, ' '));
+    }
+    // GitHub: /owner/repo
+    if (u.hostname === 'github.com' && segs.length >= 2) {
+      return segs[0] + '/' + segs[1];
+    }
+    // HN
+    if (u.hostname === 'news.ycombinator.com') {
+      var id = u.searchParams.get('id');
+      return id ? 'Hacker News #' + id : 'Hacker News';
+    }
+    // X/Twitter
+    if (u.hostname === 'x.com' || u.hostname === 'twitter.com') {
+      if (segs.length >= 1) return '@' + segs[0];
+    }
+    // General
+    var last = segs.pop() || '';
+    var decoded = decodeURIComponent(last.replace(/[-_]/g, ' ')).trim();
+    return decoded.length > 0 ? decoded : u.hostname;
+  } catch(e) {
+    return url;
+  }
+}
+
+function formatDigestContent(text) {
+  var lines = text.split('\\n');
+  var html = '';
+  for (var i = 0; i < lines.length; i++) {
+    var raw = lines[i];
+    var trimmed = raw.trim();
+    var line = esc(raw);
+
+    if (trimmed === '') {
+      html += '<div class="digest-spacer"></div>';
+    }
+    else if (/^---+$/.test(trimmed)) {
+      html += '<hr class="digest-hr">';
+    }
+    // Section headers — lines with emoji + ALL CAPS words
+    else if (/^.{1,4}(TOP |GITHUB|HACKER|REDDIT|AI |TRENDS|r\\/)/.test(trimmed) && /[A-Z]/.test(trimmed)) {
+      html += '<div class="digest-section-header">' + line + '</div>';
+    }
+    // Link lines
+    else if (trimmed.indexOf('🔗') === 0 || trimmed.indexOf('🔗') === 0) {
+      var m = raw.match(/https?:\\/\\/[^\\s]+/);
+      if (m) {
+        html += '<div class="digest-link-line">🔗 <a href="' + esc(m[0]) + '" target="_blank" rel="noopener" class="digest-link">' + esc(m[0]) + '</a></div>';
+      } else {
+        html += '<div class="digest-line">' + line + '</div>';
+      }
+    }
+    // Stats lines
+    else if (/^(⬆|🔥|💬)/.test(trimmed)) {
+      html += '<div class="digest-stats">' + line + '</div>';
+    }
+    // Numbered items
+    else if (/^\\d+\\.\\s/.test(trimmed)) {
+      html += '<div class="digest-item-title">' + line + '</div>';
+    }
+    else {
+      var p = line.replace(/(https?:\\/\\/[^\\s&lt;]+)/g, '<a href="$1" target="_blank" rel="noopener" class="digest-link">$1</a>');
+      html += '<div class="digest-line">' + p + '</div>';
+    }
+  }
+  return html;
+}
+
+async function loadDigestDetail(id) {
+  document.querySelectorAll('#digestList .list-item').forEach(i => {
+    i.classList.toggle('active', i.dataset.id === id);
+  });
+  const detail = document.getElementById('digestDetail');
+  try {
+    const data = await api('digests/' + encodeURIComponent(id));
+    const digest = data;
+
+    let html = '<div class="digest-header">';
+    html += '<div class="digest-title">' + esc(digest.jobName) + '</div>';
+    html += '<div class="digest-meta">' + formatDate(digest.createdAt);
+    if (digest.articles && digest.articles.length > 0) {
+      html += ' &middot; ' + digest.articles.length + ' links extracted';
+    }
+    html += '</div></div>';
+
+    // Use reader view for full summaries, article cards for truncated/missing ones
+    var hasFull = digest.summary && digest.summary.length > 1000;
+    if (hasFull) {
+      html += '<div class="digest-reader">' + formatDigestContent(digest.summary) + '</div>';
+    } else if (digest.articles && digest.articles.length > 0) {
+      html += '<div class="digest-articles">';
+      digest.articles.forEach(function(a) {
+        var title = a.title;
+        // If title looks like a bare URL, extract something readable
+        if (/^https?:\\/\\//.test(title)) {
+          title = extractTitleFromUrl(title);
+        }
+        var badge = '<span class="source-badge">' + esc(a.source) + '</span>';
+        var stats = '';
+        if (a.score != null) stats += '⬆️ ' + a.score;
+        if (a.comments != null) stats += (stats ? ' · ' : '') + '💬 ' + a.comments;
+        html += '<div class="digest-article-card">' +
+          badge +
+          '<a href="' + esc(a.url) + '" target="_blank" rel="noopener" class="article-title">' + esc(title) + '</a>' +
+          (stats ? '<div class="article-stats">' + stats + '</div>' : '') +
+          '</div>';
+      });
+      html += '</div>';
+    } else {
+      html += '<div class="empty">No content in this digest</div>';
+    }
+
+    detail.innerHTML = html;
+  } catch (e) {
+    detail.innerHTML = '<div class="empty">Failed to load digest</div>';
+  }
+}
+
+
+// --- Skills Tab ---
+async function loadSkills() {
+  try {
+    const data = await api('skills');
+    const el = document.getElementById('skillsList');
+    const countEl = document.getElementById('skillsCount');
+    const skills = data.skills || [];
+
+    countEl.textContent = skills.length + ' skill' + (skills.length !== 1 ? 's' : '');
+
+    if (skills.length === 0) {
+      el.innerHTML = '<div class="empty">No skills found. Create one or add SKILL.md files to ~/.skimpyclaw/skills/</div>';
+      return;
+    }
+
+    el.innerHTML = skills.map(function(s) {
+      var emoji = s.emoji || '\\u{1F527}';
+      var statusBadge = '';
+      if (!s.eligible) {
+        statusBadge = '<span class="audit-badge error">\\u274C ' + esc(s.reason || 'ineligible') + '</span>';
+      } else if (!s.enabled) {
+        statusBadge = '<span class="audit-badge" style="background:rgba(176,124,26,0.16);color:var(--warning);">\\u26A0\\uFE0F disabled</span>';
+      } else {
+        statusBadge = '<span class="audit-badge ok">\\u2705 eligible</span>';
+      }
+
+      var tags = s.tags && s.tags.length > 0
+        ? s.tags.map(function(t) { return '<span style="background:var(--surface-alt);padding:2px 6px;border-radius:4px;font-size:11px;color:var(--text-dim);">' + esc(t) + '</span>'; }).join(' ')
+        : '';
+
+      return '<div class="audit-entry" style="cursor:pointer;" data-skill="' + esc(s.name) + '">' +
+        '<div class="audit-header">' +
+          '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">' +
+            '<span style="font-size:18px;">' + emoji + '</span>' +
+            '<span class="audit-id">' + esc(s.name) + '</span>' +
+            statusBadge +
+            (tags ? '<span style="display:flex;gap:4px;">' + tags + '</span>' : '') +
+          '</div>' +
+          '<div style="display:flex;gap:8px;align-items:center;">' +
+            '<button class="btn btn-small" onclick="event.stopPropagation();toggleSkill(\\'' + esc(s.name) + '\\',' + (s.enabled ? 'false' : 'true') + ')">' +
+              (s.enabled ? 'Disable' : 'Enable') +
+            '</button>' +
+            '<button class="btn btn-small btn-danger" onclick="event.stopPropagation();deleteSkill(\\'' + esc(s.name) + '\\')">Delete</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="audit-summary"><span>' + esc(s.description || 'No description') + '</span></div>' +
+      '</div>';
+    }).join('');
+
+    el.querySelectorAll('.audit-entry[data-skill]').forEach(function(entry) {
+      entry.addEventListener('click', function() {
+        loadSkillDetail(entry.getAttribute('data-skill'));
+      });
+    });
+  } catch (e) {
+    document.getElementById('skillsList').innerHTML = '<div class="empty">Failed to load skills</div>';
+  }
+}
+
+async function loadSkillDetail(name) {
+  var el = document.getElementById('skillDetail');
+  try {
+    var data = await api('skills/' + encodeURIComponent(name));
+    el.style.display = 'block';
+    el.innerHTML = '<div class="card">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
+        '<div><span style="font-size:20px;">' + (data.emoji || '\\u{1F527}') + '</span> <strong style="font-size:18px;">' + esc(data.name) + '</strong></div>' +
+        '<button class="btn btn-small" onclick="document.getElementById(\\'skillDetail\\').style.display=\\'none\\'">Close</button>' +
+      '</div>' +
+      '<div style="margin-bottom:8px;color:var(--text-dim);">' + esc(data.description || '') + '</div>' +
+      '<div style="display:flex;gap:12px;margin-bottom:12px;font-size:13px;font-family:var(--mono);color:var(--text-dim);">' +
+        '<span>Priority: ' + (data.priority || 100) + '</span>' +
+        '<span>Eligible: ' + (data.eligible ? 'Yes' : 'No') + '</span>' +
+        '<span>Enabled: ' + (data.enabled ? 'Yes' : 'No') + '</span>' +
+      '</div>' +
+      (data.requires ? '<div style="margin-bottom:8px;font-size:13px;"><strong>Requires:</strong> <code>' + esc(JSON.stringify(data.requires)) + '</code></div>' : '') +
+      (data.contexts ? '<div style="margin-bottom:8px;font-size:13px;"><strong>Contexts:</strong> <code>' + esc(JSON.stringify(data.contexts)) + '</code></div>' : '') +
+      '<div style="margin-top:12px;"><strong>Content:</strong></div>' +
+      '<pre style="white-space:pre-wrap;font-size:13px;line-height:1.6;background:var(--surface-alt);padding:12px;border-radius:8px;margin-top:6px;max-height:400px;overflow-y:auto;">' + esc(data.body || '(empty)') + '</pre>' +
+    '</div>';
+  } catch (e) {
+    el.style.display = 'block';
+    el.innerHTML = '<div class="empty">Failed to load skill details</div>';
+  }
+}
+
+async function toggleSkill(name, enabled) {
+  try {
+    await api('skills/' + encodeURIComponent(name), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: enabled })
+    });
+    showToast('Skill ' + name + ' ' + (enabled ? 'enabled' : 'disabled'));
+    loadSkills();
+  } catch (e) {
+    showToast('Failed to update skill: ' + e.message, 'error');
+  }
+}
+
+async function deleteSkill(name) {
+  if (!confirm('Delete skill "' + name + '"? This cannot be undone.')) return;
+  try {
+    await api('skills/' + encodeURIComponent(name), { method: 'DELETE' });
+    showToast('Skill deleted: ' + name);
+    document.getElementById('skillDetail').style.display = 'none';
+    loadSkills();
+  } catch (e) {
+    showToast('Failed to delete skill: ' + e.message, 'error');
+  }
+}
+
+document.getElementById('skillsRefreshBtn').addEventListener('click', loadSkills);
+document.getElementById('skillsCreateBtn').addEventListener('click', function() {
+  document.getElementById('skillsCreateForm').style.display = 'block';
+  document.getElementById('skillNameInput').value = '';
+  document.getElementById('skillContentInput').value = '';
+});
+document.getElementById('skillCancelCreateBtn').addEventListener('click', function() {
+  document.getElementById('skillsCreateForm').style.display = 'none';
+});
+document.getElementById('skillSaveNewBtn').addEventListener('click', async function() {
+  var name = document.getElementById('skillNameInput').value.trim();
+  var content = document.getElementById('skillContentInput').value;
+  if (!name) { showToast('Skill name required', 'error'); return; }
+  if (!content) { showToast('Content required', 'error'); return; }
+  try {
+    await api('skills', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name, content: content })
+    });
+    showToast('Skill created: ' + name);
+    document.getElementById('skillsCreateForm').style.display = 'none';
+    loadSkills();
+  } catch (e) {
+    showToast('Failed to create skill: ' + e.message, 'error');
+  }
+});
 
 // --- Init ---
 startStatusRefresh();

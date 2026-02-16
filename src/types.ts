@@ -1,5 +1,8 @@
 // SkimpyClaw Type Definitions
 
+import type { SkillConfig } from './skills-types.js';
+export type { SkillConfig } from './skills-types.js';
+
 export interface VoiceProviderConfig {
   apiKey?: string;
   baseURL?: string;
@@ -70,6 +73,7 @@ export interface Config {
     exportMode?: 'immediate' | 'batched';
   };
   voice?: VoiceConfig;
+  skills?: SkillConfig;
 }
 
 export interface AgentConfig {

@@ -398,6 +398,61 @@ skimpyclaw tools remove my-server
 
 Built-in tools are hardcoded — they're fundamental to the agent. Browser is opt-in via config. MCP tools are fully dynamic.
 
+## Skills
+
+Skills are reusable, composable capabilities stored in `~/.claude/skills/` that extend SkimpyClaw with specialized knowledge and workflows. Each skill is a self-contained directory with a `SKILL.md` file containing instructions, examples, and reference material.
+
+### How skills work
+
+- Skills provide domain-specific expertise (e.g., PDF processing, data analysis, calendar sync)
+- Each skill has a `SKILL.md` file with detailed usage instructions
+- The agent automatically reads relevant skill files when handling related tasks
+- Skills are modular — add or remove them without changing core code
+
+### Available skills
+
+| Skill | Description |
+|-------|-------------|
+| `a8c-search` | Search Automattic internal sources (FieldGuide, P2s, Slack, Linear) |
+| `a8c-second-brain` | Set up personalized productivity system using Obsidian + Claude Code |
+| `dev-team` | Spawn a 5-person dev team (PM, coder, reviewer, tester, docs) for complex features |
+| `ical-sync` | Sync macOS Calendar events using icalBuddy |
+| `kimi-cli-help` | Kimi Code CLI usage, configuration, and troubleshooting |
+| `qmd-vault-search` | Search Obsidian vault for notes, context, or references |
+| `skill-creator` | Guide for creating effective skills |
+| `test-image-studio` | Test Image Studio asset loading on WordPress using Playwright |
+
+### Using skills
+
+Skills are automatically available to the agent. When you ask about a topic covered by a skill, the agent reads the skill's `SKILL.md` file for guidance.
+
+Example:
+```
+User: "Search my vault for notes about the skimpyclaw project"
+→ Agent reads qmd-vault-search/SKILL.md
+→ Agent uses the skill's workflow to search the vault
+```
+
+### Creating custom skills
+
+To create a new skill:
+
+1. Create a directory: `~/.claude/skills/my-skill/`
+2. Add a `SKILL.md` file with:
+   - Clear description of what the skill does
+   - Usage instructions and examples
+   - Any required tools or dependencies
+   - Workflow patterns and best practices
+
+Example skill structure:
+```
+~/.claude/skills/
+├── my-skill/
+│   ├── SKILL.md          # Main instructions
+│   ├── templates/        # Optional templates
+│   └── scripts/          # Optional helper scripts
+```
+
 ## HTTP endpoints
 
 Gateway routes:

@@ -29,6 +29,9 @@ import {
   getRecentTasks
 } from './subagent.js';
 import { getActiveCodeAgents, getRecentCodeAgents } from './tools.js';
+import { loadSkills } from './skills.js';
+import type { SkillConfig } from './skills-types.js';
+import { loadRawConfig, saveConfig } from './config.js';
 
 const LAUNCHD_LABEL = 'com.skimpyclaw.gateway';
 
@@ -44,6 +47,8 @@ const BOT_COMMANDS: { command: string; description: string }[] = [
   { command: 'cron', description: 'List or run scheduled jobs' },
   { command: 'tasks', description: 'Show active/recent agent tasks' },
   { command: 'cancel', description: 'Cancel a running agent task' },
+  { command: 'skills', description: 'List loaded skills' },
+  { command: 'skill', description: 'Skill details or enable/disable' },
   { command: 'heartbeat', description: 'Trigger heartbeat check' },
   { command: 'restart', description: 'Restart the gateway' }
 ];
@@ -300,15 +305,19 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
 
     // Coding agents status (multi-agent)
     const caActive = getActiveCodeAgents();
-    const caRecent = getRecentCodeAgents(3);
-    const caAll = [...caActive, ...caRecent];
+    const caRecent = getRecentCodeAgents(20);
+    // Deduplicate using agent ID as key
+    const caMap = new Map<string, typeof caActive[0]>();
+    for (const agent of caActive) caMap.set(agent.id, agent);
+    for (const agent of caRecent) caMap.set(agent.id, agent);
+    const caAll = Array.from(caMap.values());
     let caLine = 'Coding Agents: idle';
     if (caAll.length > 0) {
-      const runningCount = caActive.length;
-      const completedCount = caRecent.filter(
+      const runningCount = caAll.filter((t) => t.status === 'running').length;
+      const completedCount = caAll.filter(
         (t) => t.status === 'completed'
       ).length;
-      const failedCount = caRecent.filter(
+      const failedCount = caAll.filter(
         (t) => t.status === 'failed' || t.status === 'timeout'
       ).length;
       const parts: string[] = [];
@@ -485,6 +494,101 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
     } else {
       await ctx.reply(`Task ${id} is already ${task.status}.`);
     }
+  });
+
+  // /skills command — list loaded skills with status
+  bot.command('skills', async (ctx) => {
+    const skillConfig = (cfg as any).skills as SkillConfig | undefined;
+    const skills = loadSkills(skillConfig);
+
+    if (skills.length === 0) {
+      await ctx.reply('No skills found. Add skills to ~/.skimpyclaw/skills/');
+      return;
+    }
+
+    const lines = skills.map(s => {
+      const emoji = s.frontmatter.emoji || '🔧';
+      let status: string;
+      if (!s.eligible) {
+        status = `❌ ${s.reason || 'ineligible'}`;
+      } else if (s.frontmatter.enabled === false) {
+        status = '⚠️ disabled';
+      } else {
+        status = '✅ eligible';
+      }
+      return `${emoji} ${s.name} — ${status}`;
+    });
+
+    await sendLongMessage(ctx, `Skills (${skills.length}):\n\n${lines.join('\n')}\n\nUse /skill <name> for details`);
+  });
+
+  // /skill command — details, enable/disable
+  bot.command('skill', async (ctx) => {
+    const args = ctx.match.trim().split(/\s+/);
+    const subcommand = args[0]?.toLowerCase();
+
+    if (!subcommand) {
+      await ctx.reply('Usage:\n/skill <name> — Show details\n/skill enable <name>\n/skill disable <name>');
+      return;
+    }
+
+    if (subcommand === 'enable' || subcommand === 'disable') {
+      const skillName = args[1];
+      if (!skillName) {
+        await ctx.reply(`Usage: /skill ${subcommand} <name>`);
+        return;
+      }
+
+      const enabled = subcommand === 'enable';
+      try {
+        const raw = loadRawConfig();
+        if (!raw.skills) raw.skills = {};
+        if (!raw.skills.entries) raw.skills.entries = {};
+        raw.skills.entries[skillName] = enabled;
+        saveConfig(raw as any);
+        await ctx.reply(`Skill "${skillName}" ${enabled ? 'enabled' : 'disabled'}.`);
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : 'Unknown error';
+        await ctx.reply(`Error: ${msg}`);
+      }
+      return;
+    }
+
+    // Show skill details
+    const skillName = subcommand;
+    const skillConfig = (cfg as any).skills as SkillConfig | undefined;
+    const skills = loadSkills(skillConfig);
+    const skill = skills.find(s => s.name === skillName);
+
+    if (!skill) {
+      await ctx.reply(`Skill "${skillName}" not found.\nUse /skills to see available skills.`);
+      return;
+    }
+
+    const emoji = skill.frontmatter.emoji || '🔧';
+    const status = skill.eligible
+      ? (skill.frontmatter.enabled !== false ? '✅ Eligible' : '⚠️ Disabled')
+      : `❌ ${skill.reason || 'Ineligible'}`;
+    const tags = skill.frontmatter.tags?.join(', ') || 'none';
+    const contexts = skill.frontmatter.contexts
+      ? JSON.stringify(skill.frontmatter.contexts)
+      : 'all';
+    const reqs = skill.frontmatter.requires
+      ? Object.entries(skill.frontmatter.requires)
+          .filter(([_, v]) => v && (v as any[]).length > 0)
+          .map(([k, v]) => `${k}: ${(v as string[]).join(', ')}`)
+          .join('\n  ') || 'none'
+      : 'none';
+
+    const detail = `${emoji} ${skill.name}\n\n` +
+      `${skill.frontmatter.description}\n\n` +
+      `Status: ${status}\n` +
+      `Priority: ${skill.frontmatter.priority ?? 100}\n` +
+      `Tags: ${tags}\n` +
+      `Contexts: ${contexts}\n` +
+      `Requires:\n  ${reqs}`;
+
+    await sendLongMessage(ctx, detail);
   });
 
   // /new command — clear conversation history
@@ -801,6 +905,97 @@ function escapeHtml(text: string): string {
     .replace(/>/g, '&gt;');
 }
 
+// Convert markdown to Telegram-compatible HTML
+function markdownToTelegramHtml(md: string): string {
+  const lines = md.split('\n');
+  const result: string[] = [];
+  let inCodeBlock = false;
+  let codeBlockLang = '';
+  let codeLines: string[] = [];
+
+  for (const line of lines) {
+    // Code block toggle
+    if (line.trimStart().startsWith('```')) {
+      if (!inCodeBlock) {
+        inCodeBlock = true;
+        codeBlockLang = line.trimStart().slice(3).trim();
+        codeLines = [];
+        continue;
+      } else {
+        // Close code block
+        inCodeBlock = false;
+        const code = escapeHtml(codeLines.join('\n'));
+        if (codeBlockLang) {
+          result.push(`<pre><code class="language-${escapeHtml(codeBlockLang)}">${code}</code></pre>`);
+        } else {
+          result.push(`<pre>${code}</pre>`);
+        }
+        continue;
+      }
+    }
+
+    if (inCodeBlock) {
+      codeLines.push(line);
+      continue;
+    }
+
+    // Horizontal rules
+    if (/^---+$/.test(line.trim())) {
+      result.push('─────────────────');
+      continue;
+    }
+
+    // Blockquotes
+    if (line.trimStart().startsWith('> ')) {
+      const content = formatInline(line.replace(/^\s*>\s*/, ''));
+      result.push(`<blockquote>${content}</blockquote>`);
+      continue;
+    }
+
+    // Headers → bold
+    const headerMatch = line.match(/^(#{1,6})\s+(.+)/);
+    if (headerMatch) {
+      result.push(`<b>${formatInline(headerMatch[2])}</b>`);
+      continue;
+    }
+
+    // Regular line — apply inline formatting
+    result.push(formatInline(line));
+  }
+
+  // If code block was never closed
+  if (inCodeBlock && codeLines.length > 0) {
+    const code = escapeHtml(codeLines.join('\n'));
+    result.push(`<pre>${code}</pre>`);
+  }
+
+  return result.join('\n');
+}
+
+// Apply inline markdown formatting (bold, italic, code, links, strikethrough)
+function formatInline(text: string): string {
+  let out = escapeHtml(text);
+
+  // Inline code (must be before bold/italic to avoid conflicts)
+  out = out.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+  // Bold: **text** or __text__
+  out = out.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+  out = out.replace(/__(.+?)__/g, '<b>$1</b>');
+
+  // Italic: *text* or _text_ (but not inside words for underscore)
+  out = out.replace(/(?<!\w)\*([^*]+)\*(?!\w)/g, '<i>$1</i>');
+  out = out.replace(/(?<!\w)_([^_]+)_(?!\w)/g, '<i>$1</i>');
+
+  // Strikethrough: ~~text~~
+  out = out.replace(/~~(.+?)~~/g, '<s>$1</s>');
+
+  // Links: [text](url)
+  out = out.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+
+  return out;
+}
+
 // Send long message with HTML parse mode (for blockquotes etc.)
 async function sendLongMessageHtml(
   ctx: Context,
@@ -838,40 +1033,14 @@ async function sendLongMessageHtml(
   }
 }
 
-// Helper to send long messages (Telegram has 4096 char limit)
+// Helper to send long messages with markdown→HTML conversion
 async function sendLongMessage(
   ctx: Context,
   text: string,
   replyToMessageId?: number
 ): Promise<void> {
-  const MAX_LENGTH = 4000;
-  const replyOpts = replyToMessageId
-    ? { reply_parameters: { message_id: replyToMessageId } }
-    : {};
-
-  if (text.length <= MAX_LENGTH) {
-    await ctx.reply(text, replyOpts);
-    return;
-  }
-
-  // Split on paragraph boundaries
-  const chunks: string[] = [];
-  let current = '';
-
-  for (const paragraph of text.split('\n\n')) {
-    if (current.length + paragraph.length + 2 > MAX_LENGTH) {
-      if (current) chunks.push(current.trim());
-      current = paragraph;
-    } else {
-      current += (current ? '\n\n' : '') + paragraph;
-    }
-  }
-  if (current) chunks.push(current.trim());
-
-  for (let i = 0; i < chunks.length; i++) {
-    // Only reply-to on the first chunk
-    await ctx.reply(chunks[i], i === 0 ? replyOpts : {});
-  }
+  const html = markdownToTelegramHtml(text);
+  await sendLongMessageHtml(ctx, html, replyToMessageId);
 }
 
 export async function startTelegram(): Promise<void> {

@@ -1,8 +1,9 @@
 // Dashboard API endpoints
 
 import { FastifyInstance } from 'fastify';
-import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, readdirSync, statSync, mkdirSync, rmSync } from 'fs';
 import { join, basename, resolve } from 'path';
+import { homedir } from 'os';
 import type { Config } from './types.js';
 import {
   loadConfig,
@@ -25,6 +26,9 @@ import { redactSecrets } from './security.js';
 import { getActiveTasks, getRecentTasks } from './subagent.js';
 import { readAuditTraces } from './audit.js';
 import { getAllCodeAgents, getCodeAgent } from './tools.js';
+import { getDigests, getDigest, deleteDigest, updateArticleReadStatus } from './digests.js';
+import { loadSkills } from './skills.js';
+import type { SkillConfig } from './skills-types.js';
 
 function validateFilename(filename: string): boolean {
   return !filename.includes('..') && filename === basename(filename);
@@ -33,6 +37,14 @@ function validateFilename(filename: string): boolean {
 function validateAgentId(agentId: string): boolean {
   // Agent IDs should be simple identifiers: alphanumeric, hyphens, underscores
   return /^[a-zA-Z0-9_-]+$/.test(agentId);
+}
+
+function validateSkillName(name: string): boolean {
+  return /^[a-zA-Z0-9-]+$/.test(name) && name.length <= 100;
+}
+
+function getSkillsDir(config: Config): string {
+  return (config as any).skills?.directory || join(homedir(), '.skimpyclaw', 'skills');
 }
 
 function validateModelString(model: string): boolean {
@@ -531,6 +543,174 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
       return reply.code(404).send({ error: 'Code agent not found' });
     }
     return agent;
+  });
+
+  // --- Digests ---
+  fastify.get('/api/dashboard/digests', async () => {
+    const digests = getDigests();
+    return { digests };
+  });
+
+  fastify.get<{ Params: { id: string } }>('/api/dashboard/digests/:id', async (request, reply) => {
+    const { id } = request.params;
+    const digest = getDigest(id);
+    if (!digest) {
+      return reply.code(404).send({ error: 'Digest not found' });
+    }
+    return digest;
+  });
+
+  fastify.delete<{ Params: { id: string } }>('/api/dashboard/digests/:id', async (request, reply) => {
+    const { id } = request.params;
+    const deleted = deleteDigest(id);
+    if (!deleted) {
+      return reply.code(404).send({ error: 'Digest not found' });
+    }
+    return { deleted: true };
+  });
+
+  fastify.post<{ Params: { digestId: string; articleId: string }; Body: { read?: boolean } }>('/api/dashboard/digests/:digestId/articles/:articleId/read', async (request, reply) => {
+    const { digestId, articleId } = request.params;
+    const read = typeof request.body?.read === 'boolean' ? request.body.read : true;
+    const updated = updateArticleReadStatus(digestId, articleId, read);
+    if (!updated) {
+      return reply.code(404).send({ error: 'Digest or article not found' });
+    }
+    return { updated: true, read };
+  });
+
+  // --- Skills ---
+  fastify.get('/api/dashboard/skills', async () => {
+    const skillConfig = (config as any).skills as SkillConfig | undefined;
+    const skills = loadSkills(skillConfig);
+    return {
+      skills: skills.map(s => ({
+        name: s.name,
+        description: s.frontmatter.description,
+        emoji: s.frontmatter.emoji,
+        tags: s.frontmatter.tags,
+        enabled: s.frontmatter.enabled !== false,
+        eligible: s.eligible,
+        reason: s.reason,
+        priority: s.frontmatter.priority,
+        contexts: s.frontmatter.contexts,
+        requires: s.frontmatter.requires,
+      })),
+    };
+  });
+
+  fastify.get<{ Params: { name: string } }>('/api/dashboard/skills/:name', async (request, reply) => {
+    const { name } = request.params;
+    if (!validateSkillName(name)) {
+      return reply.code(400).send({ error: 'Invalid skill name' });
+    }
+
+    const skillConfig = (config as any).skills as SkillConfig | undefined;
+    const skills = loadSkills(skillConfig);
+    const skill = skills.find(s => s.name === name);
+    if (!skill) {
+      return reply.code(404).send({ error: 'Skill not found' });
+    }
+
+    // Read the raw SKILL.md content
+    const skillPath = join(skill.dirPath, 'SKILL.md');
+    let rawContent = '';
+    if (existsSync(skillPath)) {
+      rawContent = readFileSync(skillPath, 'utf-8');
+    }
+
+    return {
+      name: skill.name,
+      description: skill.frontmatter.description,
+      emoji: skill.frontmatter.emoji,
+      tags: skill.frontmatter.tags,
+      enabled: skill.frontmatter.enabled !== false,
+      eligible: skill.eligible,
+      reason: skill.reason,
+      priority: skill.frontmatter.priority,
+      contexts: skill.frontmatter.contexts,
+      requires: skill.frontmatter.requires,
+      body: skill.body,
+      rawContent,
+    };
+  });
+
+  fastify.put<{
+    Params: { name: string };
+    Body: { enabled?: boolean };
+  }>('/api/dashboard/skills/:name', async (request, reply) => {
+    const { name } = request.params;
+    if (!validateSkillName(name)) {
+      return reply.code(400).send({ error: 'Invalid skill name' });
+    }
+
+    // Verify skill exists
+    const skillDir = join(getSkillsDir(config), name);
+    if (!existsSync(join(skillDir, 'SKILL.md'))) {
+      return reply.code(404).send({ error: 'Skill not found' });
+    }
+
+    const { enabled } = request.body;
+    if (typeof enabled !== 'boolean') {
+      return reply.code(400).send({ error: 'enabled (boolean) required' });
+    }
+
+    // Update config.skills.entries[name]
+    const raw = loadRawConfig();
+    if (!raw.skills) raw.skills = {};
+    if (!raw.skills.entries) raw.skills.entries = {};
+    raw.skills.entries[name] = enabled;
+    saveConfig(raw as Config);
+
+    return { updated: true, name, enabled };
+  });
+
+  fastify.post<{
+    Body: { name: string; content: string };
+  }>('/api/dashboard/skills', async (request, reply) => {
+    const { name, content } = request.body;
+    if (!name || !validateSkillName(name)) {
+      return reply.code(400).send({ error: 'Invalid or missing skill name (alphanumeric + hyphens only)' });
+    }
+    if (!content || typeof content !== 'string') {
+      return reply.code(400).send({ error: 'content (string) required' });
+    }
+
+    const skillsDir = getSkillsDir(config);
+    const skillDir = join(skillsDir, name);
+
+    if (existsSync(join(skillDir, 'SKILL.md'))) {
+      return reply.code(409).send({ error: 'Skill already exists' });
+    }
+
+    // Ensure directories exist
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(join(skillDir, 'SKILL.md'), content, 'utf-8');
+
+    return { created: true, name };
+  });
+
+  fastify.delete<{ Params: { name: string } }>('/api/dashboard/skills/:name', async (request, reply) => {
+    const { name } = request.params;
+    if (!validateSkillName(name)) {
+      return reply.code(400).send({ error: 'Invalid skill name' });
+    }
+
+    const skillDir = join(getSkillsDir(config), name);
+    if (!existsSync(skillDir)) {
+      return reply.code(404).send({ error: 'Skill not found' });
+    }
+
+    rmSync(skillDir, { recursive: true, force: true });
+
+    // Also remove from config entries if present
+    const raw = loadRawConfig();
+    if (raw.skills?.entries?.[name] !== undefined) {
+      delete raw.skills.entries[name];
+      saveConfig(raw as Config);
+    }
+
+    return { deleted: true, name };
   });
 
 }
