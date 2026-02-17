@@ -237,7 +237,7 @@ export function ensureAgentSetup(type: SubagentType, config: Config): void {
     const identity = AGENT_IDENTITIES[type];
     config.agents.list[preset.agentId] = {
       identity,
-      model: preset.defaultModel || 'anthropic/claude-sonnet-4-5',
+      model: preset.defaultModel || 'anthropic/claude-sonnet-4-6',
       thinking: 'medium'
     };
     console.log(`[subagent] Registered agent in config: ${preset.agentId}`);

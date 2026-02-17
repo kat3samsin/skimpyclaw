@@ -16,7 +16,7 @@ let currentModel: string;
 export async function createGateway(cfg: Config): Promise<FastifyInstance> {
   config = cfg;
   startTime = new Date();
-  currentModel = cfg.agents.list[cfg.agents.default]?.model || 'claude-sonnet-4-20250514';
+  currentModel = cfg.agents.list[cfg.agents.default]?.model || 'claude-sonnet-4-6';
 
   const fastify = Fastify({
     logger: {

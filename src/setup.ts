@@ -192,9 +192,9 @@ function buildAliases(providers: Set<ProviderChoice>): Record<string, string> {
 
   if (hasAnthropic) {
     aliases.fast = 'anthropic/claude-3-5-haiku-20241022';
-    aliases.smart = 'anthropic/claude-sonnet-4-20250514';
+    aliases.smart = 'anthropic/claude-sonnet-4-6';
     aliases.opus = 'anthropic/claude-opus-4-6';
-    aliases['claude-think'] = 'anthropic/claude-sonnet-4-20250514';
+    aliases['claude-think'] = 'anthropic/claude-sonnet-4-6';
   }
 
   if (providers.has('openai-api')) {

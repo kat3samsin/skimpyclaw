@@ -18,7 +18,7 @@ describe('setup config generation', () => {
     expect(config.models.providers.codex.authPath).toBe('${HOME}/.codex/auth.json');
     expect(config.channels.telegram.allowFrom).toEqual([12345]);
     expect(config.channels.telegram.defaultAllowedPaths).toContain('/tmp/workspace');
-    expect(config.models.aliases['claude-think']).toBe('anthropic/claude-sonnet-4-20250514');
+    expect(config.models.aliases['claude-think']).toBe('anthropic/claude-sonnet-4-6');
     expect(config.models.aliases.codex).toBe('codex/codex-5.3');
   });
 
