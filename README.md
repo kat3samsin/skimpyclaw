@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="logo.png" alt="SkimpyClaw" width="300">
-</p>
-
 # SkimpyClaw 👙🦞
 
 SkimpyClaw is a tiny, cheeky, mini-"me" inspired by OpenClaw.
