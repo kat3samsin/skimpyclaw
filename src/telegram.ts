@@ -1,6 +1,6 @@
 // Telegram bot using Grammy
 
-import { Bot, Context, GrammyError, HttpError } from 'grammy';
+import { Bot, Context, GrammyError, HttpError, InlineKeyboard } from 'grammy';
 import { run, RunnerHandle } from '@grammyjs/runner';
 import {
   readFileSync,
@@ -29,6 +29,14 @@ import {
   getRecentTasks
 } from './subagent.js';
 import { getActiveCodeAgents, getRecentCodeAgents } from './tools.js';
+import {
+  listApprovals,
+  approveRequest,
+  denyRequest,
+  getApproval,
+  onApprovalEvent,
+  type PendingApproval,
+} from './exec-approval.js';
 import { loadSkills } from './skills.js';
 import type { SkillConfig } from './skills-types.js';
 import { loadRawConfig, saveConfig } from './config.js';
@@ -49,6 +57,9 @@ const BOT_COMMANDS: { command: string; description: string }[] = [
   { command: 'cancel', description: 'Cancel a running agent task' },
   { command: 'skills', description: 'List loaded skills' },
   { command: 'skill', description: 'Skill details or enable/disable' },
+  { command: 'approvals', description: 'List pending exec approvals' },
+  { command: 'approve', description: 'Approve an exec request by ID' },
+  { command: 'deny', description: 'Deny an exec request by ID' },
   { command: 'heartbeat', description: 'Trigger heartbeat check' },
   { command: 'restart', description: 'Restart the gateway' }
 ];
@@ -589,6 +600,164 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
       `Requires:\n  ${reqs}`;
 
     await sendLongMessage(ctx, detail);
+  });
+
+  // /approvals command — list pending exec approvals with inline buttons
+  bot.command('approvals', async (ctx) => {
+    const pending = listApprovals();
+    if (pending.length === 0) {
+      await ctx.reply('No pending exec approvals.');
+      return;
+    }
+
+    for (const approval of pending.slice(0, 10)) {
+      const cmdPreview = approval.command.length > 80
+        ? approval.command.slice(0, 80) + '...'
+        : approval.command;
+      const expiresIn = Math.max(0, Math.round((approval.expiresAt.getTime() - Date.now()) / 1000));
+      const expiresStr = expiresIn < 60 ? `${expiresIn}s` : `${Math.floor(expiresIn / 60)}m`;
+
+      const keyboard = new InlineKeyboard()
+        .text('✅ Approve', `approve:${approval.id}`)
+        .text('❌ Deny', `deny:${approval.id}`);
+
+      await ctx.reply(
+        `⛔ Approval #${approval.id}\n` +
+        `Tier ${approval.tier}: ${approval.reason}\n` +
+        `Command: ${cmdPreview}\n` +
+        `${approval.cwd ? `CWD: ${approval.cwd}\n` : ''}` +
+        `Expires in: ${expiresStr}`,
+        { reply_markup: keyboard }
+      );
+    }
+  });
+
+  // /approve <id> command
+  bot.command('approve', async (ctx) => {
+    const id = ctx.match.trim();
+    if (!id) {
+      await ctx.reply('Usage: /approve <id>');
+      return;
+    }
+    const approvedBy = ctx.from?.username || ctx.from?.id?.toString() || 'telegram';
+    const success = approveRequest(id, approvedBy);
+    if (success) {
+      await ctx.reply(`✅ Approved #${id}`);
+    } else {
+      const existing = getApproval(id);
+      if (existing) {
+        await ctx.reply(`Cannot approve #${id} — status is already "${existing.status}".`);
+      } else {
+        await ctx.reply(`No pending approval found with ID "${id}".`);
+      }
+    }
+  });
+
+  // /deny <id> command
+  bot.command('deny', async (ctx) => {
+    const id = ctx.match.trim();
+    if (!id) {
+      await ctx.reply('Usage: /deny <id>');
+      return;
+    }
+    const deniedBy = ctx.from?.username || ctx.from?.id?.toString() || 'telegram';
+    const success = denyRequest(id, deniedBy);
+    if (success) {
+      await ctx.reply(`❌ Denied #${id}`);
+    } else {
+      const existing = getApproval(id);
+      if (existing) {
+        await ctx.reply(`Cannot deny #${id} — status is already "${existing.status}".`);
+      } else {
+        await ctx.reply(`No pending approval found with ID "${id}".`);
+      }
+    }
+  });
+
+  // Inline button callback handler for approval buttons
+  bot.on('callback_query:data', async (ctx) => {
+    const data = ctx.callbackQuery.data;
+    if (!data) return;
+
+    const [action, id] = data.split(':');
+    if (!id || (action !== 'approve' && action !== 'deny')) {
+      await ctx.answerCallbackQuery({ text: 'Unknown action' });
+      return;
+    }
+
+    const by = ctx.from?.username || ctx.from?.id?.toString() || 'telegram';
+    let success: boolean;
+    let statusText: string;
+
+    if (action === 'approve') {
+      success = approveRequest(id, by);
+      statusText = success ? `✅ Approved by @${by}` : 'Failed — not pending';
+    } else {
+      success = denyRequest(id, by);
+      statusText = success ? `❌ Denied by @${by}` : 'Failed — not pending';
+    }
+
+    await ctx.answerCallbackQuery({ text: statusText });
+
+    // Update the message to reflect resolution
+    try {
+      const approval = getApproval(id);
+      if (approval) {
+        const cmdPreview = approval.command.length > 80
+          ? approval.command.slice(0, 80) + '...'
+          : approval.command;
+        await ctx.editMessageText(
+          `${statusText}\n\n` +
+          `Approval #${id}\n` +
+          `Tier ${approval.tier}: ${approval.reason}\n` +
+          `Command: ${cmdPreview}`
+        );
+      }
+    } catch {
+      // Message may already be edited or deleted — ignore
+    }
+  });
+
+  // Subscribe to approval-created events — proactively notify the originating chat
+  onApprovalEvent('created', (event) => {
+    if (!bot) return;
+    const { approval } = event;
+    const meta = approval.channelMeta;
+
+    // Only post telegram-origin approvals; skip if explicitly from another channel
+    if (meta?.channel && meta.channel !== 'telegram') return;
+
+    let targetChatId: number | undefined;
+    if (meta?.channel === 'telegram' && meta.chatId) {
+      targetChatId = typeof meta.chatId === 'number' ? meta.chatId : Number(meta.chatId);
+    }
+    if (!targetChatId) {
+      // Fallback to default chat only when origin is unknown (no meta)
+      targetChatId = getTelegramDefaultChatId(cfg) ?? undefined;
+    }
+    if (!targetChatId || !Number.isFinite(targetChatId)) return;
+
+    const cmdPreview = approval.command.length > 80
+      ? approval.command.slice(0, 80) + '...'
+      : approval.command;
+    const expiresIn = Math.max(0, Math.round((approval.expiresAt.getTime() - Date.now()) / 1000));
+    const expiresStr = expiresIn < 60 ? `${expiresIn}s` : `${Math.floor(expiresIn / 60)}m`;
+
+    const keyboard = new InlineKeyboard()
+      .text('✅ Approve', `approve:${approval.id}`)
+      .text('❌ Deny', `deny:${approval.id}`);
+
+    bot!.api.sendMessage(
+      targetChatId,
+      `⛔ Exec approval needed: #${approval.id}\n` +
+      `Tier ${approval.tier}: ${approval.reason}\n` +
+      `Command: ${cmdPreview}\n` +
+      `${approval.cwd ? `CWD: ${approval.cwd}\n` : ''}` +
+      `Expires in: ${expiresStr}`,
+      { reply_markup: keyboard }
+    ).catch((err) => {
+      console.error('[telegram] Failed to send approval notification:', err);
+    });
   });
 
   // /new command — clear conversation history

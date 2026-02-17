@@ -98,11 +98,43 @@ const LANGFUSE_APP_NAME = 'skimpyclaw';
 const LANGFUSE_APP_TAG = 'app:skimpyclaw';
 
 /** Build Langfuse costDetails from model + token usage. Returns undefined if no pricing data. */
-function toCostDetails(model: string, usage: { prompt_tokens?: number; completion_tokens?: number } | null | undefined): { input: number; output: number; total: number } | undefined {
-  if (!usage?.prompt_tokens && !usage?.completion_tokens) return undefined;
-  const cost = calculateUsageCost(model, usage?.prompt_tokens ?? 0, usage?.completion_tokens ?? 0);
+function toCostDetails(model: string, usage: { prompt_tokens?: number; completion_tokens?: number; input_tokens?: number; output_tokens?: number } | null | undefined): { input: number; output: number; total: number } | undefined {
+  // Support both OpenAI (prompt_tokens/completion_tokens) and Anthropic (input_tokens/output_tokens)
+  const inputTok = usage?.prompt_tokens ?? usage?.input_tokens ?? 0;
+  const outputTok = usage?.completion_tokens ?? usage?.output_tokens ?? 0;
+  if (!inputTok && !outputTok) return undefined;
+  const cost = calculateUsageCost(model, inputTok, outputTok);
   if (cost.totalCost === 0) return undefined;
   return { input: cost.inputCost, output: cost.outputCost, total: cost.totalCost };
+}
+
+/** Normalize Anthropic usage (input_tokens/output_tokens) to Langfuse format */
+function toAnthropicUsageDetails(usage: any): Record<string, number> | undefined {
+  if (!usage) return undefined;
+  const details: Record<string, number> = {};
+
+  // Map Anthropic fields to standard names Langfuse expects
+  if (typeof usage.input_tokens === 'number') {
+    details.prompt_tokens = usage.input_tokens;
+    details.input_tokens = usage.input_tokens;
+  }
+  if (typeof usage.output_tokens === 'number') {
+    details.completion_tokens = usage.output_tokens;
+    details.output_tokens = usage.output_tokens;
+  }
+  if (details.prompt_tokens != null && details.completion_tokens != null) {
+    details.total_tokens = details.prompt_tokens + details.completion_tokens;
+  }
+
+  // Include cache details if present
+  if (typeof usage.cache_creation_input_tokens === 'number') {
+    details.cache_creation_input_tokens = usage.cache_creation_input_tokens;
+  }
+  if (typeof usage.cache_read_input_tokens === 'number') {
+    details.cache_read_input_tokens = usage.cache_read_input_tokens;
+  }
+
+  return Object.keys(details).length > 0 ? details : undefined;
 }
 
 function startGenerationObservation(name: string, attributes: Record<string, any>) {
@@ -309,6 +341,12 @@ function parseCodexSSE(text: string): { outputText: string; functionCalls: any[]
         if (!outputText) outputText = item.text;
       }
     }
+  }
+
+  if (completedResponse?.usage) {
+    console.log(`[codex] Usage: ${JSON.stringify(completedResponse.usage)}`);
+  } else {
+    console.log('[codex] No usage data in response');
   }
 
   return { outputText, functionCalls, response: completedResponse };
@@ -697,7 +735,8 @@ export async function chat(
       const text = textContent?.text || '';
       genObs?.update({
         output: { text },
-        usageDetails: (response as any).usage,
+        usageDetails: toAnthropicUsageDetails((response as any).usage),
+        costDetails: toCostDetails(modelId, (response as any).usage),
       });
       genObs?.end();
 
@@ -848,7 +887,8 @@ export async function chatWithTools(
       response = await anthropicClient.messages.create(params);
       genObs?.update({
         output: response.content,
-        usageDetails: (response as any).usage,
+        usageDetails: toAnthropicUsageDetails((response as any).usage),
+        costDetails: toCostDetails(modelId, (response as any).usage),
       });
       genObs?.end();
     } catch (err) {
@@ -1195,6 +1235,15 @@ export async function runAgentTurn(
   // Build tool context once — used by all providers for spawn_subagent and file locking
   const chatIdNum = (context?.metadata as any)?.chatId
     ?? (context?.sessionId ? parseInt(context.sessionId, 10) : undefined);
+
+  // Determine channel target ID: for Telegram use numeric chatId, for Discord use sessionId string (snowflake)
+  let channelTargetId: string | number | undefined;
+  if (context?.channel === 'telegram') {
+    channelTargetId = (context.metadata as any)?.chatId;
+  } else if (context?.channel === 'discord') {
+    channelTargetId = context.sessionId; // Discord channel snowflake — keep as string
+  }
+
   const toolCtx: ExecuteToolContext = {
     chatId: Number.isFinite(chatIdNum) ? chatIdNum : undefined,
     fullConfig: config,
@@ -1202,6 +1251,10 @@ export async function runAgentTurn(
     abortSignal: context?.abortSignal,
     lockTaskId: context?.sessionId,
     auditTraceId,
+    channel: context?.channel,
+    channelTargetId,
+    approverUserId: context?.userId,
+    approverUsername: (context?.metadata as any)?.username,
   };
 
   const runTurn = async (): Promise<string> => {

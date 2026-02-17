@@ -20,13 +20,15 @@ export interface UsageCost {
 
 /** Pricing data for known models (USD per million tokens) */
 export const MODEL_PRICING: Record<string, ModelPricing> = {
-  // Claude models
-  'claude-3-5-sonnet-20241022': { inputPerMTok: 3.0, outputPerMTok: 15.0 },
-  'claude-3-5-haiku-20241022': { inputPerMTok: 0.8, outputPerMTok: 4.0 },
-  'claude-3-opus-20240229': { inputPerMTok: 15.0, outputPerMTok: 75.0 },
-  'claude-sonnet-4-20250514': { inputPerMTok: 3.0, outputPerMTok: 15.0 },
-  'claude-haiku-4.5-20250110': { inputPerMTok: 0.25, outputPerMTok: 1.25 },
-  'claude-opus-4.6-20250514': { inputPerMTok: 15.0, outputPerMTok: 75.0 },
+  // Claude models — base IDs (prefix matching handles dated variants like -20251001)
+  'claude-3-5-sonnet': { inputPerMTok: 3.0, outputPerMTok: 15.0 },
+  'claude-3-5-haiku': { inputPerMTok: 0.8, outputPerMTok: 4.0 },
+  'claude-3-opus': { inputPerMTok: 15.0, outputPerMTok: 75.0 },
+  'claude-sonnet-4-5': { inputPerMTok: 3.0, outputPerMTok: 15.0 },
+  'claude-sonnet-4': { inputPerMTok: 3.0, outputPerMTok: 15.0 },
+  'claude-haiku-4-5': { inputPerMTok: 0.25, outputPerMTok: 1.25 },
+  'claude-haiku-4': { inputPerMTok: 1.0, outputPerMTok: 5.0 },
+  'claude-opus-4': { inputPerMTok: 15.0, outputPerMTok: 75.0 },
 
   // OpenAI models (https://developers.openai.com/api/docs/pricing)
   'gpt-4o': { inputPerMTok: 2.5, outputPerMTok: 10.0 },
@@ -37,8 +39,8 @@ export const MODEL_PRICING: Record<string, ModelPricing> = {
   'gpt-4-turbo': { inputPerMTok: 10.0, outputPerMTok: 30.0 },
   'gpt-3.5-turbo': { inputPerMTok: 0.5, outputPerMTok: 1.5 },
   // Codex pricing aligns to current GPT-5.2 codex rates
-  'gpt-codex-5.2': { inputPerMTok: 1.75, outputPerMTok: 14.0 },
-  'gpt-codex-5.3': { inputPerMTok: 1.75, outputPerMTok: 14.0 },
+  'gpt-5.2-codex': { inputPerMTok: 1.75, outputPerMTok: 14.0 },
+  'gpt-5.3-codex': { inputPerMTok: 1.75, outputPerMTok: 14.0 },
   'codex-5.2': { inputPerMTok: 1.75, outputPerMTok: 14.0 },
   'codex-5.3': { inputPerMTok: 1.75, outputPerMTok: 14.0 },
 
@@ -53,15 +55,15 @@ export const MODEL_PRICING: Record<string, ModelPricing> = {
 
 /** Map of common aliases/shorthand to canonical model IDs in MODEL_PRICING */
 const MODEL_ALIAS_MAP: Record<string, string> = {
-  // Claude aliases
-  sonnet: 'claude-sonnet-4-20250514',
-  'claude-sonnet': 'claude-sonnet-4-20250514',
-  haiku: 'claude-haiku-4.5-20250110',
-  'claude-haiku': 'claude-haiku-4.5-20250110',
-  opus: 'claude-opus-4.6-20250514',
-  'claude-opus': 'claude-opus-4.6-20250514',
-  'claude-3.5-sonnet': 'claude-3-5-sonnet-20241022',
-  'claude-3-opus': 'claude-3-opus-20240229',
+  // Claude aliases → base keys in MODEL_PRICING (prefix matching handles dated variants)
+  sonnet: 'claude-sonnet-4',
+  'claude-sonnet': 'claude-sonnet-4',
+  haiku: 'claude-haiku-4-5',
+  'claude-haiku': 'claude-haiku-4-5',
+  opus: 'claude-opus-4',
+  'claude-opus': 'claude-opus-4',
+  'claude-3.5-sonnet': 'claude-3-5-sonnet',
+  'claude-3-opus': 'claude-3-opus',
 
   // OpenAI aliases
   gpt4o: 'gpt-4o',
@@ -72,8 +74,10 @@ const MODEL_ALIAS_MAP: Record<string, string> = {
   'gpt4-turbo': 'gpt-4-turbo',
   'gpt35-turbo': 'gpt-3.5-turbo',
   'gpt-3.5': 'gpt-3.5-turbo',
-  'gpt-codex': 'gpt-codex-5.3',
-  codex: 'codex-5.3',
+  'gpt-codex': 'gpt-5.3-codex',
+  codex: 'gpt-5.3-codex',
+  'codex-spark': 'gpt-5.3-codex',
+  'gpt-5.3-codex-spark': 'gpt-5.3-codex',
 
   // MiniMax aliases
   minimax: 'minimax-m2.5',
@@ -98,9 +102,21 @@ export function calculateUsageCost(
     ? model.split('/').slice(1).join('/')
     : model;
 
-  // Try direct match, then alias lookup
-  const pricing =
+  // Try direct match, then alias lookup, then prefix matching
+  // Prefix matching handles dated variants like "claude-haiku-4-5-20251001" → "claude-haiku-4-5"
+  let pricing =
     MODEL_PRICING[bare] ?? MODEL_PRICING[MODEL_ALIAS_MAP[bare] ?? ''];
+
+  if (!pricing) {
+    // Prefix match: find longest pricing key that the model ID starts with
+    let bestKey = '';
+    for (const key of Object.keys(MODEL_PRICING)) {
+      if (bare.startsWith(key) && key.length > bestKey.length) {
+        bestKey = key;
+      }
+    }
+    if (bestKey) pricing = MODEL_PRICING[bestKey];
+  }
 
   if (!pricing) {
     return { inputCost: 0, outputCost: 0, totalCost: 0 };

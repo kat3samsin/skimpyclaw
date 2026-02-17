@@ -12,6 +12,7 @@ import {
   createApprovalRequest,
   findApprovedRequest,
   consumeApproval,
+  type ApprovalChannelMeta,
 } from './exec-approval.js';
 
 /** Resolve full path for a CLI command. Falls back to the name itself if not found. */
@@ -370,6 +371,14 @@ export interface ExecuteToolContext {
   history?: import('./types.js').ChatMessage[];
   /** Audit trace ID for recording tool events */
   auditTraceId?: string;
+  /** Originating channel for approval routing */
+  channel?: 'telegram' | 'discord' | string;
+  /** Channel-specific target ID (Telegram chat ID or Discord channel snowflake) */
+  channelTargetId?: string | number;
+  /** User ID of the person who can approve */
+  approverUserId?: string;
+  /** Username of the approver */
+  approverUsername?: string;
 }
 
 export async function executeTool(
@@ -409,7 +418,7 @@ export async function executeTool(
       case 'list_directory':
         return executeListDirectory(input.path, config);
       case 'bash':
-        return await executeBash(input.command, input.cwd, config);
+        return await executeBash(input.command, input.cwd, config, context);
       case 'browser':
         return await executeBrowser(input, config);
       default:
@@ -1009,7 +1018,7 @@ function executeListDirectory(path: string, config: ToolConfig): string {
   return lines.join('\n');
 }
 
-function executeBash(command: string, cwd: string | undefined, config: ToolConfig): Promise<string> {
+function executeBash(command: string, cwd: string | undefined, config: ToolConfig, context?: ExecuteToolContext): Promise<string> {
   // Hard block: existing safety filter (always enforced)
   if (!isBashCommandSafe(command)) {
     return Promise.resolve('Error: Command blocked by safety filter.');
@@ -1029,15 +1038,30 @@ function executeBash(command: string, cwd: string | undefined, config: ToolConfi
         // Consume the approval and proceed with execution
         consumeApproval(approved.id);
       } else {
+        // Build channel metadata from context for notification routing
+        const channelMeta: ApprovalChannelMeta | undefined = context?.channel
+          ? {
+              channel: context.channel,
+              chatId: context.channelTargetId ?? context.chatId,
+              userId: context.approverUserId,
+              username: context.approverUsername,
+            }
+          : context?.chatId
+            ? {
+                channel: 'telegram',
+                chatId: context.chatId,
+              }
+            : undefined;
+
         // Create a pending approval request and block execution
-        const request = createApprovalRequest(command, cwd, classification, approvalConfig);
+        const request = createApprovalRequest(command, cwd, classification, approvalConfig, channelMeta);
         return Promise.resolve(
           `⛔ Approval required (tier ${classification.tier}: ${classification.reason}). ` +
           `Command NOT executed.\n\n` +
           `Request ID: ${request.id}\n` +
           `Command: ${command}\n` +
           `Expires: ${request.expiresAt.toISOString()}\n\n` +
-          `Approve via dashboard: POST /api/dashboard/approvals/${request.id}/approve`
+          `Approve via dashboard or chat: /approve ${request.id}`
         );
       }
     }

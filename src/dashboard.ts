@@ -810,6 +810,61 @@ td:first-child { color: var(--highlight); }
 .audit-trigger.discord { background: rgba(88, 101, 242, 0.16); color: #7289da; }
 .audit-trigger.code_agent { background: rgba(147, 51, 234, 0.16); color: #9333ea; }
 
+/* Approval badges */
+.approval-status {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.approval-status.pending { background: rgba(176, 124, 26, 0.16); color: var(--warning); }
+.approval-status.approved { background: rgba(15, 156, 102, 0.16); color: var(--success); }
+.approval-status.denied { background: rgba(202, 61, 79, 0.16); color: var(--error); }
+.approval-status.expired { background: var(--surface-alt); color: var(--text-dim); }
+
+.approval-tier {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.approval-tier.tier-1 { background: var(--surface-alt); color: var(--text-dim); }
+.approval-tier.tier-2 { background: rgba(176, 124, 26, 0.16); color: var(--warning); }
+.approval-tier.tier-3 { background: rgba(202, 61, 79, 0.16); color: var(--error); }
+
+.approval-command {
+  font-family: var(--mono);
+  font-size: 13px;
+  background: var(--surface-alt);
+  padding: 6px 10px;
+  border-radius: 6px;
+  margin: 6px 0;
+  word-break: break-all;
+  border: 1px solid var(--border);
+}
+
+.approval-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.approval-actions .btn { font-size: 12px; padding: 4px 12px; }
+
+.approval-countdown {
+  font-size: 12px;
+  color: var(--text-dim);
+  font-family: var(--mono);
+}
+
+.approval-countdown.urgent { color: var(--error); font-weight: 600; }
+
 .audit-summary {
   display: flex;
   gap: 12px;
@@ -1182,6 +1237,7 @@ td:first-child { color: var(--highlight); }
     <div class="tab-group-header">
       <span class="tab-group-title"><span class="tab-group-icon">◔</span> Operations</span>
     </div>
+    <button class="tab" data-tab="approvals">Approvals</button>
     <button class="tab" data-tab="cron">Cron</button>
     <button class="tab" data-tab="coding-agent">Coding Agent</button>
     <button class="tab" data-tab="audit">Audit</button>
@@ -1263,6 +1319,18 @@ td:first-child { color: var(--highlight); }
         <div class="empty">Select a template to edit</div>
       </div>
     </div>
+  </div>
+
+  <!-- Approvals Tab -->
+  <div class="tab-panel" id="panel-approvals">
+    <div class="toolbar">
+      <button class="btn btn-small" id="approvalsRefreshBtn">Refresh</button>
+      <label class="toggle-label"><input type="checkbox" id="approvalsAutoRefresh" checked> Auto-refresh</label>
+      <span id="approvalsCount" style="font-size:13px;color:var(--text-dim);margin-left:auto;"></span>
+    </div>
+    <div id="approvalsPending"></div>
+    <h3 class="section-title" style="margin-top:20px;">Recent</h3>
+    <div id="approvalsRecent"></div>
   </div>
 
   <!-- Coding Agent Tab -->
@@ -1521,6 +1589,7 @@ function onTabActivated(tab) {
   if (tab === 'status') startStatusRefresh();
   else if (tab === 'history') loadSessions();
   else if (tab === 'memory') loadMemory();
+  else if (tab === 'approvals') startApprovalsPolling();
   else if (tab === 'cron') loadCronJobs();
   else if (tab === 'model') loadModel();
   else if (tab === 'templates') loadTemplates();
@@ -2018,6 +2087,7 @@ function toggleCaDetail(id, toggleEl) {
 var origOnTab = onTabActivated;
 onTabActivated = function(tab) {
   if (tab !== 'coding-agent') stopCaPolling();
+  if (tab !== 'approvals') stopApprovalsPolling();
   origOnTab(tab);
 };
 
@@ -2482,6 +2552,137 @@ document.getElementById('skillSaveNewBtn').addEventListener('click', async funct
     loadSkills();
   } catch (e) {
     showToast('Failed to create skill: ' + e.message, 'error');
+  }
+});
+
+// --- Approvals Tab ---
+let approvalsInterval = null;
+
+function stopApprovalsPolling() {
+  if (approvalsInterval) {
+    clearInterval(approvalsInterval);
+    approvalsInterval = null;
+  }
+}
+
+function startApprovalsPolling() {
+  loadApprovals();
+  stopApprovalsPolling();
+  if (document.getElementById('approvalsAutoRefresh').checked) {
+    approvalsInterval = setInterval(loadApprovals, 5000);
+  }
+}
+
+function formatCountdown(expiresAt, serverNow) {
+  var now = serverNow ? new Date(serverNow).getTime() : Date.now();
+  var exp = new Date(expiresAt).getTime();
+  var remaining = Math.max(0, Math.round((exp - now) / 1000));
+  if (remaining <= 0) return '<span class="approval-countdown">expired</span>';
+  var m = Math.floor(remaining / 60);
+  var s = remaining % 60;
+  var cls = remaining < 60 ? 'approval-countdown urgent' : 'approval-countdown';
+  return '<span class="' + cls + '">' + m + ':' + (s < 10 ? '0' : '') + s + '</span>';
+}
+
+async function loadApprovals() {
+  try {
+    var data = await api('approvals');
+    var pending = data.pending || [];
+    var recent = (data.recent || []).filter(function(a) { return a.status !== 'pending'; });
+    var serverNow = data.now;
+
+    var pendingEl = document.getElementById('approvalsPending');
+    var recentEl = document.getElementById('approvalsRecent');
+    var countEl = document.getElementById('approvalsCount');
+
+    countEl.textContent = pending.length + ' pending';
+
+    if (pending.length === 0) {
+      pendingEl.innerHTML = '<div class="empty">No pending approvals</div>';
+    } else {
+      var html = '';
+      for (var i = 0; i < pending.length; i++) {
+        var a = pending[i];
+        html += '<div class="audit-entry">';
+        html += '<div class="audit-header">';
+        html += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">';
+        html += '<span class="audit-id">' + esc(a.id) + '</span>';
+        html += '<span class="approval-tier tier-' + a.tier + '">TIER ' + a.tier + '</span>';
+        html += '<span class="approval-status pending">PENDING</span>';
+        html += formatCountdown(a.expiresAt, serverNow);
+        html += '</div>';
+        html += '<div class="audit-meta">';
+        html += '<span>' + esc(a.reason) + '</span>';
+        if (a.cwd) html += '<span>' + esc(a.cwd) + '</span>';
+        html += '<span>' + formatDate(a.createdAt) + '</span>';
+        html += '</div>';
+        html += '</div>';
+        html += '<div class="approval-command">' + esc(a.command) + '</div>';
+        html += '<div class="approval-actions">';
+        html += '<button class="btn btn-success btn-small" onclick="approveApproval(&#39;' + esc(a.id) + '&#39;)">Approve</button>';
+        html += '<button class="btn btn-small" style="background:var(--error);color:#fff;border-color:var(--error);" onclick="denyApproval(&#39;' + esc(a.id) + '&#39;)">Deny</button>';
+        html += '</div>';
+        html += '</div>';
+      }
+      pendingEl.innerHTML = html;
+    }
+
+    if (recent.length === 0) {
+      recentEl.innerHTML = '<div class="empty">No recent approvals</div>';
+    } else {
+      var rhtml = '';
+      for (var j = 0; j < recent.length; j++) {
+        var r = recent[j];
+        rhtml += '<div class="audit-entry">';
+        rhtml += '<div class="audit-header">';
+        rhtml += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">';
+        rhtml += '<span class="audit-id">' + esc(r.id) + '</span>';
+        rhtml += '<span class="approval-tier tier-' + r.tier + '">TIER ' + r.tier + '</span>';
+        rhtml += '<span class="approval-status ' + esc(r.status) + '">' + esc(r.status).toUpperCase() + '</span>';
+        rhtml += '</div>';
+        rhtml += '<div class="audit-meta">';
+        rhtml += '<span>' + esc(r.reason) + '</span>';
+        if (r.resolvedAt) rhtml += '<span>' + formatDate(r.resolvedAt) + '</span>';
+        if (r.approvedBy) rhtml += '<span>by ' + esc(r.approvedBy) + '</span>';
+        if (r.deniedBy) rhtml += '<span>by ' + esc(r.deniedBy) + '</span>';
+        rhtml += '</div>';
+        rhtml += '</div>';
+        rhtml += '<div class="approval-command">' + esc(r.command) + '</div>';
+        rhtml += '</div>';
+      }
+      recentEl.innerHTML = rhtml;
+    }
+  } catch (e) {
+    document.getElementById('approvalsPending').innerHTML = '<div class="empty">Failed to load approvals</div>';
+  }
+}
+
+async function approveApproval(id) {
+  try {
+    await api('approvals/' + id + '/approve', { method: 'POST' });
+    showToast('Approved: ' + id);
+    loadApprovals();
+  } catch (e) {
+    showToast('Failed to approve: ' + e.message, 'error');
+  }
+}
+
+async function denyApproval(id) {
+  try {
+    await api('approvals/' + id + '/deny', { method: 'POST' });
+    showToast('Denied: ' + id);
+    loadApprovals();
+  } catch (e) {
+    showToast('Failed to deny: ' + e.message, 'error');
+  }
+}
+
+document.getElementById('approvalsRefreshBtn').addEventListener('click', function() { loadApprovals(); });
+document.getElementById('approvalsAutoRefresh').addEventListener('change', function() {
+  if (this.checked) {
+    startApprovalsPolling();
+  } else {
+    stopApprovalsPolling();
   }
 });
 

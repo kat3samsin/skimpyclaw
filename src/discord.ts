@@ -1,4 +1,13 @@
-import { Client, GatewayIntentBits, Partials, type Message } from 'discord.js';
+import {
+  Client,
+  GatewayIntentBits,
+  Partials,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  type Message,
+  type Interaction,
+} from 'discord.js';
 import { join } from 'path';
 import { homedir } from 'os';
 import type { AgentRunContext, ChatMessage, Config, ToolConfig } from './types.js';
@@ -9,6 +18,14 @@ import { runHeartbeatCheck } from './heartbeat.js';
 import { isAllowed, isRateLimited } from './security.js';
 import { getActiveCodeAgents, getRecentCodeAgents } from './tools.js';
 import { getActiveTasks, getRecentTasks, cancelTask } from './subagent.js';
+import {
+  listApprovals,
+  approveRequest,
+  denyRequest,
+  getApproval,
+  onApprovalEvent,
+  type PendingApproval,
+} from './exec-approval.js';
 
 function getDiscordRunContext(message: Message): AgentRunContext {
   return {
@@ -32,6 +49,9 @@ const BOT_COMMANDS: { command: string; description: string }[] = [
   { command: 'cron', description: 'List or run scheduled jobs' },
   { command: 'tasks', description: 'Show active/recent agent tasks' },
   { command: 'cancel', description: 'Cancel a running agent task' },
+  { command: 'approvals', description: 'List pending exec approvals' },
+  { command: 'approve', description: 'Approve an exec request by ID' },
+  { command: 'deny', description: 'Deny an exec request by ID' },
   { command: 'heartbeat', description: 'Trigger heartbeat check' },
 ];
 
@@ -271,6 +291,86 @@ async function handleCommand(message: Message, command: string, args: string[]):
     return;
   }
 
+  if (command === 'approvals') {
+    const pending = listApprovals();
+    if (pending.length === 0) {
+      await message.reply('No pending exec approvals.');
+      return;
+    }
+
+    for (const approval of pending.slice(0, 10)) {
+      const cmdPreview = approval.command.length > 80
+        ? approval.command.slice(0, 80) + '...'
+        : approval.command;
+      const expiresIn = Math.max(0, Math.round((approval.expiresAt.getTime() - Date.now()) / 1000));
+      const expiresStr = expiresIn < 60 ? `${expiresIn}s` : `${Math.floor(expiresIn / 60)}m`;
+
+      const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`approve:${approval.id}`)
+          .setLabel('Approve')
+          .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+          .setCustomId(`deny:${approval.id}`)
+          .setLabel('Deny')
+          .setStyle(ButtonStyle.Danger),
+      );
+
+      await message.reply({
+        content:
+          `⛔ Approval #${approval.id}\n` +
+          `Tier ${approval.tier}: ${approval.reason}\n` +
+          `Command: ${cmdPreview}\n` +
+          `${approval.cwd ? `CWD: ${approval.cwd}\n` : ''}` +
+          `Expires in: ${expiresStr}`,
+        components: [row],
+      });
+    }
+    return;
+  }
+
+  if (command === 'approve') {
+    const id = rawArgs;
+    if (!id) {
+      await message.reply('Usage: /approve <id>');
+      return;
+    }
+    const by = message.author.username || message.author.id;
+    const success = approveRequest(id, by);
+    if (success) {
+      await message.reply(`✅ Approved #${id}`);
+    } else {
+      const existing = getApproval(id);
+      if (existing) {
+        await message.reply(`Cannot approve #${id} — status is already "${existing.status}".`);
+      } else {
+        await message.reply(`No pending approval found with ID "${id}".`);
+      }
+    }
+    return;
+  }
+
+  if (command === 'deny') {
+    const id = rawArgs;
+    if (!id) {
+      await message.reply('Usage: /deny <id>');
+      return;
+    }
+    const by = message.author.username || message.author.id;
+    const success = denyRequest(id, by);
+    if (success) {
+      await message.reply(`❌ Denied #${id}`);
+    } else {
+      const existing = getApproval(id);
+      if (existing) {
+        await message.reply(`Cannot deny #${id} — status is already "${existing.status}".`);
+      } else {
+        await message.reply(`No pending approval found with ID "${id}".`);
+      }
+    }
+    return;
+  }
+
   if (command === 'tasks') {
     const active = getActiveTasks();
     const recent = getRecentTasks(5);
@@ -495,6 +595,88 @@ async function handleIncomingMessage(message: Message): Promise<void> {
   }
 }
 
+/** Send an approval card message with approve/deny buttons to a Discord channel. */
+async function sendApprovalCard(channelId: string, approval: PendingApproval): Promise<void> {
+  if (!client) return;
+
+  const channel = await client.channels.fetch(channelId).catch(() => null);
+  if (!channel || !('send' in channel) || typeof channel.send !== 'function') return;
+
+  const cmdPreview = approval.command.length > 80
+    ? approval.command.slice(0, 80) + '...'
+    : approval.command;
+  const expiresIn = Math.max(0, Math.round((approval.expiresAt.getTime() - Date.now()) / 1000));
+  const expiresStr = expiresIn < 60 ? `${expiresIn}s` : `${Math.floor(expiresIn / 60)}m`;
+
+  const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`approve:${approval.id}`)
+      .setLabel('Approve')
+      .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId(`deny:${approval.id}`)
+      .setLabel('Deny')
+      .setStyle(ButtonStyle.Danger),
+  );
+
+  await (channel as { send: (opts: any) => Promise<unknown> }).send({
+    content:
+      `⛔ Exec approval needed: #${approval.id}\n` +
+      `Tier ${approval.tier}: ${approval.reason}\n` +
+      `Command: ${cmdPreview}\n` +
+      `${approval.cwd ? `CWD: ${approval.cwd}\n` : ''}` +
+      `Expires in: ${expiresStr}`,
+    components: [row],
+  });
+}
+
+/** Handle Discord button interactions for approval approve/deny. */
+async function handleInteraction(interaction: Interaction): Promise<void> {
+  if (!interaction.isButton()) return;
+
+  const customId = interaction.customId;
+  const [action, id] = customId.split(':');
+  if (!id || (action !== 'approve' && action !== 'deny')) {
+    await interaction.reply({ content: 'Unknown action', ephemeral: true });
+    return;
+  }
+
+  const by = interaction.user.username || interaction.user.id;
+  let success: boolean;
+  let statusText: string;
+
+  if (action === 'approve') {
+    success = approveRequest(id, by);
+    statusText = success ? `✅ Approved by @${by}` : 'Failed — not pending';
+  } else {
+    success = denyRequest(id, by);
+    statusText = success ? `❌ Denied by @${by}` : 'Failed — not pending';
+  }
+
+  // Ephemeral acknowledgement to the clicker
+  await interaction.reply({ content: statusText, ephemeral: true });
+
+  // Update the original message to reflect the resolved status
+  try {
+    const approval = getApproval(id);
+    if (approval) {
+      const cmdPreview = approval.command.length > 80
+        ? approval.command.slice(0, 80) + '...'
+        : approval.command;
+      await interaction.message.edit({
+        content:
+          `${statusText}\n\n` +
+          `Approval #${id}\n` +
+          `Tier ${approval.tier}: ${approval.reason}\n` +
+          `Command: ${cmdPreview}`,
+        components: [], // Remove buttons after resolution
+      });
+    }
+  } catch {
+    // Message may already be edited or deleted — ignore
+  }
+}
+
 export async function initDiscord(cfg: Config): Promise<boolean> {
   const discord = cfg.channels.discord;
   if (!discord?.enabled || !discord.token) {
@@ -517,12 +699,40 @@ export async function initDiscord(cfg: Config): Promise<boolean> {
     void handleIncomingMessage(message);
   });
 
+  // Handle button interactions (approval approve/deny)
+  client.on('interactionCreate', (interaction: Interaction) => {
+    void handleInteraction(interaction);
+  });
+
   client.once('clientReady', () => {
     console.log(`[discord] Bot started as ${client?.user?.tag ?? 'unknown'}`);
   });
 
   client.on('error', (error: unknown) => {
     console.error('[discord] Client error:', error);
+  });
+
+  // Subscribe to approval-created events — proactively post to Discord for discord-origin approvals
+  onApprovalEvent('created', (event) => {
+    if (!client) return;
+    const { approval } = event;
+    const meta = approval.channelMeta;
+
+    // Only post discord-origin approvals (or fallback when no channel set)
+    if (meta?.channel && meta.channel !== 'discord') return;
+
+    let targetChannelId: string | undefined;
+    if (meta?.chatId) {
+      targetChannelId = String(meta.chatId);
+    }
+    if (!targetChannelId) {
+      targetChannelId = getDiscordDefaultTarget(cfg) ?? undefined;
+    }
+    if (!targetChannelId) return;
+
+    void sendApprovalCard(targetChannelId, approval).catch((err) => {
+      console.error('[discord] Failed to send approval notification:', err);
+    });
   });
 
   return true;

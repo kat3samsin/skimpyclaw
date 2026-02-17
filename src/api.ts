@@ -550,7 +550,7 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
   fastify.get('/api/dashboard/approvals', async (request) => {
     const pending = listApprovals();
     const recent = listApprovals({ includeResolved: true, limit: 50 });
-    return { pending, recent };
+    return { pending, recent, now: new Date().toISOString() };
   });
 
   fastify.post<{ Params: { id: string } }>('/api/dashboard/approvals/:id/approve', async (request, reply) => {
