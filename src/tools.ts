@@ -10,8 +10,7 @@ import {
   classifyCommandRisk,
   requiresApproval,
   createApprovalRequest,
-  findApprovedRequest,
-  consumeApproval,
+  waitForApproval,
   type ApprovalChannelMeta,
 } from './exec-approval.js';
 
@@ -1018,7 +1017,7 @@ function executeListDirectory(path: string, config: ToolConfig): string {
   return lines.join('\n');
 }
 
-function executeBash(command: string, cwd: string | undefined, config: ToolConfig, context?: ExecuteToolContext): Promise<string> {
+async function executeBash(command: string, cwd: string | undefined, config: ToolConfig, context?: ExecuteToolContext): Promise<string> {
   // Hard block: existing safety filter (always enforced)
   if (!isBashCommandSafe(command)) {
     return Promise.resolve('Error: Command blocked by safety filter.');
@@ -1032,38 +1031,30 @@ function executeBash(command: string, cwd: string | undefined, config: ToolConfi
   if (approvalConfig?.enabled !== false) {
     const classification = classifyCommandRisk(command);
     if (requiresApproval(classification, approvalConfig)) {
-      // Check if an approved request already exists for this exact command
-      const approved = findApprovedRequest(command, cwd);
-      if (approved) {
-        // Consume the approval and proceed with execution
-        consumeApproval(approved.id);
-      } else {
-        // Build channel metadata from context for notification routing
-        const channelMeta: ApprovalChannelMeta | undefined = context?.channel
+      // Build channel metadata from context for notification routing
+      const channelMeta: ApprovalChannelMeta | undefined = context?.channel
+        ? {
+            channel: context.channel,
+            chatId: context.channelTargetId ?? context.chatId,
+            userId: context.approverUserId,
+            username: context.approverUsername,
+          }
+        : context?.chatId
           ? {
-              channel: context.channel,
-              chatId: context.channelTargetId ?? context.chatId,
-              userId: context.approverUserId,
-              username: context.approverUsername,
+              channel: 'telegram',
+              chatId: context.chatId,
             }
-          : context?.chatId
-            ? {
-                channel: 'telegram',
-                chatId: context.chatId,
-              }
-            : undefined;
+          : undefined;
 
-        // Create a pending approval request and block execution
-        const request = createApprovalRequest(command, cwd, classification, approvalConfig, channelMeta);
-        return Promise.resolve(
-          `⛔ Approval required (tier ${classification.tier}: ${classification.reason}). ` +
-          `Command NOT executed.\n\n` +
-          `Request ID: ${request.id}\n` +
-          `Command: ${command}\n` +
-          `Expires: ${request.expiresAt.toISOString()}\n\n` +
-          `Approve via dashboard or chat: /approve ${request.id}`
-        );
+      // Create a pending approval request and wait for resolution
+      const ttlMs = approvalConfig?.ttlMs ?? 5 * 60 * 1000;
+      const request = createApprovalRequest(command, cwd, classification, approvalConfig, channelMeta);
+      const resolved = await waitForApproval(request.id, ttlMs);
+
+      if (resolved.status !== 'approved') {
+        return `⛔ Command not executed — approval ${resolved.status} (tier ${classification.tier}: ${classification.reason}).`;
       }
+      // Approved — fall through to execution below
     }
   }
 

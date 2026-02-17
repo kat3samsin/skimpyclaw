@@ -287,6 +287,55 @@ export function cleanupExpired(): void {
 }
 
 /**
+ * Wait for a pending approval to be resolved (approved, denied, or expired).
+ * Resolves with the final PendingApproval object.
+ * Falls back to returning the stored approval (or an expired stub) after timeoutMs.
+ */
+export function waitForApproval(id: string, timeoutMs: number): Promise<PendingApproval> {
+  return new Promise((resolve) => {
+    // Check if already resolved before we start waiting
+    const existing = approvals.get(id);
+    if (existing && existing.status !== 'pending') {
+      resolve(existing);
+      return;
+    }
+
+    let settled = false;
+
+    const cleanup = onAnyApprovalEvent((event) => {
+      if (event.approval.id !== id) return;
+      if (event.type === 'created') return; // ignore created events
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(event.approval);
+    });
+
+    // Fallback timeout — resolve with whatever state we have
+    setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      const stored = approvals.get(id);
+      if (stored) {
+        resolve(stored);
+      } else {
+        // Synthesize expired stub if it was already cleaned up
+        resolve({
+          id,
+          command: '',
+          tier: 0,
+          reason: '',
+          createdAt: new Date(),
+          expiresAt: new Date(),
+          status: 'expired',
+        });
+      }
+    }, timeoutMs);
+  });
+}
+
+/**
  * Clear all approvals (for testing).
  */
 export function clearApprovals(): void {
