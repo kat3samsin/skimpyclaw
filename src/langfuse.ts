@@ -28,11 +28,19 @@ export const MODEL_PRICING: Record<string, ModelPricing> = {
   'claude-haiku-4.5-20250110': { inputPerMTok: 0.25, outputPerMTok: 1.25 },
   'claude-opus-4.6-20250514': { inputPerMTok: 15.0, outputPerMTok: 75.0 },
 
-  // OpenAI models
+  // OpenAI models (https://developers.openai.com/api/docs/pricing)
   'gpt-4o': { inputPerMTok: 2.5, outputPerMTok: 10.0 },
   'gpt-4o-mini': { inputPerMTok: 0.15, outputPerMTok: 0.6 },
+  'gpt-4.1': { inputPerMTok: 2.0, outputPerMTok: 8.0 },
+  'gpt-4.1-mini': { inputPerMTok: 0.4, outputPerMTok: 1.6 },
+  'gpt-4.1-nano': { inputPerMTok: 0.1, outputPerMTok: 0.4 },
   'gpt-4-turbo': { inputPerMTok: 10.0, outputPerMTok: 30.0 },
   'gpt-3.5-turbo': { inputPerMTok: 0.5, outputPerMTok: 1.5 },
+  // Codex pricing aligns to current GPT-5.2 codex rates
+  'gpt-codex-5.2': { inputPerMTok: 1.75, outputPerMTok: 14.0 },
+  'gpt-codex-5.3': { inputPerMTok: 1.75, outputPerMTok: 14.0 },
+  'codex-5.2': { inputPerMTok: 1.75, outputPerMTok: 14.0 },
+  'codex-5.3': { inputPerMTok: 1.75, outputPerMTok: 14.0 },
 
   // MiniMax models (https://platform.minimax.io/docs/pricing/pay-as-you-go)
   'minimax-m2.1': { inputPerMTok: 0.3, outputPerMTok: 1.2 },
@@ -58,12 +66,17 @@ const MODEL_ALIAS_MAP: Record<string, string> = {
   // OpenAI aliases
   gpt4o: 'gpt-4o',
   'gpt4o-mini': 'gpt-4o-mini',
+  'gpt4.1': 'gpt-4.1',
+  'gpt4.1-mini': 'gpt-4.1-mini',
+  'gpt4.1-nano': 'gpt-4.1-nano',
   'gpt4-turbo': 'gpt-4-turbo',
   'gpt35-turbo': 'gpt-3.5-turbo',
   'gpt-3.5': 'gpt-3.5-turbo',
+  'gpt-codex': 'gpt-codex-5.3',
+  codex: 'codex-5.3',
 
   // MiniMax aliases
-  minimax: 'MiniMax-M2.5',
+  minimax: 'minimax-m2.5',
 
   // Kimi/Moonshot aliases
   kimi: 'kimi-k2.5'
