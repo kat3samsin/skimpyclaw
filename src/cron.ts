@@ -2,7 +2,7 @@
 
 import { Cron } from 'croner';
 import { exec } from 'child_process';
-import { existsSync, mkdirSync, appendFileSync } from 'fs';
+import { existsSync, mkdirSync, appendFileSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { getLogsDir } from './config.js';
 import type { Config, CronJob } from './types.js';
@@ -143,7 +143,7 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
 
   try {
     if (jobDef.payload.kind === 'agentTurn') {
-      const message = expandVariables(jobDef.payload.message || '');
+      const message = expandVariables(resolveMessageSource(jobDef.payload.message || ''));
       appendCronLogLine(jobDef.id, `Agent turn started (prompt: ${message.slice(0, 100)}...)`);
       const response = await runAgentTurn(
         config.agents.default,
@@ -287,6 +287,28 @@ async function executeScript(jobDef: CronJob): Promise<string> {
   });
 }
 
+
+/**
+ * If message is a path to a .md file, read and return its contents.
+ * Supports ~ home expansion. Otherwise returns the string as-is.
+ */
+function resolveMessageSource(message: string): string {
+  const trimmed = message.trim();
+  if (!trimmed.endsWith('.md')) return message;
+
+  // Expand ~ to home directory
+  const resolved = trimmed.startsWith('~/')
+    ? join(process.env.HOME || '', trimmed.slice(2))
+    : trimmed;
+
+  if (existsSync(resolved)) {
+    console.log(`[cron] Loading prompt from file: ${resolved}`);
+    return readFileSync(resolved, 'utf-8');
+  }
+
+  // Not a valid file path — treat as regular message text
+  return message;
+}
 
 function expandVariables(message: string): string {
   const now = new Date();

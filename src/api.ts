@@ -26,6 +26,7 @@ import { redactSecrets } from './security.js';
 import { getActiveTasks, getRecentTasks } from './subagent.js';
 import { readAuditTraces } from './audit.js';
 import { getAllCodeAgents, getCodeAgent } from './tools.js';
+import { listApprovals, getApproval, approveRequest, denyRequest } from './exec-approval.js';
 import { getDigests, getDigest, deleteDigest, updateArticleReadStatus } from './digests.js';
 import { loadSkills } from './skills.js';
 import type { SkillConfig } from './skills-types.js';
@@ -543,6 +544,45 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
       return reply.code(404).send({ error: 'Code agent not found' });
     }
     return agent;
+  });
+
+  // --- Exec Approvals ---
+  fastify.get('/api/dashboard/approvals', async (request) => {
+    const pending = listApprovals();
+    const recent = listApprovals({ includeResolved: true, limit: 50 });
+    return { pending, recent };
+  });
+
+  fastify.post<{ Params: { id: string } }>('/api/dashboard/approvals/:id/approve', async (request, reply) => {
+    const { id } = request.params;
+    const approval = getApproval(id);
+    if (!approval) {
+      return reply.code(404).send({ error: 'Approval request not found' });
+    }
+    if (approval.status !== 'pending') {
+      return reply.code(400).send({ error: `Request is already ${approval.status}` });
+    }
+    const success = approveRequest(id, 'dashboard');
+    if (!success) {
+      return reply.code(400).send({ error: 'Failed to approve request' });
+    }
+    return { approved: true, id, command: approval.command };
+  });
+
+  fastify.post<{ Params: { id: string } }>('/api/dashboard/approvals/:id/deny', async (request, reply) => {
+    const { id } = request.params;
+    const approval = getApproval(id);
+    if (!approval) {
+      return reply.code(404).send({ error: 'Approval request not found' });
+    }
+    if (approval.status !== 'pending') {
+      return reply.code(400).send({ error: `Request is already ${approval.status}` });
+    }
+    const success = denyRequest(id, 'dashboard');
+    if (!success) {
+      return reply.code(400).send({ error: 'Failed to deny request' });
+    }
+    return { denied: true, id, command: approval.command };
   });
 
   // --- Digests ---

@@ -959,6 +959,13 @@ function markdownToTelegramHtml(md: string): string {
       continue;
     }
 
+    // ALL CAPS lines as bold headers (e.g. "SCHEDULE", "PRs TO REVIEW", "LINEAR")
+    const trimmed = line.trim();
+    if (trimmed.length >= 3 && trimmed.length <= 60 && /^[A-Z][A-Z\s\-/(),:]+$/.test(trimmed)) {
+      result.push(`<b>${escapeHtml(trimmed)}</b>`);
+      continue;
+    }
+
     // Regular line — apply inline formatting
     result.push(formatInline(line));
   }
@@ -1079,7 +1086,31 @@ export async function sendProactiveMessage(
   if (!bot || isSilenced()) return;
   const resolvedChatId = typeof chatId === 'number' ? chatId : Number(chatId);
   if (!Number.isFinite(resolvedChatId)) return;
-  await bot.api.sendMessage(resolvedChatId, message);
+
+  const html = markdownToTelegramHtml(message);
+  const MAX_LENGTH = 4000;
+
+  if (html.length <= MAX_LENGTH) {
+    await bot.api.sendMessage(resolvedChatId, html, { parse_mode: 'HTML' });
+    return;
+  }
+
+  // Split long messages at paragraph boundaries
+  const chunks: string[] = [];
+  let current = '';
+  for (const paragraph of html.split('\n\n')) {
+    if (current.length + paragraph.length + 2 > MAX_LENGTH) {
+      if (current) chunks.push(current.trim());
+      current = paragraph;
+    } else {
+      current += (current ? '\n\n' : '') + paragraph;
+    }
+  }
+  if (current) chunks.push(current.trim());
+
+  for (const chunk of chunks) {
+    await bot.api.sendMessage(resolvedChatId, chunk, { parse_mode: 'HTML' });
+  }
 }
 
 export function getTelegramDefaultChatId(cfg: Config): number | null {

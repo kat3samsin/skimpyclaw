@@ -6,6 +6,13 @@ import { homedir } from 'os';
 import { exec, spawn } from 'child_process';
 import { execSync } from 'child_process';
 import { isBashCommandSafe } from './security.js';
+import {
+  classifyCommandRisk,
+  requiresApproval,
+  createApprovalRequest,
+  findApprovedRequest,
+  consumeApproval,
+} from './exec-approval.js';
 
 /** Resolve full path for a CLI command. Falls back to the name itself if not found. */
 function resolveCliPath(name: string): string {
@@ -1003,11 +1010,37 @@ function executeListDirectory(path: string, config: ToolConfig): string {
 }
 
 function executeBash(command: string, cwd: string | undefined, config: ToolConfig): Promise<string> {
+  // Hard block: existing safety filter (always enforced)
   if (!isBashCommandSafe(command)) {
     return Promise.resolve('Error: Command blocked by safety filter.');
   }
   if (cwd && !isPathAllowed(cwd, config.allowedPaths)) {
     return Promise.resolve('Error: Working directory not in allowed paths.');
+  }
+
+  // Exec approval gate: classify risk and check if approval is needed
+  const approvalConfig = config.execApproval;
+  if (approvalConfig?.enabled !== false) {
+    const classification = classifyCommandRisk(command);
+    if (requiresApproval(classification, approvalConfig)) {
+      // Check if an approved request already exists for this exact command
+      const approved = findApprovedRequest(command, cwd);
+      if (approved) {
+        // Consume the approval and proceed with execution
+        consumeApproval(approved.id);
+      } else {
+        // Create a pending approval request and block execution
+        const request = createApprovalRequest(command, cwd, classification, approvalConfig);
+        return Promise.resolve(
+          `⛔ Approval required (tier ${classification.tier}: ${classification.reason}). ` +
+          `Command NOT executed.\n\n` +
+          `Request ID: ${request.id}\n` +
+          `Command: ${command}\n` +
+          `Expires: ${request.expiresAt.toISOString()}\n\n` +
+          `Approve via dashboard: POST /api/dashboard/approvals/${request.id}/approve`
+        );
+      }
+    }
   }
 
   const timeout = config.bashTimeout || 30_000;

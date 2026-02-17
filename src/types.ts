@@ -155,6 +155,11 @@ export interface ToolConfig {
     profileDir?: string;
     executablePath?: string;
   };
+  execApproval?: {
+    enabled?: boolean;       // default true
+    ttlMs?: number;          // default 5 min (300000ms)
+    requireForTiers?: number[]; // default [2, 3]
+  };
 }
 
 export interface AgentTurn {
