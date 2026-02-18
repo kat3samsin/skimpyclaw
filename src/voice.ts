@@ -1,5 +1,5 @@
 // Voice transcription — local Whisper CLI (free) with API fallback
-import { existsSync, readFileSync, unlinkSync } from 'fs';
+import { existsSync, readFileSync, unlinkSync, readdirSync } from 'fs';
 import { execSync } from 'child_process';
 import { basename, dirname, join } from 'path';
 import type { VoiceConfig, VoiceProviderConfig } from './types.js';
@@ -44,8 +44,12 @@ const HAS_FFMPEG = (() => {
   } catch { return false; }
 })();
 
-/** Formats that whisper-cli can read natively. */
-const WHISPER_CPP_NATIVE_FORMATS = new Set(['wav', 'mp3', 'ogg', 'flac']);
+/** Formats that whisper-cli can read natively.
+ * Note: Discord sends Ogg/Opus files with .ogg extension, which whisper-cli
+ * cannot read despite claiming Ogg support (it expects Ogg/Vorbis).
+ * We force conversion to WAV for all non-WAV formats to be safe.
+ */
+const WHISPER_CPP_NATIVE_FORMATS = new Set(['wav']);
 
 /**
  * Convert audio to 16kHz mono WAV for whisper-cli.
@@ -124,6 +128,7 @@ async function transcribeWithWhisperCpp(audioPath: string, cliPath: string): Pro
     );
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[voice] whisper-cli failed: ${msg}`);
     throw new Error(`whisper-cli failed: ${msg}`);
   } finally {
     // Clean up converted WAV if we created one
@@ -133,7 +138,17 @@ async function transcribeWithWhisperCpp(audioPath: string, cliPath: string): Pro
   }
 
   const txtPath = `${outputBase}.txt`;
+  // Retry a few times in case of filesystem flush delay
+  let retries = 5;
+  while (!existsSync(txtPath) && retries > 0) {
+    await new Promise(resolve => setTimeout(resolve, 50));
+    retries--;
+  }
   if (!existsSync(txtPath)) {
+    console.error(`[voice] whisper-cli output not found after retries: ${txtPath}`);
+    try {
+      console.error(`[voice] Output dir contents:`, readdirSync(outputDir));
+    } catch { /* ignore */ }
     throw new Error(`whisper-cli output not found: ${txtPath}`);
   }
 
