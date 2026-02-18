@@ -542,11 +542,13 @@ export interface CodeAgentTask {
   durationSeconds?: number;
   exitCode?: number | null;
   validationPassed?: boolean;
+  validationOutput?: string;     // pnpm build/test output on failure (first 8KB)
   outputPreview?: string;        // first 500 chars of result
   liveOutput?: string;           // last 5KB for streaming
   error?: string;
   workdir: string;
   model?: string;
+  retryCount?: number;           // how many internal validation retries have run
 }
 
 // In-memory tracking
@@ -743,8 +745,12 @@ async function notifyCodeAgentResult(task: CodeAgentTask): Promise<void> {
   } else if (task.status === 'timeout') {
     message = `⏰ Coding agent ${task.id} timed out after ${dur}.\n\nTask: ${taskPreview}`;
   } else {
-    message = `❌ Coding agent ${task.id} failed (${dur}).\n\nTask: ${taskPreview}`;
+    const retryNote = task.retryCount ? ` (retried ${task.retryCount}x)` : '';
+    message = `❌ Coding agent ${task.id} failed (${dur})${retryNote}.\n\nTask: ${taskPreview}`;
     if (task.error) message += `\n\nError: ${task.error}`;
+    if (task.validationOutput) {
+      message += `\n\nBuild/test output:\n${task.validationOutput.slice(0, 1_500)}`;
+    }
   }
 
   await sendActiveChannelProactiveMessage(_codeAgentConfig, message).catch(() => {});
@@ -876,19 +882,83 @@ async function runCodeAgentBackground(
       caTask.liveOutput = undefined;
       writeCodeAgentTask(caTask);
 
-      const validateResult = await new Promise<string>((res) => {
+      const runValidation = (): Promise<string> => new Promise((res) => {
         exec('pnpm build && pnpm test', {
           cwd: workdir,
           timeout: VALIDATE_TIMEOUT_MS,
           maxBuffer: 5 * 1024 * 1024,
         }, (error, vStdout, vStderr) => {
           if (error) {
-            res(`VALIDATION FAILED (exit ${error.code}):\n${vStdout}\n${vStderr}`.slice(0, 15_000));
+            res([`VALIDATION FAILED (exit ${error.code}):`, vStdout, vStderr].filter(Boolean).join('\n').slice(0, 8_000));
           } else {
             res('PASS');
           }
         });
       });
+
+      let validateResult = await runValidation();
+
+      // Internal retry: if validation failed, re-run the agent with test errors injected
+      if (validateResult !== 'PASS' && !caTask.retryCount) {
+        caTask.retryCount = 1;
+        caTask.status = 'running';
+        caTask.validationOutput = validateResult;
+        writeCodeAgentTask(caTask);
+
+        addEvent(traceId, { type: 'validation', summary: 'Validation failed, retrying with error context', durationMs: Date.now() - startedAt.getTime() });
+
+        // Re-run agent with the validation errors appended to the prompt
+        const retryTask = `${task}\n\n---\nPrevious attempt failed validation. Fix the following build/test errors before finishing:\n\n${validateResult.slice(0, 4_000)}`;
+        stdout = '';
+        stderr = '';
+
+        const { cmd: retryCmd, args: retryArgs } = buildCodeAgentArgs({
+          task: retryTask,
+          agent,
+          workdir,
+          model: input.model,
+          max_turns: input.max_turns,
+        });
+
+        const retryExitCode = await new Promise<number | null>((resolveRetry, rejectRetry) => {
+          const spawnEnv = { ...process.env };
+          delete spawnEnv.CLAUDECODE;
+          const retryProc = spawn(retryCmd, retryArgs, {
+            cwd: workdir,
+            stdio: ['ignore', 'pipe', 'pipe'],
+            env: spawnEnv,
+          });
+
+          let lastStatusWrite = 0;
+          retryProc.stdout.on('data', (chunk: Buffer) => {
+            stdout += chunk.toString();
+            const now = Date.now();
+            if (now - lastStatusWrite > 3000) {
+              lastStatusWrite = now;
+              caTask.liveOutput = stdout.slice(-5000);
+              writeCodeAgentTask(caTask);
+            }
+          });
+          retryProc.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
+
+          const retryTimer = setTimeout(() => retryProc.kill('SIGTERM'), CODE_AGENT_TIMEOUT_MS);
+          retryProc.on('close', (code) => { clearTimeout(retryTimer); resolveRetry(code); });
+          retryProc.on('error', (err) => { clearTimeout(retryTimer); rejectRetry(err); });
+        });
+
+        if (retryExitCode === 0) {
+          if (agent === 'claude') {
+            try { agentOutput = JSON.parse(stdout).result || stdout; } catch { agentOutput = stdout || stderr || '(no output)'; }
+          } else {
+            agentOutput = stdout || '(no output)';
+          }
+          caTask.status = 'validating';
+          caTask.liveOutput = undefined;
+          writeCodeAgentTask(caTask);
+          validateResult = await runValidation();
+        }
+        // if retry exit code non-zero, fall through with original validateResult (still !== 'PASS')
+      }
 
       const endedAt = new Date();
       const duration = Math.round((endedAt.getTime() - startedAt.getTime()) / 1000);
@@ -902,6 +972,7 @@ async function runCodeAgentBackground(
           durationSeconds: duration,
           exitCode,
           validationPassed: false,
+          validationOutput: validateResult.slice(0, 8_000),
           outputPreview: agentOutput.slice(0, 500),
           error: 'Validation failed',
         });
@@ -918,6 +989,7 @@ async function runCodeAgentBackground(
         durationSeconds: duration,
         exitCode,
         validationPassed: true,
+        validationOutput: undefined,
         outputPreview: agentOutput.slice(0, 500),
       });
       writeCodeAgentTask(caTask);
@@ -973,8 +1045,10 @@ function executeCheckCodeAgent(input: Record<string, any>): string {
       durationSeconds: task.durationSeconds,
       exitCode: task.exitCode,
       validationPassed: task.validationPassed,
+      validationOutput: task.validationOutput,
       outputPreview: task.outputPreview,
       error: task.error,
+      retryCount: task.retryCount,
     }, null, 2);
   }
 
