@@ -10,6 +10,8 @@ import {
 } from 'discord.js';
 import { join } from 'path';
 import { homedir } from 'os';
+import { tmpdir } from 'os';
+import { existsSync, mkdirSync, writeFileSync, unlinkSync } from 'fs';
 import type { AgentRunContext, ChatMessage, Config, ToolConfig } from './types.js';
 import { getCurrentModel, setCurrentModel, getLastMessage } from './gateway.js';
 import { getCronJobs, runCronJob } from './cron.js';
@@ -26,6 +28,7 @@ import {
   onApprovalEvent,
   type PendingApproval,
 } from './exec-approval.js';
+import { transcribeAudio } from './voice.js';
 
 function getDiscordRunContext(message: Message): AgentRunContext {
   return {
@@ -545,6 +548,75 @@ async function handleIncomingMessage(message: Message): Promise<void> {
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Unknown error';
       await message.reply(`Error processing image: ${msg}`);
+    } finally {
+      stopTyping();
+    }
+    return;
+  }
+
+  // Check for voice message attachments
+  const voiceAttachments = message.attachments.filter(
+    a => a.contentType?.startsWith('audio/') || a.contentType?.startsWith('voice/')
+  );
+
+  if (voiceAttachments.size > 0) {
+    const attachment = voiceAttachments.first()!;
+    const stopTyping = startTypingIndicator(message);
+
+    try {
+      // Check if voice config is available
+      if (!config.voice) {
+        await message.reply('Voice transcription not configured. Add a "voice" section to config.json.');
+        return;
+      }
+
+      // Download the voice file
+      const voiceResponse = await fetch(attachment.url);
+      const buffer = Buffer.from(await voiceResponse.arrayBuffer());
+
+      // Save to temp file
+      const ext = attachment.name?.split('.').pop() || 'ogg';
+      const tempDir = join(tmpdir(), 'skimpyclaw-voice');
+      if (!existsSync(tempDir)) mkdirSync(tempDir, { recursive: true });
+      const tempPath = join(tempDir, `discord-voice-${Date.now()}.${ext}`);
+      writeFileSync(tempPath, buffer);
+
+      try {
+        // Transcribe
+        const result = await transcribeAudio(tempPath, config.voice);
+        const transcription = result.text.trim();
+        console.log(`[discord] Transcription result: ${transcription}`);
+
+        if (!transcription) {
+          await message.reply('Could not transcribe audio — no speech detected.');
+          return;
+        }
+
+        const key = conversationKey(message);
+        const history = getHistory(key);
+        const agentResponse = await runAgentTurn(
+          config.agents.default,
+          transcription,
+          config,
+          getCurrentModel(),
+          getDiscordToolConfig(config),
+          history,
+          getDiscordRunContext(message)
+        );
+        addToHistory(key, transcription, agentResponse);
+
+        // Format response with transcription in a blockquote
+        const combined = `> 🎤 ${transcription}\n\n${agentResponse}`;
+        await sendLongText(message, combined);
+      } finally {
+        // Clean up temp file
+        try {
+          unlinkSync(tempPath);
+        } catch {}
+      }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      await message.reply(`Voice transcription error: ${msg}`);
     } finally {
       stopTyping();
     }
