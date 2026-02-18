@@ -1,5 +1,6 @@
 node_modules/
 dist/
+.worktrees/
 .DS_Store
 config.json
 config.local.json
