@@ -1861,8 +1861,11 @@ async function loadSession(id) {
       const role = t.role || 'unknown';
       const content = typeof t.content === 'string' ? t.content :
                       (t.content && t.content.text ? t.content.text : JSON.stringify(t.content, null, 2));
+      const renderedContent = role === 'assistant'
+        ? renderMarkdown(content)
+        : '<pre style="white-space:pre-wrap;font-size:13px;line-height:1.6;margin:0;">' + esc(content) + '</pre>';
       return '<div class="chat-role">' + esc(role) + (t.timestamp ? ' &middot; ' + formatDate(t.timestamp) : '') + '</div>' +
-             '<div class="chat-bubble ' + esc(role) + '">' + esc(content) + '</div>';
+             '<div class="chat-bubble ' + esc(role) + '">' + renderedContent + '</div>';
     }).join('');
   } catch (e) {
     detail.innerHTML = '<div class="empty">Failed to load session</div>';
