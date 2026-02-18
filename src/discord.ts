@@ -612,7 +612,7 @@ async function handleIncomingMessage(message: Message): Promise<void> {
         // Clean up temp file
         try {
           unlinkSync(tempPath);
-        } catch {}
+        } catch { /* best effort */ }
       }
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Unknown error';

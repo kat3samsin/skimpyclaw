@@ -8,7 +8,7 @@ import {
   writeFileSync,
   unlinkSync,
 } from 'fs';
-import { join, basename } from 'path';
+import { join } from 'path';
 import { createHash } from 'crypto';
 import { getLogsDir } from './config.js';
 
@@ -208,10 +208,10 @@ function detectSource(url: string): string {
 }
 
 function extractUrls(text: string): string[] {
-  const urlRegex = /https?:\/\/[^\s\)\]\>\"\'\`]+/gi;
+  const urlRegex = /https?:\/\/[^\s)\]>'"`]+/gi;
   const matches = text.match(urlRegex) || [];
   // Clean up trailing punctuation
-  return matches.map(url => url.replace(/[\.,;:!?\)\]\>\"\'\`]+$/, ''));
+  return matches.map(url => url.replace(/[.,;:!?)\]>'"`]+$/, ''));
 }
 
 function extractTitleForUrl(text: string, url: string): string {
@@ -227,28 +227,33 @@ function extractTitleForUrl(text: string, url: string): string {
           const prev = lines[j].trim();
           if (!prev) continue;
           // Skip stats lines (⬆️, 💬, 🔥, ⭐, etc.)
-          if (/^[⬆️💬🔥🔄⭐🔗]+/.test(prev)) continue;
+          // Skip lines with emoji prefix (stats lines like ⬆️, 💬, 🔥, etc)
+          // eslint-disable-next-line no-misleading-character-class
+          if (/^[\u2B06\uFE0F\u{1F4AC}\u{1F525}\u{1F504}\u2B50\u{1F517}]+/u.test(prev)) continue;
           // Skip lines that are just URLs
           if (/^https?:\/\//.test(prev)) continue;
           // Found a title line — strip numbering/bullets and emoji prefix
-          const cleaned = prev.replace(/^\d+\.\s*/, '').replace(/^[\-\*•]\s*/, '').trim();
+          const cleaned = prev.replace(/^\d+\.\s*/, '').replace(/^[-*•]\s*/, '').trim();
           if (cleaned.length > 0) {
             // Strip trailing stats if inlined (e.g. "Title — ⭐ 123 stars today")
-            const noStats = cleaned.replace(/\s*[—\-]\s*[⭐🔥⬆️💬🔄].+$/, '').trim();
+            // Strip trailing stats if inlined
+          // eslint-disable-next-line no-misleading-character-class
+          const noStats = cleaned.replace(/\s*[—-]\s*[\u2B50\u{1F525}\u2B06\uFE0F\u{1F4AC}\u{1F504}].+$/u, '').trim();
             return (noStats || cleaned).slice(0, 150);
           }
         }
       }
       // Title on same line as URL (inline format)
-      const titleMatch = line.match(/^\s*[\-\*•]?\s*\d*\.?\s*(.+?)\s+https?:/);
+      const titleMatch = line.match(/^\s*[-*•]?\s*\d*\.?\s*(.+?)\s+https?:/);
       if (titleMatch) {
         return titleMatch[1].trim().slice(0, 150);
       }
       // Check previous line
       if (i > 0) {
         const prevLine = lines[i - 1].trim();
-        if (prevLine && !prevLine.startsWith('http') && !/^[⬆️💬🔥🔄⭐🔗]+/.test(prevLine)) {
-          const cleaned = prevLine.replace(/^\d+\.\s*/, '').replace(/^[\-\*•]\s*/, '').trim();
+        // eslint-disable-next-line no-misleading-character-class
+        if (prevLine && !prevLine.startsWith('http') && !/^[\u2B06\uFE0F\u{1F4AC}\u{1F525}\u{1F504}\u2B50\u{1F517}]+/u.test(prevLine)) {
+          const cleaned = prevLine.replace(/^\d+\.\s*/, '').replace(/^[-*•]\s*/, '').trim();
           if (cleaned.length > 0) return cleaned.slice(0, 150);
         }
       }

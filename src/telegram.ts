@@ -931,7 +931,7 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
         // Clean up temp file
         try {
           unlinkSync(tempPath);
-        } catch {}
+        } catch { /* best effort */ }
       }
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Unknown error';
