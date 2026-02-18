@@ -2513,46 +2513,7 @@ function extractTitleFromUrl(url) {
 }
 
 function formatDigestContent(text) {
-  var lines = text.split('\\n');
-  var html = '';
-  for (var i = 0; i < lines.length; i++) {
-    var raw = lines[i];
-    var trimmed = raw.trim();
-    var line = esc(raw);
-
-    if (trimmed === '') {
-      html += '<div class="digest-spacer"></div>';
-    }
-    else if (/^---+$/.test(trimmed)) {
-      html += '<hr class="digest-hr">';
-    }
-    // Section headers — lines with emoji + ALL CAPS words
-    else if (/^.{1,4}(TOP |GITHUB|HACKER|REDDIT|AI |TRENDS|r\\/)/.test(trimmed) && /[A-Z]/.test(trimmed)) {
-      html += '<div class="digest-section-header">' + line + '</div>';
-    }
-    // Link lines
-    else if (trimmed.indexOf('🔗') === 0 || trimmed.indexOf('🔗') === 0) {
-      var m = raw.match(/https?:\\/\\/[^\\s]+/);
-      if (m) {
-        html += '<div class="digest-link-line">🔗 <a href="' + esc(m[0]) + '" target="_blank" rel="noopener" class="digest-link">' + esc(m[0]) + '</a></div>';
-      } else {
-        html += '<div class="digest-line">' + line + '</div>';
-      }
-    }
-    // Stats lines
-    else if (/^(⬆|🔥|💬)/.test(trimmed)) {
-      html += '<div class="digest-stats">' + line + '</div>';
-    }
-    // Numbered items
-    else if (/^\\d+\\.\\s/.test(trimmed)) {
-      html += '<div class="digest-item-title">' + line + '</div>';
-    }
-    else {
-      var p = line.replace(/(https?:\\/\\/[^\\s&lt;]+)/g, '<a href="$1" target="_blank" rel="noopener" class="digest-link">$1</a>');
-      html += '<div class="digest-line">' + p + '</div>';
-    }
-  }
-  return html;
+  return renderMarkdown(text || '');
 }
 
 async function loadDigestDetail(id) {
