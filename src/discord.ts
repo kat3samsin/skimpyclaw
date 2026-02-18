@@ -29,6 +29,7 @@ import {
   type PendingApproval,
 } from './exec-approval.js';
 import { transcribeAudio } from './voice.js';
+import * as sessions from './sessions.js';
 
 function getDiscordRunContext(message: Message): AgentRunContext {
   return {
@@ -62,6 +63,8 @@ const KNOWN_COMMANDS = new Set(BOT_COMMANDS.map(c => c.command));
 
 const MAX_HISTORY_PAIRS = 5;
 const chatHistory = new Map<string, ChatMessage[]>();
+// Track which keys have been loaded from disk this session
+const loadedFromDisk = new Set<string>();
 
 const DEFAULT_DISCORD_TOOLS: ToolConfig = {
   enabled: true,
@@ -74,12 +77,20 @@ let client: Client | null = null;
 let config: Config;
 let silenceUntil: Date | null = null;
 
-function getHistory(key: string): ChatMessage[] {
+async function getHistory(key: string): Promise<ChatMessage[]> {
+  // Lazy-load from disk on first access this session
+  if (!loadedFromDisk.has(key)) {
+    loadedFromDisk.add(key);
+    const diskHistory = await sessions.loadHistory('discord', key).catch(() => []);
+    if (diskHistory.length > 0 && !chatHistory.has(key)) {
+      chatHistory.set(key, diskHistory);
+    }
+  }
   return chatHistory.get(key) || [];
 }
 
-function addToHistory(key: string, userMsg: string, assistantMsg: string): void {
-  const history = getHistory(key);
+async function addToHistory(key: string, userMsg: string, assistantMsg: string): Promise<void> {
+  const history = await getHistory(key);
   history.push({ role: 'user', content: userMsg });
   history.push({ role: 'assistant', content: assistantMsg });
   while (history.length > MAX_HISTORY_PAIRS * 2) {
@@ -87,10 +98,14 @@ function addToHistory(key: string, userMsg: string, assistantMsg: string): void 
     history.shift();
   }
   chatHistory.set(key, history);
+  // Persist to disk (fire-and-forget)
+  sessions.saveExchange('discord', key, userMsg, assistantMsg).catch(() => {});
 }
 
-function clearHistory(key: string): void {
+async function clearHistory(key: string): Promise<void> {
   chatHistory.delete(key);
+  loadedFromDisk.delete(key);
+  await sessions.clearHistory('discord', key).catch(() => {});
 }
 
 function getDiscordToolConfig(cfg: Config): ToolConfig {
@@ -424,14 +439,14 @@ async function handleCommand(message: Message, command: string, args: string[]):
   }
 
   if (command === 'new') {
-    clearHistory(conversationKey(message));
+    await clearHistory(conversationKey(message));
     await message.reply('Conversation cleared. Starting fresh.');
     return;
   }
 
   if (command === 'compact') {
     const key = conversationKey(message);
-    const history = getHistory(key);
+    const history = await getHistory(key);
     if (history.length === 0) {
       await message.reply('No conversation history to compact.');
       return;
@@ -449,11 +464,13 @@ async function handleCommand(message: Message, command: string, args: string[]):
         undefined,
         getDiscordRunContext(message),
       );
-      clearHistory(key);
+      await clearHistory(key);
       chatHistory.set(key, [
         { role: 'user', content: 'Summary of our previous conversation:' },
         { role: 'assistant', content: summary },
       ]);
+      loadedFromDisk.add(key); // Mark as loaded so we don't re-load on next access
+      await sessions.replaceWithSummary('discord', key, summary);
       await message.reply(`Compacted ${history.length} messages into a summary.`);
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Unknown error';
@@ -532,7 +549,7 @@ async function handleIncomingMessage(message: Message): Promise<void> {
       ];
 
       const key = conversationKey(message);
-      const history = getHistory(key);
+      const history = await getHistory(key);
       const response = await runAgentTurn(
         config.agents.default,
         content,
@@ -543,7 +560,7 @@ async function handleIncomingMessage(message: Message): Promise<void> {
         getDiscordRunContext(message)
       );
 
-      addToHistory(key, `[Image: ${caption}]`, response);
+      await addToHistory(key, `[Image: ${caption}]`, response);
       await sendLongText(message, response);
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Unknown error';
@@ -593,7 +610,7 @@ async function handleIncomingMessage(message: Message): Promise<void> {
         }
 
         const key = conversationKey(message);
-        const history = getHistory(key);
+        const history = await getHistory(key);
         const agentResponse = await runAgentTurn(
           config.agents.default,
           transcription,
@@ -603,7 +620,7 @@ async function handleIncomingMessage(message: Message): Promise<void> {
           history,
           getDiscordRunContext(message)
         );
-        addToHistory(key, transcription, agentResponse);
+        await addToHistory(key, transcription, agentResponse);
 
         // Format response with transcription in a blockquote
         const combined = `> 🎤 ${transcription}\n\n${agentResponse}`;
@@ -647,7 +664,7 @@ async function handleIncomingMessage(message: Message): Promise<void> {
   const stopTyping = startTypingIndicator(message);
 
   try {
-    const history = getHistory(key);
+    const history = await getHistory(key);
     const response = await runAgentTurn(
       config.agents.default,
       text,
@@ -657,7 +674,7 @@ async function handleIncomingMessage(message: Message): Promise<void> {
       history,
       getDiscordRunContext(message)
     );
-    addToHistory(key, text, response);
+    await addToHistory(key, text, response);
     await sendLongText(message, response);
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Unknown error';

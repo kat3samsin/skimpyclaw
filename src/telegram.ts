@@ -40,6 +40,7 @@ import {
 import { loadSkills } from './skills.js';
 import type { SkillConfig } from './skills-types.js';
 import { loadRawConfig, saveConfig } from './config.js';
+import * as sessions from './sessions.js';
 
 const LAUNCHD_LABEL = 'com.skimpyclaw.gateway';
 
@@ -76,17 +77,27 @@ let silenceUntil: Date | null = null;
 // Conversation history per chat — last N user/assistant message pairs
 const MAX_HISTORY_PAIRS = 5;
 const chatHistory = new Map<number, ChatMessage[]>();
+// Track which chatIds have been loaded from disk this session
+const loadedFromDisk = new Set<number>();
 
-function getHistory(chatId: number): ChatMessage[] {
+async function getHistory(chatId: number): Promise<ChatMessage[]> {
+  // Lazy-load from disk on first access this session
+  if (!loadedFromDisk.has(chatId)) {
+    loadedFromDisk.add(chatId);
+    const diskHistory = await sessions.loadHistory('telegram', chatId).catch(() => []);
+    if (diskHistory.length > 0 && !chatHistory.has(chatId)) {
+      chatHistory.set(chatId, diskHistory);
+    }
+  }
   return chatHistory.get(chatId) || [];
 }
 
-function addToHistory(
+async function addToHistory(
   chatId: number,
   userMsg: string,
   assistantMsg: string
-): void {
-  const history = getHistory(chatId);
+): Promise<void> {
+  const history = await getHistory(chatId);
   history.push({ role: 'user', content: userMsg });
   history.push({ role: 'assistant', content: assistantMsg });
   // Keep only last N pairs (2 messages per pair)
@@ -95,10 +106,14 @@ function addToHistory(
     history.shift();
   }
   chatHistory.set(chatId, history);
+  // Persist to disk (fire-and-forget — errors logged in sessions.ts)
+  sessions.saveExchange('telegram', chatId, userMsg, assistantMsg).catch(() => {});
 }
 
-function clearHistory(chatId: number): void {
+async function clearHistory(chatId: number): Promise<void> {
   chatHistory.delete(chatId);
+  loadedFromDisk.delete(chatId);
+  await sessions.clearHistory('telegram', chatId).catch(() => {});
 }
 
 function getRunContext(ctx: Context): AgentRunContext {
@@ -763,7 +778,7 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
   // /new command — clear conversation history
   bot.command('new', async (ctx) => {
     const chatId = ctx.chat?.id;
-    if (chatId) clearHistory(chatId);
+    if (chatId) await clearHistory(chatId);
     await ctx.reply('Conversation cleared. Starting fresh.');
   });
 
@@ -772,7 +787,7 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
     const chatId = ctx.chat?.id;
     if (!chatId) return;
 
-    const history = getHistory(chatId);
+    const history = await getHistory(chatId);
     if (history.length === 0) {
       await ctx.reply('No conversation history to compact.');
       return;
@@ -793,12 +808,14 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
         undefined,
         getRunContext(ctx)
       );
-      // Replace history with a single summary message
-      clearHistory(chatId);
+      // Replace history with a single summary message (in-memory + disk)
+      await clearHistory(chatId);
       chatHistory.set(chatId, [
         { role: 'user', content: 'Summary of our previous conversation:' },
         { role: 'assistant', content: summary }
       ]);
+      loadedFromDisk.add(chatId); // Mark as loaded so we don't re-load on next access
+      await sessions.replaceWithSummary('telegram', chatId, summary);
       await ctx.reply(`Compacted ${history.length} messages into a summary.`);
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Unknown error';
@@ -912,7 +929,7 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
           return;
         }
 
-        const history = chatId ? getHistory(chatId) : [];
+        const history = chatId ? await getHistory(chatId) : [];
         const agentResponse = await runAgentTurn(
           cfg.agents.default,
           transcription,
@@ -922,7 +939,7 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
           history,
           getRunContext(ctx)
         );
-        if (chatId) addToHistory(chatId, transcription, agentResponse);
+        if (chatId) await addToHistory(chatId, transcription, agentResponse);
 
         // Single message: blockquote transcription + agent response (no reply to voice note)
         const combined = `<blockquote>🎤 ${transcription}</blockquote>\n\n${escapeHtml(agentResponse)}`;
@@ -984,7 +1001,7 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
         }
       ];
 
-      const history = chatId ? getHistory(chatId) : [];
+      const history = chatId ? await getHistory(chatId) : [];
       const response = await runAgentTurn(
         cfg.agents.default,
         content,
@@ -996,7 +1013,7 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
       );
 
       if (chatId) {
-        addToHistory(chatId, `[Image: ${caption}]`, response);
+        await addToHistory(chatId, `[Image: ${caption}]`, response);
       }
 
       await sendLongMessage(ctx, response);
@@ -1027,7 +1044,7 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
     const stopTyping = startTypingIndicator(ctx);
 
     try {
-      const history = chatId ? getHistory(chatId) : [];
+      const history = chatId ? await getHistory(chatId) : [];
       const response = await runAgentTurn(
         cfg.agents.default,
         text,
@@ -1037,7 +1054,7 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
         history,
         getRunContext(ctx)
       );
-      if (chatId) addToHistory(chatId, text, response);
+      if (chatId) await addToHistory(chatId, text, response);
       await sendLongMessage(ctx, response);
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Unknown error';
