@@ -74,6 +74,9 @@ export interface Config {
   };
   voice?: VoiceConfig;
   skills?: SkillConfig;
+  /** Named project paths. Keys are short names (e.g. "skimpyclaw"), values are absolute paths.
+   *  Project paths are automatically added to tool allowedPaths and available to code_with_agent by name. */
+  projects?: Record<string, string>;
 }
 
 export interface AgentConfig {

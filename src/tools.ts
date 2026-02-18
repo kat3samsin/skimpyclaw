@@ -287,7 +287,7 @@ export function clearMcpToolCache(): void {
  * This is the primary way to get tools — replaces the static TOOL_DEFINITIONS export.
  * Pass includeSpawnSubagent: true to include the spawn_subagent tool (e.g. for Telegram conversations).
  */
-export async function getToolDefinitions(config?: ToolConfig, options?: { includeSpawnSubagent?: boolean }): Promise<any[]> {
+export async function getToolDefinitions(config?: ToolConfig, options?: { includeSpawnSubagent?: boolean; projects?: Record<string, string> }): Promise<any[]> {
   const tools: any[] = [...BUILTIN_TOOL_DEFINITIONS];
 
   // Include browser tool only when explicitly enabled
@@ -302,7 +302,31 @@ export async function getToolDefinitions(config?: ToolConfig, options?: { includ
   // Include spawn_subagent, code_with_agent, and check_code_agent tools when requested
   if (options?.includeSpawnSubagent) {
     tools.push(SPAWN_SUBAGENT_TOOL);
-    tools.push(CODE_WITH_AGENT_TOOL);
+
+    // Inject project names into code_with_agent description so the model knows what to use
+    const projects = options.projects;
+    if (projects && Object.keys(projects).length > 0) {
+      const projectList = Object.entries(projects)
+        .map(([name, path]) => `"${name}" → ${path}`)
+        .join(', ');
+      const codeAgentWithProjects = {
+        ...CODE_WITH_AGENT_TOOL,
+        input_schema: {
+          ...CODE_WITH_AGENT_TOOL.input_schema,
+          properties: {
+            ...CODE_WITH_AGENT_TOOL.input_schema.properties,
+            workdir: {
+              type: 'string',
+              description: `Working directory or project name. Named projects: ${projectList}. Default: SkimpyClaw repo root.`,
+            },
+          },
+        },
+      };
+      tools.push(codeAgentWithProjects);
+    } else {
+      tools.push(CODE_WITH_AGENT_TOOL);
+    }
+
     tools.push(CHECK_CODE_AGENT_TOOL);
   }
 
@@ -688,9 +712,26 @@ async function executeCodeWithAgent(
     return `Error: Invalid agent "${agent}". Must be claude, codex, or kimi.`;
   }
 
-  const workdir = resolve(input.workdir || SKIMPYCLAW_ROOT);
-  if (!isPathAllowed(workdir, config.allowedPaths)) {
-    return `Error: Working directory not allowed. Permitted: ${config.allowedPaths.join(', ')}`;
+  const projects = context?.fullConfig?.projects ?? {};
+  const rawWorkdir = input.workdir as string | undefined;
+
+  // Resolve project name → path (e.g. "skimpyclaw" → "/Users/katre/Sites/skimpyclaw")
+  let workdir: string;
+  if (rawWorkdir && projects[rawWorkdir]) {
+    workdir = resolve(projects[rawWorkdir]);
+  } else {
+    workdir = resolve(rawWorkdir || SKIMPYCLAW_ROOT);
+  }
+
+  // Project paths are always allowed in addition to configured allowedPaths
+  const projectPaths = Object.values(projects).map(p => resolve(p));
+  const effectiveAllowedPaths = [...config.allowedPaths, ...projectPaths];
+
+  if (!isPathAllowed(workdir, effectiveAllowedPaths)) {
+    const projectNames = Object.keys(projects).length > 0
+      ? ` (or project names: ${Object.keys(projects).join(', ')})`
+      : '';
+    return `Error: Working directory not allowed. Permitted: ${config.allowedPaths.join(', ')}${projectNames}`;
   }
 
   // Concurrency check — share limit with subagents
