@@ -622,7 +622,10 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
   // --- Skills ---
   fastify.get('/api/dashboard/skills', async () => {
     const skillConfig = (config as any).skills as SkillConfig | undefined;
-    const skills = loadSkills(skillConfig);
+    // Use active channel's toolConfig so eligibility checks reflect actual tool availability
+    const activeChannel = config.channels?.active || 'telegram';
+    const toolConfig = (config.channels as any)?.[activeChannel]?.tools;
+    const skills = loadSkills(skillConfig, toolConfig);
     return {
       skills: skills.map(s => ({
         name: s.name,
@@ -646,7 +649,9 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
     }
 
     const skillConfig = (config as any).skills as SkillConfig | undefined;
-    const skills = loadSkills(skillConfig);
+    const activeChannel = config.channels?.active || 'telegram';
+    const toolConfig = (config.channels as any)?.[activeChannel]?.tools;
+    const skills = loadSkills(skillConfig, toolConfig);
     const skill = skills.find(s => s.name === name);
     if (!skill) {
       return reply.code(404).send({ error: 'Skill not found' });

@@ -238,9 +238,26 @@ describe('checkEligibility', () => {
     expect(result.reason).toContain('Tools not enabled');
   });
 
-  it('passes on tools requirement when tools enabled', () => {
+  it('fails on browser tool requirement when browser not enabled', () => {
     const result = checkEligibility(
       { name: 'test', description: 'test', requires: { tools: ['Browser'] } },
+      { enabled: true, allowedPaths: ['/tmp'] }
+    );
+    expect(result.eligible).toBe(false);
+    expect(result.reason).toContain('Browser');
+  });
+
+  it('passes on browser tool requirement when browser enabled', () => {
+    const result = checkEligibility(
+      { name: 'test', description: 'test', requires: { tools: ['Browser'] } },
+      { enabled: true, allowedPaths: ['/tmp'], browser: { enabled: true } }
+    );
+    expect(result.eligible).toBe(true);
+  });
+
+  it('passes on spawn_subagent requirement when tools enabled', () => {
+    const result = checkEligibility(
+      { name: 'test', description: 'test', requires: { tools: ['spawn_subagent'] } },
       { enabled: true, allowedPaths: ['/tmp'] }
     );
     expect(result.eligible).toBe(true);

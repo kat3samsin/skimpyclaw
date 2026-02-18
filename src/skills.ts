@@ -65,12 +65,21 @@ export function checkEligibility(
     }
   }
 
-  // Check tool availability (requires toolConfig with allowed tools info)
-  // Note: We check tool names against a known set. Since ToolConfig doesn't
-  // enumerate tool names directly, we check if tools are enabled at all.
+  // Check tool availability against the active ToolConfig
   if (reqs.tools && reqs.tools.length > 0) {
     if (!toolConfig?.enabled) {
       return { eligible: false, reason: `Tools not enabled (needs: ${reqs.tools.join(', ')})` };
+    }
+    const missing: string[] = [];
+    for (const tool of reqs.tools) {
+      const t = tool.toLowerCase();
+      if (t === 'browser') {
+        if (!toolConfig.browser?.enabled) missing.push(tool);
+      }
+      // spawn_subagent and other built-ins are available whenever tools.enabled is true
+    }
+    if (missing.length > 0) {
+      return { eligible: false, reason: `Tools not enabled (needs: ${missing.join(', ')})` };
     }
   }
 
