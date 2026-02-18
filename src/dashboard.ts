@@ -1906,7 +1906,7 @@ async function loadMemoryFile(agentId, filename) {
   try {
     const data = await api('memory/' + encodeURIComponent(agentId) + '/' + encodeURIComponent(filename));
     const content = data.content || '';
-    const isMarkdown = filename === 'curated' || /\.md$/i.test(String(filename));
+    const isMarkdown = filename === 'curated' || String(filename).toLowerCase().endsWith('.md');
     el.innerHTML = isMarkdown
       ? renderMarkdown(content)
       : '<pre style="white-space:pre-wrap;font-size:13px;line-height:1.6;">' + esc(content || '(empty)') + '</pre>';
