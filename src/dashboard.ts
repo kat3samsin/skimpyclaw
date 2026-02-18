@@ -330,6 +330,64 @@ a:hover { text-decoration: underline; }
   font-family: var(--mono);
 }
 
+.markdown-content {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text);
+}
+
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3,
+.markdown-content h4,
+.markdown-content h5,
+.markdown-content h6 {
+  margin: 16px 0 8px;
+  line-height: 1.3;
+}
+
+.markdown-content p { margin: 10px 0; }
+.markdown-content ul,
+.markdown-content ol { margin: 8px 0 10px 22px; }
+.markdown-content li { margin: 4px 0; }
+.markdown-content hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 14px 0;
+}
+
+.markdown-content code {
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 1px 6px;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.markdown-content pre {
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  overflow-x: auto;
+  margin: 10px 0;
+}
+
+.markdown-content pre code {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  font-size: 13px;
+}
+
+.markdown-content blockquote {
+  border-left: 3px solid var(--highlight);
+  margin: 10px 0;
+  padding: 2px 0 2px 10px;
+  color: var(--text-dim);
+}
+
 .btn {
   padding: 8px 14px;
   border: 1px solid var(--border);
@@ -1471,6 +1529,132 @@ function esc(str) {
   return d.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+function isSafeHref(url) {
+  if (!url) return false;
+  if (url.startsWith('#') || url.startsWith('/')) return true;
+  try {
+    const parsed = new URL(url, window.location.origin);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' || parsed.protocol === 'mailto:';
+  } catch {
+    return false;
+  }
+}
+
+function renderInlineMarkdown(text) {
+  let html = esc(text || '');
+
+  html = html.replace(/\\x60([^\\x60]+)\\x60/g, '<code>$1</code>');
+  html = html.replace(/\\*\\*([^*]+)\\*\\*/g, '<strong>$1</strong>');
+  html = html.replace(/\\*([^*]+)\\*/g, '<em>$1</em>');
+
+  html = html.replace(/\\[([^\\]]+)\\]\\(([^)\\s]+)\\)/g, (m, label, href) => {
+    return isSafeHref(href)
+      ? '<a href="' + esc(href) + '" target="_blank" rel="noopener noreferrer">' + label + '</a>'
+      : label;
+  });
+
+  html = html.replace(/(^|\\s)(https?:\\/\\/[^\\s<]+)/g, (m, prefix, url) => {
+    return isSafeHref(url)
+      ? prefix + '<a href="' + esc(url) + '" target="_blank" rel="noopener noreferrer">' + esc(url) + '</a>'
+      : m;
+  });
+
+  return html;
+}
+
+function renderMarkdown(md) {
+  const src = String(md || '').replace(/\\r\\n/g, '\\n');
+  if (!src.trim()) return '<div class="empty">(empty)</div>';
+
+  const lines = src.split('\\n');
+  const out = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    if (/^\\x60\\x60\\x60/.test(line.trim())) {
+      const code = [];
+      i++;
+      while (i < lines.length && !/^\\x60\\x60\\x60/.test(lines[i].trim())) {
+        code.push(lines[i]);
+        i++;
+      }
+      if (i < lines.length) i++;
+      out.push('<pre><code>' + esc(code.join('\\n')) + '</code></pre>');
+      continue;
+    }
+
+    const heading = line.match(/^(#{1,6})\\s+(.*)$/);
+    if (heading) {
+      const level = heading[1].length;
+      out.push('<h' + level + '>' + renderInlineMarkdown(heading[2]) + '</h' + level + '>');
+      i++;
+      continue;
+    }
+
+    if (/^\\s*([-*_])\\1\\1+\\s*$/.test(line)) {
+      out.push('<hr>');
+      i++;
+      continue;
+    }
+
+    const quote = line.match(/^>\\s?(.*)$/);
+    if (quote) {
+      out.push('<blockquote>' + renderInlineMarkdown(quote[1]) + '</blockquote>');
+      i++;
+      continue;
+    }
+
+    const ul = line.match(/^\\s*[-*]\\s+(.*)$/);
+    if (ul) {
+      const items = [];
+      while (i < lines.length) {
+        const m = lines[i].match(/^\\s*[-*]\\s+(.*)$/);
+        if (!m) break;
+        items.push('<li>' + renderInlineMarkdown(m[1]) + '</li>');
+        i++;
+      }
+      out.push('<ul>' + items.join('') + '</ul>');
+      continue;
+    }
+
+    const ol = line.match(/^\\s*\\d+\\.\\s+(.*)$/);
+    if (ol) {
+      const items = [];
+      while (i < lines.length) {
+        const m = lines[i].match(/^\\s*\\d+\\.\\s+(.*)$/);
+        if (!m) break;
+        items.push('<li>' + renderInlineMarkdown(m[1]) + '</li>');
+        i++;
+      }
+      out.push('<ol>' + items.join('') + '</ol>');
+      continue;
+    }
+
+    if (!line.trim()) {
+      i++;
+      continue;
+    }
+
+    const paragraph = [line.trim()];
+    i++;
+    while (i < lines.length && lines[i].trim() &&
+      !/^(#{1,6})\\s+/.test(lines[i]) &&
+      !/^\\s*([-*_])\\1\\1+\\s*$/.test(lines[i]) &&
+      !/^>\\s?/.test(lines[i]) &&
+      !/^\\s*[-*]\\s+/.test(lines[i]) &&
+      !/^\\s*\\d+\\.\\s+/.test(lines[i]) &&
+      !/^\\x60\\x60\\x60/.test(lines[i].trim())) {
+      paragraph.push(lines[i].trim());
+      i++;
+    }
+    out.push('<p>' + renderInlineMarkdown(paragraph.join(' ')) + '</p>');
+  }
+
+  return '<div class="markdown-content">' + out.join('') + '</div>';
+}
+
 function formatUptime(seconds) {
   const d = Math.floor(seconds / 86400);
   const h = Math.floor((seconds % 86400) / 3600);
@@ -1718,7 +1902,11 @@ async function loadMemoryFile(agentId, filename) {
   const el = document.getElementById('memoryContent');
   try {
     const data = await api('memory/' + encodeURIComponent(agentId) + '/' + encodeURIComponent(filename));
-    el.innerHTML = '<pre style="white-space:pre-wrap;font-size:13px;line-height:1.6;">' + esc(data.content || '(empty)') + '</pre>';
+    const content = data.content || '';
+    const isMarkdown = filename === 'curated' || /\.md$/i.test(String(filename));
+    el.innerHTML = isMarkdown
+      ? renderMarkdown(content)
+      : '<pre style="white-space:pre-wrap;font-size:13px;line-height:1.6;">' + esc(content || '(empty)') + '</pre>';
   } catch (e) {
     el.innerHTML = '<div class="empty">Failed to load file</div>';
   }
