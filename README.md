@@ -26,7 +26,7 @@ Use SkimpyClaw if you live in Telegram or Discord, want to read and own every li
 - **Heartbeat** — periodic keep-alive with Telegram alerts
 - **Skills** — domain-specific capabilities loaded from `~/.skimpyclaw/skills/`
 - **Exec approval** — human-in-the-loop approval for sensitive tool calls
-- **Voice** — optional TTS/STT support (ElevenLabs and others)
+- **Voice** — optional TTS/STT support (ElevenLabs and others), voice/audio message transcription (Telegram + Discord); Discord voice messages and audio file attachments (ogg, mp3, wav, m4a, webm, flac, aac, opus) are auto-transcribed using the same Whisper-based pipeline as Telegram
 - **Observability** — optional Langfuse tracing per agent turn
 - **Multiple model providers** — Anthropic, OpenAI, Kimi, MiniMax, Codex (ChatGPT backend), any OpenAI-compatible API
 

@@ -9,7 +9,8 @@ import {
   type Interaction,
 } from 'discord.js';
 import { join } from 'path';
-import { homedir } from 'os';
+import { homedir, tmpdir } from 'os';
+import { mkdirSync, writeFileSync, unlinkSync, existsSync } from 'fs';
 import type { AgentRunContext, ChatMessage, Config, ToolConfig } from './types.js';
 import { getCurrentModel, setCurrentModel, getLastMessage } from './gateway.js';
 import { getCronJobs, runCronJob } from './cron.js';
@@ -26,6 +27,77 @@ import {
   onApprovalEvent,
   type PendingApproval,
 } from './exec-approval.js';
+import { transcribeAudio } from './voice.js';
+
+// --- Audio attachment helpers ---
+
+const AUDIO_EXTENSIONS = new Set(['ogg', 'oga', 'opus', 'mp3', 'wav', 'm4a', 'webm', 'flac', 'aac']);
+
+const CONTENT_TYPE_TO_EXT: Record<string, string> = {
+  'audio/ogg': 'ogg',
+  'audio/mpeg': 'mp3',
+  'audio/mp3': 'mp3',
+  'audio/wav': 'wav',
+  'audio/x-wav': 'wav',
+  'audio/mp4': 'm4a',
+  'audio/x-m4a': 'm4a',
+  'audio/webm': 'webm',
+  'audio/flac': 'flac',
+  'audio/x-flac': 'flac',
+  'audio/aac': 'aac',
+  'audio/opus': 'opus',
+};
+
+interface AttachmentLike {
+  contentType?: string | null;
+  name?: string | null;
+  url: string;
+}
+
+/** Extract extension from a URL, ignoring query params. */
+function extFromUrl(url: string): string {
+  try {
+    const path = new URL(url).pathname;
+    const dot = path.lastIndexOf('.');
+    if (dot === -1) return '';
+    return path.slice(dot + 1).toLowerCase();
+  } catch {
+    const dot = url.lastIndexOf('.');
+    if (dot === -1) return '';
+    return url.slice(dot + 1).split('?')[0].toLowerCase();
+  }
+}
+
+/**
+ * Returns true if the attachment is an audio file.
+ * Uses contentType when present, falls back to URL extension.
+ */
+export function isAudioAttachment(attachment: AttachmentLike): boolean {
+  if (attachment.contentType) {
+    return attachment.contentType.startsWith('audio/');
+  }
+  const ext = extFromUrl(attachment.url);
+  return AUDIO_EXTENSIONS.has(ext);
+}
+
+/**
+ * Returns the best file extension for the attachment.
+ * Uses contentType mapping first, then URL extension, then 'ogg' as default.
+ */
+export function getAudioExtension(attachment: AttachmentLike): string {
+  if (attachment.contentType) {
+    // Try exact match first
+    const mapped = CONTENT_TYPE_TO_EXT[attachment.contentType];
+    if (mapped) return mapped;
+    // Try prefix match (e.g. audio/ogg; codecs=opus)
+    const base = attachment.contentType.split(';')[0].trim();
+    const baseMapped = CONTENT_TYPE_TO_EXT[base];
+    if (baseMapped) return baseMapped;
+  }
+  const ext = extFromUrl(attachment.url);
+  if (ext && AUDIO_EXTENSIONS.has(ext)) return ext;
+  return 'ogg';
+}
 
 function getDiscordRunContext(message: Message): AgentRunContext {
   return {
@@ -488,6 +560,71 @@ async function handleIncomingMessage(message: Message): Promise<void> {
 
   if (isRateLimited(senderId)) {
     await message.reply('Too many messages. Please wait a moment.');
+    return;
+  }
+
+  // Check for audio attachments (voice messages / audio files)
+  const audioAttachments = message.attachments.filter(a => isAudioAttachment(a));
+
+  if (audioAttachments.size > 0) {
+    const attachment = audioAttachments.first()!;
+
+    if (!config.voice) {
+      await message.reply('Voice transcription not configured. Add a "voice" section to config.json.');
+      return;
+    }
+
+    const stopTyping = startTypingIndicator(message);
+    const voiceDir = join(tmpdir(), 'skimpyclaw-voice-discord');
+    let tempPath: string | null = null;
+
+    try {
+      // Download audio
+      const audioResponse = await fetch(attachment.url);
+      const audioBuffer = Buffer.from(await audioResponse.arrayBuffer());
+
+      // Write to temp file
+      mkdirSync(voiceDir, { recursive: true });
+      const ext = getAudioExtension(attachment);
+      tempPath = join(voiceDir, `voice-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`);
+      writeFileSync(tempPath, audioBuffer);
+
+      // Transcribe
+      const result = await transcribeAudio(tempPath, config.voice);
+      const transcript = result.text.trim();
+
+      if (!transcript) {
+        await message.reply('Could not transcribe audio — no speech detected.');
+        return;
+      }
+
+      // Run agent turn with transcript
+      const key = conversationKey(message);
+      const history = getHistory(key);
+      const response = await runAgentTurn(
+        config.agents.default,
+        transcript,
+        config,
+        getCurrentModel(),
+        getDiscordToolConfig(config),
+        history,
+        getDiscordRunContext(message)
+      );
+
+      addToHistory(key, transcript, response);
+
+      // Reply with transcript blockquote + response
+      const reply = `> 🎤 ${transcript}\n\n${response}`;
+      await sendLongText(message, reply);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      await message.reply(`Error processing audio: ${msg}`);
+    } finally {
+      stopTyping();
+      if (tempPath) {
+        try { unlinkSync(tempPath); } catch { /* best effort */ }
+      }
+    }
     return;
   }
 
