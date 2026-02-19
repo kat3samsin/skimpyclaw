@@ -28,7 +28,7 @@ import {
   onApprovalEvent,
   type PendingApproval,
 } from './exec-approval.js';
-import { transcribeAudio } from './voice.js';
+import { transcribeAudio, synthesizeSpeech } from './voice.js';
 import * as sessions from './sessions.js';
 
 function getDiscordRunContext(message: Message): AgentRunContext {
@@ -621,6 +621,19 @@ async function handleIncomingMessage(message: Message): Promise<void> {
           getDiscordRunContext(message)
         );
         await addToHistory(key, transcription, agentResponse);
+
+        // TTS voice reply if sendVoice enabled
+        if (config.voice?.channels?.['discord']?.sendVoice) {
+          try {
+            const speech = await synthesizeSpeech(agentResponse, config.voice);
+            await message.reply({
+              files: [{ attachment: speech.buffer, name: `reply.${speech.format}` }],
+            });
+          } catch (err) {
+            console.error('[discord] TTS synthesis failed:', err);
+            // Non-fatal — text reply still sends below
+          }
+        }
 
         // Format response with transcription in a blockquote
         const combined = `> 🎤 ${transcription}\n\n${agentResponse}`;
