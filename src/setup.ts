@@ -269,7 +269,7 @@ function buildProviders(providers: Set<ProviderChoice>): Record<string, Record<s
 function buildDefaultModel(providers: Set<ProviderChoice>): string {
   const hasAnthropic = providers.has('anthropic-api') || providers.has('anthropic-oauth');
   if (hasAnthropic) return 'anthropic/claude-opus-4-6';
-  if (providers.has('codex-oauth')) return 'codex/codex-5.3';
+  if (providers.has('codex-oauth')) return 'codex/gpt-5.3-codex';
   if (providers.has('kimi-api')) return 'kimi/kimi-for-coding';
   if (providers.has('minimax-api')) return 'minimax/MiniMax-M2.1';
   return 'openai/gpt-4o';
@@ -281,8 +281,8 @@ function buildAliases(providers: Set<ProviderChoice>): Record<string, string> {
     'claude-fast': 'anthropic/claude-haiku-4-5',
     'claude-think': 'anthropic/claude-sonnet-4-6',
     'claude-opus': 'anthropic/claude-opus-4-6',
-    'codex5.2': 'openai/gpt-5.2-codex',
-    'codex5.3': 'openai/gpt-5.3-codex',
+    'codex5.2': 'codex/gpt-5.2-codex',
+    'codex5.3': 'codex/gpt-5.3-codex',
     'minimax': 'minimax/MiniMax-M2.5',
     'kimi': 'kimi/kimi-for-coding',
   };
@@ -301,7 +301,7 @@ function buildAliases(providers: Set<ProviderChoice>): Record<string, string> {
   }
 
   if (providers.has('codex-oauth')) {
-    aliases.codex = 'codex/codex-5.3';
+    aliases.codex = 'codex/gpt-5.3-codex';
   }
 
   if (providers.has('minimax-api')) {
