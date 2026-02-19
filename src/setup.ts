@@ -188,21 +188,18 @@ async function collectProviderSecrets(
 
   if (providers.has('anthropic-oauth')) {
     console.log('\n   Anthropic OAuth (Claude Code)');
-    console.log('   The daemon can\'t read your shell config (.zshrc/.bashrc).');
-    console.log('   Paste your CLAUDE_CODE_OAUTH_TOKEN here, or press Enter to skip');
-    console.log('   and add it to ~/.skimpyclaw/.env later.');
+    console.log('   Run `claude setup-token` to get your token, then paste it here.');
+    console.log('   (The daemon can\'t read .zshrc — the token must be in ~/.skimpyclaw/.env)');
     const detected = process.env.CLAUDE_CODE_OAUTH_TOKEN || '';
     if (detected) {
       console.log(`   ${c.dim(`Detected in current shell: ${maskInput(detected)}`)}`);
-    } else {
-      console.log(`   ${c.dim('Tip: run `echo $CLAUDE_CODE_OAUTH_TOKEN` in a terminal to find it')}`);
     }
-    const oauthInput = await ask(rl, '   Enter token: ');
+    const oauthInput = await ask(rl, detected ? `   Enter token [${maskInput(detected)}]: ` : '   Enter token: ');
     secrets.oauthToken = oauthInput || detected;
     if (secrets.oauthToken) {
       console.log(`   ✓ ${maskInput(secrets.oauthToken)}`);
     } else {
-      console.log(`   ${c.yellow('⚠')} Skipped — add CLAUDE_CODE_OAUTH_TOKEN to ~/.skimpyclaw/.env before starting`);
+      console.log(`   ${c.yellow('⚠')} Skipped — run \`claude setup-token\`, then add CLAUDE_CODE_OAUTH_TOKEN to ~/.skimpyclaw/.env`);
     }
   }
 
