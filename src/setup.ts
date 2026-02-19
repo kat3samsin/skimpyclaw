@@ -54,7 +54,7 @@ interface ExistingSetup {
 
 function loadExistingSetup(): ExistingSetup {
   let config: Record<string, any> | null = null;
-  let env: Record<string, string> = {};
+  const env: Record<string, string> = {};
 
   const configPath = join(CONFIG_DIR, 'config.json');
   if (existsSync(configPath)) {
