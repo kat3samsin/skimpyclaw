@@ -141,6 +141,7 @@ export interface CronPayload {
   cwd?: string;
   timeoutMs?: number;
   tools?: ToolConfig;
+  sendAsVoice?: boolean;
 }
 
 export interface ToolConfig {

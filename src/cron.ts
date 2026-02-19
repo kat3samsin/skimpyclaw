@@ -8,8 +8,9 @@ import { getLogsDir } from './config.js';
 import type { Config, CronJob } from './types.js';
 import { runAgentTurn } from './agent.js';
 import { startTrace, addEvent, endTrace } from './audit.js';
-import { sendActiveChannelProactiveMessage, getActiveChannelId } from './channels.js';
+import { sendActiveChannelProactiveMessage, sendActiveChannelProactiveVoice, getActiveChannelId } from './channels.js';
 import { parseAndSaveDigest } from './digests.js';
+import { synthesizeSpeech } from './voice.js';
 
 interface ScheduledJob {
   id: string;
@@ -168,6 +169,25 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
       } catch (digestErr) {
         const errMsg = digestErr instanceof Error ? digestErr.message : String(digestErr);
         appendCronLogLine(jobDef.id, `Failed to save digest: ${errMsg}`);
+      }
+
+      // Synthesize and send voice if configured
+      if (jobDef.payload.sendAsVoice && config.voice) {
+        try {
+          appendCronLogLine(jobDef.id, 'Synthesizing voice...');
+          const speech = await synthesizeSpeech(response, config.voice);
+          appendCronLogLine(jobDef.id, `Voice synthesized (${speech.format}, ${speech.provider}, ${speech.buffer.length} bytes)`);
+          const sent = await sendActiveChannelProactiveVoice(config, speech.buffer, speech.format);
+          if (sent) {
+            appendCronLogLine(jobDef.id, 'Voice message sent to active channel');
+          } else {
+            appendCronLogLine(jobDef.id, 'No active channel for voice message');
+          }
+        } catch (voiceErr) {
+          const errMsg = voiceErr instanceof Error ? voiceErr.message : String(voiceErr);
+          appendCronLogLine(jobDef.id, `Voice synthesis failed: ${errMsg}`);
+          // Non-fatal — text notification still sends
+        }
       }
     } else if (jobDef.payload.kind === 'script') {
       const scriptTraceId = startTrace('cron');

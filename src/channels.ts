@@ -14,6 +14,7 @@ interface ChannelAdapter {
   stop: () => Promise<void>;
   isSilenced?: () => boolean;
   sendProactiveMessage?: (target: ChannelTarget, message: string) => Promise<void>;
+  sendProactiveVoice?: (target: ChannelTarget, buffer: Buffer, format: string) => Promise<void>;
   resolveDefaultTarget?: (config: Config) => ChannelTarget | null;
 }
 
@@ -54,6 +55,7 @@ async function loadAdapter(channel: ChannelId): Promise<ChannelAdapter> {
       stop: telegram.stopTelegram,
       isSilenced: telegram.isSilenced,
       sendProactiveMessage: telegram.sendProactiveMessage,
+      sendProactiveVoice: telegram.sendProactiveVoice,
       resolveDefaultTarget: telegram.getTelegramDefaultChatId,
     };
   }
@@ -122,5 +124,19 @@ export async function sendActiveChannelProactiveMessage(config: Config, message:
   }
 
   await activeAdapter.sendProactiveMessage(target, message);
+  return true;
+}
+
+export async function sendActiveChannelProactiveVoice(config: Config, buffer: Buffer, format: string): Promise<boolean> {
+  if (!activeAdapter?.sendProactiveVoice || !activeAdapter.resolveDefaultTarget) {
+    return false;
+  }
+
+  const target = activeAdapter.resolveDefaultTarget(config);
+  if (target === null || target === undefined || target === '') {
+    return false;
+  }
+
+  await activeAdapter.sendProactiveVoice(target, buffer, format);
   return true;
 }

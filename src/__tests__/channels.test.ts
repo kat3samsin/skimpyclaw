@@ -6,7 +6,7 @@ const telegramMock = vi.hoisted(() => ({
   stopTelegram: vi.fn(async () => {}),
   isSilenced: vi.fn(() => false),
   sendProactiveMessage: vi.fn(async () => {}),
-  sendProactiveVoiceMessage: vi.fn(async () => {}),
+  sendProactiveVoice: vi.fn(async () => {}),
   getTelegramDefaultChatId: vi.fn(() => 12345),
 }));
 
