@@ -6,6 +6,7 @@ import { join, dirname } from 'path';
 import { homedir } from 'os';
 import { fileURLToPath } from 'url';
 import { spawnSync } from 'child_process';
+import { randomUUID } from 'crypto';
 import { runDoctor as runDoctorChecks } from './doctor/runner.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -46,6 +47,34 @@ interface SetupOptions {
   dryRun?: boolean;
 }
 
+interface ExistingSetup {
+  config: Record<string, any> | null;
+  env: Record<string, string>;
+}
+
+function loadExistingSetup(): ExistingSetup {
+  let config: Record<string, any> | null = null;
+  let env: Record<string, string> = {};
+
+  const configPath = join(CONFIG_DIR, 'config.json');
+  if (existsSync(configPath)) {
+    try {
+      config = JSON.parse(readFileSync(configPath, 'utf-8'));
+    } catch { /* ignore bad config */ }
+  }
+
+  const envPath = join(CONFIG_DIR, '.env');
+  if (existsSync(envPath)) {
+    const lines = readFileSync(envPath, 'utf-8').split('\n');
+    for (const line of lines) {
+      const match = line.match(/^([A-Z_]+)=(.*)$/);
+      if (match) env[match[1]] = match[2];
+    }
+  }
+
+  return { config, env };
+}
+
 function ask(rl: readline.Interface, question: string): Promise<string> {
   return new Promise((resolve) => {
     rl.question(question, (answer) => {
@@ -79,7 +108,7 @@ function renderGatewayPlist(workspaceDir: string): string {
     .replaceAll('__HOME_DIR__', homeDir);
 }
 
-type ProviderChoice = 'anthropic-api' | 'anthropic-oauth' | 'openai-api' | 'codex-oauth' | 'minimax-api';
+type ProviderChoice = 'anthropic-api' | 'anthropic-oauth' | 'openai-api' | 'codex-oauth' | 'minimax-api' | 'kimi-api';
 
 const PROVIDER_OPTIONS: { key: ProviderChoice; label: string }[] = [
   { key: 'anthropic-api', label: 'Anthropic API key' },
@@ -87,6 +116,7 @@ const PROVIDER_OPTIONS: { key: ProviderChoice; label: string }[] = [
   { key: 'openai-api', label: 'OpenAI API key' },
   { key: 'codex-oauth', label: 'OpenAI Codex OAuth' },
   { key: 'minimax-api', label: 'MiniMax API key' },
+  { key: 'kimi-api', label: 'Kimi (Moonshot) API key' },
 ];
 
 async function askProviders(rl: readline.Interface): Promise<Set<ProviderChoice>> {
@@ -118,8 +148,10 @@ async function askProviders(rl: readline.Interface): Promise<Set<ProviderChoice>
 
 interface ProviderSecrets {
   anthropicKey?: string;
+  oauthToken?: string;
   openaiKey?: string;
   minimaxKey?: string;
+  kimiKey?: string;
 }
 
 interface SetupFeatures {
@@ -156,9 +188,22 @@ async function collectProviderSecrets(
 
   if (providers.has('anthropic-oauth')) {
     console.log('\n   Anthropic OAuth (Claude Code)');
-    console.log('   Run `claude setup-token` first to configure your OAuth token.');
-    console.log('   The token is read from CLAUDE_CODE_OAUTH_TOKEN env var at runtime.');
-    console.log('   ✓ Will use ${CLAUDE_CODE_OAUTH_TOKEN}');
+    console.log('   The daemon can\'t read your shell config (.zshrc/.bashrc).');
+    console.log('   Paste your CLAUDE_CODE_OAUTH_TOKEN here, or press Enter to skip');
+    console.log('   and add it to ~/.skimpyclaw/.env later.');
+    const detected = process.env.CLAUDE_CODE_OAUTH_TOKEN || '';
+    if (detected) {
+      console.log(`   ${c.dim(`Detected in current shell: ${maskInput(detected)}`)}`);
+    } else {
+      console.log(`   ${c.dim('Tip: run `echo $CLAUDE_CODE_OAUTH_TOKEN` in a terminal to find it')}`);
+    }
+    const oauthInput = await ask(rl, '   Enter token: ');
+    secrets.oauthToken = oauthInput || detected;
+    if (secrets.oauthToken) {
+      console.log(`   ✓ ${maskInput(secrets.oauthToken)}`);
+    } else {
+      console.log(`   ${c.yellow('⚠')} Skipped — add CLAUDE_CODE_OAUTH_TOKEN to ~/.skimpyclaw/.env before starting`);
+    }
   }
 
   if (providers.has('openai-api')) {
@@ -173,6 +218,13 @@ async function collectProviderSecrets(
     console.log('   Get one from: https://platform.minimax.io/user-center/basic-information/interface-key');
     secrets.minimaxKey = await ask(rl, '   Enter key: ');
     console.log(`   ✓ ${maskInput(secrets.minimaxKey)}`);
+  }
+
+  if (providers.has('kimi-api')) {
+    console.log('\n   Kimi (Moonshot) API Key');
+    console.log('   Get one from: https://platform.moonshot.cn/console/api-keys');
+    secrets.kimiKey = await ask(rl, '   Enter key: ');
+    console.log(`   ✓ ${maskInput(secrets.kimiKey)}`);
   }
 
   if (providers.has('codex-oauth')) {
@@ -199,7 +251,11 @@ function buildProviders(providers: Set<ProviderChoice>): Record<string, Record<s
   }
 
   if (providers.has('minimax-api')) {
-    result.minimax = { apiKey: '${MINIMAX_API_KEY}', baseURL: 'https://api.minimax.chat/v1' };
+    result.minimax = { apiKey: '${MINIMAX_API_KEY}', baseURL: 'https://api.minimax.io/v1' };
+  }
+
+  if (providers.has('kimi-api')) {
+    result.kimi = { apiKey: '${KIMI_API_KEY}', baseURL: 'https://api.kimi.com/coding/v1' };
   }
 
   if (providers.has('codex-oauth')) {
@@ -217,6 +273,7 @@ function buildDefaultModel(providers: Set<ProviderChoice>): string {
   const hasAnthropic = providers.has('anthropic-api') || providers.has('anthropic-oauth');
   if (hasAnthropic) return 'anthropic/claude-opus-4-6';
   if (providers.has('codex-oauth')) return 'codex/codex-5.3';
+  if (providers.has('kimi-api')) return 'kimi/kimi-for-coding';
   if (providers.has('minimax-api')) return 'minimax/MiniMax-M2.1';
   return 'openai/gpt-4o';
 }
@@ -245,6 +302,10 @@ function buildAliases(providers: Set<ProviderChoice>): Record<string, string> {
     aliases.minimax = 'minimax/MiniMax-M2.1';
   }
 
+  if (providers.has('kimi-api')) {
+    aliases.kimi = 'kimi/kimi-for-coding';
+  }
+
   return aliases;
 }
 
@@ -261,8 +322,12 @@ function buildEnvContent(
   }
 
   if (providers.has('anthropic-oauth')) {
-    lines.push('# Anthropic OAuth — set by `claude setup-token`, read at runtime');
-    lines.push('# CLAUDE_CODE_OAUTH_TOKEN=');
+    if (secrets.oauthToken) {
+      lines.push(`CLAUDE_CODE_OAUTH_TOKEN=${secrets.oauthToken}`);
+    } else {
+      lines.push('# Anthropic OAuth — paste token here (from .zshrc or `echo $CLAUDE_CODE_OAUTH_TOKEN`)');
+      lines.push('CLAUDE_CODE_OAUTH_TOKEN=');
+    }
   }
 
   if (providers.has('openai-api') && secrets.openaiKey) {
@@ -271,6 +336,10 @@ function buildEnvContent(
 
   if (providers.has('minimax-api') && secrets.minimaxKey) {
     lines.push(`MINIMAX_API_KEY=${secrets.minimaxKey}`);
+  }
+
+  if (providers.has('kimi-api') && secrets.kimiKey) {
+    lines.push(`KIMI_API_KEY=${secrets.kimiKey}`);
   }
 
   lines.push(`TELEGRAM_BOT_TOKEN=${telegramToken}`);
@@ -354,14 +423,18 @@ export function buildSetupConfig(input: SetupBuildInput): Record<string, unknown
         channels: {},
       },
     } : {}),
+    dashboard: {
+      token: randomUUID(),
+    },
   };
 }
 
-export function buildSetupArtifacts(input: SetupBuildInput): { configJson: string; envContent: string } {
+export function buildSetupArtifacts(input: SetupBuildInput): { configJson: string; envContent: string; config: Record<string, unknown> } {
   const config = buildSetupConfig(input);
   return {
     configJson: JSON.stringify(config, null, 2),
     envContent: buildEnvContent(input.telegramToken, input.selectedProviders, input.providerSecrets, input.discordToken),
+    config,
   };
 }
 
@@ -483,36 +556,61 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
   });
 
   try {
-    console.log(`\n${c.bold('👙🦞 SkimpyClaw Setup')}\n`);
+    const existing = loadExistingSetup();
+    const isReconfigure = existing.config !== null;
+
+    if (isReconfigure) {
+      console.log(`\n${c.bold('👙🦞 SkimpyClaw Setup')} ${c.dim('(reconfigure — press Enter to keep current values)')}\n`);
+    } else {
+      console.log(`\n${c.bold('👙🦞 SkimpyClaw Setup')}\n`);
+    }
 
     // 1. Telegram Bot Token
+    const existingTgToken = existing.env.TELEGRAM_BOT_TOKEN || '';
     sectionHeader('1. Telegram Bot Token');
     console.log('   Get one from @BotFather: https://t.me/BotFather');
-    const telegramToken = await ask(rl, '   Enter token: ');
+    let telegramToken: string;
+    if (existingTgToken) {
+      const input = await ask(rl, `   Enter token [${maskInput(existingTgToken)}]: `);
+      telegramToken = input || existingTgToken;
+    } else {
+      telegramToken = await ask(rl, '   Enter token: ');
+    }
     console.log(`   ✓ ${maskInput(telegramToken)}\n`);
 
     // 2. Telegram ID
+    const existingTgId = String(existing.config?.channels?.telegram?.allowFrom?.[0] || '');
     sectionHeader('2. Your Telegram ID');
     console.log('   Get it from @userinfobot: https://t.me/userinfobot');
     let telegramId: string;
     while (true) {
-      telegramId = await ask(rl, '   Enter ID: ');
+      const defaultHint = existingTgId ? ` [${existingTgId}]` : '';
+      const input = await ask(rl, `   Enter ID${defaultHint}: `);
+      telegramId = input || existingTgId;
       if (/^\d+$/.test(telegramId)) break;
       console.log('   ✗ Telegram user IDs are numbers. Send /start to @userinfobot to find yours.');
     }
     console.log(`   ✓ ${telegramId}\n`);
 
     // 2b. Optional Discord
+    const existingDiscord = existing.config?.channels?.discord?.enabled === true;
     sectionHeader('2b. Discord Bot (optional)');
-    const useDiscord = /^y(es)?$/i.test(await ask(rl, '   Enable Discord channel? [y/N]: '));
+    const discordDefault = existingDiscord ? 'Y' : 'N';
+    const useDiscord = /^y(es)?$/i.test(await ask(rl, `   Enable Discord channel? [${existingDiscord ? 'Y/n' : 'y/N'}]: `) || discordDefault);
     let discordToken = '';
     let discordUserId = '';
     let discordDefaultChannelId = '';
     if (useDiscord) {
+      const existingDiscordToken = existing.env.DISCORD_BOT_TOKEN || '';
+      const existingDiscordUserId = String(existing.config?.channels?.discord?.allowFrom?.[0] || '');
+      const existingDiscordChannelId = existing.config?.channels?.discord?.defaultChannelId || '';
       console.log('   Create bot in Discord Developer Portal, then copy token and user ID.');
-      discordToken = await ask(rl, '   Enter Discord bot token: ');
-      discordUserId = await ask(rl, '   Enter your Discord user ID: ');
-      discordDefaultChannelId = await ask(rl, '   Optional default channel ID for proactive alerts: ');
+      const dtInput = await ask(rl, existingDiscordToken ? `   Enter Discord bot token [${maskInput(existingDiscordToken)}]: ` : '   Enter Discord bot token: ');
+      discordToken = dtInput || existingDiscordToken;
+      const duInput = await ask(rl, existingDiscordUserId ? `   Enter your Discord user ID [${existingDiscordUserId}]: ` : '   Enter your Discord user ID: ');
+      discordUserId = duInput || existingDiscordUserId;
+      const dcInput = await ask(rl, existingDiscordChannelId ? `   Optional default channel ID [${existingDiscordChannelId}]: ` : '   Optional default channel ID for proactive alerts: ');
+      discordDefaultChannelId = dcInput || existingDiscordChannelId;
       console.log(`   ✓ ${maskInput(discordToken)}\n`);
     } else {
       console.log('   ✓ skipped\n');
@@ -523,8 +621,10 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
     const providerSecrets = await collectProviderSecrets(rl, selectedProviders);
 
     // 4. Agent Name
+    const existingAgentName = existing.config?.agents?.list?.main?.identity?.name || '';
     sectionHeader('4. Agent Name');
-    const agentName = (await ask(rl, '   What should I call myself? [Claw]: ')) || 'Claw';
+    const agentNameDefault = existingAgentName || 'Claw';
+    const agentName = (await ask(rl, `   What should I call myself? [${agentNameDefault}]: `)) || agentNameDefault;
     console.log(`   ✓ ${agentName}\n`);
 
     // 5. Your Name
@@ -533,10 +633,14 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
     statusOk(userName);
 
     // 6. Optional Features
+    const existingBrowser = existing.config?.heartbeat?.tools?.browser?.enabled === true
+      || existing.config?.channels?.telegram?.tools?.browser?.enabled === true;
+    const existingVoice = existing.config?.voice?.enabled === true;
     sectionHeader('Optional Features');
 
     // 6a. Browser tool
-    const enableBrowser = /^y(es)?$/i.test(await ask(rl, '   Enable browser tool? (requires Chrome) [y/N]: '));
+    const browserDefault = existingBrowser ? 'Y' : 'N';
+    const enableBrowser = /^y(es)?$/i.test(await ask(rl, `   Enable browser tool? (requires Chrome) [${existingBrowser ? 'Y/n' : 'y/N'}]: `) || browserDefault);
     if (enableBrowser) {
       const macChrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
       const which = spawnSync('which', ['google-chrome'], { encoding: 'utf-8' });
@@ -550,7 +654,8 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
     }
 
     // 6b. Voice/TTS
-    const enableVoice = /^y(es)?$/i.test(await ask(rl, '   Enable voice/TTS? (requires ffmpeg) [y/N]: '));
+    const voiceDefault = existingVoice ? 'Y' : 'N';
+    const enableVoice = /^y(es)?$/i.test(await ask(rl, `   Enable voice/TTS? (requires ffmpeg) [${existingVoice ? 'Y/n' : 'y/N'}]: `) || voiceDefault);
     if (enableVoice) {
       const ffmpeg = spawnSync('which', ['ffmpeg'], { encoding: 'utf-8' });
       if (ffmpeg.status === 0) {
@@ -583,7 +688,7 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
 
     const workspaceDir = process.cwd();
 
-    const { configJson, envContent } = buildSetupArtifacts({
+    const { configJson: rawConfigJson, envContent, config: generatedConfig } = buildSetupArtifacts({
       workspaceDir,
       telegramId,
       telegramToken,
@@ -595,6 +700,30 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
       providerSecrets,
       features,
     });
+
+    // On reconfigure, preserve dashboard token, cron jobs, subagents, security, langfuse
+    if (isReconfigure && existing.config) {
+      if (existing.config.dashboard?.token) {
+        (generatedConfig as any).dashboard = existing.config.dashboard;
+      }
+      if (Array.isArray(existing.config.cron?.jobs) && existing.config.cron.jobs.length > 0) {
+        (generatedConfig as any).cron = existing.config.cron;
+      }
+      if (existing.config.subagents) {
+        (generatedConfig as any).subagents = existing.config.subagents;
+      }
+      if (existing.config.security) {
+        (generatedConfig as any).security = existing.config.security;
+      }
+      if (existing.config.langfuse) {
+        (generatedConfig as any).langfuse = existing.config.langfuse;
+      }
+      // Preserve voice provider config if voice was already configured
+      if (existing.config.voice?.providers && Object.keys(existing.config.voice.providers).length > 0) {
+        (generatedConfig as any).voice = existing.config.voice;
+      }
+    }
+    const configJson = JSON.stringify(generatedConfig, null, 2);
 
     // Create directories
     console.log('Creating directories...');
@@ -628,10 +757,27 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
       console.log(`✓ Added missing core templates: ${createdFallbackTemplates.join(', ')}`);
     }
 
-    // Create .env file for secrets
+    // Merge secrets into .env (preserve existing keys not in new content)
     const envPath = join(CONFIG_DIR, '.env');
-    writeFileSync(envPath, envContent);
-    console.log(`✓ Secrets written to ${envPath}`);
+    if (isReconfigure && existsSync(envPath)) {
+      const existingLines = readFileSync(envPath, 'utf-8').split('\n');
+      const newKeys = new Set<string>();
+      for (const line of envContent.split('\n')) {
+        const m = line.match(/^([A-Z_]+)=/);
+        if (m) newKeys.add(m[1]);
+      }
+      // Keep existing keys that aren't being replaced
+      const preserved = existingLines.filter((line) => {
+        const m = line.match(/^([A-Z_]+)=/);
+        return m && !newKeys.has(m[1]);
+      });
+      const merged = envContent.trim() + (preserved.length ? '\n' + preserved.join('\n') : '') + '\n';
+      writeFileSync(envPath, merged);
+      console.log(`✓ Secrets merged into ${envPath}`);
+    } else {
+      writeFileSync(envPath, envContent);
+      console.log(`✓ Secrets written to ${envPath}`);
+    }
 
     // Update USER.md with name
     writeFileSync(join(AGENTS_DIR, 'USER.md'), `# USER.md - About ${userName}\n\nName: ${userName}\n\n## Preferences\n\n- Direct communication, no fluff\n\n## Routines\n\n- Morning: Review tasks and messages\n- EOD: Review completed work, plan tomorrow\n`);
@@ -666,7 +812,13 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
       console.log(`\n${c.yellow(`⚠ Setup complete with ${failCount} warning${failCount > 1 ? 's' : ''}. Run \`skimpyclaw doctor\` for details.`)}\n`);
     }
 
-    console.log('Next steps:');
+    const dashboardToken = (generatedConfig.dashboard as any)?.token || 'unknown';
+    console.log(`${c.bold('Dashboard')}`);
+    console.log(`   URL:   http://localhost:18790/dashboard`);
+    console.log(`   Token: ${c.cyan(dashboardToken)}`);
+    console.log(`   ${c.dim('(also available via: skimpyclaw status)')}`);
+
+    console.log('\nNext steps:');
     console.log('1. Review templates in ~/.skimpyclaw/agents/main/');
     console.log('2. Start the daemon:');
     console.log(`   launchctl load ~/Library/LaunchAgents/${GATEWAY_PLIST_LABEL}.plist`);
