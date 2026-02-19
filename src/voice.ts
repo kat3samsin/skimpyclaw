@@ -366,8 +366,42 @@ function getTTSProvider(config: VoiceConfig): { name: string; provider: VoicePro
 }
 
 /**
+ * Synthesize speech using macOS `say` + ffmpeg.
+ * Returns OGG audio buffer.
+ */
+function synthesizeWithMacOS(text: string, voice: string = 'Zoe'): SpeechResult {
+  if (process.platform !== 'darwin') {
+    throw new Error('macOS say provider is only available on macOS.');
+  }
+  if (!HAS_FFMPEG) {
+    throw new Error('ffmpeg is required for macOS TTS (to convert AIFF to OGG). Install: brew install ffmpeg');
+  }
+  const id = Date.now();
+  const aiffPath = join(tmpdir(), `skimpyclaw-tts-${id}.aiff`);
+  const oggPath = join(tmpdir(), `skimpyclaw-tts-${id}.ogg`);
+  try {
+    const safeText = text.replace(/'/g, "'\\''");
+    execSync(`say -v '${voice}' -o '${aiffPath}' '${safeText}'`, { stdio: ['ignore', 'pipe', 'pipe'] });
+    execSync(`ffmpeg -i '${aiffPath}' -c:a libopus '${oggPath}' -y`, { stdio: ['ignore', 'pipe', 'pipe'] });
+    const buffer = readFileSync(oggPath);
+    return { buffer, format: 'ogg', provider: `macos (${voice})` };
+  } finally {
+    try { unlinkSync(aiffPath); } catch { /* best effort */ }
+    try { unlinkSync(oggPath); } catch { /* best effort */ }
+  }
+}
+
+/**
+ * Check if macOS TTS fallback is available.
+ */
+function canFallbackToMacOS(config: VoiceConfig): boolean {
+  return process.platform === 'darwin' && HAS_FFMPEG && !!config.providers?.macos;
+}
+
+/**
  * Synthesize speech from text using the configured TTS provider.
- * Throws if no provider is configured or synthesis fails.
+ * Falls back to macOS `say` + ffmpeg if the primary provider fails and macOS is available.
+ * Throws if no provider is configured or all providers fail.
  */
 export async function synthesizeSpeech(text: string, config: VoiceConfig): Promise<SpeechResult> {
   const ttsProvider = getTTSProvider(config);
@@ -379,74 +413,79 @@ export async function synthesizeSpeech(text: string, config: VoiceConfig): Promi
 
   // macOS `say` command
   if (name === 'macos') {
-    if (process.platform !== 'darwin') {
-      throw new Error('macOS say provider is only available on macOS.');
-    }
-    if (!HAS_FFMPEG) {
-      throw new Error('ffmpeg is required for macOS TTS (to convert AIFF to OGG). Install: brew install ffmpeg');
-    }
     const voice = provider.tts?.voice || 'Zoe';
-    const id = Date.now();
-    const aiffPath = join(tmpdir(), `skimpyclaw-tts-${id}.aiff`);
-    const oggPath = join(tmpdir(), `skimpyclaw-tts-${id}.ogg`);
-    try {
-      // Escape text for shell — use single quotes and escape internal single quotes
-      const safeText = text.replace(/'/g, "'\\''");
-      execSync(`say -v '${voice}' -o '${aiffPath}' '${safeText}'`, { stdio: ['ignore', 'pipe', 'pipe'] });
-      execSync(`ffmpeg -i '${aiffPath}' -c:a libopus '${oggPath}' -y`, { stdio: ['ignore', 'pipe', 'pipe'] });
-      const buffer = readFileSync(oggPath);
-      return { buffer, format: 'ogg', provider: `macos (${voice})` };
-    } finally {
-      try { unlinkSync(aiffPath); } catch { /* best effort */ }
-      try { unlinkSync(oggPath); } catch { /* best effort */ }
-    }
+    return synthesizeWithMacOS(text, voice);
   }
 
   // ElevenLabs
   if (name === 'elevenlabs') {
     const apiKey = resolveApiKey(provider.apiKey);
     if (!apiKey) {
+      if (canFallbackToMacOS(config)) {
+        console.warn('[voice] No ElevenLabs API key — falling back to macOS TTS');
+        return synthesizeWithMacOS(text, config.providers?.macos?.tts?.voice || 'Zoe');
+      }
       throw new Error('No API key configured for ElevenLabs TTS provider.');
     }
     const voiceId = provider.tts?.voiceId;
     if (!voiceId) {
       throw new Error('ElevenLabs TTS requires tts.voiceId in the provider config.');
     }
-    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
-      method: 'POST',
-      headers: {
-        'xi-api-key': apiKey,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ text, model_id: 'eleven_multilingual_v2' }),
-    });
-    if (!response.ok) {
-      throw new Error(`ElevenLabs TTS failed: ${response.status} ${response.statusText}`);
+    try {
+      const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+        method: 'POST',
+        headers: {
+          'xi-api-key': apiKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text, model_id: provider.tts?.model || 'eleven_multilingual_v2' }),
+      });
+      if (!response.ok) {
+        throw new Error(`ElevenLabs TTS failed: ${response.status} ${response.statusText}`);
+      }
+      const buffer = Buffer.from(await response.arrayBuffer());
+      return { buffer, format: 'mp3', provider: 'elevenlabs' };
+    } catch (err) {
+      if (canFallbackToMacOS(config)) {
+        console.warn(`[voice] ElevenLabs failed, falling back to macOS TTS: ${(err as Error).message}`);
+        return synthesizeWithMacOS(text, config.providers?.macos?.tts?.voice || 'Zoe');
+      }
+      throw err;
     }
-    const buffer = Buffer.from(await response.arrayBuffer());
-    return { buffer, format: 'mp3', provider: 'elevenlabs' };
   }
 
   // Default: OpenAI-compatible TTS
   const apiKey = resolveApiKey(provider.apiKey);
   if (!apiKey) {
+    if (canFallbackToMacOS(config)) {
+      console.warn(`[voice] No API key for "${name}" — falling back to macOS TTS`);
+      return synthesizeWithMacOS(text, config.providers?.macos?.tts?.voice || 'Zoe');
+    }
     throw new Error(`No API key configured for TTS provider "${name}".`);
   }
-  const OpenAI = (await import('openai')).default;
-  const openai = new OpenAI({
-    apiKey,
-    ...(provider.baseURL ? { baseURL: provider.baseURL } : {}),
-  });
-  const model = provider.tts?.model || 'tts-1';
-  const voice = (provider.tts?.voice || 'nova') as Parameters<typeof openai.audio.speech.create>[0]['voice'];
-  const mp3Response = await openai.audio.speech.create({
-    model,
-    voice,
-    input: text,
-    response_format: 'opus',
-  });
-  const buffer = Buffer.from(await mp3Response.arrayBuffer());
-  return { buffer, format: 'ogg', provider: `${name} (${model})` };
+  try {
+    const OpenAI = (await import('openai')).default;
+    const openai = new OpenAI({
+      apiKey,
+      ...(provider.baseURL ? { baseURL: provider.baseURL } : {}),
+    });
+    const model = provider.tts?.model || 'tts-1';
+    const voice = (provider.tts?.voice || 'nova') as Parameters<typeof openai.audio.speech.create>[0]['voice'];
+    const mp3Response = await openai.audio.speech.create({
+      model,
+      voice,
+      input: text,
+      response_format: 'opus',
+    });
+    const buffer = Buffer.from(await mp3Response.arrayBuffer());
+    return { buffer, format: 'ogg', provider: `${name} (${model})` };
+  } catch (err) {
+    if (canFallbackToMacOS(config)) {
+      console.warn(`[voice] ${name} TTS failed, falling back to macOS TTS: ${(err as Error).message}`);
+      return synthesizeWithMacOS(text, config.providers?.macos?.tts?.voice || 'Zoe');
+    }
+    throw err;
+  }
 }
 
 /**
