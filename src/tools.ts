@@ -6,6 +6,7 @@ import { homedir } from 'os';
 import { exec, spawn } from 'child_process';
 import { execSync } from 'child_process';
 import { isBashCommandSafe } from './security.js';
+import { TTLCache } from './cache.js';
 import {
   classifyCommandRisk,
   requiresApproval,
@@ -282,12 +283,24 @@ export function clearMcpToolCache(): void {
   discoveredMcpTools = null;
 }
 
+const toolDefsCache = new TTLCache<any[]>(60_000);
+
 /**
  * Get all available tool definitions: built-ins + browser (if enabled) + MCP (auto-discovered) + spawn_subagent.
  * This is the primary way to get tools — replaces the static TOOL_DEFINITIONS export.
  * Pass includeSpawnSubagent: true to include the spawn_subagent tool (e.g. for Telegram conversations).
+ * Results are cached for 60s to avoid rebuilding the array on every agent turn.
  */
 export async function getToolDefinitions(config?: ToolConfig, options?: { includeSpawnSubagent?: boolean; projects?: Record<string, string> }): Promise<any[]> {
+  const cacheKey = JSON.stringify({
+    browser: config?.browser?.enabled,
+    spawn: options?.includeSpawnSubagent,
+    projects: options?.projects,
+  });
+
+  const cached = toolDefsCache.get(cacheKey);
+  if (cached) return cached;
+
   const tools: any[] = [...BUILTIN_TOOL_DEFINITIONS];
 
   // Include browser tool only when explicitly enabled
@@ -330,7 +343,12 @@ export async function getToolDefinitions(config?: ToolConfig, options?: { includ
     tools.push(CHECK_CODE_AGENT_TOOL);
   }
 
+  toolDefsCache.set(cacheKey, tools);
   return tools;
+}
+
+export function clearToolDefsCache(): void {
+  toolDefsCache.clear();
 }
 
 // --- MCP Tool Execution (generic) ---
