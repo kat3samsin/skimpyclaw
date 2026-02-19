@@ -1,6 +1,6 @@
 // Telegram bot using Grammy
 
-import { Bot, Context, GrammyError, HttpError, InlineKeyboard } from 'grammy';
+import { Bot, Context, GrammyError, HttpError, InlineKeyboard, InputFile } from 'grammy';
 import { run, RunnerHandle } from '@grammyjs/runner';
 import {
   readFileSync,
@@ -13,7 +13,7 @@ import {
 } from 'fs';
 import { join } from 'path';
 import { homedir, tmpdir } from 'os';
-import { transcribeAudio } from './voice.js';
+import { transcribeAudio, synthesizeSpeech } from './voice.js';
 import { spawnSync } from 'child_process';
 import type { Config, ToolConfig, AgentRunContext } from './types.js';
 import { isAllowed, isRateLimited } from './security.js';
@@ -940,6 +940,21 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
           getRunContext(ctx)
         );
         if (chatId) await addToHistory(chatId, transcription, agentResponse);
+
+        // TTS voice reply if sendVoice enabled
+        console.log('[telegram] TTS check - sendVoice:', cfg.voice?.channels?.['telegram']?.sendVoice);
+        if (cfg.voice?.channels?.['telegram']?.sendVoice) {
+          console.log('[telegram] Attempting TTS synthesis...');
+          try {
+            const speech = await synthesizeSpeech(agentResponse, cfg.voice);
+            console.log('[telegram] TTS synthesis success:', speech.format, speech.provider, 'buffer size:', speech.buffer.length);
+            await ctx.replyWithVoice(new InputFile(speech.buffer, `reply.${speech.format}`));
+            console.log('[telegram] Voice reply sent');
+          } catch (err) {
+            console.error('[telegram] TTS synthesis failed:', err);
+            // Non-fatal — text reply still sends below
+          }
+        }
 
         // Single message: blockquote transcription + agent response (no reply to voice note)
         const combined = `<blockquote>🎤 ${transcription}</blockquote>\n\n${escapeHtml(agentResponse)}`;

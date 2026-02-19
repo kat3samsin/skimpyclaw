@@ -1,7 +1,8 @@
 // Voice transcription — local Whisper CLI (free) with API fallback
-import { existsSync, readFileSync, unlinkSync, readdirSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync, unlinkSync, readdirSync } from 'fs';
 import { execSync } from 'child_process';
 import { basename, dirname, join } from 'path';
+import { tmpdir } from 'os';
 import type { VoiceConfig, VoiceProviderConfig } from './types.js';
 
 export interface TranscriptionResult {
@@ -314,6 +315,149 @@ export async function transcribeAudio(
   }
 
   return transcribeWithAPI(audioPath, sttProvider.name, sttProvider.provider);
+}
+
+// --- TTS (Text-to-Speech) ---
+
+export interface SpeechResult {
+  buffer: Buffer;
+  format: 'ogg' | 'mp3';
+  provider: string;
+}
+
+/**
+ * Resolve the TTS provider — prefers defaultProvider with tts config, otherwise finds any provider with tts.
+ */
+function getTTSProvider(config: VoiceConfig): { name: string; provider: VoiceProviderConfig } | null {
+  const providers = config.providers;
+  if (!providers || Object.keys(providers).length === 0) {
+    return null;
+  }
+
+  // First: check if defaultProvider exists AND has tts config
+  if (config.defaultProvider) {
+    const provider = providers[config.defaultProvider];
+    if (provider?.tts) {
+      return { name: config.defaultProvider, provider };
+    }
+  }
+
+  // Second: look for any provider with a tts sub-config
+  for (const [name, provider] of Object.entries(providers)) {
+    if (provider.tts) {
+      return { name, provider };
+    }
+  }
+
+  // Third: use defaultProvider even without tts config (might still work)
+  if (config.defaultProvider) {
+    const provider = providers[config.defaultProvider];
+    if (provider) {
+      return { name: config.defaultProvider, provider };
+    }
+  }
+
+  // Last resort: use first provider
+  const providerName = Object.keys(providers)[0];
+  const provider = providers[providerName];
+  if (!provider) return null;
+
+  return { name: providerName, provider };
+}
+
+/**
+ * Synthesize speech from text using the configured TTS provider.
+ * Throws if no provider is configured or synthesis fails.
+ */
+export async function synthesizeSpeech(text: string, config: VoiceConfig): Promise<SpeechResult> {
+  const ttsProvider = getTTSProvider(config);
+  if (!ttsProvider) {
+    throw new Error('No TTS provider configured. Add a provider with a tts config to your voice config.');
+  }
+
+  const { name, provider } = ttsProvider;
+
+  // macOS `say` command
+  if (name === 'macos') {
+    if (process.platform !== 'darwin') {
+      throw new Error('macOS say provider is only available on macOS.');
+    }
+    if (!HAS_FFMPEG) {
+      throw new Error('ffmpeg is required for macOS TTS (to convert AIFF to OGG). Install: brew install ffmpeg');
+    }
+    const voice = provider.tts?.voice || 'Zoe';
+    const id = Date.now();
+    const aiffPath = join(tmpdir(), `skimpyclaw-tts-${id}.aiff`);
+    const oggPath = join(tmpdir(), `skimpyclaw-tts-${id}.ogg`);
+    try {
+      // Escape text for shell — use single quotes and escape internal single quotes
+      const safeText = text.replace(/'/g, "'\\''");
+      execSync(`say -v '${voice}' -o '${aiffPath}' '${safeText}'`, { stdio: ['ignore', 'pipe', 'pipe'] });
+      execSync(`ffmpeg -i '${aiffPath}' -c:a libopus '${oggPath}' -y`, { stdio: ['ignore', 'pipe', 'pipe'] });
+      const buffer = readFileSync(oggPath);
+      return { buffer, format: 'ogg', provider: `macos (${voice})` };
+    } finally {
+      try { unlinkSync(aiffPath); } catch { /* best effort */ }
+      try { unlinkSync(oggPath); } catch { /* best effort */ }
+    }
+  }
+
+  // ElevenLabs
+  if (name === 'elevenlabs') {
+    const apiKey = resolveApiKey(provider.apiKey);
+    if (!apiKey) {
+      throw new Error('No API key configured for ElevenLabs TTS provider.');
+    }
+    const voiceId = provider.tts?.voiceId;
+    if (!voiceId) {
+      throw new Error('ElevenLabs TTS requires tts.voiceId in the provider config.');
+    }
+    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+      method: 'POST',
+      headers: {
+        'xi-api-key': apiKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ text, model_id: 'eleven_multilingual_v2' }),
+    });
+    if (!response.ok) {
+      throw new Error(`ElevenLabs TTS failed: ${response.status} ${response.statusText}`);
+    }
+    const buffer = Buffer.from(await response.arrayBuffer());
+    return { buffer, format: 'mp3', provider: 'elevenlabs' };
+  }
+
+  // Default: OpenAI-compatible TTS
+  const apiKey = resolveApiKey(provider.apiKey);
+  if (!apiKey) {
+    throw new Error(`No API key configured for TTS provider "${name}".`);
+  }
+  const OpenAI = (await import('openai')).default;
+  const openai = new OpenAI({
+    apiKey,
+    ...(provider.baseURL ? { baseURL: provider.baseURL } : {}),
+  });
+  const model = provider.tts?.model || 'tts-1';
+  const voice = (provider.tts?.voice || 'nova') as Parameters<typeof openai.audio.speech.create>[0]['voice'];
+  const mp3Response = await openai.audio.speech.create({
+    model,
+    voice,
+    input: text,
+    response_format: 'opus',
+  });
+  const buffer = Buffer.from(await mp3Response.arrayBuffer());
+  return { buffer, format: 'ogg', provider: `${name} (${model})` };
+}
+
+/**
+ * Check if TTS dependencies are available (ffmpeg for macOS say provider).
+ */
+export function checkTTSDependencies(): { ok: boolean; missing: string[] } {
+  const missing: string[] = [];
+  if (process.platform === 'darwin' && !HAS_FFMPEG) {
+    missing.push('ffmpeg is required for macOS TTS. Install: brew install ffmpeg');
+  }
+  return { ok: missing.length === 0, missing };
 }
 
 /**

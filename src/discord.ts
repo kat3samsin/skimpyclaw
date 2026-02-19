@@ -5,6 +5,7 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  AttachmentBuilder,
   type Message,
   type Interaction,
 } from 'discord.js';
@@ -28,7 +29,7 @@ import {
   onApprovalEvent,
   type PendingApproval,
 } from './exec-approval.js';
-import { transcribeAudio } from './voice.js';
+import { transcribeAudio, synthesizeSpeech } from './voice.js';
 import * as sessions from './sessions.js';
 
 function getDiscordRunContext(message: Message): AgentRunContext {
@@ -621,6 +622,25 @@ async function handleIncomingMessage(message: Message): Promise<void> {
           getDiscordRunContext(message)
         );
         await addToHistory(key, transcription, agentResponse);
+
+        // TTS voice reply if sendVoice enabled
+        console.log('[discord] TTS check - sendVoice:', config.voice?.channels?.['discord']?.sendVoice);
+        if (config.voice?.channels?.['discord']?.sendVoice) {
+          console.log('[discord] Attempting TTS synthesis...');
+          try {
+            const speech = await synthesizeSpeech(agentResponse, config.voice);
+            console.log('[discord] TTS synthesis success:', speech.format, speech.provider, 'buffer size:', speech.buffer.length);
+            const attachment = new AttachmentBuilder(speech.buffer, {
+              name: `voice-reply.${speech.format}`,
+              description: 'Voice reply'
+            });
+            await message.reply({ files: [attachment] });
+            console.log('[discord] Voice reply sent');
+          } catch (err) {
+            console.error('[discord] TTS synthesis failed:', err);
+            // Non-fatal — text reply still sends below
+          }
+        }
 
         // Format response with transcription in a blockquote
         const combined = `> 🎤 ${transcription}\n\n${agentResponse}`;
