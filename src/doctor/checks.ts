@@ -218,6 +218,11 @@ export async function checkProviderAuth(providerName: string, providerConfig: No
     }
 
     if (normalized === 'anthropic') {
+      // OAuth tokens can't be validated via API (they use Claude Code's internal refresh flow)
+      if (providerConfig.authToken) {
+        return ok(name, category, 'OAuth token configured (refresh handled at runtime)');
+      }
+
       const res = await fetch(`${providerConfig.baseURL || 'https://api.anthropic.com'}/v1/models`, {
         headers: {
           'x-api-key': token,
@@ -227,7 +232,7 @@ export async function checkProviderAuth(providerName: string, providerConfig: No
       });
 
       if (!res.ok) {
-        return fail(name, category, `${res.status} ${res.statusText}`, `Check ${providerName.toUpperCase()}_API_KEY and provider base URL.`);
+        return fail(name, category, `${res.status} ${res.statusText}`, `Check ANTHROPIC_API_KEY and provider base URL.`);
       }
 
       return ok(name, category, `${res.status} ${res.statusText}`);
@@ -455,7 +460,14 @@ export async function checkPortAvailability(port: number): Promise<DoctorCheckRe
   });
 
   if (!canListen) {
-    return fail(name, category, `Port ${port} already in use`, `Free port ${port} or set a different gateway.port in config.`);
+    // Check if SkimpyClaw itself is using the port
+    try {
+      const res = await fetch(`http://127.0.0.1:${port}/health`, { signal: AbortSignal.timeout(3000) });
+      if (res.ok) {
+        return ok(name, category, `Gateway already running on port ${port}`);
+      }
+    } catch { /* not our gateway */ }
+    return fail(name, category, `Port ${port} already in use by another process`, `Free port ${port} or set a different gateway.port in config.`);
   }
 
   return ok(name, category, `Port ${port} is available`);

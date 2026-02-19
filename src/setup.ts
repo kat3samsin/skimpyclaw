@@ -691,7 +691,7 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
     // 4. Agent Name
     const existingAgentName = existing.config?.agents?.list?.main?.identity?.name || '';
     sectionHeader('4. Agent Name');
-    const agentNameDefault = existingAgentName || 'Claw';
+    const agentNameDefault = existingAgentName || 'SkimpyClaw';
     const agentName = (await ask(rl, `   What should I call myself? [${agentNameDefault}]: `)) || agentNameDefault;
     console.log(`   ✓ ${agentName}\n`);
 
