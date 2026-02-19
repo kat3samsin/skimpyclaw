@@ -5,9 +5,37 @@ import { writeFileSync, mkdirSync, existsSync, copyFileSync, readdirSync, readFi
 import { join, dirname } from 'path';
 import { homedir } from 'os';
 import { fileURLToPath } from 'url';
+import { spawnSync } from 'child_process';
+import { runDoctor as runDoctorChecks } from './doctor/runner.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+// ANSI color helpers (no chalk dependency)
+const c = {
+  green: (s: string) => `\x1b[32m${s}\x1b[0m`,
+  red: (s: string) => `\x1b[31m${s}\x1b[0m`,
+  yellow: (s: string) => `\x1b[33m${s}\x1b[0m`,
+  cyan: (s: string) => `\x1b[36m${s}\x1b[0m`,
+  bold: (s: string) => `\x1b[1m${s}\x1b[0m`,
+  dim: (s: string) => `\x1b[2m${s}\x1b[0m`,
+};
+
+function sectionHeader(title: string): void {
+  console.log(`\n${c.bold(c.cyan(`─── ${title} ───`))}`);
+}
+
+function statusOk(msg: string): void {
+  console.log(`   ${c.green('✓')} ${msg}`);
+}
+
+function statusFail(msg: string): void {
+  console.log(`   ${c.red('✗')} ${msg}`);
+}
+
+function statusWarn(msg: string): void {
+  console.log(`   ${c.yellow('⚠')} ${msg}`);
+}
 
 const CONFIG_DIR = join(homedir(), '.skimpyclaw');
 const AGENTS_DIR = join(CONFIG_DIR, 'agents', 'main');
@@ -94,6 +122,12 @@ interface ProviderSecrets {
   minimaxKey?: string;
 }
 
+interface SetupFeatures {
+  browser: boolean;
+  voice: boolean;
+  mcp: boolean;
+}
+
 interface SetupBuildInput {
   workspaceDir: string;
   telegramId: string;
@@ -104,6 +138,7 @@ interface SetupBuildInput {
   agentName: string;
   selectedProviders: Set<ProviderChoice>;
   providerSecrets: ProviderSecrets;
+  features?: SetupFeatures;
 }
 
 async function collectProviderSecrets(
@@ -248,9 +283,11 @@ function buildEnvContent(
 
 export function buildSetupConfig(input: SetupBuildInput): Record<string, unknown> {
   const useDiscord = Boolean(input.discordToken);
+  const features = input.features ?? { browser: false, voice: false, mcp: false };
   return {
     gateway: {
       port: 18790,
+      host: '127.0.0.1',
       mode: 'local',
     },
     agents: {
@@ -307,8 +344,16 @@ export function buildSetupConfig(input: SetupBuildInput): Record<string, unknown
         ],
         maxIterations: 10,
         bashTimeout: 15000,
+        ...(features.browser ? { browser: { enabled: true } } : { browser: { enabled: false } }),
       },
     },
+    ...(features.voice ? {
+      voice: {
+        enabled: true,
+        providers: {},
+        channels: {},
+      },
+    } : {}),
   };
 }
 
@@ -438,22 +483,27 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
   });
 
   try {
-    console.log('\n👙🦞 SkimpyClaw Setup\n');
+    console.log(`\n${c.bold('👙🦞 SkimpyClaw Setup')}\n`);
 
     // 1. Telegram Bot Token
-    console.log('1. Telegram Bot Token');
+    sectionHeader('1. Telegram Bot Token');
     console.log('   Get one from @BotFather: https://t.me/BotFather');
     const telegramToken = await ask(rl, '   Enter token: ');
     console.log(`   ✓ ${maskInput(telegramToken)}\n`);
 
     // 2. Telegram ID
-    console.log('2. Your Telegram ID');
+    sectionHeader('2. Your Telegram ID');
     console.log('   Get it from @userinfobot: https://t.me/userinfobot');
-    const telegramId = await ask(rl, '   Enter ID: ');
+    let telegramId: string;
+    while (true) {
+      telegramId = await ask(rl, '   Enter ID: ');
+      if (/^\d+$/.test(telegramId)) break;
+      console.log('   ✗ Telegram user IDs are numbers. Send /start to @userinfobot to find yours.');
+    }
     console.log(`   ✓ ${telegramId}\n`);
 
     // 2b. Optional Discord
-    console.log('2b. Discord Bot (optional)');
+    sectionHeader('2b. Discord Bot (optional)');
     const useDiscord = /^y(es)?$/i.test(await ask(rl, '   Enable Discord channel? [y/N]: '));
     let discordToken = '';
     let discordUserId = '';
@@ -473,14 +523,63 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
     const providerSecrets = await collectProviderSecrets(rl, selectedProviders);
 
     // 4. Agent Name
-    console.log('4. Agent Name');
+    sectionHeader('4. Agent Name');
     const agentName = (await ask(rl, '   What should I call myself? [Claw]: ')) || 'Claw';
     console.log(`   ✓ ${agentName}\n`);
 
     // 5. Your Name
-    console.log('5. Your Name');
+    sectionHeader('5. Your Name');
     const userName = (await ask(rl, '   What should I call you? ')) || 'User';
-    console.log(`   ✓ ${userName}\n`);
+    statusOk(userName);
+
+    // 6. Optional Features
+    sectionHeader('Optional Features');
+
+    // 6a. Browser tool
+    const enableBrowser = /^y(es)?$/i.test(await ask(rl, '   Enable browser tool? (requires Chrome) [y/N]: '));
+    if (enableBrowser) {
+      const macChrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+      const which = spawnSync('which', ['google-chrome'], { encoding: 'utf-8' });
+      if (which.status === 0 || existsSync(macChrome)) {
+        statusOk('Chrome detected');
+      } else {
+        statusWarn('Chrome not found — browser tool may not work until Chrome is installed');
+      }
+    } else {
+      statusOk('browser disabled');
+    }
+
+    // 6b. Voice/TTS
+    const enableVoice = /^y(es)?$/i.test(await ask(rl, '   Enable voice/TTS? (requires ffmpeg) [y/N]: '));
+    if (enableVoice) {
+      const ffmpeg = spawnSync('which', ['ffmpeg'], { encoding: 'utf-8' });
+      if (ffmpeg.status === 0) {
+        statusOk('ffmpeg detected');
+      } else {
+        statusWarn('ffmpeg not found — voice features may not work until ffmpeg is installed');
+      }
+    } else {
+      statusOk('voice disabled');
+    }
+
+    // 6c. MCP tools
+    const enableMcp = /^y(es)?$/i.test(await ask(rl, '   Enable MCP tools? (requires mcporter at ~/.mcporter/) [y/N]: '));
+    if (enableMcp) {
+      const mcporterConfig = join(homedir(), '.mcporter', 'mcporter.json');
+      if (existsSync(mcporterConfig)) {
+        statusOk('mcporter config found');
+      } else {
+        statusWarn(`mcporter config not found at ${mcporterConfig} — MCP tools won't load until configured`);
+      }
+    } else {
+      statusOk('MCP tools disabled');
+    }
+
+    const features: SetupFeatures = {
+      browser: enableBrowser,
+      voice: enableVoice,
+      mcp: enableMcp,
+    };
 
     const workspaceDir = process.cwd();
 
@@ -494,6 +593,7 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
       agentName,
       selectedProviders,
       providerSecrets,
+      features,
     });
 
     // Create directories
@@ -544,16 +644,28 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
     writeFileSync(plistPath, plistContent);
     console.log(`✓ Daemon plist written to ${plistPath}`);
 
-    console.log('\nRunning preflight checks...');
-    const telegramCheck = await validateTelegramToken(telegramToken);
-    const providerChecks = await validateProviderAuth(selectedProviders, providerSecrets);
-
-    console.log(`- Telegram token: ${telegramCheck.ok ? 'PASS' : 'FAIL'} (${telegramCheck.detail})`);
-    for (const check of providerChecks) {
-      console.log(`- ${check.name}: ${check.ok ? 'PASS' : 'FAIL'} (${check.detail})`);
+    sectionHeader('Post-Setup Validation');
+    console.log('   Running doctor checks...\n');
+    const { report } = await runDoctorChecks();
+    let failCount = 0;
+    for (const check of report.checks) {
+      if (check.ok) {
+        console.log(`   ${c.green('PASS')} ${check.name} ${c.dim(`— ${check.detail}`)}`);
+      } else {
+        failCount++;
+        console.log(`   ${c.red('FAIL')} ${check.name} — ${check.detail}`);
+        if (check.remedy) {
+          console.log(`         ${c.dim(check.remedy)}`);
+        }
+      }
     }
 
-    console.log('\n✅ Setup complete!\n');
+    if (failCount === 0) {
+      console.log(`\n${c.green('✅ Setup complete. Run `skimpyclaw start` to begin.')}\n`);
+    } else {
+      console.log(`\n${c.yellow(`⚠ Setup complete with ${failCount} warning${failCount > 1 ? 's' : ''}. Run \`skimpyclaw doctor\` for details.`)}\n`);
+    }
+
     console.log('Next steps:');
     console.log('1. Review templates in ~/.skimpyclaw/agents/main/');
     console.log('2. Start the daemon:');
@@ -561,7 +673,6 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
     console.log('3. Check health:');
     console.log('   curl http://localhost:18790/health');
     console.log(`4. Send /help in your ${useDiscord ? 'Discord bot DM/server' : 'Telegram bot'}`);
-    console.log('5. If any preflight check failed, fix it before relying on automation.');
     console.log('\n👙🦞 Enjoy!');
   } finally {
     rl.close();

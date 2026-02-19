@@ -58,4 +58,65 @@ describe('setup config generation', () => {
     expect(envContent).toContain('CLAUDE_CODE_OAUTH_TOKEN=');
     expect(envContent).not.toContain('ANTHROPIC_API_KEY=');
   });
+
+  it('includes gateway host in generated config', () => {
+    const config = buildSetupConfig({
+      workspaceDir: '/tmp/workspace',
+      telegramId: '12345',
+      telegramToken: 'tg-token',
+      agentName: 'Claw',
+      selectedProviders: new Set(['anthropic-api'] as const),
+      providerSecrets: { anthropicKey: 'sk-ant-test' },
+    }) as any;
+
+    expect(config.gateway.host).toBe('127.0.0.1');
+    expect(config.gateway.port).toBe(18790);
+  });
+
+  it('disables browser when features.browser is false', () => {
+    const config = buildSetupConfig({
+      workspaceDir: '/tmp/workspace',
+      telegramId: '12345',
+      telegramToken: 'tg-token',
+      agentName: 'Claw',
+      selectedProviders: new Set(['anthropic-api'] as const),
+      providerSecrets: { anthropicKey: 'sk-ant-test' },
+      features: { browser: false, voice: false, mcp: false },
+    }) as any;
+
+    expect(config.heartbeat.tools.browser.enabled).toBe(false);
+    expect(config.voice).toBeUndefined();
+  });
+
+  it('enables browser and voice when features are true', () => {
+    const config = buildSetupConfig({
+      workspaceDir: '/tmp/workspace',
+      telegramId: '12345',
+      telegramToken: 'tg-token',
+      agentName: 'Claw',
+      selectedProviders: new Set(['anthropic-api'] as const),
+      providerSecrets: { anthropicKey: 'sk-ant-test' },
+      features: { browser: true, voice: true, mcp: false },
+    }) as any;
+
+    expect(config.heartbeat.tools.browser.enabled).toBe(true);
+    expect(config.voice).toBeDefined();
+    expect(config.voice.enabled).toBe(true);
+  });
+
+  it('rejects non-numeric telegram IDs by parsing to NaN', () => {
+    // buildSetupConfig uses parseInt which returns NaN for non-numeric strings
+    // The wizard loop validates before reaching here, but verify the fallback
+    const config = buildSetupConfig({
+      workspaceDir: '/tmp/workspace',
+      telegramId: 'not-a-number',
+      telegramToken: 'tg-token',
+      agentName: 'Claw',
+      selectedProviders: new Set(['anthropic-api'] as const),
+      providerSecrets: { anthropicKey: 'sk-ant-test' },
+    }) as any;
+
+    // parseInt('not-a-number') is NaN, so || falls through to string
+    expect(config.channels.telegram.allowFrom).toEqual(['not-a-number']);
+  });
 });

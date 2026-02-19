@@ -1290,6 +1290,7 @@ td:first-child { color: var(--highlight); }
     <button class="tab" data-tab="model">Model</button>
     <button class="tab" data-tab="templates">Templates</button>
     <button class="tab" data-tab="config">Config</button>
+    <button class="tab" data-tab="health">Health</button>
   </div>
   <div class="tab-group">
     <div class="tab-group-header">
@@ -1484,6 +1485,27 @@ td:first-child { color: var(--highlight); }
       </div>
       <div style="margin-top:8px;font-size:12px;color:var(--warning);">
         Warning: Restart required for changes to take effect.
+      </div>
+    </div>
+  </div>
+
+  <!-- Health Tab -->
+  <div class="tab-panel" id="panel-health">
+    <div class="card">
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
+        System Health
+        <button class="btn" id="healthRecheckBtn" style="font-size:12px;">Re-check</button>
+      </div>
+      <div id="healthChecks" style="margin-bottom:16px;">Loading...</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+      <div class="card">
+        <div class="card-title">Environment Variables</div>
+        <div id="healthEnvVars">Loading...</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Feature Toggles</div>
+        <div id="healthFeatures">Loading...</div>
       </div>
     </div>
   </div>
@@ -1783,6 +1805,7 @@ function onTabActivated(tab) {
   else if (tab === 'digests') loadDigests();
   else if (tab === 'skills') loadSkills();
   else if (tab === 'config') loadConfig();
+  else if (tab === 'health') loadHealth();
 }
 
 // --- Status Tab ---
@@ -2837,6 +2860,65 @@ document.getElementById('approvalsAutoRefresh').addEventListener('change', funct
     stopApprovalsPolling();
   }
 });
+
+// --- Health ---
+async function loadHealth() {
+  const checksEl = document.getElementById('healthChecks');
+  const envEl = document.getElementById('healthEnvVars');
+  const featEl = document.getElementById('healthFeatures');
+  try {
+    const res = await apiFetch('/api/dashboard/health');
+    const data = await res.json();
+
+    // Render checks table
+    let html = '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
+    html += '<tr style="border-bottom:1px solid var(--border);"><th style="text-align:left;padding:6px;">Check</th><th style="text-align:left;padding:6px;">Status</th><th style="text-align:left;padding:6px;">Detail</th><th style="text-align:left;padding:6px;">Remedy</th></tr>';
+    for (const ch of data.checks) {
+      const color = ch.ok ? 'var(--success)' : 'var(--error)';
+      const status = ch.ok ? 'PASS' : 'FAIL';
+      html += '<tr style="border-bottom:1px solid var(--border);">';
+      html += '<td style="padding:6px;font-family:var(--mono);font-size:12px;">' + esc(ch.name) + '</td>';
+      html += '<td style="padding:6px;color:' + color + ';font-weight:600;">' + status + '</td>';
+      html += '<td style="padding:6px;color:var(--text-dim);font-size:12px;">' + esc(ch.detail) + '</td>';
+      html += '<td style="padding:6px;color:var(--text-dim);font-size:12px;">' + (ch.remedy ? esc(ch.remedy) : '') + '</td>';
+      html += '</tr>';
+    }
+    html += '</table>';
+    checksEl.innerHTML = html;
+
+    // Render env vars
+    if (data.envVars && data.envVars.length > 0) {
+      let envHtml = '<div style="font-size:13px;">';
+      for (const ev of data.envVars) {
+        const icon = ev.set ? '<span style="color:var(--success);">●</span>' : '<span style="color:var(--error);">○</span>';
+        const label = ev.set ? 'set' : 'missing';
+        envHtml += '<div style="padding:4px 0;display:flex;justify-content:space-between;border-bottom:1px solid var(--border);">';
+        envHtml += '<span style="font-family:var(--mono);font-size:12px;">' + icon + ' ' + esc(ev.name) + '</span>';
+        envHtml += '<span style="color:var(--text-dim);font-size:12px;">' + label + '</span>';
+        envHtml += '</div>';
+      }
+      envHtml += '</div>';
+      envEl.innerHTML = envHtml;
+    } else {
+      envEl.innerHTML = '<span style="color:var(--text-dim);">No env var references found</span>';
+    }
+
+    // Render features
+    if (data.features) {
+      let featHtml = '<div style="font-size:13px;">';
+      for (const [name, enabled] of Object.entries(data.features)) {
+        const icon = enabled ? '<span style="color:var(--success);">✓</span>' : '<span style="color:var(--text-dim);">✗</span>';
+        featHtml += '<div style="padding:4px 0;border-bottom:1px solid var(--border);">' + icon + ' ' + esc(name) + '</div>';
+      }
+      featHtml += '</div>';
+      featEl.innerHTML = featHtml;
+    }
+  } catch (err) {
+    checksEl.innerHTML = '<span style="color:var(--error);">Failed to load health data: ' + esc(err.message) + '</span>';
+  }
+}
+
+document.getElementById('healthRecheckBtn')?.addEventListener('click', () => loadHealth());
 
 // --- Init ---
 startStatusRefresh();

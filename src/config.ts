@@ -19,7 +19,12 @@ function ensureEnvLoaded(): void {
 
 function expandEnvVars(obj: any): any {
   if (typeof obj === 'string') {
-    return obj.replace(/\$\{(\w+)\}/g, (_, key) => process.env[key] || '');
+    return obj.replace(/\$\{(\w+)\}/g, (_, key) => {
+      if (process.env[key] === undefined) {
+        console.warn(`[config] env var \${${key}} is not set`);
+      }
+      return process.env[key] || '';
+    });
   }
   if (Array.isArray(obj)) {
     return obj.map(expandEnvVars);

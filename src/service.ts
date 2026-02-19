@@ -24,7 +24,8 @@ export async function startRuntime(config: Config): Promise<SkimpyClawRuntime> {
 
   const port = smokeTest ? (parseInt(process.env.SKIMPYCLAW_SMOKE_PORT || '19999', 10)) : config.gateway.port;
   const gateway = await createGateway(config);
-  await gateway.listen({ port, host: '127.0.0.1' });
+  const host = config.gateway.host ?? '127.0.0.1';
+  await gateway.listen({ port, host });
 
   if (!smokeTest) {
     initCron(config);
