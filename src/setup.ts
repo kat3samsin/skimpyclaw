@@ -276,14 +276,23 @@ function buildDefaultModel(providers: Set<ProviderChoice>): string {
 }
 
 function buildAliases(providers: Set<ProviderChoice>): Record<string, string> {
-  const aliases: Record<string, string> = {};
+  // Always include well-known aliases so users can switch models easily
+  const aliases: Record<string, string> = {
+    'claude-fast': 'anthropic/claude-haiku-4-5',
+    'claude-think': 'anthropic/claude-sonnet-4-6',
+    'claude-opus': 'anthropic/claude-opus-4-6',
+    'codex5.2': 'openai/gpt-5.2-codex',
+    'codex5.3': 'openai/gpt-5.3-codex',
+    'minimax': 'minimax/MiniMax-M2.5',
+    'kimi': 'kimi/kimi-for-coding',
+  };
+
   const hasAnthropic = providers.has('anthropic-api') || providers.has('anthropic-oauth');
 
   if (hasAnthropic) {
-    aliases.fast = 'anthropic/claude-3-5-haiku-20241022';
+    aliases.fast = 'anthropic/claude-haiku-4-5';
     aliases.smart = 'anthropic/claude-sonnet-4-6';
     aliases.opus = 'anthropic/claude-opus-4-6';
-    aliases['claude-think'] = 'anthropic/claude-sonnet-4-6';
   }
 
   if (providers.has('openai-api')) {

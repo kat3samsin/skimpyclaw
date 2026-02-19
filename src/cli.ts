@@ -34,6 +34,7 @@ Commands:
   config get <key>        Read config value by dot path
   config set <key> <val>  Set config value (JSON value or string)
   model <alias|model>     Switch current runtime model
+  models                  List providers and aliases
   send <message>          Send a message to the local gateway
   cron list               List cron jobs from gateway status
   cron run <id>           Trigger cron job by id
@@ -378,6 +379,35 @@ async function commandModel(args: string[]): Promise<number> {
   }, config.gateway.port);
 
   console.log(`Model set to ${data.model}`);
+  return 0;
+}
+
+function commandModels(): number {
+  const config = loadConfig();
+  const providers = Object.entries(config.models.providers || {});
+  const aliases = Object.entries(config.models.aliases || {});
+  const currentModel = config.agents.list[config.agents.default]?.model || 'unknown';
+
+  console.log(`Current: ${currentModel}\n`);
+
+  if (providers.length > 0) {
+    console.log('Providers:');
+    for (const [name, cfg] of providers) {
+      const url = (cfg as any).baseURL || (name === 'anthropic' ? 'api.anthropic.com' : '');
+      console.log(`  ${name.padEnd(16)} ${url}`);
+    }
+    console.log('');
+  }
+
+  if (aliases.length > 0) {
+    console.log('Aliases:');
+    for (const [alias, model] of aliases) {
+      console.log(`  ${alias.padEnd(16)} → ${model}`);
+    }
+    console.log('');
+  }
+
+  console.log(`Switch: skimpyclaw model <alias|provider/model>`);
   return 0;
 }
 
@@ -752,6 +782,10 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<nu
 
     if (command === 'model') {
       return await commandModel(args);
+    }
+
+    if (command === 'models') {
+      return commandModels();
     }
 
     if (command === 'send') {
