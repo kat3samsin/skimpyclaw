@@ -8,8 +8,9 @@ import { getLogsDir } from './config.js';
 import type { Config, CronJob } from './types.js';
 import { runAgentTurn } from './agent.js';
 import { startTrace, addEvent, endTrace } from './audit.js';
-import { sendActiveChannelProactiveMessage, getActiveChannelId } from './channels.js';
+import { sendActiveChannelProactiveMessage, sendActiveChannelVoiceMessage, getActiveChannelId } from './channels.js';
 import { parseAndSaveDigest } from './digests.js';
+import { synthesizeSpeech } from './voice.js';
 
 interface ScheduledJob {
   id: string;
@@ -230,6 +231,20 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
         notification += `\n\n${output}`;
       }
       await sendActiveChannelProactiveMessage(config, notification);
+
+      // Send voice message if requested and job succeeded
+      if (jobDef.payload.sendAsVoice && logEntry.status === 'success' && logEntry.output && config.voice) {
+        try {
+          console.log(`[cron] Synthesizing voice for job ${jobDef.id}...`);
+          const speech = await synthesizeSpeech(logEntry.output, config.voice);
+          console.log(`[cron] Sending voice message (${speech.format}, ${speech.buffer.length} bytes)...`);
+          await sendActiveChannelVoiceMessage(config, speech.buffer, speech.format);
+          console.log(`[cron] Voice message sent for job ${jobDef.id}`);
+        } catch (voiceErr) {
+          console.error(`[cron] Failed to send voice message: ${voiceErr}`);
+          // Non-fatal — text notification already sent
+        }
+      }
     } catch (notifyErr) {
       console.error(`[cron] Failed to send notification: ${notifyErr}`);
     }

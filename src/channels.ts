@@ -14,6 +14,7 @@ interface ChannelAdapter {
   stop: () => Promise<void>;
   isSilenced?: () => boolean;
   sendProactiveMessage?: (target: ChannelTarget, message: string) => Promise<void>;
+  sendProactiveVoiceMessage?: (target: ChannelTarget, buffer: Buffer, format: 'ogg' | 'mp3') => Promise<void>;
   resolveDefaultTarget?: (config: Config) => ChannelTarget | null;
 }
 
@@ -54,6 +55,7 @@ async function loadAdapter(channel: ChannelId): Promise<ChannelAdapter> {
       stop: telegram.stopTelegram,
       isSilenced: telegram.isSilenced,
       sendProactiveMessage: telegram.sendProactiveMessage,
+      sendProactiveVoiceMessage: telegram.sendProactiveVoiceMessage,
       resolveDefaultTarget: telegram.getTelegramDefaultChatId,
     };
   }
@@ -65,6 +67,7 @@ async function loadAdapter(channel: ChannelId): Promise<ChannelAdapter> {
     stop: discord.stopDiscord,
     isSilenced: discord.isDiscordSilenced,
     sendProactiveMessage: discord.sendDiscordProactiveMessage,
+    sendProactiveVoiceMessage: discord.sendDiscordProactiveVoiceMessage,
     resolveDefaultTarget: discord.getDiscordDefaultTarget,
   };
 }
@@ -122,5 +125,19 @@ export async function sendActiveChannelProactiveMessage(config: Config, message:
   }
 
   await activeAdapter.sendProactiveMessage(target, message);
+  return true;
+}
+
+export async function sendActiveChannelVoiceMessage(config: Config, buffer: Buffer, format: 'ogg' | 'mp3'): Promise<boolean> {
+  if (!activeAdapter?.sendProactiveVoiceMessage || !activeAdapter.resolveDefaultTarget) {
+    return false;
+  }
+
+  const target = activeAdapter.resolveDefaultTarget(config);
+  if (target === null || target === undefined || target === '') {
+    return false;
+  }
+
+  await activeAdapter.sendProactiveVoiceMessage(target, buffer, format);
   return true;
 }

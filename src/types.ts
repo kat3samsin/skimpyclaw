@@ -140,6 +140,7 @@ export interface CronPayload {
   cwd?: string;
   timeoutMs?: number;
   tools?: ToolConfig;
+  sendAsVoice?: boolean;  // If true, send output as voice message in addition to text
 }
 
 export interface ToolConfig {

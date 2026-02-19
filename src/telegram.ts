@@ -1314,6 +1314,18 @@ export async function sendProactiveMessage(
   }
 }
 
+export async function sendProactiveVoiceMessage(
+  chatId: string | number,
+  buffer: Buffer,
+  format: 'ogg' | 'mp3'
+): Promise<void> {
+  if (!bot || isSilenced()) return;
+  const resolvedChatId = typeof chatId === 'number' ? chatId : Number(chatId);
+  if (!Number.isFinite(resolvedChatId)) return;
+
+  await bot.api.sendVoice(resolvedChatId, new InputFile(buffer, `voice.${format}`));
+}
+
 export function getTelegramDefaultChatId(cfg: Config): number | null {
   const allowFrom = cfg.channels.telegram.allowFrom;
   for (const entry of allowFrom) {
