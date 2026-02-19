@@ -196,19 +196,40 @@ function toNumericUsageDetails(usage: unknown): Record<string, number> | undefin
 /**
  * Build the system parameter for Anthropic API calls.
  * For OAuth: returns an array with Claude Code identity + guard + actual prompt as separate blocks.
- * For API key: returns the prompt string directly.
+ * For API key: returns the prompt string directly (or array with cache_control if caching enabled).
+ * When cacheEnabled, adds cache_control breakpoint to the last system block.
  */
-export function buildSystemParam(systemContent: string | undefined): string | Array<{type: 'text', text: string}> | undefined {
+export function buildSystemParam(
+  systemContent: string | undefined,
+  cacheEnabled: boolean = false
+): string | Array<{type: 'text', text: string, cache_control?: {type: 'ephemeral'}}> | undefined {
   if (!systemContent) return undefined;
 
   if (usingOAuth) {
-    return [
+    const blocks: Array<{type: 'text', text: string, cache_control?: {type: 'ephemeral'}}> = [
       { type: 'text' as const, text: "You are Claude Code, Anthropic's official CLI for Claude." },
       { type: 'text' as const, text: TOOL_GUARD },
       { type: 'text' as const, text: systemContent },
     ];
+    if (cacheEnabled) {
+      blocks[2].cache_control = { type: 'ephemeral' };
+    }
+    return blocks;
+  }
+
+  if (cacheEnabled) {
+    return [{ type: 'text' as const, text: systemContent, cache_control: { type: 'ephemeral' } }];
   }
   return systemContent;
+}
+
+/**
+ * Add cache_control breakpoint to the last tool definition.
+ * One breakpoint on the last tool caches the entire tools array.
+ */
+export function addToolCacheBreakpoint(toolDefs: any[]): void {
+  if (toolDefs.length === 0) return;
+  toolDefs[toolDefs.length - 1].cache_control = { type: 'ephemeral' };
 }
 
 // --- Memory Management ---
@@ -690,13 +711,14 @@ export async function chat(
       }));
 
     // Build request parameters
+    const cacheEnabled = config.models?.promptCaching !== false;
     const params: Anthropic.MessageCreateParams = {
       model: modelId,
       max_tokens: options.maxTokens || 4096,
       messages: chatMessages,
     };
 
-    const systemParam = buildSystemParam(contentToText(systemMessage?.content || ''));
+    const systemParam = buildSystemParam(contentToText(systemMessage?.content || ''), cacheEnabled);
     if (systemParam) {
       params.system = systemParam;
     }
@@ -729,14 +751,20 @@ export async function chat(
 
     try {
       const response = await anthropicClient.messages.create(params);
+      const usage = (response as any).usage;
+
+      // Log cache metrics
+      if (usage?.cache_read_input_tokens > 0 || usage?.cache_creation_input_tokens > 0) {
+        console.log(`[cache] read=${usage.cache_read_input_tokens || 0} created=${usage.cache_creation_input_tokens || 0}`);
+      }
 
       // Extract text content
       const textContent = response.content.find(c => c.type === 'text');
       const text = textContent?.text || '';
       genObs?.update({
         output: { text },
-        usageDetails: toAnthropicUsageDetails((response as any).usage),
-        costDetails: toCostDetails(modelId, (response as any).usage),
+        usageDetails: toAnthropicUsageDetails(usage),
+        costDetails: toCostDetails(modelId, usage),
       });
       genObs?.end();
 
@@ -829,9 +857,13 @@ export async function chatWithTools(
   const includeSpawn = !!(toolContext?.chatId && toolContext?.fullConfig);
   const toolDefs = await getToolDefinitions(toolConfig, { includeSpawnSubagent: includeSpawn, projects: toolContext?.fullConfig?.projects });
 
+  // Enable prompt caching for system + tools (uses 2 of 4 allowed breakpoints)
+  const cacheEnabled = config.models?.promptCaching !== false;
+  if (cacheEnabled) addToolCacheBreakpoint(toolDefs);
+
   // Build system param with OAuth identity guard
   const systemMessage = messages.find(m => m.role === 'system');
-  const systemParam = buildSystemParam(contentToText(systemMessage?.content || ''));
+  const systemParam = buildSystemParam(contentToText(systemMessage?.content || ''), cacheEnabled);
 
   // Build initial messages (exclude system) — content arrays pass through for Anthropic vision
   const apiMessages: any[] = messages
@@ -885,10 +917,17 @@ export async function chatWithTools(
     let response: any;
     try {
       response = await anthropicClient.messages.create(params);
+      const usage = (response as any).usage;
+
+      // Log cache metrics
+      if (usage?.cache_read_input_tokens > 0 || usage?.cache_creation_input_tokens > 0) {
+        console.log(`[cache] read=${usage.cache_read_input_tokens || 0} created=${usage.cache_creation_input_tokens || 0}`);
+      }
+
       genObs?.update({
         output: response.content,
-        usageDetails: toAnthropicUsageDetails((response as any).usage),
-        costDetails: toCostDetails(modelId, (response as any).usage),
+        usageDetails: toAnthropicUsageDetails(usage),
+        costDetails: toCostDetails(modelId, usage),
       });
       genObs?.end();
     } catch (err) {

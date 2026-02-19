@@ -44,6 +44,7 @@ export interface Config {
       [key: string]: { apiKey?: string; authToken?: string; baseURL?: string; authPath?: string } | undefined;
     };
     aliases: Record<string, string>;
+    promptCaching?: boolean;  // Enable Anthropic prompt caching (default true)
   };
   channels: ChannelsConfig;
   cron: {
