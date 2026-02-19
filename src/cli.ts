@@ -382,21 +382,10 @@ async function commandModel(args: string[]): Promise<number> {
   return 0;
 }
 
-const WELL_KNOWN_ALIASES: Record<string, string> = {
-  'claude-fast': 'anthropic/claude-haiku-4-5',
-  'claude-think': 'anthropic/claude-sonnet-4-6',
-  'claude-opus': 'anthropic/claude-opus-4-6',
-  'codex5.2': 'codex/gpt-5.2-codex',
-  'codex5.3': 'codex/gpt-5.3-codex',
-  'minimax': 'minimax/MiniMax-M2.5',
-  'kimi': 'kimi/kimi-for-coding',
-};
-
 function commandModels(): number {
   const config = loadConfig();
   const providers = Object.entries(config.models.providers || {});
-  const merged = { ...WELL_KNOWN_ALIASES, ...(config.models.aliases || {}) };
-  const aliases = Object.entries(merged).sort(([a], [b]) => a.localeCompare(b));
+  const aliases = Object.entries(config.models.aliases || {}).sort(([a], [b]) => a.localeCompare(b));
   const currentModel = config.agents.list[config.agents.default]?.model || 'unknown';
 
   console.log(`Current: ${currentModel}\n`);
