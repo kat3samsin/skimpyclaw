@@ -19,7 +19,7 @@ describe('setup config generation', () => {
     expect(config.channels.telegram.allowFrom).toEqual([12345]);
     expect(config.channels.telegram.defaultAllowedPaths).toContain('/tmp/workspace');
     expect(config.models.aliases['claude-think']).toBe('anthropic/claude-sonnet-4-6');
-    expect(config.models.aliases.codex).toBe('codex/codex-5.3');
+    expect(config.models.aliases.codex).toBe('codex/gpt-5.3-codex');
   });
 
   it('builds OpenAI-only config and env content', () => {
@@ -102,6 +102,9 @@ describe('setup config generation', () => {
     expect(config.heartbeat.tools.browser.enabled).toBe(true);
     expect(config.voice).toBeDefined();
     expect(config.voice.enabled).toBe(true);
+    expect(config.voice.channels.telegram.sendVoice).toBe(true);
+    expect(config.voice.channels.telegram.acceptVoice).toBe(true);
+    expect(config.voice.channels.discord.sendVoice).toBe(true);
   });
 
   it('rejects non-numeric telegram IDs by parsing to NaN', () => {

@@ -119,13 +119,44 @@ const PROVIDER_OPTIONS: { key: ProviderChoice; label: string }[] = [
   { key: 'kimi-api', label: 'Kimi (Moonshot) API key' },
 ];
 
-async function askProviders(rl: readline.Interface): Promise<Set<ProviderChoice>> {
+function detectExistingProviders(config: Record<string, any> | null): Set<ProviderChoice> {
+  const existing = new Set<ProviderChoice>();
+  if (!config?.models?.providers) return existing;
+  const providers = config.models.providers;
+  if (providers.anthropic?.authToken) existing.add('anthropic-oauth');
+  else if (providers.anthropic?.apiKey) existing.add('anthropic-api');
+  if (providers.openai?.apiKey) existing.add('openai-api');
+  if (providers.codex || providers.openai?.authToken === 'codex') existing.add('codex-oauth');
+  if (providers.minimax) existing.add('minimax-api');
+  if (providers.kimi) existing.add('kimi-api');
+  return existing;
+}
+
+async function askProviders(rl: readline.Interface, existingProviders?: Set<ProviderChoice>): Promise<Set<ProviderChoice>> {
+  const hasExisting = existingProviders && existingProviders.size > 0;
   while (true) {
-    console.log('3. Model Providers (pick one or more)');
+    sectionHeader('3. Model Providers');
+    if (hasExisting) {
+      console.log('   Currently configured:');
+      for (const opt of PROVIDER_OPTIONS) {
+        if (existingProviders.has(opt.key)) {
+          console.log(`   ${c.green('✓')} ${opt.label}`);
+        }
+      }
+      console.log('');
+    }
+    console.log('   Pick providers (pick one or more):');
     for (let i = 0; i < PROVIDER_OPTIONS.length; i++) {
-      console.log(`   ${i + 1}. ${PROVIDER_OPTIONS[i].label}`);
+      const marker = hasExisting && existingProviders.has(PROVIDER_OPTIONS[i].key) ? c.green('*') : ' ';
+      console.log(`   ${marker}${i + 1}. ${PROVIDER_OPTIONS[i].label}`);
+    }
+    if (hasExisting) {
+      console.log(`   ${c.dim('Press Enter to keep current providers')}`);
     }
     const input = await ask(rl, '   Enter numbers separated by commas (e.g. 1,3): ');
+    if (input.trim() === '' && hasExisting) {
+      return new Set(existingProviders);
+    }
     const nums = input.split(',').map((s) => parseInt(s.trim(), 10)).filter((n) => !isNaN(n));
     const choices = new Set<ProviderChoice>();
     for (const n of nums) {
@@ -176,26 +207,40 @@ interface SetupBuildInput {
 async function collectProviderSecrets(
   rl: readline.Interface,
   providers: Set<ProviderChoice>,
+  existingEnv?: Record<string, string>,
 ): Promise<ProviderSecrets> {
   const secrets: ProviderSecrets = {};
+  const env = existingEnv || {};
 
   if (providers.has('anthropic-api')) {
+    const existing = env.ANTHROPIC_API_KEY || '';
     console.log('\n   Anthropic API Key');
-    console.log('   Get one from: https://console.anthropic.com/');
-    secrets.anthropicKey = await ask(rl, '   Enter key: ');
-    console.log(`   ✓ ${maskInput(secrets.anthropicKey)}`);
+    if (existing) {
+      const input = await ask(rl, `   Enter key [${maskInput(existing)}]: `);
+      secrets.anthropicKey = input || existing;
+    } else {
+      console.log('   Get one from: https://console.anthropic.com/');
+      secrets.anthropicKey = await ask(rl, '   Enter key: ');
+    }
+    console.log(`   ✓ ${maskInput(secrets.anthropicKey!)}`);
   }
 
   if (providers.has('anthropic-oauth')) {
+    const existing = env.CLAUDE_CODE_OAUTH_TOKEN || '';
     console.log('\n   Anthropic OAuth (Claude Code)');
-    console.log('   Run `claude setup-token` to get your token, then paste it here.');
-    console.log('   (The daemon can\'t read .zshrc — the token must be in ~/.skimpyclaw/.env)');
-    const detected = process.env.CLAUDE_CODE_OAUTH_TOKEN || '';
-    if (detected) {
-      console.log(`   ${c.dim(`Detected in current shell: ${maskInput(detected)}`)}`);
+    if (existing) {
+      const input = await ask(rl, `   Enter token [${maskInput(existing)}]: `);
+      secrets.oauthToken = input || existing;
+    } else {
+      console.log('   Run `claude setup-token` to get your token, then paste it here.');
+      console.log('   (The daemon can\'t read .zshrc — the token must be in ~/.skimpyclaw/.env)');
+      const detected = process.env.CLAUDE_CODE_OAUTH_TOKEN || '';
+      if (detected) {
+        console.log(`   ${c.dim(`Detected in current shell: ${maskInput(detected)}`)}`);
+      }
+      const oauthInput = await ask(rl, detected ? `   Enter token [${maskInput(detected)}]: ` : '   Enter token: ');
+      secrets.oauthToken = oauthInput || detected;
     }
-    const oauthInput = await ask(rl, detected ? `   Enter token [${maskInput(detected)}]: ` : '   Enter token: ');
-    secrets.oauthToken = oauthInput || detected;
     if (secrets.oauthToken) {
       console.log(`   ✓ ${maskInput(secrets.oauthToken)}`);
     } else {
@@ -204,24 +249,42 @@ async function collectProviderSecrets(
   }
 
   if (providers.has('openai-api')) {
+    const existing = env.OPENAI_API_KEY || '';
     console.log('\n   OpenAI API Key');
-    console.log('   Get one from: https://platform.openai.com/api-keys');
-    secrets.openaiKey = await ask(rl, '   Enter key: ');
-    console.log(`   ✓ ${maskInput(secrets.openaiKey)}`);
+    if (existing) {
+      const input = await ask(rl, `   Enter key [${maskInput(existing)}]: `);
+      secrets.openaiKey = input || existing;
+    } else {
+      console.log('   Get one from: https://platform.openai.com/api-keys');
+      secrets.openaiKey = await ask(rl, '   Enter key: ');
+    }
+    console.log(`   ✓ ${maskInput(secrets.openaiKey!)}`);
   }
 
   if (providers.has('minimax-api')) {
+    const existing = env.MINIMAX_API_KEY || '';
     console.log('\n   MiniMax API Key');
-    console.log('   Get one from: https://platform.minimax.io/user-center/basic-information/interface-key');
-    secrets.minimaxKey = await ask(rl, '   Enter key: ');
-    console.log(`   ✓ ${maskInput(secrets.minimaxKey)}`);
+    if (existing) {
+      const input = await ask(rl, `   Enter key [${maskInput(existing)}]: `);
+      secrets.minimaxKey = input || existing;
+    } else {
+      console.log('   Get one from: https://platform.minimax.io/user-center/basic-information/interface-key');
+      secrets.minimaxKey = await ask(rl, '   Enter key: ');
+    }
+    console.log(`   ✓ ${maskInput(secrets.minimaxKey!)}`);
   }
 
   if (providers.has('kimi-api')) {
+    const existing = env.KIMI_API_KEY || '';
     console.log('\n   Kimi (Moonshot) API Key');
-    console.log('   Get one from: https://platform.moonshot.cn/console/api-keys');
-    secrets.kimiKey = await ask(rl, '   Enter key: ');
-    console.log(`   ✓ ${maskInput(secrets.kimiKey)}`);
+    if (existing) {
+      const input = await ask(rl, `   Enter key [${maskInput(existing)}]: `);
+      secrets.kimiKey = input || existing;
+    } else {
+      console.log('   Get one from: https://platform.moonshot.cn/console/api-keys');
+      secrets.kimiKey = await ask(rl, '   Enter key: ');
+    }
+    console.log(`   ✓ ${maskInput(secrets.kimiKey!)}`);
   }
 
   if (providers.has('codex-oauth')) {
@@ -286,14 +349,6 @@ function buildAliases(providers: Set<ProviderChoice>): Record<string, string> {
     'minimax': 'minimax/MiniMax-M2.5',
     'kimi': 'kimi/kimi-for-coding',
   };
-
-  const hasAnthropic = providers.has('anthropic-api') || providers.has('anthropic-oauth');
-
-  if (hasAnthropic) {
-    aliases.fast = 'anthropic/claude-haiku-4-5';
-    aliases.smart = 'anthropic/claude-sonnet-4-6';
-    aliases.opus = 'anthropic/claude-opus-4-6';
-  }
 
   if (providers.has('openai-api')) {
     aliases['gpt-fast'] = 'openai/gpt-4o-mini';
@@ -425,8 +480,14 @@ export function buildSetupConfig(input: SetupBuildInput): Record<string, unknown
     ...(features.voice ? {
       voice: {
         enabled: true,
-        providers: {},
-        channels: {},
+        defaultProvider: 'macos',
+        providers: {
+          macos: { tts: { voice: 'Samantha' } },
+        },
+        channels: {
+          telegram: { enabled: true, acceptVoice: true, sendVoice: true },
+          discord: { enabled: true, acceptVoice: true, sendVoice: true },
+        },
       },
     } : {}),
     dashboard: {
@@ -623,8 +684,9 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
     }
 
     // 3. Model Providers
-    const selectedProviders = await askProviders(rl);
-    const providerSecrets = await collectProviderSecrets(rl, selectedProviders);
+    const existingProviders = isReconfigure ? detectExistingProviders(existing.config) : undefined;
+    const selectedProviders = await askProviders(rl, existingProviders);
+    const providerSecrets = await collectProviderSecrets(rl, selectedProviders, isReconfigure ? existing.env : undefined);
 
     // 4. Agent Name
     const existingAgentName = existing.config?.agents?.list?.main?.identity?.name || '';
@@ -674,6 +736,7 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
     }
 
     // 6c. MCP tools
+    console.log('   Install mcporter: https://github.com/steipete/mcporter');
     const enableMcp = /^y(es)?$/i.test(await ask(rl, '   Enable MCP tools? (requires mcporter at ~/.mcporter/) [y/N]: '));
     if (enableMcp) {
       const mcporterConfig = join(homedir(), '.mcporter', 'mcporter.json');
