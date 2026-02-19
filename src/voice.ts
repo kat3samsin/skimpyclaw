@@ -326,7 +326,7 @@ export interface SpeechResult {
 }
 
 /**
- * Resolve the TTS provider — iterates all providers to find one with a tts config.
+ * Resolve the TTS provider — prefers defaultProvider with tts config, otherwise finds any provider with tts.
  */
 function getTTSProvider(config: VoiceConfig): { name: string; provider: VoiceProviderConfig } | null {
   const providers = config.providers;
@@ -334,15 +334,31 @@ function getTTSProvider(config: VoiceConfig): { name: string; provider: VoicePro
     return null;
   }
 
-  // First: look for any provider with a tts sub-config
+  // First: check if defaultProvider exists AND has tts config
+  if (config.defaultProvider) {
+    const provider = providers[config.defaultProvider];
+    if (provider?.tts) {
+      return { name: config.defaultProvider, provider };
+    }
+  }
+
+  // Second: look for any provider with a tts sub-config
   for (const [name, provider] of Object.entries(providers)) {
     if (provider.tts) {
       return { name, provider };
     }
   }
 
-  // Fallback: use defaultProvider even without explicit tts config
-  const providerName = config.defaultProvider || Object.keys(providers)[0];
+  // Third: use defaultProvider even without tts config (might still work)
+  if (config.defaultProvider) {
+    const provider = providers[config.defaultProvider];
+    if (provider) {
+      return { name: config.defaultProvider, provider };
+    }
+  }
+
+  // Last resort: use first provider
+  const providerName = Object.keys(providers)[0];
   const provider = providers[providerName];
   if (!provider) return null;
 
