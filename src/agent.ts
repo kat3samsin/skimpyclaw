@@ -14,12 +14,18 @@ import { loadSkills, getSkillsForContext, formatSkillsPrompt } from './skills.js
 import type { SkillConfig } from './skills-types.js';
 import { calculateUsageCost, getLangfuseConfig, isLangfuseEnabled } from './langfuse.js';
 import { startActiveObservation, startObservation, updateActiveTrace } from '@langfuse/tracing';
+import { TTLCache } from './cache.js';
 
 // --- Template Loading ---
 
 export const TEMPLATE_FILES = ['SOUL.md', 'IDENTITY.md', 'USER.md', 'TOOLS.md', 'BOOT.md', 'HEARTBEAT.md', 'MEMORY.md'];
 
+const templateCache = new TTLCache<Record<string, string>>(60_000);
+
 export function loadAgentTemplates(agentId: string): Record<string, string> {
+  const cached = templateCache.get(agentId);
+  if (cached) return cached;
+
   const agentDir = getAgentDir(agentId);
   const templates: Record<string, string> = {};
 
@@ -30,7 +36,12 @@ export function loadAgentTemplates(agentId: string): Record<string, string> {
     }
   }
 
+  templateCache.set(agentId, templates);
   return templates;
+}
+
+export function clearTemplateCache(): void {
+  templateCache.clear();
 }
 
 // Track if using OAuth (requires Claude Code identity)
@@ -229,6 +240,7 @@ export function buildSystemParam(
  */
 export function addToolCacheBreakpoint(toolDefs: any[]): void {
   if (toolDefs.length === 0) return;
+  if (toolDefs[toolDefs.length - 1].cache_control) return;
   toolDefs[toolDefs.length - 1].cache_control = { type: 'ephemeral' };
 }
 

@@ -7,6 +7,7 @@ import { execSync } from 'child_process';
 import matter from 'gray-matter';
 import type { SkillFrontmatter, LoadedSkill, SkillConfig, SkillContext } from './skills-types.js';
 import type { ToolConfig } from './types.js';
+import { TTLCache } from './cache.js';
 
 const DEFAULT_SKILLS_DIR = join(homedir(), '.skimpyclaw', 'skills');
 const DEFAULT_PRIORITY = 100;
@@ -153,9 +154,12 @@ function parseSkillFile(dirPath: string, dirName: string, skillConfig?: SkillCon
   }
 }
 
+const skillsCache = new TTLCache<LoadedSkill[]>(60_000);
+
 /**
  * Scan the skills directory and load all valid skills.
  * Returns skills sorted by priority (lower first).
+ * Results are cached for 60s to avoid repeated disk I/O and `which` calls.
  */
 export function loadSkills(skillConfig?: SkillConfig, toolConfig?: ToolConfig): LoadedSkill[] {
   // Master switch
@@ -163,15 +167,26 @@ export function loadSkills(skillConfig?: SkillConfig, toolConfig?: ToolConfig): 
     return [];
   }
 
+  const cacheKey = JSON.stringify({
+    dir: skillConfig?.directory,
+    entries: skillConfig?.entries,
+    enabled: skillConfig?.enabled,
+    toolEnabled: toolConfig?.enabled,
+    browserEnabled: toolConfig?.browser?.enabled,
+  });
+
+  const cached = skillsCache.get(cacheKey);
+  if (cached) return cached;
+
   const dir = skillConfig?.directory || DEFAULT_SKILLS_DIR;
   if (!existsSync(dir)) {
     return [];
   }
 
-  const entries = readdirSync(dir);
+  const dirEntries = readdirSync(dir);
   const skills: LoadedSkill[] = [];
 
-  for (const entry of entries) {
+  for (const entry of dirEntries) {
     const entryPath = join(dir, entry);
     // Only process directories
     try {
@@ -194,7 +209,12 @@ export function loadSkills(skillConfig?: SkillConfig, toolConfig?: ToolConfig): 
     return a.name.localeCompare(b.name);
   });
 
+  skillsCache.set(cacheKey, skills);
   return skills;
+}
+
+export function clearSkillsCache(): void {
+  skillsCache.clear();
 }
 
 /**
