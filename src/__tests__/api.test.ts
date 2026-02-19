@@ -172,6 +172,23 @@ vi.mock('../security.js', () => ({
   redactSecrets: redactSecretsImpl,
 }));
 
+// Mock doctor/runner.ts for health endpoint
+vi.mock('../doctor/runner.js', () => ({
+  runDoctor: async () => ({
+    report: {
+      ok: true,
+      exitCode: 0,
+      startedAt: new Date().toISOString(),
+      finishedAt: new Date().toISOString(),
+      checks: [
+        { name: 'node_version', category: 'environment', ok: true, detail: 'v20.11.0' },
+        { name: 'config_json_valid', category: 'configuration', ok: true, detail: 'ok' },
+      ],
+    },
+    exitCode: 0,
+  }),
+}));
+
 import { registerDashboardAPI } from '../api.js';
 import type { Config } from '../types.js';
 
@@ -711,5 +728,39 @@ describe('Authentication', () => {
   it('returns 200 with correct token', async () => {
     const res = await inject({ method: 'GET', url: '/api/dashboard/status' });
     expect(res.statusCode).toBe(200);
+  });
+});
+
+describe('Health endpoint', () => {
+  it('GET /api/dashboard/health returns doctor check results', async () => {
+    const res = await inject({ method: 'GET', url: '/api/dashboard/health' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body).toHaveProperty('ok', true);
+    expect(body).toHaveProperty('checks');
+    expect(Array.isArray(body.checks)).toBe(true);
+    expect(body.checks.length).toBeGreaterThan(0);
+    expect(body.checks[0]).toHaveProperty('name');
+    expect(body.checks[0]).toHaveProperty('ok');
+    expect(body.checks[0]).toHaveProperty('detail');
+  });
+
+  it('GET /api/dashboard/health returns features summary', async () => {
+    const res = await inject({ method: 'GET', url: '/api/dashboard/health' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body).toHaveProperty('features');
+    expect(body.features).toHaveProperty('telegram');
+    expect(body.features).toHaveProperty('discord');
+    expect(body.features).toHaveProperty('browser');
+    expect(body.features).toHaveProperty('voice');
+  });
+
+  it('GET /api/dashboard/health returns env var status', async () => {
+    const res = await inject({ method: 'GET', url: '/api/dashboard/health' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body).toHaveProperty('envVars');
+    expect(Array.isArray(body.envVars)).toBe(true);
   });
 });

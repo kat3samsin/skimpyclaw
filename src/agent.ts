@@ -1068,7 +1068,7 @@ export async function openaiChatWithTools(
 
   // Resolve tools once at start
   const includeSpawn = !!(toolContext?.chatId && toolContext?.fullConfig);
-  const toolDefs = await getToolDefinitions(toolConfig, { includeSpawnSubagent: includeSpawn, projects: toolContext?.fullConfig?.projects });
+  const toolDefs = await getToolDefinitions(toolConfig, { includeSpawnSubagent: includeSpawn, includeMcp: false, projects: toolContext?.fullConfig?.projects });
   const openaiTools: any[] = toOpenAITools(toolDefs);
 
   // Inject Kimi $web_search builtin tool when using Moonshot/Kimi provider
@@ -1319,7 +1319,7 @@ export async function runAgentTurn(
       // Codex tool_use loop via Responses API
       console.log(`[agent] Running Codex with tools enabled (paths: ${toolConfig.allowedPaths.join(', ')})`);
       const includeSpawn = !!(toolCtx.chatId && toolCtx.fullConfig);
-      const toolDefs = await getToolDefinitions(toolConfig, { includeSpawnSubagent: includeSpawn, projects: toolCtx?.fullConfig?.projects });
+      const toolDefs = await getToolDefinitions(toolConfig, { includeSpawnSubagent: includeSpawn, includeMcp: false, projects: toolCtx?.fullConfig?.projects });
       const result = await codexChat(messages, modelId, toolConfig, toolDefs, toolCtx);
       response = result.response;
       toolCalls = result.toolCalls;

@@ -29,12 +29,12 @@ Commands:
        [--lines N]
        [--follow]
   onboard [--dry-run]     Run onboarding wizard (or validate setup only)
-  setup [--dry-run]       Alias for onboard
   config                  Show config JSON
   config path             Show config file path
   config get <key>        Read config value by dot path
   config set <key> <val>  Set config value (JSON value or string)
   model <alias|model>     Switch current runtime model
+  models                  List providers and aliases
   send <message>          Send a message to the local gateway
   cron list               List cron jobs from gateway status
   cron run <id>           Trigger cron job by id
@@ -238,6 +238,12 @@ async function commandStatus(): Promise<number> {
     // Keep default when config does not exist yet.
   }
 
+  let dashboardToken = '';
+  try {
+    const cfg = loadConfig();
+    dashboardToken = (cfg as any).dashboard?.token || '';
+  } catch { /* ignore */ }
+
   try {
     const health = await requestGateway('/health', undefined, port);
     const status = await requestGateway('/status', undefined, port);
@@ -248,6 +254,10 @@ async function commandStatus(): Promise<number> {
     console.log(`Model: ${status.model}`);
     console.log(`Last message: ${status.lastMessage || 'never'}`);
     console.log(`Cron jobs: ${Array.isArray(status.cronJobs) ? status.cronJobs.length : 0}`);
+    if (dashboardToken) {
+      console.log(`Dashboard: http://127.0.0.1:${port}/dashboard`);
+      console.log(`Dashboard token: ${dashboardToken}`);
+    }
     return 0;
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
@@ -264,16 +274,17 @@ function commandLogs(args: string[]): number {
   const linesOpt = parseOption(args, '--lines', '200');
   const follow = hasFlag(args, '--follow');
 
-  const fileMap: Record<string, string> = {
-    stdout: 'stdout.log',
-    stderr: 'stderr.log',
-    app: 'app.log',
+  // Try gateway-prefixed names first (new plist), fall back to old names
+  const fileCandidates: Record<string, string[]> = {
+    stdout: ['gateway.stdout.log', 'stdout.log'],
+    stderr: ['gateway.stderr.log', 'stderr.log'],
+    app: ['app.log'],
   };
-  const filename = fileMap[fileOpt] || fileOpt;
-  const path = join(logDir, filename);
+  const candidates = fileCandidates[fileOpt] || [fileOpt];
+  const path = candidates.map((f) => join(logDir, f)).find((p) => existsSync(p));
 
-  if (!existsSync(path)) {
-    console.error(`Log file not found: ${path}`);
+  if (!path) {
+    console.error(`Log file not found. Tried: ${candidates.map((f) => join(logDir, f)).join(', ')}`);
     return 1;
   }
 
@@ -345,13 +356,22 @@ function commandConfig(args: string[]): number {
 }
 
 async function commandModel(args: string[]): Promise<number> {
+  const config = loadConfig();
   const requested = args[0];
   if (!requested) {
-    console.error('Usage: skimpyclaw model <alias|model>');
+    const aliases = Object.entries(config.models.aliases || {});
+    console.log('Usage: skimpyclaw model <alias|model>\n');
+    if (aliases.length > 0) {
+      console.log('Available aliases:');
+      for (const [alias, model] of aliases) {
+        console.log(`  ${alias.padEnd(16)} → ${model}`);
+      }
+    } else {
+      console.log('No aliases configured. Pass a full model name (e.g. anthropic/claude-sonnet-4-6).');
+    }
     return 1;
   }
 
-  const config = loadConfig();
   const resolved = config.models.aliases[requested] || requested;
   const data = await requestGateway('/model', {
     method: 'POST',
@@ -359,6 +379,35 @@ async function commandModel(args: string[]): Promise<number> {
   }, config.gateway.port);
 
   console.log(`Model set to ${data.model}`);
+  return 0;
+}
+
+function commandModels(): number {
+  const config = loadConfig();
+  const providers = Object.entries(config.models.providers || {});
+  const aliases = Object.entries(config.models.aliases || {}).sort(([a], [b]) => a.localeCompare(b));
+  const currentModel = config.agents.list[config.agents.default]?.model || 'unknown';
+
+  console.log(`Current: ${currentModel}\n`);
+
+  if (providers.length > 0) {
+    console.log('Providers:');
+    for (const [name, cfg] of providers) {
+      const url = (cfg as any).baseURL || (name === 'anthropic' ? 'api.anthropic.com' : '');
+      console.log(`  ${name.padEnd(16)} ${url}`);
+    }
+    console.log('');
+  }
+
+  if (aliases.length > 0) {
+    console.log('Aliases:');
+    for (const [alias, model] of aliases) {
+      console.log(`  ${alias.padEnd(16)} → ${model}`);
+    }
+    console.log('');
+  }
+
+  console.log(`Switch: skimpyclaw model <alias|provider/model>`);
   return 0;
 }
 
@@ -722,7 +771,7 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<nu
       return commandLogs(args);
     }
 
-    if (command === 'onboard' || command === 'setup') {
+    if (command === 'onboard') {
       await runSetup({ dryRun: args.includes('--dry-run') });
       return 0;
     }
@@ -733,6 +782,10 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<nu
 
     if (command === 'model') {
       return await commandModel(args);
+    }
+
+    if (command === 'models') {
+      return commandModels();
     }
 
     if (command === 'send') {

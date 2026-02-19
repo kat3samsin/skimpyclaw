@@ -13,6 +13,9 @@ const {
   mockCheckTelegramToken,
   mockCheckDiscordToken,
   mockCheckBrowserBinaryIfEnabled,
+  mockCheckVoiceDependencies,
+  mockCheckMcpConfig,
+  mockCheckGatewayHostBindable,
   mockCheckSkimpyclawDirWritable,
   mockCheckPortAvailability,
 } = vi.hoisted(() => ({
@@ -28,6 +31,9 @@ const {
   mockCheckTelegramToken: vi.fn(),
   mockCheckDiscordToken: vi.fn(),
   mockCheckBrowserBinaryIfEnabled: vi.fn(),
+  mockCheckVoiceDependencies: vi.fn(),
+  mockCheckMcpConfig: vi.fn(),
+  mockCheckGatewayHostBindable: vi.fn(),
   mockCheckSkimpyclawDirWritable: vi.fn(),
   mockCheckPortAvailability: vi.fn(),
 }));
@@ -48,6 +54,9 @@ vi.mock('../doctor/checks.js', () => ({
   checkTelegramToken: mockCheckTelegramToken,
   checkDiscordToken: mockCheckDiscordToken,
   checkBrowserBinaryIfEnabled: mockCheckBrowserBinaryIfEnabled,
+  checkVoiceDependencies: mockCheckVoiceDependencies,
+  checkMcpConfig: mockCheckMcpConfig,
+  checkGatewayHostBindable: mockCheckGatewayHostBindable,
   checkSkimpyclawDirWritable: mockCheckSkimpyclawDirWritable,
   checkPortAvailability: mockCheckPortAvailability,
 }));
@@ -90,6 +99,9 @@ describe('doctor runner', () => {
     mockCheckTelegramToken.mockReset();
     mockCheckDiscordToken.mockReset();
     mockCheckBrowserBinaryIfEnabled.mockReset();
+    mockCheckVoiceDependencies.mockReset();
+    mockCheckMcpConfig.mockReset();
+    mockCheckGatewayHostBindable.mockReset();
     mockCheckSkimpyclawDirWritable.mockReset();
     mockCheckPortAvailability.mockReset();
 
@@ -104,6 +116,9 @@ describe('doctor runner', () => {
     mockCheckTelegramToken.mockResolvedValue(okCheck('telegram_token_valid', 'channels'));
     mockCheckDiscordToken.mockResolvedValue(okCheck('discord_token_valid', 'channels'));
     mockCheckBrowserBinaryIfEnabled.mockResolvedValue(okCheck('browser_binary_available', 'runtime'));
+    mockCheckVoiceDependencies.mockResolvedValue(okCheck('voice_dependencies', 'runtime', 'Voice disabled'));
+    mockCheckMcpConfig.mockResolvedValue(okCheck('mcp_config', 'runtime', 'MCP tools not configured'));
+    mockCheckGatewayHostBindable.mockResolvedValue(okCheck('gateway_host_bindable', 'runtime', '127.0.0.1 (always available)'));
     mockCheckSkimpyclawDirWritable.mockResolvedValue(okCheck('skimpyclaw_dirs_writable', 'runtime'));
     mockCheckPortAvailability.mockResolvedValue(okCheck('gateway_port_available', 'runtime'));
   });
@@ -203,5 +218,37 @@ describe('doctor runner', () => {
         }),
       ])
     );
+  });
+
+  it('runs voice, mcp, and gateway host checks', async () => {
+    await runDoctor();
+
+    expect(mockCheckVoiceDependencies).toHaveBeenCalled();
+    expect(mockCheckMcpConfig).toHaveBeenCalled();
+    expect(mockCheckGatewayHostBindable).toHaveBeenCalled();
+  });
+
+  it('passes gateway host from config to host bindable check', async () => {
+    mockLoadConfig.mockReturnValue({
+      gateway: { port: 18790, host: '10.0.0.1' },
+      models: { providers: {} },
+      channels: {
+        telegram: { enabled: false, token: '', allowFrom: [] },
+        discord: { enabled: false, token: '', allowFrom: [] },
+      },
+      agents: { default: 'main', list: {} },
+      cron: { jobs: [] },
+      heartbeat: { intervalMs: 60000, prompt: 'ping' },
+    });
+
+    await runDoctor();
+
+    expect(mockCheckGatewayHostBindable).toHaveBeenCalledWith('10.0.0.1');
+  });
+
+  it('defaults gateway host to 127.0.0.1 when not set', async () => {
+    await runDoctor();
+
+    expect(mockCheckGatewayHostBindable).toHaveBeenCalledWith('127.0.0.1');
   });
 });

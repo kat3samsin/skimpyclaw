@@ -30,6 +30,7 @@ import { listApprovals, getApproval, approveRequest, denyRequest } from './exec-
 import { getDigests, getDigest, deleteDigest, updateArticleReadStatus } from './digests.js';
 import { loadSkills } from './skills.js';
 import type { SkillConfig } from './skills-types.js';
+import { runDoctor as runDoctorChecks } from './doctor/runner.js';
 
 function validateFilename(filename: string): boolean {
   return !filename.includes('..') && filename === basename(filename);
@@ -529,6 +530,46 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
     const { traces, total } = await readAuditTraces({ limit, offset, trigger: triggerFilter });
 
     return { traces, total, limit, offset };
+  });
+
+  // --- Health ---
+  fastify.get('/api/dashboard/health', async () => {
+    const { report } = await runDoctorChecks();
+
+    // Build feature toggles summary from config
+    const features: Record<string, boolean> = {
+      telegram: config.channels.telegram?.enabled ?? false,
+      discord: config.channels.discord?.enabled ?? false,
+      browser: Boolean(
+        config.channels.telegram?.tools?.browser?.enabled
+        || config.channels.discord?.tools?.browser?.enabled
+        || config.heartbeat?.tools?.browser?.enabled,
+      ),
+      voice: Boolean(config.voice?.enabled),
+    };
+
+    // Check which env vars are set vs missing by reading raw config for ${VAR} refs
+    const envVars: Array<{ name: string; set: boolean }> = [];
+    try {
+      const raw = loadRawConfig();
+      const rawStr = JSON.stringify(raw);
+      const matches = rawStr.matchAll(/\$\{(\w+)\}/g);
+      const seen = new Set<string>();
+      for (const m of matches) {
+        if (seen.has(m[1])) continue;
+        seen.add(m[1]);
+        envVars.push({ name: m[1], set: process.env[m[1]] !== undefined });
+      }
+    } catch {
+      // Config not readable — health checks will report this
+    }
+
+    return {
+      ok: report.ok,
+      checks: report.checks,
+      features,
+      envVars,
+    };
   });
 
   // --- Code Agents (Multi-Agent) ---

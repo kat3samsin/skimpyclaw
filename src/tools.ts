@@ -291,10 +291,12 @@ const toolDefsCache = new TTLCache<any[]>(60_000);
  * Pass includeSpawnSubagent: true to include the spawn_subagent tool (e.g. for Telegram conversations).
  * Results are cached for 60s to avoid rebuilding the array on every agent turn.
  */
-export async function getToolDefinitions(config?: ToolConfig, options?: { includeSpawnSubagent?: boolean; projects?: Record<string, string> }): Promise<any[]> {
+export async function getToolDefinitions(config?: ToolConfig, options?: { includeSpawnSubagent?: boolean; includeMcp?: boolean; projects?: Record<string, string> }): Promise<any[]> {
+  const includeMcp = options?.includeMcp !== false; // default true for backwards compat
   const cacheKey = JSON.stringify({
     browser: config?.browser?.enabled,
     spawn: options?.includeSpawnSubagent,
+    mcp: includeMcp,
     projects: options?.projects,
   });
 
@@ -308,9 +310,11 @@ export async function getToolDefinitions(config?: ToolConfig, options?: { includ
     tools.push(BROWSER_TOOL_DEFINITION);
   }
 
-  // Auto-discover MCP tools from mcporter config
-  const mcpTools = await discoverMcpTools();
-  tools.push(...mcpTools);
+  // Auto-discover MCP tools from mcporter config (only for Anthropic models)
+  if (includeMcp) {
+    const mcpTools = await discoverMcpTools();
+    tools.push(...mcpTools);
+  }
 
   // Include spawn_subagent, code_with_agent, and check_code_agent tools when requested
   if (options?.includeSpawnSubagent) {

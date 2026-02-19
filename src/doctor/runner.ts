@@ -12,6 +12,9 @@ import {
   checkTelegramToken,
   checkDiscordToken,
   checkBrowserBinaryIfEnabled,
+  checkVoiceDependencies,
+  checkMcpConfig,
+  checkGatewayHostBindable,
   checkSkimpyclawDirWritable,
   checkPortAvailability,
 } from './checks.js';
@@ -135,6 +138,9 @@ export async function runDoctor(): Promise<DoctorRunResult> {
   }
 
   checks.push(await runSafe('browser_binary_available', 'runtime', () => checkBrowserBinaryIfEnabled(config)));
+  checks.push(await runSafe('voice_dependencies', 'runtime', () => checkVoiceDependencies(config)));
+  checks.push(await runSafe('mcp_config', 'runtime', () => checkMcpConfig(config)));
+  checks.push(await runSafe('gateway_host_bindable', 'runtime', () => checkGatewayHostBindable(config.gateway.host ?? '127.0.0.1')));
   checks.push(await runSafe('skimpyclaw_dirs_writable', 'runtime', () => checkSkimpyclawDirWritable()));
   checks.push(await runSafe('gateway_port_available', 'runtime', () => checkPortAvailability(config.gateway.port)));
 

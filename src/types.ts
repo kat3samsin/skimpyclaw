@@ -33,6 +33,7 @@ export interface VoiceConfig {
 export interface Config {
   gateway: {
     port: number;
+    host?: string;  // Bind address (default: '127.0.0.1')
     mode: 'local' | 'remote';
   };
   agents: {
