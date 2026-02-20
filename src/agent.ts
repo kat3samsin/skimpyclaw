@@ -324,6 +324,29 @@ function loadCodexAuth(authPath: string = codexAuthPath): CodexAuth | null {
 let codexAuth: CodexAuth | null = null;
 
 /**
+ * Convert content blocks to Codex Responses API format.
+ * Supports images via `input_image` type for multimodal models (e.g. gpt-5.2-chat).
+ */
+function toCodexContent(content: string | ContentBlock[], defaultType: string): any[] {
+  if (typeof content === 'string') {
+    return [{ type: defaultType, text: content }];
+  }
+
+  const parts: any[] = [];
+  for (const block of content) {
+    if (block.type === 'text') {
+      parts.push({ type: defaultType, text: block.text });
+    } else if (block.type === 'image') {
+      parts.push({
+        type: 'input_image',
+        image_url: `data:${block.source.media_type};base64,${block.source.data}`,
+      });
+    }
+  }
+  return parts.length > 0 ? parts : [{ type: defaultType, text: '' }];
+}
+
+/**
  * Convert Anthropic tool definitions to OpenAI function format for Responses API.
  */
 function toCodexToolDefinitions(tools: any[]): any[] {
@@ -427,10 +450,12 @@ async function codexChat(messages: ChatMessage[], model: string, toolConfig?: To
       instructions = contentToText(m.content);
     } else {
       const contentType = m.role === 'assistant' ? 'output_text' : 'input_text';
+      // Convert content blocks to Responses API format (supports images)
+      const content = toCodexContent(m.content, contentType);
       input.push({
         type: 'message',
         role: m.role,
-        content: [{ type: contentType, text: contentToText(m.content) }],
+        content,
       });
     }
   }
