@@ -2,9 +2,9 @@
 
 import { Cron } from 'croner';
 import { exec } from 'child_process';
-import { existsSync, mkdirSync, appendFileSync, readFileSync } from 'fs';
+import { existsSync, mkdirSync, appendFileSync, readFileSync, watch, type FSWatcher } from 'fs';
 import { join } from 'path';
-import { getLogsDir } from './config.js';
+import { getLogsDir, getConfigPath, loadConfig } from './config.js';
 import type { Config, CronJob } from './types.js';
 import { runAgentTurn } from './agent.js';
 import { startTrace, addEvent, endTrace } from './audit.js';
@@ -20,6 +20,7 @@ interface ScheduledJob {
 }
 
 const scheduledJobs: Map<string, ScheduledJob> = new Map();
+let configWatcher: FSWatcher | null = null;
 
 // --- Cron Logging ---
 
@@ -92,6 +93,36 @@ export function initCron(config: Config): void {
   }
 
   console.log(`[cron] Initialized ${scheduledJobs.size} jobs`);
+
+  // Watch config.json for changes and re-initialize cron jobs
+  if (configWatcher) {
+    configWatcher.close();
+    configWatcher = null;
+  }
+  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  try {
+    configWatcher = watch(getConfigPath(), () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        try {
+          const newConfig = loadConfig();
+          console.log('[cron] Config changed, reloading cron jobs...');
+          for (const job of scheduledJobs.values()) {
+            job.job.stop();
+          }
+          scheduledJobs.clear();
+          for (const jobDef of newConfig.cron.jobs) {
+            scheduleJob(jobDef, newConfig);
+          }
+          console.log(`[cron] Reloaded ${scheduledJobs.size} jobs`);
+        } catch (err) {
+          console.error('[cron] Failed to reload config:', err);
+        }
+      }, 1000);
+    });
+  } catch (err) {
+    console.warn('[cron] Could not watch config file:', err);
+  }
 }
 
 function scheduleJob(jobDef: CronJob, config: Config): void {
@@ -160,11 +191,20 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
           metadata: { jobName: jobDef.name },
         }
       );
-      logEntry.output = response.slice(0, 5000);
       appendCronLogLine(jobDef.id, `Agent turn completed (${response.length} chars)`);
-      // Parse and save digest from the response
+
+      // Parse dual output (voice + text) if delimiters present
+      const { voice: voicePortion, text: textPortion } = parseDualOutput(response);
+      if (voicePortion) {
+        appendCronLogLine(jobDef.id, `Dual output parsed: voice=${voicePortion.length} chars, text=${textPortion.length} chars`);
+      }
+
+      // Use text portion for log output and notifications
+      logEntry.output = textPortion.slice(0, 5000);
+
+      // Parse and save digest from the text portion
       try {
-        parseAndSaveDigest(jobDef.id, jobDef.name, response);
+        parseAndSaveDigest(jobDef.id, jobDef.name, textPortion);
         appendCronLogLine(jobDef.id, 'Digest saved');
       } catch (digestErr) {
         const errMsg = digestErr instanceof Error ? digestErr.message : String(digestErr);
@@ -174,8 +214,10 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
       // Synthesize and send voice if configured
       if (jobDef.payload.sendAsVoice && config.voice) {
         try {
-          appendCronLogLine(jobDef.id, 'Synthesizing voice...');
-          const speech = await synthesizeSpeech(response, config.voice);
+          // Use voice portion if available, fall back to text
+          const voiceContent = voicePortion || textPortion;
+          appendCronLogLine(jobDef.id, `Synthesizing voice (${voicePortion ? 'voice portion' : 'full text fallback'})...`);
+          const speech = await synthesizeSpeech(voiceContent, config.voice);
           appendCronLogLine(jobDef.id, `Voice synthesized (${speech.format}, ${speech.provider}, ${speech.buffer.length} bytes)`);
           const sent = await sendActiveChannelProactiveVoice(config, speech.buffer, speech.format);
           if (sent) {
@@ -326,8 +368,44 @@ function resolveMessageSource(message: string): string {
     return readFileSync(resolved, 'utf-8');
   }
 
+  // Fallback: check ~/.skimpyclaw/prompts/ directory
+  const promptsDir = join(process.env.HOME || '', '.skimpyclaw', 'prompts', trimmed);
+  if (existsSync(promptsDir)) {
+    console.log(`[cron] Loading prompt from prompts dir: ${promptsDir}`);
+    return readFileSync(promptsDir, 'utf-8');
+  }
+
+  console.warn(`[cron] Could not resolve prompt file: ${trimmed}`);
   // Not a valid file path — treat as regular message text
   return message;
+}
+
+/**
+ * Parse dual-output format with ---VOICE--- and ---TEXT--- delimiters.
+ * Returns voice (concise, no links) and text (full detail) portions.
+ * If delimiters not found, returns full response as text with voice = null (backward compatible).
+ */
+export function parseDualOutput(response: string): { voice: string | null; text: string } {
+  const voiceMarker = '---VOICE---';
+  const textMarker = '---TEXT---';
+
+  const voiceIdx = response.indexOf(voiceMarker);
+  const textIdx = response.indexOf(textMarker);
+
+  if (voiceIdx === -1 || textIdx === -1) {
+    // No delimiters — backward compatible
+    return { voice: null, text: response };
+  }
+
+  // Extract content between markers
+  const voiceStart = voiceIdx + voiceMarker.length;
+  const voice = response.slice(voiceStart, textIdx).trim();
+  const text = response.slice(textIdx + textMarker.length).trim();
+
+  return {
+    voice: voice || null,
+    text: text || response,
+  };
 }
 
 function expandVariables(message: string): string {
@@ -392,6 +470,10 @@ export function getCronJobDetails(config: Config): CronJobDetail[] {
 }
 
 export function stopCron(): void {
+  if (configWatcher) {
+    configWatcher.close();
+    configWatcher = null;
+  }
   for (const job of scheduledJobs.values()) {
     job.job.stop();
   }
