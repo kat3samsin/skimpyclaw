@@ -165,8 +165,8 @@ export const SPAWN_SUBAGENT_TOOL = {
       task: { type: 'string', description: 'What the subagent should do — be specific and self-contained' },
       type: {
         type: 'string',
-        enum: ['coding', 'research', 'general'],
-        description: 'Agent type: coding (code/files/bash), research (investigation/reading), general (other)',
+        enum: ['coding', 'research'],
+        description: 'Agent type: coding (code/files/bash), research (investigation/reading)',
       },
       model: { type: 'string', description: 'Optional model override (e.g. claude-opus, claude-think)' },
       label: { type: 'string', description: 'Short label for status display (e.g. "write tests", "check logs")' },
@@ -193,6 +193,7 @@ export const CODE_WITH_AGENT_TOOL = {
       workdir: { type: 'string', description: 'Working directory (default: SkimpyClaw repo root)' },
       model: { type: 'string', description: 'Model override (e.g. opus, gpt-5.3-codex)' },
       max_turns: { type: 'number', description: 'Max agentic turns, Claude only (default: 30)' },
+      timeout_minutes: { type: 'number', description: 'Timeout in minutes (default: 10, max: 30)' },
       validate: { type: 'boolean', description: 'Run pnpm build && pnpm test after (default: true)' },
     },
     required: ['task'],
@@ -543,8 +544,8 @@ async function executeSpawnSubagent(input: Record<string, any>, context?: Execut
   if (!task || !type) {
     return 'Error: task and type are required';
   }
-  if (!['coding', 'research', 'general'].includes(type)) {
-    return `Error: Invalid type "${type}". Must be coding, research, or general.`;
+  if (!['coding', 'research'].includes(type)) {
+    return `Error: Invalid type "${type}". Must be coding or research.`;
   }
 
   try {
@@ -737,7 +738,7 @@ async function executeCodeWithAgent(
   const projects = context?.fullConfig?.projects ?? {};
   const rawWorkdir = input.workdir as string | undefined;
 
-  // Resolve project name → path (e.g. "skimpyclaw" → "/Users/katre/Sites/skimpyclaw")
+  // Resolve project name → path (e.g. "skimpyclaw" → configured project path)
   let workdir: string;
   if (rawWorkdir && projects[rawWorkdir]) {
     workdir = resolve(projects[rawWorkdir]);
@@ -765,6 +766,20 @@ async function executeCodeWithAgent(
 
   const validate = input.validate !== false; // default true
 
+  // Resolve model alias to real model ID (e.g. "claude-opus" → "anthropic/claude-opus-4-6")
+  // CLI tools don't know SkimpyClaw's aliases, so we must resolve before passing --model
+  let resolvedModel: string | undefined = input.model as string | undefined;
+  if (resolvedModel && context?.fullConfig) {
+    const aliases = context.fullConfig.models?.aliases;
+    if (aliases?.[resolvedModel]) {
+      resolvedModel = aliases[resolvedModel];
+    }
+    // Strip provider prefix for CLI tools (they don't use "anthropic/..." format)
+    if (resolvedModel.includes('/')) {
+      resolvedModel = resolvedModel.split('/').slice(1).join('/');
+    }
+  }
+
   // Create task with unique ID
   const id = `ca-${++codeAgentCounter}`;
   const startedAt = new Date();
@@ -776,13 +791,15 @@ async function executeCodeWithAgent(
     chatId: context?.chatId,
     startedAt: startedAt.toISOString(),
     workdir,
-    model: input.model,
+    model: resolvedModel,
   };
   codeAgentTasks.set(id, caTask);
   writeCodeAgentTask(caTask);
 
   // Fire-and-forget: spawn background process
-  runCodeAgentBackground(id, agent, task, workdir, validate, input, startedAt).catch((err) => {
+  // Pass resolved model so buildCodeAgentArgs gets the real model ID, not the alias
+  const resolvedInput = { ...input, model: resolvedModel };
+  runCodeAgentBackground(id, agent, task, workdir, validate, resolvedInput, startedAt).catch((err) => {
     console.error(`[code-agent] Background error for ${id}:`, err);
   });
 
@@ -840,6 +857,10 @@ async function runCodeAgentBackground(
     detail: { agent, workdir, model: input.model, validate },
   });
 
+  // Per-invocation timeout (default 10min, max 30min)
+  const timeoutMinutes = Math.min(input.timeout_minutes || 10, 30);
+  const timeoutMs = timeoutMinutes * 60 * 1000;
+
   const { cmd, args } = buildCodeAgentArgs({
     task,
     agent,
@@ -869,22 +890,33 @@ async function runCodeAgentBackground(
         const now = Date.now();
         if (now - lastStatusWrite > STATUS_WRITE_INTERVAL) {
           lastStatusWrite = now;
-          caTask.liveOutput = stdout.slice(-5000);
+          // Combine stderr (tool calls/progress) + stdout for live output
+          const live = stderr ? `[progress]\n${stderr.slice(-3000)}\n\n[output]\n${stdout.slice(-2000)}` : stdout.slice(-5000);
+          caTask.liveOutput = live;
           writeCodeAgentTask(caTask);
         }
       });
-      proc.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
+      proc.stderr.on('data', (chunk: Buffer) => {
+        stderr += chunk.toString();
+        const now = Date.now();
+        if (now - lastStatusWrite > STATUS_WRITE_INTERVAL) {
+          lastStatusWrite = now;
+          const live = `[progress]\n${stderr.slice(-3000)}\n\n[output]\n${stdout.slice(-2000)}`;
+          caTask.liveOutput = live;
+          writeCodeAgentTask(caTask);
+        }
+      });
 
       let timedOut = false;
       const timer = setTimeout(() => {
         timedOut = true;
         proc.kill('SIGTERM');
-      }, CODE_AGENT_TIMEOUT_MS);
+      }, timeoutMs);
 
       proc.on('close', (code) => {
         clearTimeout(timer);
         if (timedOut) {
-          reject(new Error(`${agent} agent timed out after ${CODE_AGENT_TIMEOUT_MS / 60000} minutes`));
+          reject(new Error(`${agent} agent timed out after ${timeoutMinutes} minutes`));
         } else {
           resolvePromise(code);
         }
@@ -998,13 +1030,23 @@ async function runCodeAgentBackground(
             const now = Date.now();
             if (now - lastStatusWrite > 3000) {
               lastStatusWrite = now;
-              caTask.liveOutput = stdout.slice(-5000);
+              const live = stderr ? `[progress]\n${stderr.slice(-3000)}\n\n[output]\n${stdout.slice(-2000)}` : stdout.slice(-5000);
+              caTask.liveOutput = live;
               writeCodeAgentTask(caTask);
             }
           });
-          retryProc.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
+          retryProc.stderr.on('data', (chunk: Buffer) => {
+            stderr += chunk.toString();
+            const now = Date.now();
+            if (now - lastStatusWrite > 3000) {
+              lastStatusWrite = now;
+              const live = `[progress]\n${stderr.slice(-3000)}\n\n[output]\n${stdout.slice(-2000)}`;
+              caTask.liveOutput = live;
+              writeCodeAgentTask(caTask);
+            }
+          });
 
-          const retryTimer = setTimeout(() => retryProc.kill('SIGTERM'), CODE_AGENT_TIMEOUT_MS);
+          const retryTimer = setTimeout(() => retryProc.kill('SIGTERM'), timeoutMs);
           retryProc.on('close', (code) => { clearTimeout(retryTimer); resolveRetry(code); });
           retryProc.on('error', (err) => { clearTimeout(retryTimer); rejectRetry(err); });
         });

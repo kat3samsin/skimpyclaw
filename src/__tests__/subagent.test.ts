@@ -94,7 +94,6 @@ describe('subagent', () => {
       const desc = getPresetDescriptions();
       expect(desc).toContain('coding');
       expect(desc).toContain('research');
-      expect(desc).toContain('general');
     });
   });
 
@@ -119,11 +118,6 @@ describe('subagent', () => {
     it('uses model override when provided', () => {
       const task = dispatchSubagent('coding', 'test', 123, mockConfig, 'anthropic/claude-opus-4-6');
       expect(task.model).toBe('anthropic/claude-opus-4-6');
-    });
-
-    it('general type uses current model', () => {
-      const task = dispatchSubagent('general', 'test', 123, mockConfig);
-      expect(task.model).toBe('anthropic/claude-sonnet-4-5');
     });
 
     it('rejects when max concurrent reached', () => {
@@ -297,17 +291,5 @@ describe('subagent', () => {
       expect(identityCall![1]).toContain('research subagent dispatched');
     });
 
-    it('creates correct templates for general type', () => {
-      mockedExistsSync.mockReturnValue(false);
-      const config = createMockConfig();
-
-      ensureAgentSetup('general', config);
-
-      const identityCall = mockedWriteFileSync.mock.calls.find(
-        (c: any) => String(c[0]).endsWith('IDENTITY.md')
-      );
-      expect(identityCall![1]).toContain('General Agent');
-      expect(config.agents.list['general'].identity.emoji).toBe('🦞');
-    });
   });
 });

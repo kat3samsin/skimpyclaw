@@ -51,17 +51,6 @@ const PRESETS: Record<SubagentType, SubagentPreset> = {
     },
     description: 'Research tasks with configurable file access'
   },
-  general: {
-    agentId: 'general',
-    defaultModel: '', // uses current model
-    toolConfig: {
-      enabled: true,
-      allowedPaths: [join(homedir(), '.skimpyclaw')],
-      maxIterations: 100,
-      bashTimeout: 15000
-    },
-    description: 'General tasks with config access'
-  }
 };
 
 // --- Starter Templates ---
@@ -77,7 +66,7 @@ Name: Coding Agent
 Emoji: 🔧
 
 You are a coding subagent dispatched for a specific task. You have file and bash access
-across ~/.skimpyclaw and ~/Sites.
+within your allowed paths (provided at runtime).
 
 ## Your Role
 - Execute coding tasks: write code, fix bugs, refactor, run commands
@@ -114,7 +103,6 @@ Execute a shell command. Parameters: \`command\` (string, required), \`cwd\` (st
 ## Key Paths
 - Config: ~/.skimpyclaw/config.json
 - Agent templates: ~/.skimpyclaw/agents/
-- Sites: ~/Sites/
 `
   },
   research: {
@@ -161,57 +149,13 @@ Execute a shell command. Parameters: \`command\` (string, required), \`cwd\` (st
 - Add your notes/vault paths to allowedPaths in config before using them
 `
   },
-  general: {
-    identity: `# IDENTITY.md - General Subagent
-
-Name: General Agent
-Emoji: 🦞
-
-You are a general-purpose subagent dispatched for a specific task.
-
-## Your Role
-- Handle miscellaneous tasks that don't fit coding or research
-- Act on instructions directly — don't narrate what you're going to do
-- Return concise results when done
-
-## Your Limitations
-- You are short-lived: complete the task and return the result
-- You have ONLY 4 tools: Read, Write, Glob, Bash
-- Do NOT invent or hallucinate tools that don't exist
-`,
-    tools: `# TOOLS.md - General Subagent Tools
-
-## CRITICAL: Act, Don't Narrate
-
-**NEVER say "let me check" or "I'll look into that" — just call the tool.**
-
-## Your 4 Tools
-
-### Read
-Read the contents of a file. Parameter: \`file_path\` (string, required)
-
-### Write
-Write content to a file. Parameters: \`file_path\` (string, required), \`content\` (string, required)
-
-### Glob
-List files and directories at a path. Parameter: \`path\` (string, required)
-
-### Bash
-Execute a shell command. Parameters: \`command\` (string, required), \`cwd\` (string, optional)
-
-## Key Paths
-- Config: ~/.skimpyclaw/config.json
-- Agent templates: ~/.skimpyclaw/agents/
-`
-  }
 };
 
 // Agent identity metadata for in-memory registration
 const AGENT_IDENTITIES: Record<SubagentType, { name: string; emoji: string }> =
   {
     coding: { name: 'Coding Agent', emoji: '🔧' },
-    research: { name: 'Research Agent', emoji: '🔍' },
-    general: { name: 'General Agent', emoji: '🦞' }
+    research: { name: 'Research Agent', emoji: '🔍' }
   };
 
 /**

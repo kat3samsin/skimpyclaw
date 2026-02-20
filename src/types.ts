@@ -197,7 +197,7 @@ export interface ModelProvider {
   chat(messages: ChatMessage[], options: ChatOptions): Promise<string>;
 }
 
-export type SubagentType = 'coding' | 'research' | 'general';
+export type SubagentType = 'coding' | 'research';
 export type SubagentStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
 
 export interface SubagentTask {
