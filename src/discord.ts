@@ -898,3 +898,24 @@ export async function sendDiscordProactiveMessage(target: string | number, messa
     await sendChunked(user as { send: (content: string) => Promise<unknown> }, message);
   }
 }
+
+export async function sendDiscordProactiveVoice(target: string | number, buffer: Buffer, format: string): Promise<void> {
+  if (!client || isDiscordSilenced()) return;
+
+  const targetId = String(target);
+  const attachment = new AttachmentBuilder(buffer, {
+    name: `voice.${format}`,
+    description: 'Voice message',
+  });
+
+  const channel = await client.channels.fetch(targetId).catch(() => null);
+  if (channel && 'send' in channel && typeof channel.send === 'function') {
+    await (channel as { send: (opts: unknown) => Promise<unknown> }).send({ files: [attachment] });
+    return;
+  }
+
+  const user = await client.users.fetch(targetId).catch(() => null);
+  if (user) {
+    await user.send({ files: [attachment] });
+  }
+}

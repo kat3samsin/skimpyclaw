@@ -16,7 +16,7 @@ const discordMock = vi.hoisted(() => ({
   stopDiscord: vi.fn(async () => {}),
   isDiscordSilenced: vi.fn(() => false),
   sendDiscordProactiveMessage: vi.fn(async () => {}),
-  sendDiscordProactiveVoiceMessage: vi.fn(async () => {}),
+  sendDiscordProactiveVoice: vi.fn(async () => {}),
   getDiscordDefaultTarget: vi.fn(() => '999'),
 }));
 

@@ -67,6 +67,7 @@ async function loadAdapter(channel: ChannelId): Promise<ChannelAdapter> {
     stop: discord.stopDiscord,
     isSilenced: discord.isDiscordSilenced,
     sendProactiveMessage: discord.sendDiscordProactiveMessage,
+    sendProactiveVoice: discord.sendDiscordProactiveVoice,
     resolveDefaultTarget: discord.getDiscordDefaultTarget,
   };
 }
