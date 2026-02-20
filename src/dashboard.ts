@@ -1489,16 +1489,20 @@ td:first-child { color: var(--highlight); }
     </div>
   </div>
 
-  <!-- Health Tab -->
+  <!-- Health Tab (unified: diagnostics + environment + features) -->
   <div class="tab-panel" id="panel-health">
-    <div class="card">
+    <div class="card" id="doctorSummaryCard">
       <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
         System Health
-        <button class="btn" id="healthRecheckBtn" style="font-size:12px;">Re-check</button>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <span id="doctorTimestamp" style="font-size:11px;color:var(--text-dim);font-weight:normal;"></span>
+          <button class="btn" id="healthRecheckBtn" style="font-size:12px;">Re-check</button>
+        </div>
       </div>
-      <div id="healthChecks" style="margin-bottom:16px;">Loading...</div>
+      <div id="doctorSummary" style="margin-bottom:8px;">Loading...</div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+    <div id="doctorCategories">Loading...</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px;">
       <div class="card">
         <div class="card-title">Environment Variables</div>
         <div id="healthEnvVars">Loading...</div>
@@ -2861,35 +2865,96 @@ document.getElementById('approvalsAutoRefresh').addEventListener('change', funct
   }
 });
 
-// --- Health ---
+// --- Health Tab (unified: diagnostics + environment + features) ---
+const DOCTOR_CATEGORY_LABELS = {
+  environment: 'Environment',
+  configuration: 'Configuration',
+  provider_auth: 'Provider Auth',
+  channels: 'Channels',
+  runtime: 'Runtime',
+};
+const DOCTOR_CATEGORY_ORDER = ['environment', 'configuration', 'provider_auth', 'channels', 'runtime'];
+
 async function loadHealth() {
-  const checksEl = document.getElementById('healthChecks');
+  const summaryEl = document.getElementById('doctorSummary');
+  const categoriesEl = document.getElementById('doctorCategories');
+  const tsEl = document.getElementById('doctorTimestamp');
   const envEl = document.getElementById('healthEnvVars');
   const featEl = document.getElementById('healthFeatures');
   try {
-    const res = await apiFetch('/api/dashboard/health');
-    const data = await res.json();
+    const [doctorData, healthData] = await Promise.all([api('doctor'), api('health')]);
+    const report = doctorData.report;
 
-    // Render checks table
-    let html = '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
-    html += '<tr style="border-bottom:1px solid var(--border);"><th style="text-align:left;padding:6px;">Check</th><th style="text-align:left;padding:6px;">Status</th><th style="text-align:left;padding:6px;">Detail</th><th style="text-align:left;padding:6px;">Remedy</th></tr>';
-    for (const ch of data.checks) {
-      const color = ch.ok ? 'var(--success)' : 'var(--error)';
-      const status = ch.ok ? 'PASS' : 'FAIL';
-      html += '<tr style="border-bottom:1px solid var(--border);">';
-      html += '<td style="padding:6px;font-family:var(--mono);font-size:12px;">' + esc(ch.name) + '</td>';
-      html += '<td style="padding:6px;color:' + color + ';font-weight:600;">' + status + '</td>';
-      html += '<td style="padding:6px;color:var(--text-dim);font-size:12px;">' + esc(ch.detail) + '</td>';
-      html += '<td style="padding:6px;color:var(--text-dim);font-size:12px;">' + (ch.remedy ? esc(ch.remedy) : '') + '</td>';
-      html += '</tr>';
+    // Timestamp
+    if (tsEl) {
+      const started = new Date(report.startedAt);
+      const finished = new Date(report.finishedAt);
+      const durationMs = finished - started;
+      tsEl.textContent = 'Ran ' + finished.toLocaleTimeString() + ' (' + durationMs + 'ms)';
     }
-    html += '</table>';
-    checksEl.innerHTML = html;
+
+    // Summary banner
+    const total = report.checks.length;
+    const passed = report.checks.filter(c => c.ok).length;
+    const failed = report.checks.filter(c => !c.ok && c.fatal).length;
+    const warned = report.checks.filter(c => !c.ok && !c.fatal).length;
+    const overallColor = report.ok ? 'var(--success)' : (failed > 0 ? 'var(--error)' : 'var(--warning, #f59e0b)');
+    const overallLabel = report.ok ? 'All checks passed' : (failed > 0 ? 'Fatal issues found' : 'Warnings detected');
+    summaryEl.innerHTML =
+      '<div style="display:flex;gap:24px;align-items:center;padding:8px 0;">' +
+        '<span style="font-size:18px;font-weight:700;color:' + overallColor + ';">' + esc(overallLabel) + '</span>' +
+        '<span style="font-size:13px;color:var(--text-dim);">' +
+          '<span style="color:var(--success);font-weight:600;">' + passed + '</span> pass · ' +
+          (warned > 0 ? '<span style="color:var(--warning, #f59e0b);font-weight:600;">' + warned + '</span> warn · ' : '') +
+          (failed > 0 ? '<span style="color:var(--error);font-weight:600;">' + failed + '</span> fail · ' : '') +
+          total + ' total' +
+        '</span>' +
+        '<span style="font-size:12px;color:var(--text-dim);">exit ' + report.exitCode + '</span>' +
+      '</div>';
+
+    // Group checks by category
+    const grouped = {};
+    for (const cat of DOCTOR_CATEGORY_ORDER) grouped[cat] = [];
+    for (const ch of report.checks) {
+      if (!grouped[ch.category]) grouped[ch.category] = [];
+      grouped[ch.category].push(ch);
+    }
+
+    let html = '';
+    for (const cat of DOCTOR_CATEGORY_ORDER) {
+      const checks = grouped[cat];
+      if (!checks || checks.length === 0) continue;
+      const catLabel = DOCTOR_CATEGORY_LABELS[cat] || cat;
+      const catPassed = checks.every(c => c.ok);
+      const catIcon = catPassed ? '<span style="color:var(--success);">●</span>' : '<span style="color:var(--error);">●</span>';
+      html += '<div class="card" style="margin-bottom:12px;">';
+      html += '<div class="card-title">' + catIcon + ' ' + esc(catLabel) + '</div>';
+      html += '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
+      html += '<tr style="border-bottom:1px solid var(--border);">' +
+        '<th style="text-align:left;padding:6px;">Check</th>' +
+        '<th style="text-align:left;padding:6px;width:60px;">Status</th>' +
+        '<th style="text-align:left;padding:6px;">Detail</th>' +
+        '<th style="text-align:left;padding:6px;">Remedy</th>' +
+      '</tr>';
+      for (const ch of checks) {
+        const isFatal = !ch.ok && ch.fatal;
+        const color = ch.ok ? 'var(--success)' : 'var(--error)';
+        const status = ch.ok ? 'PASS' : (isFatal ? 'FAIL' : 'WARN');
+        html += '<tr style="border-bottom:1px solid var(--border);">';
+        html += '<td style="padding:6px;font-family:var(--mono);font-size:12px;">' + esc(ch.name) + '</td>';
+        html += '<td style="padding:6px;color:' + color + ';font-weight:600;">' + status + '</td>';
+        html += '<td style="padding:6px;color:var(--text-dim);font-size:12px;">' + esc(ch.detail) + '</td>';
+        html += '<td style="padding:6px;color:var(--text-dim);font-size:12px;">' + (ch.remedy ? esc(ch.remedy) : '') + '</td>';
+        html += '</tr>';
+      }
+      html += '</table></div>';
+    }
+    categoriesEl.innerHTML = html;
 
     // Render env vars
-    if (data.envVars && data.envVars.length > 0) {
+    if (healthData.envVars && healthData.envVars.length > 0) {
       let envHtml = '<div style="font-size:13px;">';
-      for (const ev of data.envVars) {
+      for (const ev of healthData.envVars) {
         const icon = ev.set ? '<span style="color:var(--success);">●</span>' : '<span style="color:var(--error);">○</span>';
         const label = ev.set ? 'set' : 'missing';
         envHtml += '<div style="padding:4px 0;display:flex;justify-content:space-between;border-bottom:1px solid var(--border);">';
@@ -2904,9 +2969,9 @@ async function loadHealth() {
     }
 
     // Render features
-    if (data.features) {
+    if (healthData.features) {
       let featHtml = '<div style="font-size:13px;">';
-      for (const [name, enabled] of Object.entries(data.features)) {
+      for (const [name, enabled] of Object.entries(healthData.features)) {
         const icon = enabled ? '<span style="color:var(--success);">✓</span>' : '<span style="color:var(--text-dim);">✗</span>';
         featHtml += '<div style="padding:4px 0;border-bottom:1px solid var(--border);">' + icon + ' ' + esc(name) + '</div>';
       }
@@ -2914,7 +2979,8 @@ async function loadHealth() {
       featEl.innerHTML = featHtml;
     }
   } catch (err) {
-    checksEl.innerHTML = '<span style="color:var(--error);">Failed to load health data: ' + esc(err.message) + '</span>';
+    summaryEl.innerHTML = '<span style="color:var(--error);">Failed to load health data: ' + esc(err.message) + '</span>';
+    categoriesEl.innerHTML = '';
   }
 }
 

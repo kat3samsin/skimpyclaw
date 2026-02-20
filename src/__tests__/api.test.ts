@@ -764,3 +764,35 @@ describe('Health endpoint', () => {
     expect(Array.isArray(body.envVars)).toBe(true);
   });
 });
+
+describe('Doctor endpoint', () => {
+  it('GET /api/dashboard/doctor returns full report', async () => {
+    const res = await inject({ method: 'GET', url: '/api/dashboard/doctor' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body).toHaveProperty('report');
+    expect(body.report).toHaveProperty('ok', true);
+    expect(body.report).toHaveProperty('exitCode', 0);
+    expect(body.report).toHaveProperty('startedAt');
+    expect(body.report).toHaveProperty('finishedAt');
+    expect(body.report).toHaveProperty('checks');
+    expect(Array.isArray(body.report.checks)).toBe(true);
+    expect(body.report.checks.length).toBeGreaterThan(0);
+  });
+
+  it('GET /api/dashboard/doctor checks include category', async () => {
+    const res = await inject({ method: 'GET', url: '/api/dashboard/doctor' });
+    const body = res.json();
+    for (const check of body.report.checks) {
+      expect(check).toHaveProperty('name');
+      expect(check).toHaveProperty('category');
+      expect(check).toHaveProperty('ok');
+      expect(check).toHaveProperty('detail');
+    }
+  });
+
+  it('GET /api/dashboard/doctor requires auth', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/dashboard/doctor' });
+    expect(res.statusCode).toBe(401);
+  });
+});

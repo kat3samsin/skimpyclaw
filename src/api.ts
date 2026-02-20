@@ -572,6 +572,12 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
     };
   });
 
+  // --- Doctor ---
+  fastify.get('/api/dashboard/doctor', async () => {
+    const { report } = await runDoctorChecks();
+    return { report };
+  });
+
   // --- Code Agents (Multi-Agent) ---
   fastify.get('/api/dashboard/code-agents', async () => {
     const agents = getAllCodeAgents();
