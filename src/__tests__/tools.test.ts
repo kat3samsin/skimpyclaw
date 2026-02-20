@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { existsSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'fs';
 import { join } from 'path';
-import { executeTool, BUILTIN_TOOL_DEFINITIONS, BROWSER_TOOL_DEFINITION, CODE_WITH_AGENT_TOOL, CHECK_CODE_AGENT_TOOL, getToolDefinitions, fromClaudeCodeName, toClaudeCodeName, buildCodeAgentArgs, getActiveCodeAgents, getRecentCodeAgents, getCodeAgent } from '../tools.js';
+import { executeTool, BUILTIN_TOOL_DEFINITIONS, BROWSER_TOOL_DEFINITION, CODE_WITH_AGENT_TOOL, CODE_WITH_TEAM_TOOL, CHECK_CODE_AGENT_TOOL, getToolDefinitions, fromClaudeCodeName, toClaudeCodeName, buildCodeAgentArgs, getActiveCodeAgents, getRecentCodeAgents, getCodeAgent, readTeamState, decomposeTask, synthesizeResults } from '../tools.js';
 import type { ToolConfig } from '../types.js';
 
 const TEST_DIR = join(process.cwd(), '__test_sandbox__');
@@ -354,7 +354,7 @@ describe('code_with_agent', () => {
       expect(cmd).toContain('claude');
       expect(args).toContain('-p');
       expect(args).toContain('--output-format');
-      expect(args).toContain('json');
+      expect(args).toContain('stream-json');
       expect(args).toContain('--dangerously-skip-permissions');
       expect(args).toContain('--max-turns');
       expect(args).toContain('30');
@@ -475,5 +475,90 @@ describe('code_with_agent', () => {
       // May return "No coding agents have run yet" or a list depending on state
       expect(typeof result).toBe('string');
     });
+  });
+});
+
+describe('code_with_team', () => {
+  describe('tool definition', () => {
+    it('has correct name and required fields', () => {
+      expect(CODE_WITH_TEAM_TOOL.name).toBe('code_with_team');
+      expect(CODE_WITH_TEAM_TOOL.input_schema.required).toEqual(['task']);
+    });
+
+    it('has expected properties in schema (no max_turns)', () => {
+      const props = Object.keys(CODE_WITH_TEAM_TOOL.input_schema.properties);
+      expect(props).toContain('task');
+      expect(props).toContain('team_size');
+      expect(props).toContain('workdir');
+      expect(props).toContain('model');
+      expect(props).toContain('timeout_minutes');
+      expect(props).toContain('validate');
+      // max_turns removed — not relevant for parallel agents
+      expect(props).not.toContain('max_turns');
+    });
+
+    it('is included in getToolDefinitions when includeSpawnSubagent is true', async () => {
+      const tools = await getToolDefinitions(toolConfig, { includeSpawnSubagent: true });
+      expect(tools.map(t => t.name)).toContain('code_with_team');
+    });
+
+    it('is excluded from getToolDefinitions when includeSpawnSubagent is false', async () => {
+      const tools = await getToolDefinitions(toolConfig);
+      expect(tools.map(t => t.name)).not.toContain('code_with_team');
+    });
+  });
+
+  describe('executeTool routing', () => {
+    it('rejects workdir outside allowed paths', async () => {
+      const result = await executeTool('code_with_team', {
+        task: 'refactor auth',
+        workdir: '/tmp/not-allowed',
+      }, toolConfig);
+      expect(result).toContain('Error: Working directory not allowed');
+    });
+
+    it('returns error when task is missing', async () => {
+      const result = await executeTool('code_with_team', {}, toolConfig);
+      expect(result).toContain('Error: task is required');
+    });
+  });
+});
+
+describe('decomposeTask', () => {
+  it('falls back to numbered subtasks on error', async () => {
+    // decomposeTask with no valid config will fail the model call and use fallback
+    const mockConfig = {
+      agents: { list: {} },
+    } as any;
+    const subtasks = await decomposeTask('fix everything', 3, mockConfig);
+    expect(subtasks).toHaveLength(3);
+    expect(subtasks[0]).toContain('Part 1 of 3');
+    expect(subtasks[1]).toContain('Part 2 of 3');
+    expect(subtasks[2]).toContain('Part 3 of 3');
+    expect(subtasks[0]).toContain('fix everything');
+  });
+});
+
+describe('synthesizeResults', () => {
+  it('falls back to mechanical summary on error', async () => {
+    const mockConfig = {
+      agents: { list: {} },
+    } as any;
+    const results = [
+      { subtask: 'fix auth', status: 'completed', output: 'done' },
+      { subtask: 'fix tests', status: 'failed', error: 'timeout' },
+    ];
+    const summary = await synthesizeResults('fix everything', results, mockConfig);
+    expect(summary).toContain('1/2 subtasks succeeded');
+    expect(summary).toContain('1 failed');
+    expect(summary).toContain('fix auth');
+    expect(summary).toContain('fix tests');
+  });
+});
+
+describe('readTeamState (deprecated)', () => {
+  it('always returns null', () => {
+    const state = readTeamState();
+    expect(state).toBeNull();
   });
 });

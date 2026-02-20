@@ -4,7 +4,7 @@
 
 ```bash
 pnpm build        # TypeScript compile (tsc)
-pnpm test         # Vitest (271 tests)
+pnpm test         # Vitest (347 tests)
 pnpm build && pnpm test  # Always run both after changes
 pnpm dev          # Hot reload dev server (tsx watch)
 ```
@@ -25,7 +25,7 @@ Always run `pnpm build && pnpm test` after making changes. Do not submit work wi
 | File | Purpose |
 |------|---------|
 | `src/agent.ts` | AI model runner — Anthropic (`chatWithTools`) + Codex (`codexChat`) + OpenAI-compatible |
-| `src/tools.ts` | Tool definitions + executor: Read, Write, Glob, Bash, Browser, spawn_subagent, MCP |
+| `src/tools.ts` | Tool definitions + executor: Read, Write, Glob, Bash, Browser, spawn_subagent, code_with_agent, code_with_team, MCP |
 | `src/exec-approval.ts` | Risk classification (tier 0–3) + pending approval registry for Bash commands |
 | `src/telegram.ts` | Telegram bot — commands, conversation history, typing indicator |
 | `src/discord.ts` | Discord bot — commands and message handling |

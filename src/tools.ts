@@ -1,6 +1,6 @@
 // Tool definitions and executors for Anthropic API tool_use
 
-import { readFileSync, writeFileSync, readdirSync, existsSync, statSync, mkdirSync } from 'fs';
+import { readFileSync, writeFileSync, readdirSync, existsSync, statSync, mkdirSync, createWriteStream } from 'fs';
 import { join, resolve, dirname, sep } from 'path';
 import { homedir } from 'os';
 import { exec, spawn } from 'child_process';
@@ -200,6 +200,25 @@ export const CODE_WITH_AGENT_TOOL = {
   },
 };
 
+// --- Code With Team Tool ---
+
+export const CODE_WITH_TEAM_TOOL = {
+  name: 'code_with_team',
+  description: 'Decompose a complex task into subtasks and run multiple code_with_agent instances in parallel. SkimpyClaw manages coordination: decomposes the task, spawns N parallel agents, monitors progress, synthesizes results, and validates. Use for multi-file refactors, cross-layer changes, or tasks with independent subtasks.',
+  input_schema: {
+    type: 'object' as const,
+    properties: {
+      task: { type: 'string', description: 'Detailed task description. Be specific: what to change, why, which files, expected behavior.' },
+      team_size: { type: 'number', description: 'Number of parallel agents (2-5, default 3)' },
+      workdir: { type: 'string', description: 'Working directory or project name (default: SkimpyClaw repo root)' },
+      model: { type: 'string', description: 'Model override (e.g. claude-sonnet-4-5)' },
+      timeout_minutes: { type: 'number', description: 'Total timeout in minutes (default: 20, max: 60)' },
+      validate: { type: 'boolean', description: 'Run pnpm build && pnpm test after all agents complete (default: true)' },
+    },
+    required: ['task'],
+  },
+};
+
 // --- Check Code Agent Tool ---
 
 export const CHECK_CODE_AGENT_TOOL = {
@@ -345,6 +364,29 @@ export async function getToolDefinitions(config?: ToolConfig, options?: { includ
       tools.push(CODE_WITH_AGENT_TOOL);
     }
 
+    // Inject project names into code_with_team description too
+    if (projects && Object.keys(projects).length > 0) {
+      const projectList = Object.entries(projects)
+        .map(([name, path]) => `"${name}" → ${path}`)
+        .join(', ');
+      const codeTeamWithProjects = {
+        ...CODE_WITH_TEAM_TOOL,
+        input_schema: {
+          ...CODE_WITH_TEAM_TOOL.input_schema,
+          properties: {
+            ...CODE_WITH_TEAM_TOOL.input_schema.properties,
+            workdir: {
+              type: 'string',
+              description: `Working directory or project name. Named projects: ${projectList}. Default: SkimpyClaw repo root.`,
+            },
+          },
+        },
+      };
+      tools.push(codeTeamWithProjects);
+    } else {
+      tools.push(CODE_WITH_TEAM_TOOL);
+    }
+
     tools.push(CHECK_CODE_AGENT_TOOL);
   }
 
@@ -447,6 +489,11 @@ export async function executeTool(
     // Route code_with_agent
     if (name === 'code_with_agent') {
       return await executeCodeWithAgent(input, config, context);
+    }
+
+    // Route code_with_team
+    if (name === 'code_with_team') {
+      return await executeCodeWithTeam(input, config, context);
     }
 
     // Route check_code_agent
@@ -580,7 +627,7 @@ const CODE_AGENTS_DIR = join(homedir(), '.skimpyclaw', 'logs', 'code-agents');
 
 export interface CodeAgentTask {
   id: string;                    // "ca-1", "ca-2"
-  agent: string;                 // "claude" | "codex"
+  agent: string;                 // "claude" | "codex" | "team-coordinator"
   task: string;                  // full prompt
   status: 'running' | 'validating' | 'completed' | 'failed' | 'timeout';
   chatId?: number;               // for notification delivery
@@ -596,6 +643,11 @@ export interface CodeAgentTask {
   workdir: string;
   model?: string;
   retryCount?: number;           // how many internal validation retries have run
+  // Team coordination fields
+  parentTaskId?: string;         // child points to parent
+  childTaskIds?: string[];       // parent tracks children
+  subtask?: string;              // child's specific subtask description
+  synthesisResult?: string;      // parent's final synthesized output
 }
 
 // In-memory tracking
@@ -710,7 +762,8 @@ export function buildCodeAgentArgs(input: {
   const toolArgs = allowedTools.flatMap(t => ['--allowedTools', t]);
   const args = [
     '-p',
-    '--output-format', 'json',
+    '--verbose',
+    '--output-format', 'stream-json',
     '--dangerously-skip-permissions',
     ...toolArgs,
     '--max-turns', maxTurns,
@@ -719,6 +772,182 @@ export function buildCodeAgentArgs(input: {
   if (input.model) args.push('--model', input.model);
   args.push(input.task);
   return { cmd: CLAUDE_CLI_PATH, args };
+}
+
+// --- Task Decomposition & Synthesis ---
+
+/**
+ * Use a quick model call to decompose a complex task into N independent subtasks.
+ * Falls back to numbered subtask splitting on parse error.
+ */
+export async function decomposeTask(
+  task: string,
+  teamSize: number,
+  config: import('./types.js').Config,
+): Promise<string[]> {
+  try {
+    const { runAgentTurn } = await import('./agent.js');
+    const prompt = `You are a task decomposition assistant. Break the following task into exactly ${teamSize} independent subtasks that can be worked on in parallel by separate coding agents. Each subtask should be self-contained and specific.
+
+Return ONLY a JSON object in this exact format, no other text:
+{"subtasks": ["subtask 1 description", "subtask 2 description", ...]}
+
+Task to decompose:
+${task}`;
+
+    const result = await runAgentTurn('main', prompt, config);
+    const match = result.match(/\{[\s\S]*"subtasks"[\s\S]*\}/);
+    if (match) {
+      const parsed = JSON.parse(match[0]);
+      if (Array.isArray(parsed.subtasks) && parsed.subtasks.length > 0) {
+        // Pad or trim to match teamSize
+        while (parsed.subtasks.length < teamSize) {
+          parsed.subtasks.push(parsed.subtasks[parsed.subtasks.length - 1]);
+        }
+        return parsed.subtasks.slice(0, teamSize);
+      }
+    }
+  } catch (err) {
+    console.warn('[team] Task decomposition failed, using fallback:', err instanceof Error ? err.message : err);
+  }
+
+  // Fallback: numbered subtask splitting
+  return Array.from({ length: teamSize }, (_, i) =>
+    `Part ${i + 1} of ${teamSize}: ${task}`
+  );
+}
+
+/**
+ * Use a quick model call to synthesize results from multiple subtask completions.
+ */
+export async function synthesizeResults(
+  originalTask: string,
+  results: Array<{ subtask: string; status: string; output?: string; error?: string }>,
+  config: import('./types.js').Config,
+): Promise<string> {
+  try {
+    const { runAgentTurn } = await import('./agent.js');
+    const resultSummary = results.map((r, i) =>
+      `### Subtask ${i + 1}: ${r.subtask}\nStatus: ${r.status}\n${r.output ? `Output: ${r.output.slice(0, 1000)}` : ''}${r.error ? `Error: ${r.error}` : ''}`
+    ).join('\n\n');
+
+    const prompt = `You are a results synthesizer. Summarize the results of a multi-agent coding task.
+
+Original task: ${originalTask}
+
+Results from each agent:
+${resultSummary}
+
+Provide a concise markdown summary of what was accomplished, what succeeded, and what failed (if anything). Be specific about files changed and outcomes.`;
+
+    return await runAgentTurn('main', prompt, config);
+  } catch (err) {
+    // Fallback: mechanical summary
+    const succeeded = results.filter(r => r.status === 'completed').length;
+    const failed = results.filter(r => r.status !== 'completed').length;
+    return `Team completed: ${succeeded}/${results.length} subtasks succeeded${failed > 0 ? `, ${failed} failed` : ''}.\n\n${results.map((r, i) => `${i + 1}. [${r.status}] ${r.subtask}`).join('\n')}`;
+  }
+}
+
+/**
+ * Run build/test validation. Shared by solo agents and team orchestrator.
+ */
+export function runValidation(workdir: string): Promise<{ passed: boolean; output: string }> {
+  return new Promise((resolve) => {
+    exec('pnpm build && pnpm test', {
+      cwd: workdir,
+      timeout: VALIDATE_TIMEOUT_MS,
+      maxBuffer: 5 * 1024 * 1024,
+    }, (error, vStdout, vStderr) => {
+      if (error) {
+        resolve({
+          passed: false,
+          output: [`VALIDATION FAILED (exit ${error.code}):`, vStdout, vStderr].filter(Boolean).join('\n').slice(0, 8_000),
+        });
+      } else {
+        resolve({ passed: true, output: 'PASS' });
+      }
+    });
+  });
+}
+
+async function executeCodeWithTeam(
+  input: Record<string, any>,
+  config: ToolConfig,
+  context?: ExecuteToolContext,
+): Promise<string> {
+  const task = input.task as string;
+  if (!task) return 'Error: task is required';
+
+  const teamSize = Math.max(2, Math.min(5, (input.team_size as number) || 3));
+
+  const projects = context?.fullConfig?.projects ?? {};
+  const rawWorkdir = input.workdir as string | undefined;
+
+  // Resolve project name → path
+  let workdir: string;
+  if (rawWorkdir && projects[rawWorkdir]) {
+    workdir = resolve(projects[rawWorkdir]);
+  } else {
+    workdir = resolve(rawWorkdir || SKIMPYCLAW_ROOT);
+  }
+
+  // Project paths are always allowed
+  const projectPaths = Object.values(projects).map(p => resolve(p));
+  const effectiveAllowedPaths = [...config.allowedPaths, ...projectPaths];
+
+  if (!isPathAllowed(workdir, effectiveAllowedPaths)) {
+    const projectNames = Object.keys(projects).length > 0
+      ? ` (or project names: ${Object.keys(projects).join(', ')})`
+      : '';
+    return `Error: Working directory not allowed. Permitted: ${config.allowedPaths.join(', ')}${projectNames}`;
+  }
+
+  // Concurrency check — need room for teamSize children
+  const maxConcurrent = context?.fullConfig?.subagents?.maxConcurrent ?? 5;
+  const activeCount = getActiveCodeAgents().length;
+  if (activeCount + teamSize > maxConcurrent) {
+    return `Error: Concurrency limit — need ${teamSize} slots but only ${maxConcurrent - activeCount} available (${activeCount}/${maxConcurrent} running). Wait for agents to finish.`;
+  }
+
+  const validate = input.validate !== false;
+
+  // Resolve model alias
+  let resolvedModel: string | undefined = input.model as string | undefined;
+  if (resolvedModel && context?.fullConfig) {
+    const aliases = context.fullConfig.models?.aliases;
+    if (aliases?.[resolvedModel]) {
+      resolvedModel = aliases[resolvedModel];
+    }
+    if (resolvedModel.includes('/')) {
+      resolvedModel = resolvedModel.split('/').slice(1).join('/');
+    }
+  }
+
+  // Create parent task
+  const id = `ca-${++codeAgentCounter}`;
+  const startedAt = new Date();
+  const caTask: CodeAgentTask = {
+    id,
+    agent: 'team-coordinator',
+    task,
+    status: 'running',
+    chatId: context?.chatId,
+    startedAt: startedAt.toISOString(),
+    workdir,
+    model: resolvedModel,
+    childTaskIds: [],
+  };
+  codeAgentTasks.set(id, caTask);
+  writeCodeAgentTask(caTask);
+
+  // Fire-and-forget: orchestrator decomposes, spawns children, monitors, synthesizes
+  runTeamOrchestrator(id, task, teamSize, workdir, validate, resolvedModel, startedAt, context).catch((err) => {
+    console.error(`[code-team] Background error for ${id}:`, err);
+  });
+
+  const taskPreview = task.length > 100 ? task.slice(0, 100) + '...' : task;
+  return `Started coding team ${id} (${teamSize} parallel agents). Task: ${taskPreview}\n\nUse check_code_agent to poll status.`;
 }
 
 async function executeCodeWithAgent(
@@ -807,21 +1036,72 @@ async function executeCodeWithAgent(
   return `Started coding agent ${id} (${agent}). Task: ${taskPreview}\n\nUse check_code_agent to poll status.`;
 }
 
+/** Format duration as human-readable string. */
+function formatDuration(seconds: number | undefined): string {
+  if (seconds == null) return '?';
+  return seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+}
+
+/** Build notification for a team-coordinator task with child results. */
+function buildTeamNotification(task: CodeAgentTask): string {
+  const dur = formatDuration(task.durationSeconds);
+  const taskPreview = task.task.length > 100 ? task.task.slice(0, 100) + '...' : task.task;
+  const statusIcon = task.status === 'completed' ? '✅' : task.status === 'timeout' ? '⏰' : '❌';
+  const validation = task.validationPassed ? ' Tests pass.' : '';
+
+  const lines: string[] = [];
+  lines.push(`${statusIcon} Team ${task.id} ${task.status} (${dur}).${validation}`);
+  lines.push(`Task: ${taskPreview}`);
+
+  // Per-child summary
+  const childIds = task.childTaskIds || [];
+  if (childIds.length > 0) {
+    lines.push('');
+    for (const childId of childIds) {
+      const child = codeAgentTasks.get(childId);
+      if (!child) continue;
+      const childIcon = child.status === 'completed' ? '✓' : child.status === 'failed' ? '✗' : child.status === 'timeout' ? '⏰' : '?';
+      const childDur = formatDuration(child.durationSeconds);
+      const subtask = (child.subtask || child.task || '').slice(0, 80);
+      lines.push(`  ${childIcon} ${child.id} (${childDur}): ${subtask}`);
+    }
+  }
+
+  // Errors
+  if (task.error && task.error !== 'Validation failed') {
+    lines.push(`\nError: ${task.error}`);
+  }
+  if (task.validationOutput) {
+    lines.push(`\nValidation:\n${task.validationOutput.slice(0, 800)}`);
+  }
+
+  return lines.join('\n');
+}
+
 /** Send auto-notification to active channel on completion/failure. */
 async function notifyCodeAgentResult(task: CodeAgentTask): Promise<void> {
   if (!_codeAgentConfig) return;
   const { sendActiveChannelProactiveMessage } = await import('./channels.js');
 
-  const dur = task.durationSeconds != null
-    ? (task.durationSeconds < 60 ? `${task.durationSeconds}s` : `${Math.floor(task.durationSeconds / 60)}m ${task.durationSeconds % 60}s`)
-    : '?';
+  let message: string;
+
+  // Team coordinator gets a structured notification
+  if (task.agent === 'team-coordinator') {
+    message = buildTeamNotification(task);
+    await sendActiveChannelProactiveMessage(_codeAgentConfig, message).catch(() => {});
+    return;
+  }
+
+  const dur = formatDuration(task.durationSeconds);
   const taskPreview = task.task.length > 120 ? task.task.slice(0, 120) + '...' : task.task;
 
-  let message: string;
   if (task.status === 'completed') {
     const validation = task.validationPassed ? ' Build/tests pass.' : '';
     message = `✅ Coding agent ${task.id} completed (${dur}).${validation}\n\nTask: ${taskPreview}`;
-    if (task.outputPreview) message += `\n\nResult: ${task.outputPreview}`;
+    if (task.outputPreview) {
+      const preview = task.outputPreview.slice(0, 300);
+      message += `\n\nResult: ${preview}`;
+    }
   } else if (task.status === 'timeout') {
     message = `⏰ Coding agent ${task.id} timed out after ${dur}.\n\nTask: ${taskPreview}`;
   } else {
@@ -836,8 +1116,65 @@ async function notifyCodeAgentResult(task: CodeAgentTask): Promise<void> {
   await sendActiveChannelProactiveMessage(_codeAgentConfig, message).catch(() => {});
 }
 
+/**
+ * Parse stream-json stdout into human-readable live output.
+ * Extracts assistant text, tool use summaries, and system messages.
+ * Returns the last `maxChars` of readable output.
+ */
+function parseStreamJsonForLive(raw: string, maxChars = 5000): string {
+  const lines = raw.split('\n');
+  const parts: string[] = [];
+
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    try {
+      const event = JSON.parse(line);
+
+      if (event.type === 'assistant' && event.message?.content) {
+        for (const block of event.message.content) {
+          if (block.type === 'text' && block.text) {
+            parts.push(block.text);
+          } else if (block.type === 'tool_use') {
+            const name = block.name || 'tool';
+            const inputPreview = block.input
+              ? JSON.stringify(block.input).slice(0, 120)
+              : '';
+            parts.push(`[${name}] ${inputPreview}`);
+          }
+        }
+      } else if (event.type === 'result') {
+        if (event.result) parts.push(event.result);
+      } else if (event.type === 'system' && event.message) {
+        parts.push(`[system] ${typeof event.message === 'string' ? event.message : JSON.stringify(event.message).slice(0, 200)}`);
+      }
+    } catch {
+      // Non-JSON line — include if it looks like meaningful output
+      if (line.trim().length > 0 && !line.startsWith('{')) {
+        parts.push(line.trim());
+      }
+    }
+  }
+
+  const output = parts.join('\n');
+  return output.length > maxChars ? output.slice(-maxChars) : output;
+}
+
+/** Options for team-mode or other overrides in runCodeAgentBackground. */
+export interface CodeAgentBackgroundOptions {
+  /** Extra env vars to set (e.g. CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS) */
+  env?: Record<string, string>;
+  /** Override args builder (returns { cmd, args } instead of buildCodeAgentArgs) */
+  buildArgs?: () => { cmd: string; args: string[] };
+  /** Default timeout in minutes (overrides 10min default) */
+  defaultTimeoutMinutes?: number;
+  /** Max timeout in minutes (overrides 30min cap) */
+  maxTimeoutMinutes?: number;
+  /** Skip sending notification on completion (parent handles it) */
+  skipNotification?: boolean;
+}
+
 /** Background execution of a coding agent. Updates task status throughout. */
-async function runCodeAgentBackground(
+export async function runCodeAgentBackground(
   id: string,
   agent: string,
   task: string,
@@ -845,6 +1182,7 @@ async function runCodeAgentBackground(
   validate: boolean,
   input: Record<string, any>,
   startedAt: Date,
+  options?: CodeAgentBackgroundOptions,
 ): Promise<void> {
   const caTask = codeAgentTasks.get(id)!;
 
@@ -857,25 +1195,39 @@ async function runCodeAgentBackground(
     detail: { agent, workdir, model: input.model, validate },
   });
 
-  // Per-invocation timeout (default 10min, max 30min)
-  const timeoutMinutes = Math.min(input.timeout_minutes || 10, 30);
+  // Per-invocation timeout (configurable defaults for team vs solo)
+  const defaultTimeout = options?.defaultTimeoutMinutes ?? 10;
+  const maxTimeout = options?.maxTimeoutMinutes ?? 30;
+  const timeoutMinutes = Math.min(input.timeout_minutes || defaultTimeout, maxTimeout);
   const timeoutMs = timeoutMinutes * 60 * 1000;
 
-  const { cmd, args } = buildCodeAgentArgs({
-    task,
-    agent,
-    workdir,
-    model: input.model,
-    max_turns: input.max_turns,
-  });
+  const { cmd, args } = options?.buildArgs
+    ? options.buildArgs()
+    : buildCodeAgentArgs({
+        task,
+        agent,
+        workdir,
+        model: input.model,
+        max_turns: input.max_turns,
+      });
 
   let stdout = '';
   let stderr = '';
+
+  // Full log file — untruncated stdout + stderr
+  const logPath = join(CODE_AGENTS_DIR, `${id}.log`);
+  if (!existsSync(CODE_AGENTS_DIR)) mkdirSync(CODE_AGENTS_DIR, { recursive: true });
+  const logStream = createWriteStream(logPath, { flags: 'w' });
+  logStream.write(`=== ${id} | ${agent} | ${new Date().toISOString()} ===\n`);
+  logStream.write(`Task: ${task.slice(0, 500)}\n`);
+  logStream.write(`Workdir: ${workdir}\n\n`);
 
   try {
     const exitCode = await new Promise<number | null>((resolvePromise, reject) => {
       const spawnEnv = { ...process.env };
       delete spawnEnv.CLAUDECODE;
+      // Apply extra env vars (e.g. team mode feature flag)
+      if (options?.env) Object.assign(spawnEnv, options.env);
       const proc = spawn(cmd, args, {
         cwd: workdir,
         stdio: ['ignore', 'pipe', 'pipe'],
@@ -887,21 +1239,25 @@ async function runCodeAgentBackground(
 
       proc.stdout.on('data', (chunk: Buffer) => {
         stdout += chunk.toString();
+        logStream.write(chunk);
         const now = Date.now();
         if (now - lastStatusWrite > STATUS_WRITE_INTERVAL) {
           lastStatusWrite = now;
-          // Combine stderr (tool calls/progress) + stdout for live output
-          const live = stderr ? `[progress]\n${stderr.slice(-3000)}\n\n[output]\n${stdout.slice(-2000)}` : stdout.slice(-5000);
+          // Parse stream-json into readable live output
+          const parsed = parseStreamJsonForLive(stdout);
+          const live = stderr ? `[progress]\n${stderr.slice(-2000)}\n\n${parsed}` : parsed;
           caTask.liveOutput = live;
           writeCodeAgentTask(caTask);
         }
       });
       proc.stderr.on('data', (chunk: Buffer) => {
         stderr += chunk.toString();
+        logStream.write(chunk);
         const now = Date.now();
         if (now - lastStatusWrite > STATUS_WRITE_INTERVAL) {
           lastStatusWrite = now;
-          const live = `[progress]\n${stderr.slice(-3000)}\n\n[output]\n${stdout.slice(-2000)}`;
+          const parsedOut = parseStreamJsonForLive(stdout);
+          const live = `[progress]\n${stderr.slice(-2000)}\n\n${parsedOut}`;
           caTask.liveOutput = live;
           writeCodeAgentTask(caTask);
         }
@@ -915,6 +1271,8 @@ async function runCodeAgentBackground(
 
       proc.on('close', (code) => {
         clearTimeout(timer);
+        logStream.write(`\n=== EXIT ${code} | ${new Date().toISOString()} ===\n`);
+        logStream.end();
         if (timedOut) {
           reject(new Error(`${agent} agent timed out after ${timeoutMinutes} minutes`));
         } else {
@@ -924,16 +1282,52 @@ async function runCodeAgentBackground(
 
       proc.on('error', (err) => {
         clearTimeout(timer);
+        logStream.write(`\n=== ERROR: ${err.message} ===\n`);
+        logStream.end();
         reject(err);
       });
     });
 
-    // Parse output
+    // Parse output — stream-json format is newline-delimited JSON events
     let agentOutput: string;
     if (agent === 'claude') {
       try {
-        const parsed = JSON.parse(stdout);
-        agentOutput = parsed.result || parsed.content || stdout;
+        const lines = stdout.trim().split('\n');
+        let resultText = '';
+        let lastResult: any = null;
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const event = JSON.parse(line);
+            // Capture assistant text messages
+            if (event.type === 'assistant' && event.message?.content) {
+              for (const block of event.message.content) {
+                if (block.type === 'text' && block.text) {
+                  resultText += block.text + '\n';
+                }
+              }
+            }
+            // The final "result" event has metadata
+            if (event.type === 'result') {
+              lastResult = event;
+              if (event.result) resultText += event.result;
+            }
+          } catch { /* skip non-JSON lines */ }
+        }
+
+        if (resultText.trim()) {
+          agentOutput = resultText.trim();
+        } else if (lastResult) {
+          // No text output — build summary from result metadata
+          const turns = lastResult.num_turns || '?';
+          const cost = lastResult.total_cost_usd != null ? `$${lastResult.total_cost_usd.toFixed(2)}` : '';
+          const duration = lastResult.duration_ms ? `${Math.round(lastResult.duration_ms / 1000)}s` : '';
+          const parts = [`Completed in ${turns} turns`, duration, cost].filter(Boolean);
+          agentOutput = parts.join(', ');
+        } else {
+          agentOutput = stdout.slice(0, 500) || stderr.slice(0, 500) || '(no output)';
+        }
       } catch {
         agentOutput = stdout || stderr || '(no output)';
       }
@@ -961,12 +1355,12 @@ async function runCodeAgentBackground(
         endedAt: new Date().toISOString(),
         durationSeconds: Math.round((Date.now() - startedAt.getTime()) / 1000),
         exitCode,
-        outputPreview: agentOutput.slice(0, 500),
+        outputPreview: agentOutput.slice(0, 5000),
         error: `Exited with code ${exitCode}`,
         liveOutput: undefined,
       });
       writeCodeAgentTask(caTask);
-      await notifyCodeAgentResult(caTask);
+      if (!options?.skipNotification) await notifyCodeAgentResult(caTask);
       return;
     }
 
@@ -1030,7 +1424,8 @@ async function runCodeAgentBackground(
             const now = Date.now();
             if (now - lastStatusWrite > 3000) {
               lastStatusWrite = now;
-              const live = stderr ? `[progress]\n${stderr.slice(-3000)}\n\n[output]\n${stdout.slice(-2000)}` : stdout.slice(-5000);
+              const retryParsed = parseStreamJsonForLive(stdout);
+              const live = stderr ? `[progress]\n${stderr.slice(-2000)}\n\n${retryParsed}` : retryParsed;
               caTask.liveOutput = live;
               writeCodeAgentTask(caTask);
             }
@@ -1040,7 +1435,8 @@ async function runCodeAgentBackground(
             const now = Date.now();
             if (now - lastStatusWrite > 3000) {
               lastStatusWrite = now;
-              const live = `[progress]\n${stderr.slice(-3000)}\n\n[output]\n${stdout.slice(-2000)}`;
+              const parsedOut = parseStreamJsonForLive(stdout);
+          const live = `[progress]\n${stderr.slice(-2000)}\n\n${parsedOut}`;
               caTask.liveOutput = live;
               writeCodeAgentTask(caTask);
             }
@@ -1078,11 +1474,11 @@ async function runCodeAgentBackground(
           exitCode,
           validationPassed: false,
           validationOutput: validateResult.slice(0, 8_000),
-          outputPreview: agentOutput.slice(0, 500),
+          outputPreview: agentOutput.slice(0, 5000),
           error: 'Validation failed',
         });
         writeCodeAgentTask(caTask);
-        await notifyCodeAgentResult(caTask);
+        if (!options?.skipNotification) await notifyCodeAgentResult(caTask);
         return;
       }
 
@@ -1095,10 +1491,10 @@ async function runCodeAgentBackground(
         exitCode,
         validationPassed: true,
         validationOutput: undefined,
-        outputPreview: agentOutput.slice(0, 500),
+        outputPreview: agentOutput.slice(0, 5000),
       });
       writeCodeAgentTask(caTask);
-      await notifyCodeAgentResult(caTask);
+      if (!options?.skipNotification) await notifyCodeAgentResult(caTask);
       return;
     }
 
@@ -1110,11 +1506,11 @@ async function runCodeAgentBackground(
       endedAt: new Date().toISOString(),
       durationSeconds: Math.round((Date.now() - startedAt.getTime()) / 1000),
       exitCode,
-      outputPreview: agentOutput.slice(0, 500),
+      outputPreview: agentOutput.slice(0, 5000),
       liveOutput: undefined,
     });
     writeCodeAgentTask(caTask);
-    await notifyCodeAgentResult(caTask);
+    if (!options?.skipNotification) await notifyCodeAgentResult(caTask);
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
     addEvent(traceId, { type: 'error', summary: errMsg.slice(0, 200), durationMs: Date.now() - startedAt.getTime() });
@@ -1127,8 +1523,231 @@ async function runCodeAgentBackground(
       liveOutput: undefined,
     });
     writeCodeAgentTask(caTask);
-    await notifyCodeAgentResult(caTask);
+    if (!options?.skipNotification) await notifyCodeAgentResult(caTask);
   }
+}
+
+/**
+ * Team orchestrator — decomposes task, spawns parallel agents, monitors, synthesizes.
+ */
+async function runTeamOrchestrator(
+  parentId: string,
+  task: string,
+  teamSize: number,
+  workdir: string,
+  validate: boolean,
+  model: string | undefined,
+  startedAt: Date,
+  context?: ExecuteToolContext,
+): Promise<void> {
+  const parentTask = codeAgentTasks.get(parentId)!;
+
+  const traceId = startTrace('code_team');
+  addEvent(traceId, {
+    type: 'spawn',
+    summary: `team-coordinator: ${task.slice(0, 150)}`,
+    durationMs: 0,
+    detail: { teamSize, workdir, model, validate },
+  });
+
+  const timeoutMinutes = Math.min(context?.fullConfig?.subagents?.maxConcurrent ? 60 : 20, 60);
+  const perChildTimeout = Math.max(5, Math.floor(timeoutMinutes / teamSize));
+
+  try {
+    // Phase 1: Decompose
+    parentTask.liveOutput = 'Phase: Decomposing task...';
+    writeCodeAgentTask(parentTask);
+
+    const fullConfig = context?.fullConfig;
+    if (!fullConfig) throw new Error('No config available for task decomposition');
+
+    const subtasks = await decomposeTask(task, teamSize, fullConfig);
+    addEvent(traceId, {
+      type: 'decompose',
+      summary: `Decomposed into ${subtasks.length} subtasks`,
+      durationMs: Date.now() - startedAt.getTime(),
+    });
+
+    // Phase 2: Spawn parallel children
+    parentTask.liveOutput = `Phase: Spawning ${subtasks.length} agents...`;
+    writeCodeAgentTask(parentTask);
+
+    const childIds: string[] = [];
+    for (let i = 0; i < subtasks.length; i++) {
+      const childId = `ca-${++codeAgentCounter}`;
+      const childTask: CodeAgentTask = {
+        id: childId,
+        agent: 'claude',
+        task: subtasks[i],
+        status: 'running',
+        chatId: context?.chatId,
+        startedAt: new Date().toISOString(),
+        workdir,
+        model,
+        parentTaskId: parentId,
+        subtask: subtasks[i],
+      };
+      codeAgentTasks.set(childId, childTask);
+      writeCodeAgentTask(childTask);
+      childIds.push(childId);
+
+      // Fire-and-forget: spawn each child agent
+      runCodeAgentBackground(
+        childId,
+        'claude',
+        subtasks[i],
+        workdir,
+        false, // children don't validate individually
+        { task: subtasks[i], model, timeout_minutes: perChildTimeout },
+        new Date(),
+        { skipNotification: true, defaultTimeoutMinutes: perChildTimeout, maxTimeoutMinutes: perChildTimeout },
+      ).catch((err) => {
+        console.error(`[code-team] Child ${childId} background error:`, err);
+      });
+    }
+
+    parentTask.childTaskIds = childIds;
+    writeCodeAgentTask(parentTask);
+
+    // Phase 3: Poll until all children complete
+    const POLL_INTERVAL = 3000;
+    const totalTimeoutMs = timeoutMinutes * 60 * 1000;
+
+    while (true) {
+      await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL));
+
+      const children = childIds.map(id => codeAgentTasks.get(id)!);
+      const doneCount = children.filter(c => c.status !== 'running' && c.status !== 'validating').length;
+      const runningCount = children.filter(c => c.status === 'running' || c.status === 'validating').length;
+
+      // Update parent's liveOutput with structured status
+      const statusLines = children.map(c => {
+        const elapsed = Math.round((Date.now() - new Date(c.startedAt).getTime()) / 1000);
+        const elapsedStr = elapsed < 60 ? `${elapsed}s` : `${Math.floor(elapsed / 60)}m${elapsed % 60}s`;
+        const subtaskPreview = (c.subtask || c.task).slice(0, 200);
+        return `${c.id} [${c.status}] (${elapsedStr}): ${subtaskPreview}`;
+      }).join('\n');
+      parentTask.liveOutput = `Phase: Running (${doneCount}/${children.length} complete)\n${statusLines}`;
+      writeCodeAgentTask(parentTask);
+
+      if (doneCount === children.length) break;
+
+      // Check total timeout
+      if (Date.now() - startedAt.getTime() > totalTimeoutMs) {
+        // Kill remaining running children
+        for (const child of children) {
+          if (child.status === 'running' || child.status === 'validating') {
+            Object.assign(child, {
+              status: 'timeout',
+              endedAt: new Date().toISOString(),
+              durationSeconds: Math.round((Date.now() - new Date(child.startedAt).getTime()) / 1000),
+              error: 'Parent team timed out',
+            });
+            writeCodeAgentTask(child);
+          }
+        }
+        break;
+      }
+    }
+
+    // Phase 4: Collect results and synthesize
+    parentTask.liveOutput = 'Phase: Synthesizing results...';
+    writeCodeAgentTask(parentTask);
+
+    const childResults = childIds.map(id => {
+      const child = codeAgentTasks.get(id)!;
+      return {
+        subtask: child.subtask || child.task,
+        status: child.status,
+        output: child.outputPreview,
+        error: child.error,
+      };
+    });
+
+    addEvent(traceId, {
+      type: 'synthesize',
+      summary: `Synthesizing ${childResults.length} results`,
+      durationMs: Date.now() - startedAt.getTime(),
+    });
+
+    const synthesis = await synthesizeResults(task, childResults, fullConfig);
+    parentTask.synthesisResult = synthesis;
+
+    // Phase 5: Validation (once, on the combined result)
+    if (validate) {
+      parentTask.liveOutput = 'Phase: Validating...';
+      parentTask.status = 'validating';
+      writeCodeAgentTask(parentTask);
+
+      const { passed, output } = await runValidation(workdir);
+      const endedAt = new Date();
+      const duration = Math.round((endedAt.getTime() - startedAt.getTime()) / 1000);
+
+      if (!passed) {
+        addEvent(traceId, { type: 'validation', summary: 'Team validation failed', durationMs: Date.now() - startedAt.getTime() });
+        await endTrace(traceId, 'error');
+        Object.assign(parentTask, {
+          status: 'failed',
+          endedAt: endedAt.toISOString(),
+          durationSeconds: duration,
+          validationPassed: false,
+          validationOutput: output,
+          outputPreview: synthesis.slice(0, 5000),
+          error: 'Validation failed',
+          liveOutput: undefined,
+        });
+        writeCodeAgentTask(parentTask);
+        await notifyCodeAgentResult(parentTask);
+        return;
+      }
+
+      addEvent(traceId, { type: 'validation', summary: 'Team validation passed', durationMs: Date.now() - startedAt.getTime() });
+      await endTrace(traceId, 'ok');
+      Object.assign(parentTask, {
+        status: 'completed',
+        endedAt: endedAt.toISOString(),
+        durationSeconds: duration,
+        validationPassed: true,
+        outputPreview: synthesis.slice(0, 5000),
+        liveOutput: undefined,
+      });
+      writeCodeAgentTask(parentTask);
+      await notifyCodeAgentResult(parentTask);
+      return;
+    }
+
+    // No validation — mark complete
+    const endedAt = new Date();
+    addEvent(traceId, { type: 'complete', summary: 'Team completed (no validation)', durationMs: Date.now() - startedAt.getTime() });
+    await endTrace(traceId, 'ok');
+    Object.assign(parentTask, {
+      status: 'completed',
+      endedAt: endedAt.toISOString(),
+      durationSeconds: Math.round((endedAt.getTime() - startedAt.getTime()) / 1000),
+      outputPreview: synthesis.slice(0, 5000),
+      liveOutput: undefined,
+    });
+    writeCodeAgentTask(parentTask);
+    await notifyCodeAgentResult(parentTask);
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    addEvent(traceId, { type: 'error', summary: errMsg.slice(0, 200), durationMs: Date.now() - startedAt.getTime() });
+    await endTrace(traceId, 'error');
+    Object.assign(parentTask, {
+      status: errMsg.includes('timed out') ? 'timeout' : 'failed',
+      endedAt: new Date().toISOString(),
+      durationSeconds: Math.round((Date.now() - startedAt.getTime()) / 1000),
+      error: errMsg,
+      liveOutput: undefined,
+    });
+    writeCodeAgentTask(parentTask);
+    await notifyCodeAgentResult(parentTask);
+  }
+}
+
+/** @deprecated Removed — old Claude CLI team state reader. Kept for backward compat. */
+export function readTeamState(): null {
+  return null;
 }
 
 /** Execute check_code_agent tool — list all or get details for one agent. */

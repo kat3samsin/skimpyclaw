@@ -266,7 +266,7 @@ export interface AuditEvent {
 
 export interface AuditTrace {
   traceId: string;
-  trigger: 'telegram' | 'cron' | 'api' | 'system' | 'discord' | 'code_agent';
+  trigger: 'telegram' | 'cron' | 'api' | 'system' | 'discord' | 'code_agent' | 'code_team';
   status: 'ok' | 'error';
   startedAt: string;
   endedAt: string;

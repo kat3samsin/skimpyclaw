@@ -14,6 +14,7 @@ const DASHBOARD_HTML = `<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>SkimpyClaw 👙🦞 Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/lib/marked.umd.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
@@ -794,10 +795,65 @@ td:first-child { color: var(--highlight); }
   overflow-y: auto;
 }
 
+.ca-output-md {
+  white-space: normal;
+  font-family: var(--font);
+  max-height: 400px;
+  overflow-y: auto;
+}
+.ca-output-md h1, .ca-output-md h2, .ca-output-md h3 {
+  margin: 10px 0 4px;
+  font-size: 14px;
+}
+.ca-output-md h2 { font-size: 15px; }
+.ca-output-md h1 { font-size: 16px; }
+.ca-output-md p { margin: 4px 0; }
+.ca-output-md ul, .ca-output-md ol { margin: 4px 0; padding-left: 20px; }
+.ca-output-md li { margin: 2px 0; }
+.ca-output-md code {
+  background: var(--surface);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-family: var(--mono);
+  font-size: 0.9em;
+}
+.ca-output-md pre {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px;
+  overflow-x: auto;
+  font-size: 11px;
+}
+.ca-output-md pre code {
+  background: none;
+  padding: 0;
+}
+
 .ca-error {
   background: rgba(202, 61, 79, 0.08);
   border: 1px solid rgba(202, 61, 79, 0.2);
   color: var(--error);
+}
+
+.ca-tree { margin-bottom: 16px; }
+.ca-tree-children {
+  margin-left: 20px;
+  padding-left: 16px;
+  border-left: 2px solid var(--border);
+}
+.ca-tree-child {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 10px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.ca-tree-child .ca-output {
+  max-height: 300px;
+  overflow-y: auto;
 }
 
 .audit-entry {
@@ -1555,6 +1611,13 @@ function esc(str) {
   return d.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+function md(str) {
+  if (typeof marked !== 'undefined' && marked.parse) {
+    try { return marked.parse(str, { breaks: true }); } catch(e) {}
+  }
+  return esc(str);
+}
+
 function isSafeHref(url) {
   if (!url) return false;
   if (url.startsWith('#') || url.startsWith('/')) return true;
@@ -2184,6 +2247,7 @@ function renderCaAgents(agents) {
   // Save expanded states and scroll positions before re-rendering
   var expandedIds = new Set();
   var scrollPositions = {};
+  var expandedTeammates = new Set();
   document.querySelectorAll('.audit-events.expanded').forEach(function(detailEl) {
     if (detailEl.id) {
       expandedIds.add(detailEl.id);
@@ -2193,10 +2257,27 @@ function renderCaAgents(agents) {
       }
     }
   });
+  // Save expanded teammate panels
+  document.querySelectorAll('[id^="tm-"]').forEach(function(tmEl) {
+    if (tmEl.style.display !== 'none') {
+      expandedTeammates.add(tmEl.id);
+    }
+  });
+
+  // Build lookup for child tasks (parentTaskId → children)
+  var childMap = {};
+  for (var ci = 0; ci < agents.length; ci++) {
+    if (agents[ci].parentTaskId) {
+      if (!childMap[agents[ci].parentTaskId]) childMap[agents[ci].parentTaskId] = [];
+      childMap[agents[ci].parentTaskId].push(agents[ci]);
+    }
+  }
 
   var html = '';
   for (var i = 0; i < agents.length; i++) {
     var a = agents[i];
+    // Skip child tasks — they render under their parent
+    if (a.parentTaskId) continue;
     var isActive = a.status === 'running' || a.status === 'validating';
     var spinner = isActive ? '<span class="ca-spinner"></span> ' : '';
     var secs = a.durationSeconds != null ? a.durationSeconds
@@ -2204,13 +2285,23 @@ function renderCaAgents(agents) {
     var elapsed = secs < 60 ? secs + 's' : Math.floor(secs / 60) + 'm ' + (secs % 60) + 's';
     var taskPreview = (a.task || '').length > 80 ? a.task.slice(0, 80) + '...' : (a.task || '');
     var detailId = 'ca-detail-' + (a.id || '').replace(/[^a-zA-Z0-9]/g, '');
+    var children = childMap[a.id] || [];
+    var isTeam = a.agent === 'team-coordinator' && children.length > 0;
+
+    // Wrap team-coordinator agents in a tree container
+    if (isTeam) html += '<div class="ca-tree">';
 
     html += '<div class="audit-entry">';
     html += '<div class="audit-header">';
     html += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">';
     html += '<span class="audit-id">' + esc(a.id) + '</span>';
     html += '<span class="ca-status-badge ' + esc(a.status) + '">' + spinner + esc(a.status.toUpperCase()) + '</span>';
-    if (a.agent) html += '<span style="font-size:13px;color:var(--text-dim);">' + esc(a.agent) + '</span>';
+    if (a.agent === 'team-coordinator') {
+      var childCount = (a.childTaskIds || []).length;
+      html += '<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px;background:#7c3aed;color:#fff;">Team (' + childCount + ')</span>';
+    } else if (a.agent) {
+      html += '<span style="font-size:13px;color:var(--text-dim);">' + esc(a.agent) + '</span>';
+    }
     html += '</div>';
     html += '<div class="audit-meta">';
     html += '<span>' + elapsed + '</span>';
@@ -2224,7 +2315,7 @@ function renderCaAgents(agents) {
       html += '<div class="audit-summary"><span>' + esc(taskPreview) + '</span></div>';
     }
 
-    // Expandable details
+    // Expandable details (meta info, full task, parent-level output/errors)
     var hasDetails = a.task || a.liveOutput || a.outputPreview || a.error || a.endedAt || a.validationPassed != null;
     if (hasDetails) {
       html += '<div class="audit-events-toggle" onclick="toggleCaDetail(\\'' + detailId + '\\', this)">\\u25B6 Details</div>';
@@ -2241,15 +2332,70 @@ function renderCaAgents(agents) {
       // Full task
       if (a.task) html += '<div class="ca-task">' + esc(a.task) + '</div>';
 
-      // Output
-      var output = a.liveOutput || a.outputPreview;
-      if (output) html += '<div class="ca-output" style="margin-top:8px;">' + esc(output) + '</div>';
-      if (a.error) html += '<div class="ca-output ca-error" style="margin-top:8px;">' + esc(a.error) + '</div>';
+      // Output (parent-level) — skip for team coordinators since synthesis shows in tree
+      if (!isTeam) {
+        var output = a.liveOutput || a.outputPreview;
+        if (output) html += '<div class="ca-output ca-output-md" style="margin-top:8px;">' + md(output) + '</div>';
+      }
+      if (a.error) html += '<div class="ca-output ca-error ca-output-md" style="margin-top:8px;">' + md(a.error) + '</div>';
 
       html += '</div>';
     }
 
-    html += '</div>';
+    html += '</div>'; // end .audit-entry
+
+    // Tree children — rendered OUTSIDE the root card, always visible
+    if (isTeam) {
+      html += '<div class="ca-tree-children">';
+      html += '<div style="font-size:13px;font-weight:600;color:var(--text-dim);margin-bottom:8px;margin-top:8px;text-transform:uppercase;letter-spacing:0.04em;">Agents (' + children.length + ')</div>';
+
+      for (var ch = 0; ch < children.length; ch++) {
+        var child = children[ch];
+        var childActive = child.status === 'running' || child.status === 'validating';
+        var childIcon = child.status === 'running' ? '\\u{1F504}' : child.status === 'completed' ? '\\u2705' : child.status === 'failed' ? '\\u274C' : child.status === 'timeout' ? '\\u23F0' : child.status === 'validating' ? '\\u{1F50D}' : '\\u2B55';
+        var childSecs = child.durationSeconds != null ? child.durationSeconds : Math.round((Date.now() - new Date(child.startedAt).getTime()) / 1000);
+        var childElapsed = childSecs < 60 ? childSecs + 's' : Math.floor(childSecs / 60) + 'm ' + (childSecs % 60) + 's';
+        var childSubtask = child.subtask || child.task || '';
+        var childDetailId = 'tm-' + (a.id || '').replace(/[^a-zA-Z0-9]/g, '') + '-' + ch;
+        var childBorderColor = child.status === 'completed' ? 'var(--success)' : child.status === 'failed' ? 'var(--error)' : child.status === 'timeout' ? 'var(--warning)' : 'var(--highlight)';
+
+        html += '<div class="ca-tree-child" style="border-left:3px solid ' + childBorderColor + ';" onclick="toggleTeammate(\\'' + childDetailId + '\\')">';
+
+        // Header row
+        html += '<div style="display:flex;justify-content:space-between;align-items:center;">';
+        html += '<div style="display:flex;align-items:center;gap:6px;">';
+        html += '<span>' + childIcon + '</span>';
+        html += '<span class="audit-id" style="font-size:13px;">' + esc(child.id) + '</span>';
+        if (childActive) html += '<span class="ca-spinner"></span>';
+        html += '<span style="color:var(--text-dim);font-size:13px;">' + childElapsed + '</span>';
+        html += '</div>';
+        html += '<span class="ca-status-badge ' + esc(child.status) + '" style="font-size:11px;padding:2px 8px;">' + esc(child.status.toUpperCase()) + '</span>';
+        html += '</div>';
+
+        // Subtask description
+        html += '<div style="margin-top:4px;color:var(--text);">' + esc(childSubtask) + '</div>';
+
+        // Expandable detail (output)
+        html += '<div id="' + childDetailId + '" style="display:none;margin-top:8px;">';
+        var childOutput = child.liveOutput || child.outputPreview;
+        if (childOutput) html += '<div class="ca-output ca-output-md" style="font-size:13px;max-height:300px;overflow-y:auto;">' + md(childOutput) + '</div>';
+        if (child.error) html += '<div class="ca-output ca-error ca-output-md" style="font-size:13px;margin-top:4px;">' + md(child.error) + '</div>';
+        html += '</div>';
+
+        html += '</div>'; // end .ca-tree-child
+      }
+
+      // Synthesis result — after children
+      if (a.synthesisResult) {
+        html += '<div style="margin-top:8px;padding:12px 16px;background:var(--surface-alt);border:1px solid var(--border);border-radius:8px;font-size:14px;max-height:400px;overflow-y:auto;">';
+        html += '<div style="font-size:12px;font-weight:600;color:var(--text-dim);margin-bottom:4px;">SYNTHESIS</div>';
+        html += '<div class="ca-output-md" style="word-break:break-word;">' + md(a.synthesisResult) + '</div>';
+        html += '</div>';
+      }
+
+      html += '</div>'; // end .ca-tree-children
+      html += '</div>'; // end .ca-tree
+    }
   }
 
   el.innerHTML = html;
@@ -2273,9 +2419,16 @@ function renderCaAgents(agents) {
     }
   });
 
+  // Restore expanded teammate panels
+  expandedTeammates.forEach(function(tmId) {
+    var tmEl = document.getElementById(tmId);
+    if (tmEl) tmEl.style.display = 'block';
+  });
+
   // Auto-expand and auto-scroll live output for active agents
   for (var j = 0; j < agents.length; j++) {
     if (agents[j].status === 'running' || agents[j].status === 'validating') {
+      // Auto-expand parent-level details
       var detailId2 = 'ca-detail-' + (agents[j].id || '').replace(/[^a-zA-Z0-9]/g, '');
       var detailEl = document.getElementById(detailId2);
       if (detailEl) {
@@ -2289,6 +2442,28 @@ function renderCaAgents(agents) {
       }
     }
   }
+  // Auto-expand active children's output panels
+  for (var k = 0; k < agents.length; k++) {
+    if (agents[k].parentTaskId && (agents[k].status === 'running' || agents[k].status === 'validating')) {
+      var parentId = (agents[k].parentTaskId || '').replace(/[^a-zA-Z0-9]/g, '');
+      // Find the tm- panel for this child by scanning all panels under this parent
+      var parentChildren = childMap[agents[k].parentTaskId] || [];
+      for (var ci2 = 0; ci2 < parentChildren.length; ci2++) {
+        if (parentChildren[ci2].id === agents[k].id) {
+          var tmId = 'tm-' + parentId + '-' + ci2;
+          var tmEl = document.getElementById(tmId);
+          if (tmEl && tmEl.style.display === 'none') {
+            tmEl.style.display = 'block';
+          }
+          if (tmEl) {
+            var tmOutput = tmEl.querySelector('.ca-output');
+            if (tmOutput) tmOutput.scrollTop = tmOutput.scrollHeight;
+          }
+          break;
+        }
+      }
+    }
+  }
 }
 
 function toggleCaDetail(id, toggleEl) {
@@ -2298,6 +2473,13 @@ function toggleCaDetail(id, toggleEl) {
     if (toggleEl) {
       toggleEl.textContent = (expanded ? '\\u25BC' : '\\u25B6') + ' Details';
     }
+  }
+}
+
+function toggleTeammate(id) {
+  var el = document.getElementById(id);
+  if (el) {
+    el.style.display = el.style.display === 'none' ? 'block' : 'none';
   }
 }
 
