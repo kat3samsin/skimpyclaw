@@ -490,6 +490,7 @@ describe('code_with_team', () => {
       expect(props).toContain('task');
       expect(props).toContain('team_size');
       expect(props).toContain('workdir');
+      expect(props).toContain('agent');
       expect(props).toContain('model');
       expect(props).toContain('timeout_minutes');
       expect(props).toContain('validate');
@@ -520,6 +521,14 @@ describe('code_with_team', () => {
     it('returns error when task is missing', async () => {
       const result = await executeTool('code_with_team', {}, toolConfig);
       expect(result).toContain('Error: task is required');
+    });
+
+    it('returns error when agent is invalid', async () => {
+      const result = await executeTool('code_with_team', {
+        task: 'refactor auth',
+        agent: 'not-a-real-agent',
+      }, toolConfig);
+      expect(result).toContain('Error: Invalid agent');
     });
   });
 });

@@ -211,7 +211,8 @@ export const CODE_WITH_TEAM_TOOL = {
       task: { type: 'string', description: 'Detailed task description. Be specific: what to change, why, which files, expected behavior.' },
       team_size: { type: 'number', description: 'Number of parallel agents (2-5, default 3)' },
       workdir: { type: 'string', description: 'Working directory or project name (default: SkimpyClaw repo root)' },
-      model: { type: 'string', description: 'Model override (e.g. claude-sonnet-4-5)' },
+      agent: { type: 'string', enum: ['claude', 'codex', 'kimi'], description: 'Which coding CLI to use for all team workers. Omit to use configured default.' },
+      model: { type: 'string', description: 'Model override (e.g. claude-sonnet-4-6, gpt-5.3-codex)' },
       timeout_minutes: { type: 'number', description: 'Total timeout in minutes (default: 20, max: 60)' },
       validate: { type: 'boolean', description: 'Run pnpm build && pnpm test after all agents complete (default: true)' },
     },
@@ -879,6 +880,12 @@ async function executeCodeWithTeam(
   const task = input.task as string;
   if (!task) return 'Error: task is required';
 
+  const configDefault = context?.fullConfig?.subagents?.defaultCodeAgent || 'claude';
+  const agent = (input.agent as string) || configDefault;
+  if (!['claude', 'codex', 'kimi'].includes(agent)) {
+    return `Error: Invalid agent "${agent}". Must be claude, codex, or kimi.`;
+  }
+
   const teamSize = Math.max(2, Math.min(5, (input.team_size as number) || 3));
 
   const projects = context?.fullConfig?.projects ?? {};
@@ -942,12 +949,12 @@ async function executeCodeWithTeam(
   writeCodeAgentTask(caTask);
 
   // Fire-and-forget: orchestrator decomposes, spawns children, monitors, synthesizes
-  runTeamOrchestrator(id, task, teamSize, workdir, validate, resolvedModel, startedAt, context).catch((err) => {
+  runTeamOrchestrator(id, task, teamSize, workdir, validate, agent, resolvedModel, startedAt, context).catch((err) => {
     console.error(`[code-team] Background error for ${id}:`, err);
   });
 
   const taskPreview = task.length > 100 ? task.slice(0, 100) + '...' : task;
-  return `Started coding team ${id} (${teamSize} parallel agents). Task: ${taskPreview}\n\nUse check_code_agent to poll status.`;
+  return `Started coding team ${id} (${teamSize} parallel ${agent} agents). Task: ${taskPreview}\n\nUse check_code_agent to poll status.`;
 }
 
 async function executeCodeWithAgent(
@@ -1536,6 +1543,7 @@ async function runTeamOrchestrator(
   teamSize: number,
   workdir: string,
   validate: boolean,
+  agent: string,
   model: string | undefined,
   startedAt: Date,
   context?: ExecuteToolContext,
@@ -1547,7 +1555,7 @@ async function runTeamOrchestrator(
     type: 'spawn',
     summary: `team-coordinator: ${task.slice(0, 150)}`,
     durationMs: 0,
-    detail: { teamSize, workdir, model, validate },
+    detail: { teamSize, workdir, agent, model, validate },
   });
 
   const timeoutMinutes = Math.min(context?.fullConfig?.subagents?.maxConcurrent ? 60 : 20, 60);
@@ -1577,7 +1585,7 @@ async function runTeamOrchestrator(
       const childId = `ca-${++codeAgentCounter}`;
       const childTask: CodeAgentTask = {
         id: childId,
-        agent: 'claude',
+        agent,
         task: subtasks[i],
         status: 'running',
         chatId: context?.chatId,
@@ -1594,7 +1602,7 @@ async function runTeamOrchestrator(
       // Fire-and-forget: spawn each child agent
       runCodeAgentBackground(
         childId,
-        'claude',
+        agent,
         subtasks[i],
         workdir,
         false, // children don't validate individually

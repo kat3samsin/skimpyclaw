@@ -4,7 +4,7 @@
 
 ```bash
 pnpm build        # TypeScript compile (tsc)
-pnpm test         # Vitest (347 tests)
+pnpm test         # Vitest (355 tests)
 pnpm build && pnpm test  # Always run both after changes
 pnpm dev          # Hot reload dev server (tsx watch)
 ```
@@ -91,6 +91,7 @@ priority: 100
 - **Guard Codex SSE responses** — `fc.arguments` can be undefined. Always use `(fc.arguments || JSON.stringify(args))`.
 - **Pass toolConfig to runAgentTurn** — without it, the model hallucinates XML tool calls.
 - **New tools go in both paths** — Anthropic `chatWithTools` AND Codex `codexChat` in agent.ts.
+- **code_with_team agent selection** — team workers support `claude`, `codex`, or `kimi`; default comes from `subagents.defaultCodeAgent`.
 - **Path validation** — all file/dir operations restricted to `ToolConfig.allowedPaths`.
 - **Hardcode paths** — prefer simple over configurable.
 - **Dashboard is inline** — no framework, no build step. HTML/CSS/JS in a single string in `dashboard.ts`.
