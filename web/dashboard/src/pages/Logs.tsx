@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'preact/hooks';
 import { getLogFiles, getLogContent } from '../api/client.js';
 import type { LogFile } from '../types.js';
-import { LuFileText } from 'react-icons/lu';
+import { LuFileText, LuRefreshCw } from 'react-icons/lu';
 
 export function Logs() {
   const [files, setFiles] = useState<LogFile[]>([]);
@@ -44,7 +44,11 @@ export function Logs() {
     <div>
       <div class="page-header">
         <div class="page-title">Logs</div>
-        <button class="btn btn-sm" onClick={load}>Refresh</button>
+        <div class="header-actions">
+          <button class="btn-refresh" onClick={load}>
+            <LuRefreshCw size={14} /> Refresh
+          </button>
+        </div>
       </div>
 
       {loading ? (

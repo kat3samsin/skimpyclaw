@@ -24,9 +24,10 @@ export function setSessionsDir(dir: string): void {
 
 export interface SessionEntry {
   ts: string;
-  user: string;
-  assistant: string;
+  user?: string;
+  assistant?: string;
   summary?: true;
+  proactive?: true;
 }
 
 function sessionPath(platform: string, chatId: string | number): string {
@@ -66,17 +67,24 @@ export async function loadHistory(
     }
 
     // Take last MAX_HISTORY_PAIRS entries
-    const recent = entries.slice(-MAX_HISTORY_PAIRS);
+    const usable = entries.filter((entry) => {
+      if (entry.summary) return typeof entry.assistant === 'string';
+      return typeof entry.user === 'string' && typeof entry.assistant === 'string';
+    });
+    const recent = usable.slice(-MAX_HISTORY_PAIRS);
 
     // Convert to ChatMessage pairs
     const messages: ChatMessage[] = [];
     for (const entry of recent) {
       if (entry.summary) {
+        const assistantContent = entry.assistant || '';
         messages.push({ role: 'user', content: 'Summary of our previous conversation:' });
-        messages.push({ role: 'assistant', content: entry.assistant });
+        messages.push({ role: 'assistant', content: assistantContent });
       } else {
-        messages.push({ role: 'user', content: entry.user });
-        messages.push({ role: 'assistant', content: entry.assistant });
+        const userContent = entry.user || '';
+        const assistantContent = entry.assistant || '';
+        messages.push({ role: 'user', content: userContent });
+        messages.push({ role: 'assistant', content: assistantContent });
       }
     }
     return messages;
@@ -106,6 +114,29 @@ export async function saveExchange(
     appendFileSync(filePath, JSON.stringify(entry) + '\n', 'utf-8');
   } catch (err) {
     console.error('[sessions] Failed to save exchange:', err);
+  }
+}
+
+/**
+ * Append one proactive outbound message to the session file.
+ * This is used by dashboard "messages/send" for audit visibility.
+ */
+export async function saveProactiveMessage(
+  platform: string,
+  chatId: string | number,
+  message: string
+): Promise<void> {
+  try {
+    ensureDir();
+    const filePath = sessionPath(platform, chatId);
+    const entry: SessionEntry = {
+      ts: new Date().toISOString(),
+      user: message,
+      proactive: true,
+    };
+    appendFileSync(filePath, JSON.stringify(entry) + '\n', 'utf-8');
+  } catch (err) {
+    console.error('[sessions] Failed to save proactive message:', err);
   }
 }
 

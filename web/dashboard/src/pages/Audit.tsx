@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'preact/hooks';
 import { getAudit } from '../api/client.js';
 import type { AuditTrace } from '../types.js';
-import { LuClock3, LuSearch, LuSend, LuServer } from 'react-icons/lu';
+import { LuClock3, LuRefreshCw, LuSearch, LuSend, LuServer } from 'react-icons/lu';
 
 // Re-export History with "Audit" name — same data, different page label
 export function Audit() {
@@ -66,7 +66,9 @@ export function Audit() {
             <option value="cron">Cron</option>
             <option value="gateway">Gateway</option>
           </select>
-          <button class="btn btn-sm" onClick={() => load(0)}>Refresh</button>
+          <button class="btn-refresh" onClick={() => load(0)}>
+            <LuRefreshCw size={14} /> Refresh
+          </button>
         </div>
       </div>
 

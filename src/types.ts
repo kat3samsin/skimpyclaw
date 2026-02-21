@@ -190,6 +190,7 @@ export interface GatewayStatus {
   agent: string;
   model: string;
   lastMessage?: Date;
+  activeChannel?: ChannelId | null;
   cronJobs: { id: string; name: string; nextRun?: Date }[];
 }
 

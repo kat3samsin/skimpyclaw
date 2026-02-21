@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { getDigest, getDigests } from '../api/client.js';
 import type { Digest, DigestResponse } from '../types.js';
-import { LuExternalLink, LuNewspaper } from 'react-icons/lu';
+import { LuExternalLink, LuNewspaper, LuRefreshCw } from 'react-icons/lu';
 
 export function Digests() {
   const [digests, setDigests] = useState<Digest[]>([]);
@@ -46,7 +46,11 @@ export function Digests() {
     <div>
       <div class="page-header">
         <div class="page-title">Digests</div>
-        <button class="btn btn-sm" onClick={() => void load()}>Refresh</button>
+        <div class="header-actions">
+          <button class="btn-refresh" onClick={() => void load()}>
+            <LuRefreshCw size={14} /> Refresh
+          </button>
+        </div>
       </div>
 
       {loading ? (

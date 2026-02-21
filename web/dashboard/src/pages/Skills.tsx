@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { createSkill, deleteSkill, getSkill, getSkills, setSkillEnabled, updateSkillContent } from '../api/client.js';
 import type { Skill, SkillResponse } from '../types.js';
-import { LuCircleCheck, LuCircleX, LuZap } from 'react-icons/lu';
+import { LuCircleCheck, LuCircleX, LuRefreshCw, LuZap } from 'react-icons/lu';
 import { MarkdownView } from '../components/MarkdownView.js';
 
 interface SkillsProps {
@@ -120,7 +120,9 @@ export function Skills({ showToast }: SkillsProps) {
         <div class="page-title">Skills</div>
         <div class="header-actions">
           <button class="btn btn-sm" onClick={() => setCreating(v => !v)}>{creating ? 'Close' : 'New'}</button>
-          <button class="btn btn-sm" onClick={load}>Refresh</button>
+          <button class="btn-refresh" onClick={load}>
+            <LuRefreshCw size={14} /> Refresh
+          </button>
         </div>
       </div>
 

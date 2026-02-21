@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'preact/hooks';
 import { getMemory, getMemoryFile } from '../api/client.js';
 import type { MemoryFile } from '../types.js';
-import { LuDatabase } from 'react-icons/lu';
+import { LuDatabase, LuRefreshCw } from 'react-icons/lu';
 import { MarkdownView } from '../components/MarkdownView.js';
 
 const DEFAULT_AGENT = 'main';
@@ -56,7 +56,9 @@ export function Memory() {
               <button class={`btn btn-sm${view === 'markdown' ? ' btn-primary' : ''}`} onClick={() => setView('markdown')}>Markdown</button>
             </>
           )}
-          <button class="btn btn-sm" onClick={load}>Refresh</button>
+          <button class="btn-refresh" onClick={load}>
+            <LuRefreshCw size={14} /> Refresh
+          </button>
         </div>
       </div>
 

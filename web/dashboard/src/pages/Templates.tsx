@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'preact/hooks';
 import { getTemplates, getTemplate, saveTemplate } from '../api/client.js';
 import type { TemplateListItem } from '../types.js';
-import { LuFileText } from 'react-icons/lu';
+import { LuFileText, LuRefreshCw } from 'react-icons/lu';
 import { MarkdownView } from '../components/MarkdownView.js';
 
 interface TemplatesProps {
@@ -79,7 +79,9 @@ export function Templates({ showToast }: TemplatesProps) {
               {saving ? 'Saving…' : 'Save'}
             </button>
           )}
-          <button class="btn btn-sm" onClick={load}>Refresh</button>
+          <button class="btn-refresh" onClick={load}>
+            <LuRefreshCw size={14} /> Refresh
+          </button>
         </div>
       </div>
 

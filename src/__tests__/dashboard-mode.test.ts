@@ -61,6 +61,76 @@ describe('Framework dashboard mode', () => {
     rmSync(distDir, { recursive: true, force: true });
   });
 
+  it('serves favicon.svg from dist root', async () => {
+    const distDir = mkdtempSync(join(tmpdir(), 'skimpy-favicon-'));
+    mkdirSync(join(distDir, 'assets'), { recursive: true });
+    writeFileSync(join(distDir, 'index.html'), '<!doctype html><html><body></body></html>', 'utf-8');
+    writeFileSync(join(distDir, 'favicon.svg'), '<svg xmlns="http://www.w3.org/2000/svg"></svg>', 'utf-8');
+
+    const faviconApp = Fastify();
+    registerDashboard(faviconApp, { mode: 'framework', frameworkDistDir: distDir });
+    await faviconApp.ready();
+
+    const res = await faviconApp.inject({ method: 'GET', url: '/favicon.svg' });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toContain('image/svg+xml');
+    expect(res.body).toContain('<svg');
+
+    await faviconApp.close();
+    rmSync(distDir, { recursive: true, force: true });
+  });
+
+  it('returns 404 for missing root static files', async () => {
+    const distDir = mkdtempSync(join(tmpdir(), 'skimpy-nofav-'));
+    mkdirSync(join(distDir, 'assets'), { recursive: true });
+    writeFileSync(join(distDir, 'index.html'), '<!doctype html><html><body></body></html>', 'utf-8');
+
+    const noFavApp = Fastify();
+    registerDashboard(noFavApp, { mode: 'framework', frameworkDistDir: distDir });
+    await noFavApp.ready();
+
+    const res = await noFavApp.inject({ method: 'GET', url: '/favicon.svg' });
+    expect(res.statusCode).toBe(404);
+
+    await noFavApp.close();
+    rmSync(distDir, { recursive: true, force: true });
+  });
+
+  it('rejects path traversal on root static route', async () => {
+    const distDir = mkdtempSync(join(tmpdir(), 'skimpy-traverse-'));
+    mkdirSync(join(distDir, 'assets'), { recursive: true });
+    writeFileSync(join(distDir, 'index.html'), '<!doctype html><html><body></body></html>', 'utf-8');
+
+    const traverseApp = Fastify();
+    registerDashboard(traverseApp, { mode: 'framework', frameworkDistDir: distDir });
+    await traverseApp.ready();
+
+    const res = await traverseApp.inject({ method: 'GET', url: '/..%2F..%2Fetc%2Fpasswd.svg' });
+    expect(res.statusCode).toBe(404);
+
+    await traverseApp.close();
+    rmSync(distDir, { recursive: true, force: true });
+  });
+
+  it('does not serve non-static extensions from root', async () => {
+    const distDir = mkdtempSync(join(tmpdir(), 'skimpy-ext-'));
+    mkdirSync(join(distDir, 'assets'), { recursive: true });
+    writeFileSync(join(distDir, 'index.html'), '<!doctype html><html><body></body></html>', 'utf-8');
+    writeFileSync(join(distDir, 'secret.json'), '{"key":"value"}', 'utf-8');
+
+    const extApp = Fastify();
+    registerDashboard(extApp, { mode: 'framework', frameworkDistDir: distDir });
+    await extApp.ready();
+
+    // .json is not in the allowed extensions list
+    const res = await extApp.inject({ method: 'GET', url: '/secret.json' });
+    // Should fall through (callNotFound), not serve the file
+    expect(res.statusCode).not.toBe(200);
+
+    await extApp.close();
+    rmSync(distDir, { recursive: true, force: true });
+  });
+
   it('falls back to legacy dashboard when framework dist is missing', async () => {
     const missingDir = join(tmpdir(), 'missing-dashboard-dist-123');
     const fallbackApp = Fastify();

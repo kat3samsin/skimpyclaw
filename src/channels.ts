@@ -110,17 +110,24 @@ export function getActiveChannelId(): ChannelId | null {
   return activeChannelId;
 }
 
+export function getActiveChannelDefaultTarget(config: Config): ChannelTarget | null {
+  if (!activeAdapter?.resolveDefaultTarget) return null;
+  const target = activeAdapter.resolveDefaultTarget(config);
+  if (target === null || target === undefined || target === '') return null;
+  return target;
+}
+
 export function isActiveChannelSilenced(): boolean {
   return activeAdapter?.isSilenced?.() ?? false;
 }
 
 export async function sendActiveChannelProactiveMessage(config: Config, message: string): Promise<boolean> {
-  if (!activeAdapter?.sendProactiveMessage || !activeAdapter.resolveDefaultTarget) {
+  if (!activeAdapter?.sendProactiveMessage) {
     return false;
   }
 
-  const target = activeAdapter.resolveDefaultTarget(config);
-  if (target === null || target === undefined || target === '') {
+  const target = getActiveChannelDefaultTarget(config);
+  if (target === null) {
     return false;
   }
 

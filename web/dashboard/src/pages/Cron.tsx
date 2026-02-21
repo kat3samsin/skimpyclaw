@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'preact/hooks';
-import { getConfig, getCronJobs, saveConfig, triggerCronJob } from '../api/client.js';
+import { getConfig, getCronJobs, getCronPromptFile, saveConfig, triggerCronJob } from '../api/client.js';
 import type { CronJob } from '../types.js';
-import { LuClock3 } from 'react-icons/lu';
+import { LuClock3, LuRefreshCw } from 'react-icons/lu';
 
 function formatNextRun(dateStr?: string): string {
   if (!dateStr) return 'N/A';
@@ -23,6 +23,8 @@ export function Cron({ showToast }: CronProps) {
   const [config, setConfig] = useState<Record<string, any> | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [promptSourcePath, setPromptSourcePath] = useState<string | null>(null);
+  const [promptSourceContent, setPromptSourceContent] = useState<string | null>(null);
   const [form, setForm] = useState({
     id: '',
     name: '',
@@ -56,15 +58,34 @@ export function Cron({ showToast }: CronProps) {
     }
   }
 
-  function loadFormFromJob(job: Record<string, any>) {
+  async function loadFormFromJob(job: Record<string, any>) {
+    const payloadKind = job.payload?.kind || 'agentTurn';
+    const rawMessage = job.payload?.message || '';
+    let visibleMessage = rawMessage;
+    let sourcePath: string | null = null;
+    let loadedSourceContent: string | null = null;
+
+    if (payloadKind === 'agentTurn' && typeof rawMessage === 'string' && rawMessage.trim().endsWith('.md')) {
+      try {
+        const prompt = await getCronPromptFile(rawMessage);
+        visibleMessage = prompt.content;
+        sourcePath = rawMessage;
+        loadedSourceContent = prompt.content;
+      } catch {
+        // Keep raw path in textarea if prompt file cannot be read.
+      }
+    }
+
+    setPromptSourcePath(sourcePath);
+    setPromptSourceContent(loadedSourceContent);
     setForm({
       id: job.id || '',
       name: job.name || '',
       scheduleExpr: job.schedule?.expr || '',
       tz: job.schedule?.tz || 'America/Chicago',
       model: job.model || '',
-      payloadKind: job.payload?.kind || 'agentTurn',
-      message: job.payload?.message || '',
+      payloadKind,
+      message: visibleMessage,
       script: job.payload?.script || '',
       url: job.payload?.url || '',
       cwd: job.payload?.cwd || '',
@@ -75,6 +96,8 @@ export function Cron({ showToast }: CronProps) {
 
   function newJob() {
     setSelected(null);
+    setPromptSourcePath(null);
+    setPromptSourceContent(null);
     setForm({
       id: '',
       name: '',
@@ -95,7 +118,7 @@ export function Cron({ showToast }: CronProps) {
     setSelected(id);
     const fromCfg = ((config?.cron as any)?.jobs ?? []).find((j: any) => j.id === id);
     if (fromCfg) {
-      loadFormFromJob(fromCfg);
+      void loadFormFromJob(fromCfg);
     }
   }
 
@@ -114,7 +137,13 @@ export function Cron({ showToast }: CronProps) {
     if (!Array.isArray(next.cron.jobs)) next.cron.jobs = [];
 
     const payload: Record<string, any> = { kind: form.payloadKind };
-    if (form.payloadKind === 'agentTurn') payload.message = form.message;
+    if (form.payloadKind === 'agentTurn') {
+      const shouldKeepSourcePath =
+        promptSourcePath &&
+        promptSourceContent !== null &&
+        form.message === promptSourceContent;
+      payload.message = shouldKeepSourcePath ? promptSourcePath : form.message;
+    }
     if (form.payloadKind === 'script') {
       payload.script = form.script;
       if (form.cwd.trim()) payload.cwd = form.cwd.trim();
@@ -171,7 +200,9 @@ export function Cron({ showToast }: CronProps) {
         <div class="page-title">Scheduled Jobs</div>
         <div class="header-actions">
           <button class="btn btn-sm" onClick={newJob}>New Job</button>
-          <button class="btn btn-sm" onClick={load}>Refresh</button>
+          <button class="btn-refresh" onClick={load}>
+            <LuRefreshCw size={14} /> Refresh
+          </button>
         </div>
       </div>
 
@@ -242,6 +273,9 @@ export function Cron({ showToast }: CronProps) {
             {form.payloadKind === 'agentTurn' && (
               <label class="form-field" style={{ marginTop: 10 }}>
                 <span class="form-label">Agent prompt</span>
+                {promptSourcePath && (
+                  <span class="form-help">Loaded from {promptSourcePath}</span>
+                )}
                 <textarea value={form.message} onInput={(e) => setForm(f => ({ ...f, message: (e.target as HTMLTextAreaElement).value }))} placeholder="Message prompt" style={{ minHeight: 120 }} />
               </label>
             )}

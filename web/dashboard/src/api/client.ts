@@ -5,7 +5,7 @@ import type {
   AuditResponse,
   Approval,
   CodeAgentsResponse,
-  ConversationMessage,
+  ConversationDetail,
   ConversationSummary,
   ConfigResponse,
   DigestsResponse,
@@ -105,6 +105,8 @@ export const denyCommand = (id: string) =>
 export const getCronJobs = () => request<{ jobs: import('../types.js').CronJob[] }>('cron');
 export const triggerCronJob = (id: string) =>
   request<{ status: string; id: string }>(`cron/${encodeURIComponent(id)}/run`, { method: 'POST' });
+export const getCronPromptFile = (path: string) =>
+  request<{ path: string; resolvedPath: string; content: string }>(`cron/prompt-file?path=${encodeURIComponent(path)}`);
 
 // ── Model ────────────────────────────────────────────────────────────
 
@@ -161,8 +163,13 @@ export const getConversations = (channel?: 'telegram' | 'discord') => {
   const q = channel ? `?channel=${encodeURIComponent(channel)}` : '';
   return request<{ conversations: ConversationSummary[] }>(`conversations${q}`);
 };
-export const getConversation = (id: string) =>
-  request<{ id: string; messages: ConversationMessage[] }>(`conversations/${encodeURIComponent(id)}`);
+export const getConversation = (id: string, options?: { limit?: number; offset?: number }) => {
+  const q = new URLSearchParams();
+  if (options?.limit !== undefined) q.set('limit', String(options.limit));
+  if (options?.offset !== undefined) q.set('offset', String(options.offset));
+  const qs = q.toString();
+  return request<ConversationDetail>(`conversations/${encodeURIComponent(id)}${qs ? `?${qs}` : ''}`);
+};
 
 // ── Config ───────────────────────────────────────────────────────────
 

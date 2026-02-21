@@ -5,6 +5,7 @@ export interface StatusResponse {
   agent: string;
   model: string;
   lastMessage?: string;
+  activeChannel?: 'telegram' | 'discord' | null;
   cronJobs: CronJobSummary[];
   subagents?: {
     maxConcurrent: number;
@@ -254,4 +255,11 @@ export interface ConversationMessage {
   ts: string;
   role: 'user' | 'assistant';
   content: string;
+}
+
+export interface ConversationDetail {
+  id: string;
+  messages: ConversationMessage[];
+  total: number;
+  hasMore: boolean;
 }

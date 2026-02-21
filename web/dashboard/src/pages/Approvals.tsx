@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'preact/hooks';
 import { getApprovals, approveCommand, denyCommand } from '../api/client.js';
 import type { Approval } from '../types.js';
-import { LuCircleCheck, LuTriangle } from 'react-icons/lu';
+import { LuCircleCheck, LuRefreshCw, LuTriangle } from 'react-icons/lu';
 
 interface ApprovalsProps {
   showToast: (msg: string, type?: 'success' | 'error' | 'warning') => void;
@@ -60,7 +60,11 @@ export function Approvals({ showToast, onCountChange }: ApprovalsProps) {
     <div>
       <div class="page-header">
         <div class="page-title">Approvals</div>
-        <button class="btn btn-sm" onClick={load}>Refresh</button>
+        <div class="header-actions">
+          <button class="btn-refresh" onClick={load}>
+            <LuRefreshCw size={14} /> Refresh
+          </button>
+        </div>
       </div>
 
       {loading ? (

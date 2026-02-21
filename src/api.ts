@@ -56,6 +56,24 @@ function validateModelString(model: string): boolean {
   return /^[a-zA-Z0-9_./-]+$/.test(model) && model.length <= 100;
 }
 
+function resolveCronPromptPath(inputPath: string): string | null {
+  const trimmed = inputPath.trim();
+  if (!trimmed || !trimmed.endsWith('.md') || trimmed.includes('\0')) return null;
+
+  const home = homedir();
+  const promptsRoot = resolve(home, '.skimpyclaw', 'prompts');
+  const expanded = trimmed.startsWith('~/')
+    ? resolve(home, trimmed.slice(2))
+    : trimmed.startsWith('/')
+      ? resolve(trimmed)
+      : resolve(promptsRoot, trimmed);
+
+  if (!expanded.startsWith(`${promptsRoot}/`) && expanded !== promptsRoot) {
+    return null;
+  }
+  return expanded;
+}
+
 interface SessionLine {
   ts?: string;
   user?: string;
@@ -140,6 +158,7 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
       model: getCurrentModel(),
       agent: config.agents.default,
       lastMessage: getLastMessage(),
+      activeChannel: getActiveChannelId() ?? config.channels.active ?? null,
       cronJobs: jobs,
       subagents: {
         maxConcurrent,
@@ -262,7 +281,7 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
     return { conversations };
   });
 
-  fastify.get<{ Params: { id: string } }>('/api/dashboard/conversations/:id', async (request, reply) => {
+  fastify.get<{ Params: { id: string }; Querystring: { limit?: string; offset?: string } }>('/api/dashboard/conversations/:id', async (request, reply) => {
     const { id } = request.params;
     if (!/^[a-zA-Z0-9_-]+-[a-zA-Z0-9:_-]+$/.test(id) || id.includes('..')) {
       return reply.code(400).send({ error: 'Invalid conversation id' });
@@ -275,6 +294,11 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
     }
 
     try {
+      const limitRaw = Number.parseInt(request.query.limit || '80', 10);
+      const offsetRaw = Number.parseInt(request.query.offset || '0', 10);
+      const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 500) : 80;
+      const offset = Number.isFinite(offsetRaw) ? Math.max(offsetRaw, 0) : 0;
+
       const content = readFileSync(filePath, 'utf-8');
       const lines = content.split('\n').filter(Boolean);
       const messages: Array<{ ts: string; role: 'user' | 'assistant'; content: string }> = [];
@@ -290,7 +314,16 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
         }
       }
 
-      return { id, messages };
+      const total = messages.length;
+      const end = Math.max(0, total - offset);
+      const start = Math.max(0, end - limit);
+      const sliced = messages.slice(start, end);
+      return {
+        id,
+        messages: sliced,
+        total,
+        hasMore: start > 0,
+      };
     } catch {
       return reply.code(500).send({ error: 'Failed to read conversation' });
     }
@@ -367,6 +400,31 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
     return { jobs };
   });
 
+  fastify.get<{ Querystring: { path?: string } }>('/api/dashboard/cron/prompt-file', async (request, reply) => {
+    const inputPath = request.query.path?.trim();
+    if (!inputPath) {
+      return reply.code(400).send({ error: 'path required' });
+    }
+
+    const resolvedPath = resolveCronPromptPath(inputPath);
+    if (!resolvedPath) {
+      return reply.code(400).send({ error: 'Invalid prompt path' });
+    }
+    if (!existsSync(resolvedPath)) {
+      return reply.code(404).send({ error: 'Prompt file not found' });
+    }
+    if (!statSync(resolvedPath).isFile()) {
+      return reply.code(400).send({ error: 'Prompt path is not a file' });
+    }
+
+    try {
+      const content = readFileSync(resolvedPath, 'utf-8');
+      return { path: inputPath, resolvedPath, content };
+    } catch {
+      return reply.code(500).send({ error: 'Failed to read prompt file' });
+    }
+  });
+
   // --- Messages ---
   fastify.post<{ Body: { message: string } }>('/api/dashboard/messages/send', async (request, reply) => {
     const message = request.body?.message?.trim();
@@ -379,9 +437,10 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
       if (!sent) {
         return reply.code(400).send({ error: 'No active channel target configured' });
       }
+      const activeChannel = getActiveChannelId();
       return {
         sent: true,
-        channel: getActiveChannelId(),
+        channel: activeChannel,
         timestamp: new Date().toISOString(),
       };
     } catch (error) {

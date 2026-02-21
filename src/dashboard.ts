@@ -49,6 +49,28 @@ export function registerDashboard(
       const buffer = readFileSync(filePath);
       reply.type(getMimeType(filePath)).send(buffer);
     });
+
+    // Serve root-level static files from dist (e.g. favicon.svg)
+    // Only allows known safe extensions — no directory traversal
+    const ALLOWED_ROOT_STATIC_EXTS = new Set(['.svg', '.png', '.ico', '.webmanifest', '.xml']);
+    fastify.get<{ Params: { file: string } }>('/:file', async (request, reply) => {
+      const fileName = request.params.file;
+      const ext = extname(fileName).toLowerCase();
+      if (!ALLOWED_ROOT_STATIC_EXTS.has(ext)) {
+        // Not a static file request — don't handle it
+        reply.callNotFound();
+        return;
+      }
+      const filePath = resolve(frameworkDistDir, fileName);
+      const rel = relative(frameworkDistDir, filePath);
+      if (!rel || rel.startsWith('..') || isAbsolute(rel) || rel.includes('/') || !existsSync(filePath)) {
+        reply.code(404).send('Not found');
+        return;
+      }
+      const buffer = readFileSync(filePath);
+      reply.type(getMimeType(filePath)).send(buffer);
+    });
+
     return;
   }
 

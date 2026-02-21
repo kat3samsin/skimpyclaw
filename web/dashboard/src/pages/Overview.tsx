@@ -8,10 +8,8 @@ import {
   LuCpu,
   LuHistory,
   LuMessageSquare,
-  LuMoon,
   LuSend,
   LuServer,
-  LuSun,
 } from 'react-icons/lu';
 
 function formatUptime(ms: number): string {
@@ -63,11 +61,9 @@ function getTraceSummary(trace: AuditTrace): string {
 
 interface OverviewProps {
   onNavigate: (page: PageId) => void;
-  theme: 'light' | 'dark';
-  onThemeToggle: () => void;
 }
 
-export function Overview({ onNavigate, theme, onThemeToggle }: OverviewProps) {
+export function Overview({ onNavigate }: OverviewProps) {
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [traces, setTraces] = useState<AuditTrace[]>([]);
   const [loading, setLoading] = useState(true);
@@ -121,9 +117,6 @@ export function Overview({ onNavigate, theme, onThemeToggle }: OverviewProps) {
           <div class="header-meta">
             {(status?.model ?? '—')} &bull; up {status ? formatUptime(status.uptime) : '—'}
           </div>
-          <button class="theme-toggle" onClick={onThemeToggle} aria-label="Toggle theme">
-            {theme === 'light' ? <LuMoon size={16} /> : <LuSun size={16} />}
-          </button>
         </div>
       </div>
 
@@ -163,30 +156,28 @@ export function Overview({ onNavigate, theme, onThemeToggle }: OverviewProps) {
         </div>
         <div class="stat-card">
           <div class="stat-icon blue"><LuMessageSquare size={16} /></div>
-          <div class="stat-label">Last Message</div>
+          <div class="stat-label">Active Channel</div>
           <div class="stat-value" style={{ fontSize: '18px', paddingTop: '4px' }}>
-            {status?.lastMessage ? formatTimeAgo(status.lastMessage) : 'never'}
+            {status?.activeChannel ? status.activeChannel : '—'}
           </div>
-          <div class="stat-sub">last activity</div>
+          <div class="stat-sub">discord / telegram</div>
         </div>
-      </div>
-      <div class="cards-link-row">
-        <a
-          class="section-link"
-          href="#audit"
-          onClick={(e) => {
-            e.preventDefault();
-            onNavigate('audit');
-          }}
-        >
-          View all -&gt;
-        </a>
       </div>
 
       {/* Audit logs */}
       <div class="section">
         <div class="section-header">
           <div class="section-title">Audit Logs</div>
+          <a
+            class="section-link"
+            href="#audit"
+            onClick={(e) => {
+              e.preventDefault();
+              onNavigate('audit');
+            }}
+          >
+            View all -&gt;
+          </a>
         </div>
         <div class="feed-card">
           <div class="feed">

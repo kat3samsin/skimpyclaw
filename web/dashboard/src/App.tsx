@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'preact/hooks';
+import { LuMoon, LuSun } from 'react-icons/lu';
 import { Sidebar, type PageId } from './components/Sidebar.js';
 import { ToastContainer, useToast } from './components/Toast.js';
 import {
@@ -147,7 +148,7 @@ export function App() {
   function renderPage() {
     switch (page) {
       case 'overview':
-        return <Overview onNavigate={navigate} theme={theme} onThemeToggle={toggleTheme} />;
+        return <Overview onNavigate={navigate} />;
       case 'history':
         return <History />;
       case 'cron':
@@ -175,7 +176,7 @@ export function App() {
       case 'templates':
         return <Templates showToast={showToast} />;
       default:
-        return <Overview onNavigate={navigate} theme={theme} onThemeToggle={toggleTheme} />;
+        return <Overview onNavigate={navigate} />;
     }
   }
 
@@ -190,6 +191,9 @@ export function App() {
           pendingApprovals={pendingApprovals}
         />
         <main class="main">
+          <button class="global-theme-toggle" onClick={toggleTheme} aria-label="Toggle theme">
+            {theme === 'light' ? <LuMoon size={16} /> : <LuSun size={16} />}
+          </button>
           {renderPage()}
         </main>
       </div>
