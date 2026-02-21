@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { existsSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'fs';
 import { join } from 'path';
-import { executeTool, BUILTIN_TOOL_DEFINITIONS, BROWSER_TOOL_DEFINITION, CODE_WITH_AGENT_TOOL, CODE_WITH_TEAM_TOOL, CHECK_CODE_AGENT_TOOL, getToolDefinitions, fromClaudeCodeName, toClaudeCodeName, buildCodeAgentArgs, getActiveCodeAgents, getRecentCodeAgents, getCodeAgent, readTeamState, decomposeTask, synthesizeResults } from '../tools.js';
+import { executeTool, BUILTIN_TOOL_DEFINITIONS, BROWSER_TOOL_DEFINITION, CODE_WITH_AGENT_TOOL, CODE_WITH_TEAM_TOOL, CHECK_CODE_AGENT_TOOL, getToolDefinitions, fromClaudeCodeName, toClaudeCodeName, buildCodeAgentArgs, getActiveCodeAgents, getRecentCodeAgents, getCodeAgent, readTeamState, decomposeTask, synthesizeResults, computeWaves } from '../tools.js';
+import type { DecomposedSubtask } from '../tools.js';
 import type { ToolConfig } from '../types.js';
 
 const TEST_DIR = join(process.cwd(), '__test_sandbox__');
@@ -534,17 +535,98 @@ describe('code_with_team', () => {
 });
 
 describe('decomposeTask', () => {
-  it('falls back to numbered subtasks on error', async () => {
+  it('falls back to numbered subtasks with DecomposedSubtask format on error', async () => {
     // decomposeTask with no valid config will fail the model call and use fallback
     const mockConfig = {
       agents: { list: {} },
     } as any;
     const subtasks = await decomposeTask('fix everything', 3, mockConfig);
     expect(subtasks).toHaveLength(3);
-    expect(subtasks[0]).toContain('Part 1 of 3');
-    expect(subtasks[1]).toContain('Part 2 of 3');
-    expect(subtasks[2]).toContain('Part 3 of 3');
-    expect(subtasks[0]).toContain('fix everything');
+    expect(subtasks[0].description).toContain('Part 1 of 3');
+    expect(subtasks[1].description).toContain('Part 2 of 3');
+    expect(subtasks[2].description).toContain('Part 3 of 3');
+    expect(subtasks[0].description).toContain('fix everything');
+    // Fallback produces all-independent subtasks
+    expect(subtasks[0].dependsOn).toEqual([]);
+    expect(subtasks[1].dependsOn).toEqual([]);
+    expect(subtasks[2].dependsOn).toEqual([]);
+  });
+});
+
+describe('computeWaves', () => {
+  it('puts all independent subtasks in a single wave', () => {
+    const subtasks: DecomposedSubtask[] = [
+      { description: 'task A', dependsOn: [] },
+      { description: 'task B', dependsOn: [] },
+      { description: 'task C', dependsOn: [] },
+    ];
+    const waves = computeWaves(subtasks);
+    expect(waves).toHaveLength(1);
+    expect(waves[0]).toEqual([0, 1, 2]);
+  });
+
+  it('creates sequential waves for a dependency chain', () => {
+    const subtasks: DecomposedSubtask[] = [
+      { description: 'schema', dependsOn: [] },
+      { description: 'queries', dependsOn: [0] },
+      { description: 'tests', dependsOn: [1] },
+    ];
+    const waves = computeWaves(subtasks);
+    expect(waves).toHaveLength(3);
+    expect(waves[0]).toEqual([0]);
+    expect(waves[1]).toEqual([1]);
+    expect(waves[2]).toEqual([2]);
+  });
+
+  it('groups tasks with shared dependency into the same wave', () => {
+    const subtasks: DecomposedSubtask[] = [
+      { description: 'schema', dependsOn: [] },
+      { description: 'API endpoints', dependsOn: [0] },
+      { description: 'admin endpoints', dependsOn: [0] },
+      { description: 'integration tests', dependsOn: [1, 2] },
+    ];
+    const waves = computeWaves(subtasks);
+    expect(waves).toHaveLength(3);
+    expect(waves[0]).toEqual([0]);
+    expect(waves[1].sort()).toEqual([1, 2]);
+    expect(waves[2]).toEqual([3]);
+  });
+
+  it('handles mixed independent and dependent tasks', () => {
+    const subtasks: DecomposedSubtask[] = [
+      { description: 'setup types', dependsOn: [] },
+      { description: 'write docs', dependsOn: [] },
+      { description: 'implement using types', dependsOn: [0] },
+    ];
+    const waves = computeWaves(subtasks);
+    expect(waves).toHaveLength(2);
+    expect(waves[0].sort()).toEqual([0, 1]);
+    expect(waves[1]).toEqual([2]);
+  });
+
+  it('handles dependency cycles by forcing remaining into current wave', () => {
+    const subtasks: DecomposedSubtask[] = [
+      { description: 'A depends on B', dependsOn: [1] },
+      { description: 'B depends on A', dependsOn: [0] },
+    ];
+    const waves = computeWaves(subtasks);
+    // Both should end up in a wave despite the cycle
+    const allIndices = waves.flat().sort();
+    expect(allIndices).toEqual([0, 1]);
+  });
+
+  it('handles single subtask', () => {
+    const subtasks: DecomposedSubtask[] = [
+      { description: 'only task', dependsOn: [] },
+    ];
+    const waves = computeWaves(subtasks);
+    expect(waves).toHaveLength(1);
+    expect(waves[0]).toEqual([0]);
+  });
+
+  it('handles empty subtask list', () => {
+    const waves = computeWaves([]);
+    expect(waves).toHaveLength(0);
   });
 });
 
