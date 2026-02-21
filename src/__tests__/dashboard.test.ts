@@ -24,26 +24,26 @@ describe('Dashboard HTML', () => {
   });
 
   it('has a single Health tab button', () => {
-    const healthTabs = html.match(/data-tab="health"/g);
+    const healthTabs = html.match(/data-page="health"/g);
     expect(healthTabs).toHaveLength(1);
   });
 
   it('does not have a Doctor tab button', () => {
-    const doctorTabs = html.match(/data-tab="doctor"/g);
+    const doctorTabs = html.match(/data-page="doctor"/g);
     expect(doctorTabs).toBeNull();
   });
 
   it('has no panel-doctor element', () => {
-    expect(html).not.toContain('id="panel-doctor"');
+    expect(html).not.toContain('id="page-doctor"');
   });
 
-  it('has a single panel-health element', () => {
-    const panels = html.match(/id="panel-health"/g);
+  it('has a single page-health element', () => {
+    const panels = html.match(/id="page-health"/g);
     expect(panels).toHaveLength(1);
   });
 
   it('unified health panel contains doctor diagnostics elements', () => {
-    // Doctor summary and categories are inside panel-health
+    // Doctor summary and categories are inside page-health
     expect(html).toContain('id="doctorSummary"');
     expect(html).toContain('id="doctorCategories"');
     expect(html).toContain('id="doctorTimestamp"');
