@@ -367,7 +367,7 @@ async function commandModel(args: string[]): Promise<number> {
         console.log(`  ${alias.padEnd(16)} → ${model}`);
       }
     } else {
-      console.log('No aliases configured. Pass a full model name (e.g. anthropic/claude-sonnet-4-6).');
+      console.log('No aliases configured. Pass a full model name (e.g. anthropic/claude-sonnet-4-5).');
     }
     return 1;
   }

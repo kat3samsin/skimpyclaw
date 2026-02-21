@@ -39,11 +39,10 @@ JSON values support env var substitution:
     "codex": { "authPath": "${HOME}/.codex/auth.json" }
   },
   "aliases": {
-    "claude-fast":  "anthropic/claude-haiku-4-5-20251001",
-    "claude-think": "anthropic/claude-sonnet-4-6",
-    "claude-opus":  "anthropic/claude-opus-4-6",
-    "codex5.3":     "codex/gpt-5.3-codex",
-    "codex-spark":  "codex/gpt-5.3-codex-spark"
+    "claude-fast":  "anthropic/claude-haiku-4-5",
+    "claude-think": "anthropic/claude-sonnet-4-5",
+    "claude-opus":  "anthropic/claude-opus-4",
+    "codex5.3":     "codex/gpt-5.3-codex"
   }
 }
 ```

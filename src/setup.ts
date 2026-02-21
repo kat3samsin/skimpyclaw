@@ -331,7 +331,7 @@ function buildProviders(providers: Set<ProviderChoice>): Record<string, Record<s
 
 function buildDefaultModel(providers: Set<ProviderChoice>): string {
   const hasAnthropic = providers.has('anthropic-api') || providers.has('anthropic-oauth');
-  if (hasAnthropic) return 'anthropic/claude-opus-4-6';
+  if (hasAnthropic) return 'anthropic/claude-opus-4';
   if (providers.has('codex-oauth')) return 'codex/gpt-5.3-codex';
   if (providers.has('kimi-api')) return 'kimi/kimi-for-coding';
   if (providers.has('minimax-api')) return 'minimax/MiniMax-M2.1';
@@ -342,8 +342,8 @@ function buildAliases(providers: Set<ProviderChoice>): Record<string, string> {
   // Always include well-known aliases so users can switch models easily
   const aliases: Record<string, string> = {
     'claude-fast': 'anthropic/claude-haiku-4-5',
-    'claude-think': 'anthropic/claude-sonnet-4-6',
-    'claude-opus': 'anthropic/claude-opus-4-6',
+    'claude-think': 'anthropic/claude-sonnet-4-5',
+    'claude-opus': 'anthropic/claude-opus-4',
     'codex5.2': 'codex/gpt-5.2-codex',
     'codex5.3': 'codex/gpt-5.3-codex',
     'minimax': 'minimax/MiniMax-M2.5',

@@ -1,0 +1,257 @@
+// Dashboard API types — mirror backend response shapes
+
+export interface StatusResponse {
+  uptime: number;
+  agent: string;
+  model: string;
+  lastMessage?: string;
+  cronJobs: CronJobSummary[];
+  subagents?: {
+    maxConcurrent: number;
+    active: number;
+    running: number;
+    pending: number;
+    recentTotal: number;
+    recentCompleted: number;
+    recentFailed: number;
+    recentCancelled: number;
+  };
+  activeSubagents?: Array<{
+    id: string;
+    type: string;
+    status: string;
+    model?: string;
+    label?: string;
+    promptPreview: string;
+    retryCount: number;
+    maxRetries: number;
+    createdAt: string;
+    startedAt?: string;
+    elapsedSeconds: number;
+  }>;
+}
+
+export interface CronJobSummary {
+  id: string;
+  name: string;
+  nextRun?: string;
+}
+
+export interface CronJob extends CronJobSummary {
+  schedule: string;
+  enabled: boolean;
+  lastRun?: string;
+  lastStatus?: string;
+}
+
+export interface AuditEvent {
+  type: string;
+  summary: string;
+  durationMs?: number;
+  timestamp?: string;
+}
+
+export interface AuditTrace {
+  traceId: string;
+  trigger: string;
+  status: 'success' | 'error' | 'running';
+  startedAt: string;
+  endedAt?: string;
+  events: AuditEvent[];
+}
+
+export interface AuditResponse {
+  traces: AuditTrace[];
+  total: number;
+}
+
+export interface Approval {
+  id: string;
+  command: string;
+  reason?: string;
+  tier: number;
+  timestamp: string;
+}
+
+export interface HealthCheck {
+  name: string;
+  status: 'ok' | 'warn' | 'error';
+  message?: string;
+}
+
+export interface DoctorCheck {
+  name: string;
+  category?: string;
+  ok: boolean;
+  detail?: string;
+  remedy?: string;
+  fatal?: boolean;
+}
+
+export interface DoctorResponse {
+  report: {
+    ok: boolean;
+    checks: DoctorCheck[];
+  };
+}
+
+export interface HealthResponse {
+  ok: boolean;
+  checks: DoctorCheck[];
+  features?: Record<string, boolean>;
+  envVars?: Array<{ name: string; set: boolean }>;
+}
+
+export interface MemoryFile {
+  name: string;
+  size: number;
+  date: string;
+}
+
+export interface MemoryResponse {
+  agentId: string;
+  files: MemoryFile[];
+}
+
+export interface MemoryFileResponse {
+  content: string;
+}
+
+export interface Template {
+  name: string;
+  content: string;
+}
+
+export interface TemplateListItem {
+  name: string;
+  exists: boolean;
+  size: number;
+}
+
+export interface TemplateListResponse {
+  templates: TemplateListItem[];
+}
+
+export interface LogFile {
+  name: string;
+  size: number;
+  modified: string;
+}
+
+export interface LogListResponse {
+  files: LogFile[];
+}
+
+export interface CodeAgent {
+  id: string;
+  agent: string;
+  status: 'running' | 'completed' | 'failed' | 'validating' | 'timeout' | 'pending';
+  task: string;
+  startedAt: string;
+  endedAt?: string;
+  durationSeconds?: number;
+  outputPreview?: string;
+  liveOutput?: string;
+  error?: string;
+  model?: string;
+  parentTaskId?: string;
+  childTaskIds?: string[];
+  subtask?: string;
+  synthesisResult?: string;
+  validationPassed?: boolean;
+  workdir?: string;
+}
+
+export interface CodeAgentsResponse {
+  agents: CodeAgent[];
+}
+
+export interface ConfigResponse {
+  config: Record<string, unknown>;
+}
+
+export interface ModelResponse {
+  current: string;
+  aliases: Record<string, string>;
+  agents: Record<string, string>;
+}
+
+export interface Digest {
+  id: string;
+  jobId: string;
+  jobName: string;
+  createdAt: string;
+  articleCount: number;
+  preview: string[];
+}
+
+export interface DigestsResponse {
+  digests: Digest[];
+}
+
+export interface DigestArticle {
+  id: string;
+  title: string;
+  source: string;
+  url: string;
+  score?: number;
+  comments?: number;
+  summary?: string;
+  read?: boolean;
+}
+
+export interface DigestResponse {
+  id: string;
+  jobId: string;
+  jobName: string;
+  createdAt: string;
+  summary?: string;
+  articles: DigestArticle[];
+}
+
+export interface Skill {
+  name: string;
+  description?: string;
+  emoji?: string;
+  tags?: string[];
+  enabled?: boolean;
+  eligible?: boolean;
+  reason?: string;
+  priority?: number;
+  contexts?: string[];
+  requires?: Record<string, unknown>;
+}
+
+export interface SkillsResponse {
+  skills: Skill[];
+}
+
+export interface SkillResponse {
+  name: string;
+  description?: string;
+  emoji?: string;
+  tags?: string[];
+  enabled?: boolean;
+  eligible?: boolean;
+  reason?: string;
+  priority?: number;
+  contexts?: string[];
+  requires?: Record<string, unknown>;
+  body?: string;
+  rawContent?: string;
+}
+
+export interface ConversationSummary {
+  id: string;
+  channel: 'telegram' | 'discord';
+  chatId: string;
+  updatedAt: string;
+  messageCount: number;
+  preview?: string;
+}
+
+export interface ConversationMessage {
+  ts: string;
+  role: 'user' | 'assistant';
+  content: string;
+}

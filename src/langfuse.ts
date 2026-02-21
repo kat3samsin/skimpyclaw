@@ -25,7 +25,6 @@ export const MODEL_PRICING: Record<string, ModelPricing> = {
   'claude-3-5-haiku': { inputPerMTok: 0.8, outputPerMTok: 4.0 },
   'claude-3-opus': { inputPerMTok: 15.0, outputPerMTok: 75.0 },
   'claude-sonnet-4-5': { inputPerMTok: 3.0, outputPerMTok: 15.0 },
-  'claude-sonnet-4-6': { inputPerMTok: 3.0, outputPerMTok: 15.0 },
   'claude-sonnet-4': { inputPerMTok: 3.0, outputPerMTok: 15.0 },
   'claude-haiku-4-5': { inputPerMTok: 0.25, outputPerMTok: 1.25 },
   'claude-haiku-4': { inputPerMTok: 1.0, outputPerMTok: 5.0 },
@@ -57,8 +56,8 @@ export const MODEL_PRICING: Record<string, ModelPricing> = {
 /** Map of common aliases/shorthand to canonical model IDs in MODEL_PRICING */
 const MODEL_ALIAS_MAP: Record<string, string> = {
   // Claude aliases → base keys in MODEL_PRICING (prefix matching handles dated variants)
-  sonnet: 'claude-sonnet-4-6',
-  'claude-sonnet': 'claude-sonnet-4-6',
+  sonnet: 'claude-sonnet-4-5',
+  'claude-sonnet': 'claude-sonnet-4-5',
   haiku: 'claude-haiku-4-5',
   'claude-haiku': 'claude-haiku-4-5',
   opus: 'claude-opus-4',
@@ -77,9 +76,6 @@ const MODEL_ALIAS_MAP: Record<string, string> = {
   'gpt-3.5': 'gpt-3.5-turbo',
   'gpt-codex': 'gpt-5.3-codex',
   codex: 'gpt-5.3-codex',
-  'codex-spark': 'gpt-5.3-codex',
-  'gpt-5.3-codex-spark': 'gpt-5.3-codex',
-
   // MiniMax aliases
   minimax: 'minimax-m2.5',
 
@@ -104,7 +100,7 @@ export function calculateUsageCost(
     : model;
 
   // Try direct match, then alias lookup, then prefix matching
-  // Prefix matching handles dated variants like "claude-haiku-4-5-20251001" → "claude-haiku-4-5"
+  // Prefix matching handles dated variants like "claude-haiku-4-5-YYYYMMDD" → "claude-haiku-4-5"
   let pricing =
     MODEL_PRICING[bare] ?? MODEL_PRICING[MODEL_ALIAS_MAP[bare] ?? ''];
 

@@ -607,7 +607,7 @@ describe('Config endpoints', () => {
       payload: { config: validConfig },
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ saved: true });
+    expect(res.json()).toEqual({ saved: true, restartRequired: true });
   });
 
   it('PUT /api/dashboard/config rejects missing config', async () => {

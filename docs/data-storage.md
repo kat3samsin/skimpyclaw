@@ -47,7 +47,7 @@ Each line in `logs/audit/YYYY-MM-DD.jsonl` is a completed trace:
   "endedAt": "2026-02-17T08:00:05.123Z",
   "events": [
     { "type": "tool_call", "summary": "Read ~/.skimpyclaw/agents/main/TOOLS.md", "durationMs": 12 },
-    { "type": "model_call", "summary": "anthropic/claude-sonnet-4-6", "durationMs": 3200 }
+    { "type": "model_call", "summary": "anthropic/claude-sonnet-4-5", "durationMs": 3200 }
   ]
 }
 ```

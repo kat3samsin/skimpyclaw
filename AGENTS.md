@@ -4,7 +4,7 @@
 
 ```bash
 pnpm build        # TypeScript compile (tsc)
-pnpm test         # Vitest (355 tests)
+pnpm test         # Vitest (469 tests)
 pnpm build && pnpm test  # Always run both after changes
 pnpm dev          # Hot reload dev server (tsx watch)
 ```
@@ -86,6 +86,63 @@ priority: 100
 
 `src/skills.ts` scans the directory, loads valid skills, and injects relevant ones into the system prompt based on triggers and token budget (`maxPromptTokens`, default 4000 chars ≈ 1000 tokens).
 
+## Dashboard Architecture
+
+The dashboard is currently served as **inline HTML/CSS/JS** from `src/dashboard.ts` — no build step, no framework.
+
+### Current (Legacy Inline)
+
+| Concern | Location |
+|---------|---------|
+| HTML/CSS/JS | `src/dashboard.ts` — single `DASHBOARD_HTML` string constant |
+| Route | `GET /dashboard` registered via `registerDashboard()` in `src/dashboard.ts` |
+| Backend API | `src/api.ts` — all endpoints under `/api/dashboard/*` |
+| Auth | Bearer token from `config.dashboard.token` |
+
+Pages: `overview`, `history`, `approvals`, `digests`, `audit`, `coding`, `memory`, `templates`, `model`, `skills`, `cron`, `config`, `logs`, `health`
+
+### Planned Migration (Preact/Vite — see `dashboard_refactor.md`)
+
+A future migration to Preact + Vite is planned. The migration plan lives in `dashboard_refactor.md`. Until it ships, the inline dashboard remains authoritative.
+
+Migration flag (when implemented): `config.dashboard.frontend: "legacy" | "framework"`
+- `framework` (default) → built SPA from `web/dashboard/dist/` with index.html fallback
+- `legacy` → existing inline HTML path
+
+Frontend project (when created): `web/dashboard/` — Vite + TypeScript + Preact
+
+**Build commands (post-migration):**
+```bash
+pnpm dashboard:dev    # Vite dev server for frontend
+pnpm dashboard:build  # Build frontend assets to web/dashboard/dist/
+pnpm build            # TypeScript compile (backend) + dashboard:build
+```
+
+### Migration Rules
+
+1. **Do not remove legacy dashboard** until framework parity is confirmed.
+2. **Backend API contracts are stable** — `/api/dashboard/*` response shapes must not change.
+3. **Feature flag gates rollout** — default `legacy` until real-usage validated.
+4. Every migration milestone must pass `pnpm build && pnpm test`.
+5. Both `AGENTS.md` and `CLAUDE.md` must be updated in the same PR as any migration phase.
+
+### Dashboard Tests
+
+- `src/__tests__/dashboard.test.ts` — parity contract tests (116 tests):
+  - Route (200, content-type, non-empty body)
+  - HTML document structure (DOCTYPE, charset, viewport, fonts)
+  - Theme system (light/dark CSS variables)
+  - Sidebar nav tabs (all 14 pages, no duplicates, no Doctor tab)
+  - Page panel IDs (all 14 panels present)
+  - Unified Health panel (Doctor elements merged into Health)
+  - JavaScript API call coverage (all 12 backend endpoints referenced)
+  - `onPageActivated` routing (all 13 page branches wired correctly)
+  - `switchPage` / `api()` helper functions
+  - Authentication (token, localStorage)
+
+- `src/__tests__/api.test.ts` — backend API contract tests (full suite):
+  - Auth (401 flows), status, sessions, memory, cron, model, templates, logs, config, TODOs, health, doctor
+
 ## Critical Rules
 
 - **Guard Codex SSE responses** — `fc.arguments` can be undefined. Always use `(fc.arguments || JSON.stringify(args))`.
@@ -94,7 +151,7 @@ priority: 100
 - **code_with_team agent selection** — team workers support `claude`, `codex`, or `kimi`; default comes from `subagents.defaultCodeAgent`.
 - **Path validation** — all file/dir operations restricted to `ToolConfig.allowedPaths`.
 - **Hardcode paths** — prefer simple over configurable.
-- **Dashboard is inline** — no framework, no build step. HTML/CSS/JS in a single string in `dashboard.ts`.
+- **Dashboard is inline** — no framework, no build step. HTML/CSS/JS in a single string in `dashboard.ts`. See migration plan in `dashboard_refactor.md`.
 - **Codex auth** — uses `~/.codex/auth.json` with ChatGPT backend headers (`chatgpt-account-id`, `OpenAI-Beta`, `originator: codex_cli_rs`).
 - **Skills directory** — `~/.skimpyclaw/skills/`, NOT `~/.claude/skills/`.
 

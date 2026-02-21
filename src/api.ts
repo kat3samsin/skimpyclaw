@@ -31,6 +31,8 @@ import { getDigests, getDigest, deleteDigest, updateArticleReadStatus } from './
 import { loadSkills } from './skills.js';
 import type { SkillConfig } from './skills-types.js';
 import { runDoctor as runDoctorChecks } from './doctor/runner.js';
+import { sendActiveChannelProactiveMessage, getActiveChannelId } from './channels.js';
+import { runAgentTurn } from './agent.js';
 
 function validateFilename(filename: string): boolean {
   return !filename.includes('..') && filename === basename(filename);
@@ -52,6 +54,13 @@ function getSkillsDir(config: Config): string {
 function validateModelString(model: string): boolean {
   // Allow alphanumeric, hyphens, underscores, dots, slashes (for provider/model format)
   return /^[a-zA-Z0-9_./-]+$/.test(model) && model.length <= 100;
+}
+
+interface SessionLine {
+  ts?: string;
+  user?: string;
+  assistant?: string;
+  summary?: boolean;
 }
 
 interface TodoItem {
@@ -198,6 +207,95 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
     return { sessions };
   });
 
+  // --- Conversations (Telegram/Discord chat history from .jsonl sessions) ---
+  fastify.get<{ Querystring: { channel?: string } }>('/api/dashboard/conversations', async (request) => {
+    const sessionsDir = getSessionsDir();
+    if (!existsSync(sessionsDir)) {
+      return { conversations: [] };
+    }
+
+    const channelFilter = request.query.channel;
+    const files = readdirSync(sessionsDir).filter(f => f.endsWith('.jsonl'));
+    const conversations = files.map(file => {
+      const id = file.replace('.jsonl', '');
+      const [channel, ...rest] = id.split('-');
+      const chatId = rest.join('-');
+      if ((channel !== 'telegram' && channel !== 'discord') || !chatId) return null;
+      if (channelFilter && channel !== channelFilter) return null;
+
+      try {
+        const content = readFileSync(join(sessionsDir, file), 'utf-8');
+        const lines = content.split('\n').filter(Boolean);
+        const entries: SessionLine[] = lines
+          .map((line) => {
+            try {
+              return JSON.parse(line) as SessionLine;
+            } catch {
+              return null;
+            }
+          })
+          .filter((v): v is SessionLine => Boolean(v));
+
+        const last = entries[entries.length - 1];
+        const preview = last?.user || last?.assistant || '';
+        return {
+          id,
+          channel,
+          chatId,
+          updatedAt: last?.ts || new Date(0).toISOString(),
+          messageCount: entries.length * 2,
+          preview: preview.slice(0, 140),
+        };
+      } catch {
+        return null;
+      }
+    }).filter(Boolean) as Array<{
+      id: string;
+      channel: string;
+      chatId: string;
+      updatedAt: string;
+      messageCount: number;
+      preview: string;
+    }>;
+
+    conversations.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    return { conversations };
+  });
+
+  fastify.get<{ Params: { id: string } }>('/api/dashboard/conversations/:id', async (request, reply) => {
+    const { id } = request.params;
+    if (!/^[a-zA-Z0-9_-]+-[a-zA-Z0-9:_-]+$/.test(id) || id.includes('..')) {
+      return reply.code(400).send({ error: 'Invalid conversation id' });
+    }
+
+    const sessionsDir = getSessionsDir();
+    const filePath = join(sessionsDir, `${id}.jsonl`);
+    if (!existsSync(filePath)) {
+      return reply.code(404).send({ error: 'Conversation not found' });
+    }
+
+    try {
+      const content = readFileSync(filePath, 'utf-8');
+      const lines = content.split('\n').filter(Boolean);
+      const messages: Array<{ ts: string; role: 'user' | 'assistant'; content: string }> = [];
+
+      for (const line of lines) {
+        try {
+          const entry = JSON.parse(line) as SessionLine;
+          const ts = entry.ts || new Date().toISOString();
+          if (entry.user) messages.push({ ts, role: 'user', content: entry.user });
+          if (entry.assistant) messages.push({ ts, role: 'assistant', content: entry.assistant });
+        } catch {
+          // Ignore malformed lines
+        }
+      }
+
+      return { id, messages };
+    } catch {
+      return reply.code(500).send({ error: 'Failed to read conversation' });
+    }
+  });
+
   fastify.get<{ Params: { id: string } }>('/api/dashboard/sessions/:id', async (request, reply) => {
     const { id } = request.params;
     if (!validateFilename(id)) {
@@ -267,6 +365,61 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
   fastify.get('/api/dashboard/cron', async () => {
     const jobs = getCronJobDetails(config);
     return { jobs };
+  });
+
+  // --- Messages ---
+  fastify.post<{ Body: { message: string } }>('/api/dashboard/messages/send', async (request, reply) => {
+    const message = request.body?.message?.trim();
+    if (!message) {
+      return reply.code(400).send({ error: 'message required' });
+    }
+
+    try {
+      const sent = await sendActiveChannelProactiveMessage(config, message);
+      if (!sent) {
+        return reply.code(400).send({ error: 'No active channel target configured' });
+      }
+      return {
+        sent: true,
+        channel: getActiveChannelId(),
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      return reply.code(500).send({ error: msg });
+    }
+  });
+
+  fastify.post<{ Body: { message: string; model?: string } }>('/api/dashboard/messages/agent', async (request, reply) => {
+    const message = request.body?.message?.trim();
+    if (!message) {
+      return reply.code(400).send({ error: 'message required' });
+    }
+
+    try {
+      const response = await runAgentTurn(
+        config.agents.default,
+        message,
+        config,
+        request.body?.model || getCurrentModel(),
+        undefined,
+        undefined,
+        {
+          channel: 'dashboard',
+          trigger: 'api',
+          metadata: { source: 'dashboard_messages' },
+        },
+      );
+
+      return {
+        ok: true,
+        response,
+        timestamp: new Date().toISOString(),
+      };
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      return reply.code(500).send({ error: msg });
+    }
   });
 
   fastify.post<{ Params: { id: string } }>('/api/dashboard/cron/:id/run', async (request, reply) => {
@@ -511,11 +664,17 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
 
     try {
       saveConfig(merged as Config);
-      return { saved: true };
+      return { saved: true, restartRequired: true };
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Unknown error';
       return reply.code(500).send({ error: msg });
     }
+  });
+
+  fastify.post('/api/dashboard/restart', async () => {
+    // Respond first, then terminate so process manager (launchd/systemd) can restart.
+    setTimeout(() => process.exit(0), 150);
+    return { restarting: true };
   });
 
   // --- Audit Log ---
@@ -729,7 +888,7 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
 
   fastify.put<{
     Params: { name: string };
-    Body: { enabled?: boolean };
+    Body: { enabled?: boolean; content?: string };
   }>('/api/dashboard/skills/:name', async (request, reply) => {
     const { name } = request.params;
     if (!validateSkillName(name)) {
@@ -742,19 +901,27 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
       return reply.code(404).send({ error: 'Skill not found' });
     }
 
-    const { enabled } = request.body;
-    if (typeof enabled !== 'boolean') {
-      return reply.code(400).send({ error: 'enabled (boolean) required' });
+    const { enabled, content } = request.body;
+    const hasEnabled = typeof enabled === 'boolean';
+    const hasContent = typeof content === 'string';
+    if (!hasEnabled && !hasContent) {
+      return reply.code(400).send({ error: 'enabled (boolean) or content (string) required' });
     }
 
-    // Update config.skills.entries[name]
-    const raw = loadRawConfig();
-    if (!raw.skills) raw.skills = {};
-    if (!raw.skills.entries) raw.skills.entries = {};
-    raw.skills.entries[name] = enabled;
-    saveConfig(raw as Config);
+    if (hasEnabled) {
+      // Update config.skills.entries[name]
+      const raw = loadRawConfig();
+      if (!raw.skills) raw.skills = {};
+      if (!raw.skills.entries) raw.skills.entries = {};
+      raw.skills.entries[name] = enabled;
+      saveConfig(raw as Config);
+    }
 
-    return { updated: true, name, enabled };
+    if (hasContent) {
+      writeFileSync(join(skillDir, 'SKILL.md'), content, 'utf-8');
+    }
+
+    return { updated: true, name, enabled, contentUpdated: hasContent, restartRequired: hasEnabled };
   });
 
   fastify.post<{
@@ -800,6 +967,7 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
     if (raw.skills?.entries?.[name] !== undefined) {
       delete raw.skills.entries[name];
       saveConfig(raw as Config);
+      return { deleted: true, name, restartRequired: true };
     }
 
     return { deleted: true, name };

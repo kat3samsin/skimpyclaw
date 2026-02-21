@@ -1,6 +1,7 @@
 // Gateway HTTP server for health checks and control
 
 import Fastify, { FastifyInstance } from 'fastify';
+import { join } from 'path';
 import type { Config, GatewayStatus } from './types.js';
 import { runAgentTurn } from './agent.js';
 import { getCronJobs, runCronJob } from './cron.js';
@@ -16,7 +17,7 @@ let currentModel: string;
 export async function createGateway(cfg: Config): Promise<FastifyInstance> {
   config = cfg;
   startTime = new Date();
-  currentModel = cfg.agents.list[cfg.agents.default]?.model || 'claude-sonnet-4-6';
+  currentModel = cfg.agents.list[cfg.agents.default]?.model || 'claude-sonnet-4-5';
 
   const fastify = Fastify({
     logger: {
@@ -117,8 +118,13 @@ export async function createGateway(cfg: Config): Promise<FastifyInstance> {
   // Register dashboard API routes (includes auth hook)
   registerDashboardAPI(fastify, config);
 
-  // Register dashboard frontend
-  registerDashboard(fastify);
+  // Register dashboard frontend (legacy inline HTML or built framework app)
+  registerDashboard(fastify, {
+    mode: config.dashboard?.frontend === 'legacy' ? 'legacy' : 'framework',
+    frameworkDistDir: join(process.cwd(), 'dist', 'dashboard'),
+    botName: config.agents.list[config.agents.default]?.identity?.name || 'SkimpyClaw',
+    botEmoji: config.agents.list[config.agents.default]?.identity?.emoji || '👙🦞',
+  });
 
   return fastify;
 }

@@ -59,6 +59,7 @@ export interface Config {
   };
   dashboard?: {
     token?: string;
+    frontend?: 'legacy' | 'framework';
   };
   subagents?: {
     maxConcurrent?: number;   // Max parallel subagents (default 5)

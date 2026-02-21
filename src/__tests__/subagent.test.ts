@@ -52,7 +52,7 @@ function createMockConfig(): Config {
       providers: {},
       aliases: {
         'claude-think': 'anthropic/claude-sonnet-4-5',
-        'claude-opus': 'anthropic/claude-opus-4-6',
+        'claude-opus': 'anthropic/claude-opus-4',
       },
     },
     channels: {
@@ -116,8 +116,8 @@ describe('subagent', () => {
     });
 
     it('uses model override when provided', () => {
-      const task = dispatchSubagent('coding', 'test', 123, mockConfig, 'anthropic/claude-opus-4-6');
-      expect(task.model).toBe('anthropic/claude-opus-4-6');
+      const task = dispatchSubagent('coding', 'test', 123, mockConfig, 'anthropic/claude-opus-4');
+      expect(task.model).toBe('anthropic/claude-opus-4');
     });
 
     it('rejects when max concurrent reached', () => {

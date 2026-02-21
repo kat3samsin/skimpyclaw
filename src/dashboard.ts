@@ -1,11 +1,87 @@
 // Dashboard frontend - serves the single-page dashboard UI
 
+import { existsSync, readFileSync } from 'fs';
+import { extname, isAbsolute, join, relative, resolve } from 'path';
 import { FastifyInstance } from 'fastify';
 
-export function registerDashboard(fastify: FastifyInstance): void {
+export interface DashboardFrontendOptions {
+  mode?: 'legacy' | 'framework';
+  frameworkDistDir?: string;
+  botName?: string;
+  botEmoji?: string;
+}
+
+export function registerDashboard(
+  fastify: FastifyInstance,
+  options: DashboardFrontendOptions = {},
+): void {
+  const mode = options.mode ?? 'legacy';
+  const botName = options.botName ?? 'SkimpyClaw';
+  const botEmoji = options.botEmoji ?? '👙🦞';
+  const frameworkDistDir = resolve(options.frameworkDistDir ?? join(process.cwd(), 'dist', 'dashboard'));
+  const frameworkIndexPath = join(frameworkDistDir, 'index.html');
+
+  if (mode === 'framework' && existsSync(frameworkIndexPath)) {
+    const serveFrameworkIndex = async (_request: unknown, reply: any) => {
+      try {
+        const html = readFileSync(frameworkIndexPath, 'utf-8')
+          .replace('__SKIMPY_BOT_NAME__', escapeForInlineScript(botName))
+          .replace('__SKIMPY_BOT_EMOJI__', escapeForInlineScript(botEmoji));
+        reply.type('text/html').send(html);
+      } catch {
+        reply.code(500).send('Framework dashboard failed to load');
+      }
+    };
+
+    fastify.get('/dashboard', serveFrameworkIndex);
+    fastify.get('/dashboard/*', serveFrameworkIndex);
+
+    fastify.get<{ Params: { '*': string } }>('/assets/*', async (request, reply) => {
+      const relPath = request.params['*'];
+      const assetsBaseDir = resolve(frameworkDistDir, 'assets');
+      const filePath = resolve(assetsBaseDir, relPath);
+      const rel = relative(assetsBaseDir, filePath);
+      if (!rel || rel.startsWith('..') || isAbsolute(rel) || !existsSync(filePath)) {
+        reply.code(404).send('Not found');
+        return;
+      }
+
+      const buffer = readFileSync(filePath);
+      reply.type(getMimeType(filePath)).send(buffer);
+    });
+    return;
+  }
+
+  if (mode === 'framework') {
+    console.warn(`[dashboard] Framework mode requested, but ${frameworkIndexPath} is missing. Falling back to legacy.`);
+  }
+
   fastify.get('/dashboard', async (_request, reply) => {
     reply.type('text/html').send(DASHBOARD_HTML);
   });
+}
+
+function escapeForInlineScript(value: string): string {
+  return value
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e');
+}
+
+function getMimeType(filePath: string): string {
+  const ext = extname(filePath).toLowerCase();
+  if (ext === '.js') return 'text/javascript; charset=utf-8';
+  if (ext === '.css') return 'text/css; charset=utf-8';
+  if (ext === '.json') return 'application/json; charset=utf-8';
+  if (ext === '.map') return 'application/json; charset=utf-8';
+  if (ext === '.svg') return 'image/svg+xml';
+  if (ext === '.png') return 'image/png';
+  if (ext === '.jpg' || ext === '.jpeg') return 'image/jpeg';
+  if (ext === '.woff2') return 'font/woff2';
+  if (ext === '.woff') return 'font/woff';
+  if (ext === '.ttf') return 'font/ttf';
+  return 'application/octet-stream';
 }
 
 const DASHBOARD_HTML = `<!DOCTYPE html>

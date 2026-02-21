@@ -1,0 +1,79 @@
+/* Design tokens — light theme (warm cream + sage) */
+:root,
+[data-theme="light"] {
+  --bg: #f5f2ee;
+  --bg-sidebar: #f5f2ee;
+  --surface: #ffffff;
+  --surface-alt: #f9f7f4;
+  --surface-hover: #f0ede8;
+  --text: #2c2825;
+  --text-dim: #5c5652;
+  --text-muted: #9b948e;
+  --accent: #4a7c6f;
+  --accent-hover: #3b6b5e;
+  --accent-soft: rgba(74, 124, 111, 0.08);
+  --accent-soft-2: rgba(74, 124, 111, 0.04);
+  --success: #4a7c6f;
+  --success-soft: rgba(74, 124, 111, 0.08);
+  --warning: #c4873a;
+  --warning-soft: rgba(196, 135, 58, 0.08);
+  --error: #c25450;
+  --error-soft: rgba(194, 84, 80, 0.06);
+  --border: rgba(0,0,0,0.06);
+  --border-light: rgba(0,0,0,0.04);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.03);
+  --shadow: 0 2px 8px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.06);
+  --sidebar-active: #ffffff;
+  --sidebar-hover: rgba(0,0,0,0.03);
+  --welcome-from: #4a7c6f;
+  --welcome-to: #6ba396;
+  --welcome-text: #ffffff;
+  --log-info: #5c5652;
+  --log-warn: #b07c1a;
+  --log-error: #c25450;
+  --highlight: var(--accent);
+  --mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+  --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --serif: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --radius: 16px;
+  --radius-md: 12px;
+  --radius-sm: 8px;
+  --sidebar-width: 260px;
+}
+
+/* Dark theme — warm charcoal + sage */
+[data-theme="dark"] {
+  --bg: #1a1816;
+  --bg-sidebar: #1a1816;
+  --surface: #242120;
+  --surface-alt: #2c2928;
+  --surface-hover: #353230;
+  --text: #ede9e4;
+  --text-dim: #a8a29e;
+  --text-muted: #6d6762;
+  --accent: #7dbcab;
+  --accent-hover: #92ccbc;
+  --accent-soft: rgba(125, 188, 171, 0.12);
+  --accent-soft-2: rgba(125, 188, 171, 0.06);
+  --success: #7dbcab;
+  --success-soft: rgba(125, 188, 171, 0.1);
+  --warning: #e0a95e;
+  --warning-soft: rgba(224, 169, 94, 0.1);
+  --error: #d97a77;
+  --error-soft: rgba(217, 122, 119, 0.1);
+  --border: rgba(255,255,255,0.07);
+  --border-light: rgba(255,255,255,0.04);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.2);
+  --shadow: 0 2px 8px rgba(0,0,0,0.2);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.3);
+  --sidebar-active: rgba(125, 188, 171, 0.08);
+  --sidebar-hover: rgba(255,255,255,0.04);
+  --welcome-from: #3d6b5e;
+  --welcome-to: #6ba396;
+  --welcome-text: #ffffff;
+  --log-info: #a8a29e;
+  --log-warn: #e0a95e;
+  --log-error: #d97a77;
+  --highlight: var(--accent);
+}

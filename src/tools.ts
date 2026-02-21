@@ -212,7 +212,7 @@ export const CODE_WITH_TEAM_TOOL = {
       team_size: { type: 'number', description: 'Number of parallel agents (2-5, default 3)' },
       workdir: { type: 'string', description: 'Working directory or project name (default: SkimpyClaw repo root)' },
       agent: { type: 'string', enum: ['claude', 'codex', 'kimi'], description: 'Which coding CLI to use for all team workers. Omit to use configured default.' },
-      model: { type: 'string', description: 'Model override (e.g. claude-sonnet-4-6, gpt-5.3-codex)' },
+      model: { type: 'string', description: 'Model override (e.g. claude-sonnet-4-5, gpt-5.3-codex)' },
       timeout_minutes: { type: 'number', description: 'Total timeout in minutes (default: 20, max: 60)' },
       validate: { type: 'boolean', description: 'Run pnpm build && pnpm test after all agents complete (default: true)' },
     },
@@ -1075,7 +1075,7 @@ async function executeCodeWithAgent(
 
   const validate = input.validate !== false; // default true
 
-  // Resolve model alias to real model ID (e.g. "claude-opus" → "anthropic/claude-opus-4-6")
+  // Resolve model alias to real model ID (e.g. "claude-opus" → "anthropic/claude-opus-4")
   // CLI tools don't know SkimpyClaw's aliases, so we must resolve before passing --model
   let resolvedModel: string | undefined = input.model as string | undefined;
   if (resolvedModel && context?.fullConfig) {

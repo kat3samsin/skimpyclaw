@@ -1,0 +1,1100 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SkimpyClaw Dashboard — UI Redesign Mockup</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+/* ══════════════════════════════════════════════════
+   THEME — warm cream + sage
+   ══════════════════════════════════════════════════ */
+:root,
+[data-theme="light"] {
+  --bg: #f5f2ee;
+  --bg-sidebar: #f5f2ee;
+  --surface: #ffffff;
+  --surface-alt: #f9f7f4;
+  --surface-hover: #f0ede8;
+  --text: #2c2825;
+  --text-dim: #5c5652;
+  --text-muted: #9b948e;
+  --accent: #4a7c6f;
+  --accent-hover: #3b6b5e;
+  --accent-soft: rgba(74, 124, 111, 0.08);
+  --accent-soft-2: rgba(74, 124, 111, 0.04);
+  --success: #4a7c6f;
+  --success-soft: rgba(74, 124, 111, 0.08);
+  --warning: #c4873a;
+  --warning-soft: rgba(196, 135, 58, 0.08);
+  --error: #c25450;
+  --error-soft: rgba(194, 84, 80, 0.06);
+  --border: rgba(0,0,0,0.06);
+  --border-light: rgba(0,0,0,0.04);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.03);
+  --shadow: 0 2px 8px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.06);
+  --sidebar-active: #ffffff;
+  --sidebar-hover: rgba(0,0,0,0.03);
+  --welcome-from: #4a7c6f;
+  --welcome-to: #6ba396;
+  --welcome-text: #ffffff;
+  --info: #567791;
+  --info-soft: rgba(86, 119, 145, 0.08);
+}
+
+[data-theme="dark"] {
+  --bg: #1a1816;
+  --bg-sidebar: #1a1816;
+  --surface: #242120;
+  --surface-alt: #2c2928;
+  --surface-hover: #353230;
+  --text: #ede9e4;
+  --text-dim: #a8a29e;
+  --text-muted: #6d6762;
+  --accent: #7dbcab;
+  --accent-hover: #92ccbc;
+  --accent-soft: rgba(125, 188, 171, 0.12);
+  --accent-soft-2: rgba(125, 188, 171, 0.06);
+  --success: #7dbcab;
+  --success-soft: rgba(125, 188, 171, 0.1);
+  --warning: #e0a95e;
+  --warning-soft: rgba(224, 169, 94, 0.1);
+  --error: #d97a77;
+  --error-soft: rgba(217, 122, 119, 0.1);
+  --border: rgba(255,255,255,0.07);
+  --border-light: rgba(255,255,255,0.04);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.2);
+  --shadow: 0 2px 8px rgba(0,0,0,0.2);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.3);
+  --sidebar-active: rgba(125, 188, 171, 0.08);
+  --sidebar-hover: rgba(255,255,255,0.04);
+  --welcome-from: #3d6b5e;
+  --welcome-to: #6ba396;
+  --welcome-text: #ffffff;
+  --info: #89b4cc;
+  --info-soft: rgba(137, 180, 204, 0.12);
+}
+
+:root {
+  --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --serif: 'Playfair Display', Georgia, 'Times New Roman', serif;
+  --mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+  --radius: 16px;
+  --radius-md: 12px;
+  --radius-sm: 8px;
+  --sidebar-width: 260px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  font-size: 14px;
+  line-height: 1.55;
+  transition: background 0.3s ease, color 0.3s ease;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--accent); text-decoration: none; }
+
+/* ══════════════════════════════════════════════════
+   LAYOUT
+   ══════════════════════════════════════════════════ */
+.shell { display: grid; grid-template-columns: var(--sidebar-width) 1fr; min-height: 100vh; }
+
+.sidebar {
+  background: var(--bg-sidebar); display: flex; flex-direction: column;
+  position: sticky; top: 0; height: 100vh; z-index: 10; overflow-y: auto;
+}
+.sidebar-header { padding: 28px 24px 20px; display: flex; align-items: center; gap: 12px; }
+.sidebar-logo {
+  width: 40px; height: 40px;
+  background: linear-gradient(135deg, var(--welcome-from), var(--welcome-to));
+  border-radius: var(--radius-md);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+  box-shadow: 0 2px 8px rgba(74, 124, 111, 0.2);
+}
+.sidebar-brand-name { font-family: var(--serif); font-size: 17px; font-weight: 700; color: var(--text); }
+.sidebar-brand-status { font-size: 11px; color: var(--success); display: flex; align-items: center; gap: 5px; font-weight: 500; }
+.sidebar-brand-status::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--success); display: inline-block; }
+.sidebar-section { padding: 0 12px; margin-bottom: 8px; }
+.sidebar-section-label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; padding: 16px 12px 8px; }
+.sidebar-item {
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--radius-sm);
+  cursor: pointer; color: var(--text-dim); font-size: 14px; font-weight: 500;
+  transition: all 0.15s ease; border: none; background: transparent;
+  width: 100%; text-align: left; font-family: var(--sans); position: relative;
+}
+.sidebar-item:hover { background: var(--sidebar-hover); color: var(--text); }
+.sidebar-item.active { background: var(--sidebar-active); color: var(--accent); font-weight: 600; box-shadow: var(--shadow-sm); }
+.sidebar-item.active::before { content: ''; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px; border-radius: 0 3px 3px 0; background: var(--accent); }
+.sidebar-item svg { width: 20px; height: 20px; flex-shrink: 0; opacity: 0.6; }
+.sidebar-item.active svg { opacity: 1; }
+.sidebar-item .item-badge { margin-left: auto; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--warning-soft); color: var(--warning); }
+.sidebar-spacer { flex: 1; }
+.sidebar-footer { padding: 16px 12px; border-top: 1px solid var(--border-light); }
+.sidebar-footer-item {
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--radius-sm);
+  cursor: pointer; color: var(--text-muted); font-size: 13px; font-weight: 500;
+  border: none; background: transparent; width: 100%; text-align: left; font-family: var(--sans);
+}
+.sidebar-footer-item svg { width: 18px; height: 18px; flex-shrink: 0; opacity: 0.5; }
+
+.main { overflow-y: auto; padding: 32px 36px; max-height: 100vh; }
+.page { display: none; }
+.page.active { display: block; }
+
+.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 28px; }
+.page-title { font-family: var(--serif); font-size: 26px; font-weight: 700; letter-spacing: -0.02em; }
+.header-actions { display: flex; gap: 10px; align-items: center; }
+.header-meta { font-size: 12px; color: var(--text-muted); font-family: var(--mono); }
+
+.theme-toggle {
+  width: 36px; height: 36px; border: 1px solid var(--border); background: var(--surface);
+  border-radius: var(--radius-sm); cursor: pointer; display: flex; align-items: center;
+  justify-content: center; color: var(--text-dim); transition: all 0.15s ease;
+}
+.theme-toggle:hover { background: var(--surface-hover); }
+
+/* ══════════════════════════════════════════════════
+   SHARED COMPONENTS
+   ══════════════════════════════════════════════════ */
+.btn {
+  padding: 7px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface); color: var(--text); font-family: var(--sans);
+  font-weight: 500; font-size: 13px; cursor: pointer; transition: all 0.15s ease;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.btn:hover { background: var(--surface-hover); border-color: var(--text-muted); }
+.btn-primary { background: var(--accent); color: white; border-color: var(--accent); }
+.btn-primary:hover { background: var(--accent-hover); }
+.btn-danger { background: var(--error-soft); color: var(--error); border-color: rgba(194,84,80,0.15); }
+.btn-danger:hover { background: rgba(194,84,80,0.12); }
+.btn-sm { padding: 4px 10px; font-size: 12px; }
+.btn-ghost { background: transparent; border-color: transparent; color: var(--text-muted); }
+.btn-ghost:hover { background: var(--surface-alt); color: var(--text-dim); }
+
+.badge {
+  font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  display: inline-flex; align-items: center; gap: 4px;
+}
+
+.spinner { width: 14px; height: 14px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; display: inline-block; }
+.spinner-sm { width: 10px; height: 10px; border-width: 1.5px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.refresh-indicator {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11px; font-family: var(--mono); color: var(--text-muted);
+  padding: 5px 10px; border-radius: 999px; background: var(--surface-alt); border: 1px solid var(--border-light);
+}
+.refresh-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); animation: pulse-dot 2s ease infinite; }
+@keyframes pulse-dot { 0%,100% { opacity: 0.3; } 50% { opacity: 1; } }
+
+.meta-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-muted); }
+.meta-chip svg { width: 14px; height: 14px; opacity: 0.5; }
+.meta-chip.mono { font-family: var(--mono); }
+.meta-dot { width: 3px; height: 3px; border-radius: 50%; background: var(--border); flex-shrink: 0; }
+
+.cost-pill { font-family: var(--mono); font-size: 11px; padding: 3px 10px; border-radius: 999px; background: var(--surface-alt); color: var(--text-dim); border: 1px solid var(--border-light); }
+.diff-pill { font-family: var(--mono); font-size: 11px; padding: 3px 10px; border-radius: 999px; background: var(--surface-alt); border: 1px solid var(--border-light); }
+.diff-pill .added { color: var(--success); font-weight: 600; }
+.diff-pill .removed { color: var(--error); font-weight: 600; }
+
+.empty-state { text-align: center; padding: 60px 30px; color: var(--text-muted); }
+
+/* ══════════════════════════════════════════════════
+   CODING AGENT PAGE
+   ══════════════════════════════════════════════════ */
+.ca-stats { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+.ca-stat {
+  display: flex; align-items: center; gap: 10px; padding: 14px 20px;
+  background: var(--surface); border: 1px solid var(--border-light);
+  border-radius: var(--radius); box-shadow: var(--shadow-sm); min-width: 140px; flex: 1;
+}
+.ca-stat-icon { width: 38px; height: 38px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.ca-stat-icon.running { background: var(--accent-soft); color: var(--accent); }
+.ca-stat-icon.completed { background: var(--success-soft); color: var(--success); }
+.ca-stat-icon.failed { background: var(--error-soft); color: var(--error); }
+.ca-stat-icon.cost { background: var(--warning-soft); color: var(--warning); }
+.ca-stat-num { font-family: var(--serif); font-size: 22px; font-weight: 700; line-height: 1; }
+.ca-stat-label { font-size: 11px; color: var(--text-muted); font-weight: 500; margin-top: 2px; }
+
+/* Waterfall */
+.waterfall { background: var(--surface); border: 1px solid var(--border-light); border-radius: var(--radius); padding: 20px 24px 16px; box-shadow: var(--shadow-sm); margin-bottom: 24px; }
+.waterfall-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+.waterfall-title { font-size: 13px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; }
+.waterfall-legend { display: flex; gap: 14px; font-size: 11px; color: var(--text-muted); }
+.waterfall-legend-dot { width: 8px; height: 8px; border-radius: 2px; display: inline-block; margin-right: 5px; vertical-align: middle; }
+.waterfall-axis { display: flex; justify-content: space-between; font-size: 10px; font-family: var(--mono); color: var(--text-muted); margin-bottom: 8px; padding: 0 4px; }
+.waterfall-rows { display: flex; flex-direction: column; gap: 6px; }
+.waterfall-row { display: grid; grid-template-columns: 100px 1fr; gap: 12px; align-items: center; }
+.waterfall-label { font-family: var(--mono); color: var(--text-dim); font-size: 11px; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.waterfall-label.indent { padding-left: 16px; font-size: 10px; color: var(--text-muted); }
+.waterfall-track { height: 22px; background: var(--surface-alt); border-radius: 4px; position: relative; overflow: hidden; }
+.waterfall-bar { position: absolute; top: 3px; bottom: 3px; border-radius: 3px; min-width: 6px; cursor: pointer; transition: opacity 0.15s; }
+.waterfall-bar:hover { opacity: 1 !important; }
+.waterfall-bar.completed { background: var(--success); opacity: 0.55; }
+.waterfall-bar.running { background: var(--accent); opacity: 0.6; animation: pulse-bar 1.5s ease infinite; }
+.waterfall-bar.failed { background: var(--error); opacity: 0.55; }
+.waterfall-bar-tooltip { position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg); font-size: 11px; font-family: var(--mono); padding: 4px 8px; border-radius: 4px; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity 0.15s; }
+.waterfall-bar:hover .waterfall-bar-tooltip { opacity: 1; }
+@keyframes pulse-bar { 0%,100% { opacity: 0.4; } 50% { opacity: 0.8; } }
+
+/* Task cards */
+.task-list { display: flex; flex-direction: column; gap: 16px; }
+.task-card { background: var(--surface); border: 1px solid var(--border-light); border-radius: var(--radius); box-shadow: var(--shadow-sm); overflow: hidden; transition: box-shadow 0.15s ease; }
+.task-card:hover { box-shadow: var(--shadow); }
+.task-card-stripe { height: 3px; }
+.task-card-stripe.completed { background: var(--success); }
+.task-card-stripe.failed { background: var(--error); }
+.task-card-stripe.running { background: linear-gradient(90deg, transparent, var(--accent), transparent); background-size: 200% 100%; animation: stripe-slide 2s ease infinite; }
+@keyframes stripe-slide { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
+.task-header { padding: 18px 22px 0; display: flex; align-items: flex-start; gap: 14px; }
+.task-status-icon { width: 36px; height: 36px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px; }
+.task-status-icon.running { background: var(--accent-soft); color: var(--accent); }
+.task-status-icon.completed { background: var(--success-soft); color: var(--success); }
+.task-status-icon.failed { background: var(--error-soft); color: var(--error); }
+.task-header-body { flex: 1; min-width: 0; }
+.task-top-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
+.task-id { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--accent); }
+.badge-team { background: var(--accent-soft); color: var(--accent); }
+.badge-status.running { background: var(--accent-soft); color: var(--accent); }
+.badge-status.completed { background: var(--success-soft); color: var(--success); }
+.badge-status.failed { background: var(--error-soft); color: var(--error); }
+.task-title { font-size: 14px; font-weight: 500; color: var(--text); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.task-header-right { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; flex-shrink: 0; }
+.task-meta { padding: 10px 22px 16px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.task-progress { height: 2px; background: var(--surface-alt); position: relative; }
+.task-progress-fill { position: absolute; top: 0; left: 0; bottom: 0; background: var(--accent); border-radius: 0 2px 2px 0; transition: width 0.5s ease; }
+
+/* Subagents */
+.subagents-section { border-top: 1px solid var(--border-light); }
+.subagents-toggle { display: flex; align-items: center; gap: 8px; padding: 12px 22px; cursor: pointer; user-select: none; font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; background: none; border: none; width: 100%; text-align: left; font-family: var(--sans); }
+.subagents-toggle:hover { color: var(--text-dim); }
+.subagents-toggle svg { width: 14px; height: 14px; transition: transform 0.2s ease; }
+.subagents-toggle.open svg { transform: rotate(90deg); }
+.subagents-list { display: none; padding: 0 22px 16px 22px; }
+.subagents-list.open { display: block; }
+.subagent-tree { border-left: 2px solid var(--border); padding-left: 16px; margin-left: 8px; display: flex; flex-direction: column; gap: 8px; }
+.sub-card { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border: 1px solid var(--border-light); border-radius: var(--radius-sm); cursor: pointer; transition: all 0.12s ease; background: var(--surface-alt); }
+.sub-card:hover { background: var(--surface-hover); }
+.sub-card-icon { width: 24px; height: 24px; border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+.sub-card-icon.completed { background: var(--success-soft); color: var(--success); }
+.sub-card-icon.running { background: var(--accent-soft); color: var(--accent); }
+.sub-card-body { flex: 1; min-width: 0; }
+.sub-card-top { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+.sub-card-id { font-family: var(--mono); font-size: 11px; color: var(--accent); font-weight: 500; }
+.sub-card-task { font-size: 13px; color: var(--text-dim); line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+.sub-card-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; font-size: 11px; font-family: var(--mono); color: var(--text-muted); }
+
+/* Output section */
+.task-output-section { border-top: 1px solid var(--border-light); }
+.output-toggle { display: flex; align-items: center; gap: 8px; padding: 12px 22px; cursor: pointer; user-select: none; font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; background: none; border: none; width: 100%; text-align: left; font-family: var(--sans); }
+.output-toggle:hover { color: var(--text-dim); }
+.output-toggle svg { width: 14px; height: 14px; transition: transform 0.2s ease; }
+.output-toggle.open svg { transform: rotate(90deg); }
+.output-content { display: none; padding: 0 22px 18px; }
+.output-content.open { display: block; }
+.output-box { background: var(--surface-alt); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px 16px; font-family: var(--mono); font-size: 12px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; max-height: 280px; overflow-y: auto; color: var(--text-dim); }
+.output-box.error-output { background: var(--error-soft); border-color: rgba(194, 84, 80, 0.15); color: var(--error); }
+.synthesis-box { margin-top: 12px; padding: 14px 16px; background: var(--accent-soft-2); border: 1px solid var(--accent-soft); border-radius: var(--radius-sm); }
+.synthesis-label { font-size: 10px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
+.synthesis-text { font-size: 13px; line-height: 1.6; color: var(--text); }
+
+/* ══════════════════════════════════════════════════
+   AUDIT LOG PAGE
+   ══════════════════════════════════════════════════ */
+
+/* Search + filter bar */
+.audit-toolbar {
+  display: flex; gap: 10px; align-items: center; margin-bottom: 20px; flex-wrap: wrap;
+}
+.audit-search {
+  flex: 1; min-width: 200px; padding: 9px 14px 9px 36px; border: 1px solid var(--border);
+  border-radius: var(--radius-sm); background: var(--surface); font-family: var(--sans);
+  font-size: 13px; color: var(--text); outline: none; transition: border-color 0.15s;
+}
+.audit-search:focus { border-color: var(--accent); }
+.audit-search-wrap { position: relative; flex: 1; min-width: 200px; }
+.audit-search-wrap svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: var(--text-muted); pointer-events: none; }
+.audit-filter-select {
+  padding: 9px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface); font-family: var(--sans); font-size: 13px;
+  color: var(--text); cursor: pointer; outline: none; min-width: 140px;
+}
+.audit-filter-select:focus { border-color: var(--accent); }
+
+/* Trigger pill colors */
+.trigger-pill {
+  font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.trigger-pill.telegram { background: var(--info-soft); color: var(--info); }
+.trigger-pill.cron { background: var(--warning-soft); color: var(--warning); }
+.trigger-pill.system { background: var(--surface-alt); color: var(--text-muted); }
+.trigger-pill.api { background: var(--accent-soft); color: var(--accent); }
+.trigger-pill.discord { background: rgba(114, 101, 227, 0.08); color: #7265e3; }
+.trigger-pill.code_agent { background: var(--success-soft); color: var(--success); }
+.trigger-pill.code_team { background: var(--success-soft); color: var(--success); }
+
+/* Audit timeline */
+.audit-timeline { display: flex; flex-direction: column; gap: 2px; }
+
+.audit-row {
+  display: grid;
+  grid-template-columns: 60px 1fr;
+  gap: 0;
+  min-height: 64px;
+}
+
+.audit-time-col {
+  display: flex; flex-direction: column; align-items: center;
+  padding-top: 20px;
+  position: relative;
+}
+.audit-time {
+  font-size: 11px; font-family: var(--mono); color: var(--text-muted);
+  white-space: nowrap;
+}
+.audit-timeline-line {
+  width: 2px; flex: 1; background: var(--border); margin-top: 8px;
+}
+.audit-row:last-child .audit-timeline-line { background: transparent; }
+
+.audit-timeline-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  border: 2px solid var(--surface);
+  position: absolute; top: 18px; left: 50%; transform: translateX(-50%);
+  z-index: 1;
+}
+.audit-timeline-dot.ok { background: var(--success); }
+.audit-timeline-dot.error { background: var(--error); }
+
+.audit-card {
+  background: var(--surface); border: 1px solid var(--border-light);
+  border-radius: var(--radius-md); padding: 16px 20px;
+  margin-left: 12px; cursor: pointer;
+  transition: all 0.12s ease; position: relative;
+}
+.audit-card:hover { box-shadow: var(--shadow-sm); }
+
+.audit-card-header {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 6px;
+}
+.audit-card-id {
+  font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--text-dim);
+}
+.audit-card-status {
+  font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+}
+.audit-card-status.ok { background: var(--success-soft); color: var(--success); }
+.audit-card-status.error { background: var(--error-soft); color: var(--error); }
+
+.audit-card-duration {
+  margin-left: auto; font-size: 11px; font-family: var(--mono); color: var(--text-muted);
+}
+
+.audit-card-preview {
+  font-size: 13px; color: var(--text); line-height: 1.5;
+  display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden;
+}
+
+.audit-card-events {
+  display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap;
+}
+.audit-event-chip {
+  font-size: 11px; font-family: var(--mono); padding: 3px 10px;
+  border-radius: 999px; background: var(--surface-alt);
+  color: var(--text-dim); border: 1px solid var(--border-light);
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.audit-event-chip .ev-dur { color: var(--text-muted); font-size: 10px; }
+
+/* Expanded audit detail */
+.audit-detail { display: none; margin-top: 12px; border-top: 1px solid var(--border-light); padding-top: 12px; }
+.audit-detail.open { display: block; }
+.audit-event-row {
+  display: grid; grid-template-columns: 90px 1fr auto;
+  gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border-light);
+  font-size: 12px; align-items: center;
+}
+.audit-event-row:last-child { border-bottom: none; }
+.audit-event-type { font-family: var(--mono); font-weight: 600; color: var(--accent); font-size: 11px; }
+.audit-event-summary { color: var(--text-dim); font-size: 12px; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+.audit-event-dur { font-family: var(--mono); font-size: 11px; color: var(--text-muted); text-align: right; }
+
+/* Audit stats summary */
+.audit-stats { display: flex; gap: 20px; margin-bottom: 20px; padding: 14px 20px; background: var(--surface); border: 1px solid var(--border-light); border-radius: var(--radius); }
+.audit-stat-item { display: flex; align-items: center; gap: 8px; }
+.audit-stat-num { font-family: var(--serif); font-size: 18px; font-weight: 700; }
+.audit-stat-label { font-size: 11px; color: var(--text-muted); }
+
+/* ══════════════════════════════════════════════════
+   TEMPLATES PAGE
+   ══════════════════════════════════════════════════ */
+.tmpl-split {
+  display: grid; grid-template-columns: 280px 1fr; gap: 18px;
+  height: calc(100vh - 140px);
+}
+
+.tmpl-sidebar {
+  background: var(--surface); border: 1px solid var(--border-light);
+  border-radius: var(--radius); box-shadow: var(--shadow-sm);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+
+.tmpl-sidebar-header {
+  padding: 16px 18px; border-bottom: 1px solid var(--border-light);
+  display: flex; justify-content: space-between; align-items: center;
+}
+.tmpl-sidebar-title { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+
+.tmpl-agent-select {
+  padding: 5px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface-alt); font-family: var(--mono); font-size: 11px;
+  color: var(--text); cursor: pointer; outline: none;
+}
+
+.tmpl-file-list { flex: 1; overflow-y: auto; }
+
+.tmpl-file {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 18px; cursor: pointer;
+  border-bottom: 1px solid var(--border-light);
+  transition: all 0.12s ease; position: relative;
+}
+.tmpl-file:hover { background: var(--surface-alt); }
+.tmpl-file.active { background: var(--accent-soft-2); }
+.tmpl-file.active::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--accent); border-radius: 0 3px 3px 0; }
+
+.tmpl-file-icon {
+  width: 32px; height: 32px; border-radius: var(--radius-sm);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; flex-shrink: 0;
+}
+.tmpl-file-icon.soul { background: linear-gradient(135deg, var(--welcome-from), var(--welcome-to)); color: white; }
+.tmpl-file-icon.identity { background: var(--accent-soft); color: var(--accent); }
+.tmpl-file-icon.user { background: var(--info-soft); color: var(--info); }
+.tmpl-file-icon.tools { background: var(--warning-soft); color: var(--warning); }
+.tmpl-file-icon.boot { background: var(--error-soft); color: var(--error); }
+.tmpl-file-icon.heartbeat { background: var(--success-soft); color: var(--success); }
+.tmpl-file-icon.memory { background: rgba(114, 101, 227, 0.08); color: #7265e3; }
+
+.tmpl-file-info { flex: 1; min-width: 0; }
+.tmpl-file-name { font-weight: 600; font-size: 13px; margin-bottom: 2px; }
+.tmpl-file-desc { font-size: 11px; color: var(--text-muted); line-height: 1.3; }
+.tmpl-file-meta { font-size: 10px; font-family: var(--mono); color: var(--text-muted); margin-top: 3px; }
+
+/* Editor panel */
+.tmpl-editor {
+  background: var(--surface); border: 1px solid var(--border-light);
+  border-radius: var(--radius); box-shadow: var(--shadow-sm);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+
+.tmpl-editor-header {
+  padding: 16px 22px; border-bottom: 1px solid var(--border-light);
+  display: flex; justify-content: space-between; align-items: center;
+}
+.tmpl-editor-title-group { display: flex; align-items: center; gap: 12px; }
+.tmpl-editor-title { font-family: var(--serif); font-size: 18px; font-weight: 700; }
+.tmpl-unsaved { font-size: 11px; font-family: var(--mono); color: var(--warning); padding: 2px 8px; border-radius: 999px; background: var(--warning-soft); }
+
+.tmpl-editor-tabs {
+  display: flex; gap: 0; border-bottom: 1px solid var(--border-light); padding: 0 22px;
+}
+.tmpl-editor-tab {
+  padding: 10px 16px; font-size: 12px; font-weight: 600;
+  color: var(--text-muted); cursor: pointer; border-bottom: 2px solid transparent;
+  transition: all 0.15s; background: none; border-top: none; border-left: none; border-right: none;
+  font-family: var(--sans);
+}
+.tmpl-editor-tab:hover { color: var(--text-dim); }
+.tmpl-editor-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+.tmpl-editor-body { flex: 1; overflow-y: auto; }
+
+/* Edit mode */
+.tmpl-textarea {
+  width: 100%; height: 100%; padding: 20px 22px; border: none; outline: none;
+  font-family: var(--mono); font-size: 13px; line-height: 1.7;
+  background: transparent; color: var(--text); resize: none;
+}
+
+/* Preview/markdown mode */
+.tmpl-preview {
+  padding: 24px 28px; font-size: 14px; line-height: 1.7; color: var(--text);
+}
+.tmpl-preview h1 { font-family: var(--serif); font-size: 24px; font-weight: 700; margin: 24px 0 12px; color: var(--text); }
+.tmpl-preview h2 { font-family: var(--serif); font-size: 20px; font-weight: 700; margin: 20px 0 10px; color: var(--text); }
+.tmpl-preview h3 { font-size: 16px; font-weight: 600; margin: 16px 0 8px; }
+.tmpl-preview p { margin: 10px 0; }
+.tmpl-preview ul, .tmpl-preview ol { margin: 8px 0 10px 22px; }
+.tmpl-preview li { margin: 4px 0; }
+.tmpl-preview hr { border: 0; border-top: 1px solid var(--border); margin: 18px 0; }
+.tmpl-preview code { background: var(--surface-alt); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; font-family: var(--mono); font-size: 12px; }
+.tmpl-preview blockquote { border-left: 3px solid var(--accent); padding: 4px 0 4px 14px; color: var(--text-dim); margin: 12px 0; }
+
+/* File metadata card */
+.tmpl-file-meta-card {
+  margin: 16px 22px; padding: 14px 18px;
+  background: var(--surface-alt); border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm); display: flex; gap: 24px; font-size: 12px;
+}
+.tmpl-meta-item { display: flex; flex-direction: column; gap: 2px; }
+.tmpl-meta-label { font-size: 10px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.tmpl-meta-value { font-family: var(--mono); color: var(--text-dim); }
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <!-- SIDEBAR -->
+  <nav class="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">👙🦞</div>
+      <div>
+        <div class="sidebar-brand-name">SkimpyClaw</div>
+        <div class="sidebar-brand-status">Online</div>
+      </div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Dashboard</div>
+      <button class="sidebar-item" onclick="switchPage('overview')"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg> Overview</button>
+      <button class="sidebar-item" onclick="switchPage('history')"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> History</button>
+      <button class="sidebar-item" onclick="switchPage('approvals')"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Approvals <span class="item-badge">1</span></button>
+      <button class="sidebar-item" data-page="audit" onclick="switchPage('audit')"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> Audit</button>
+      <button class="sidebar-item" data-page="coding" onclick="switchPage('coding')"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg> Coding Agent</button>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">Settings</div>
+      <button class="sidebar-item" onclick="switchPage('memory')"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg> Memory</button>
+      <button class="sidebar-item" data-page="templates" onclick="switchPage('templates')"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Templates</button>
+      <button class="sidebar-item"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg> Skills</button>
+      <button class="sidebar-item"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Cron Jobs</button>
+      <button class="sidebar-item"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Config</button>
+    </div>
+    <div class="sidebar-spacer"></div>
+    <div class="sidebar-footer">
+      <button class="sidebar-footer-item"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="14" y2="21"/></svg> Logs</button>
+      <button class="sidebar-footer-item"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg> Health</button>
+    </div>
+  </nav>
+
+  <!-- ══════════════════════════════════════════════
+       MAIN CONTENT
+       ══════════════════════════════════════════════ -->
+  <div class="main">
+
+    <!-- ════════════════════════════════════════════
+         PAGE: CODING AGENT
+         ════════════════════════════════════════════ -->
+    <div class="page active" id="page-coding">
+      <div class="page-header">
+        <div class="page-title">Coding Agent</div>
+        <div class="header-actions">
+          <div class="refresh-indicator"><span class="refresh-dot"></span> Auto-refresh 3s</div>
+          <button class="btn btn-sm"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Refresh</button>
+          <button class="theme-toggle" onclick="toggleTheme()"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg></button>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="ca-stats">
+        <div class="ca-stat"><div class="ca-stat-icon running"><span class="spinner"></span></div><div><div class="ca-stat-num">1</div><div class="ca-stat-label">Running</div></div></div>
+        <div class="ca-stat"><div class="ca-stat-icon completed"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div><div><div class="ca-stat-num">4</div><div class="ca-stat-label">Completed</div></div></div>
+        <div class="ca-stat"><div class="ca-stat-icon failed"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></div><div><div class="ca-stat-num">1</div><div class="ca-stat-label">Failed</div></div></div>
+        <div class="ca-stat"><div class="ca-stat-icon cost"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div><div><div class="ca-stat-num">$1.23</div><div class="ca-stat-label">Cost today</div></div></div>
+      </div>
+
+      <!-- Waterfall -->
+      <div class="waterfall">
+        <div class="waterfall-header">
+          <div class="waterfall-title">Timeline</div>
+          <div class="waterfall-legend">
+            <span><span class="waterfall-legend-dot" style="background:var(--accent);"></span>Running</span>
+            <span><span class="waterfall-legend-dot" style="background:var(--success);"></span>Done</span>
+            <span><span class="waterfall-legend-dot" style="background:var(--error);"></span>Failed</span>
+          </div>
+        </div>
+        <div class="waterfall-axis"><span>10:00 AM</span><span>10:30</span><span>11:00</span><span>11:30</span><span>12:00 PM</span><span>12:30</span><span>1:00</span></div>
+        <div class="waterfall-rows">
+          <div class="waterfall-row"><div class="waterfall-label">ca-119</div><div class="waterfall-track"><div class="waterfall-bar completed" style="left:2%;width:10%;"><span class="waterfall-bar-tooltip">52s</span></div></div></div>
+          <div class="waterfall-row"><div class="waterfall-label">ca-121</div><div class="waterfall-track"><div class="waterfall-bar failed" style="left:18%;width:22%;"><span class="waterfall-bar-tooltip">5m 14s — failed</span></div></div></div>
+          <div class="waterfall-row"><div class="waterfall-label">ca-123</div><div class="waterfall-track"><div class="waterfall-bar completed" style="left:48%;width:8%;"><span class="waterfall-bar-tooltip">1m 32s</span></div></div></div>
+          <div class="waterfall-row"><div class="waterfall-label">ca-125</div><div class="waterfall-track"><div class="waterfall-bar running" style="left:72%;width:28%;"><span class="waterfall-bar-tooltip">running...</span></div></div></div>
+          <div class="waterfall-row"><div class="waterfall-label indent">└ ca-126</div><div class="waterfall-track"><div class="waterfall-bar completed" style="left:72%;width:12%;"><span class="waterfall-bar-tooltip">48s</span></div></div></div>
+          <div class="waterfall-row"><div class="waterfall-label indent">└ ca-127</div><div class="waterfall-track"><div class="waterfall-bar running" style="left:75%;width:25%;"><span class="waterfall-bar-tooltip">running...</span></div></div></div>
+        </div>
+      </div>
+
+      <!-- Task cards -->
+      <div class="task-list">
+        <!-- Running team task -->
+        <div class="task-card">
+          <div class="task-card-stripe running"></div>
+          <div class="task-header">
+            <div class="task-status-icon running"><span class="spinner"></span></div>
+            <div class="task-header-body">
+              <div class="task-top-row"><span class="task-id">ca-125</span><span class="badge badge-team">Team (2)</span><span class="badge badge-status running"><span class="spinner spinner-sm"></span> Running</span></div>
+              <div class="task-title">Refactor dashboard to use new coding agent card layout with summary stats, waterfall timeline, and collapsible subagent tree.</div>
+            </div>
+            <div class="task-header-right"><button class="btn btn-danger btn-sm">Cancel</button></div>
+          </div>
+          <div class="task-meta">
+            <span class="meta-chip mono">claude-sonnet-4-6</span><span class="meta-dot"></span>
+            <span class="meta-chip"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> 4m 22s</span><span class="meta-dot"></span>
+            <span class="cost-pill">$0.34 · 22k tok</span>
+          </div>
+          <div class="task-progress"><div class="task-progress-fill" style="width:55%;"></div></div>
+          <div class="subagents-section">
+            <button class="subagents-toggle open" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open');"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg> Subagents (2)</button>
+            <div class="subagents-list open">
+              <div class="subagent-tree">
+                <div class="sub-card"><div class="sub-card-icon completed"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div><div class="sub-card-body"><div class="sub-card-top"><span class="sub-card-id">ca-126</span><span class="badge badge-status completed" style="font-size:9px;padding:1px 6px;">Done</span><span class="cost-pill" style="font-size:10px;padding:1px 7px;">$0.08</span></div><div class="sub-card-task">Restructure CSS: replace 220px text sidebar with 260px icon+text sidebar</div></div><div class="sub-card-right"><span>48s</span><span class="diff-pill"><span class="added">+142</span> <span class="removed">-87</span></span></div></div>
+                <div class="sub-card"><div class="sub-card-icon running"><span class="spinner spinner-sm"></span></div><div class="sub-card-body"><div class="sub-card-top"><span class="sub-card-id">ca-127</span><span class="badge badge-status running" style="font-size:9px;padding:1px 6px;"><span class="spinner spinner-sm"></span> Running</span><span class="cost-pill" style="font-size:10px;padding:1px 7px;">$0.26</span></div><div class="sub-card-task">Update JS: new switchPage() function, keyboard shortcuts, preserve polling</div></div><div class="sub-card-right"><span>3m 14s</span></div></div>
+              </div>
+            </div>
+          </div>
+          <div class="task-output-section"><button class="output-toggle" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open');"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg> Live Output</button><div class="output-content"><div class="output-box">Coordinating 2 subagents for dashboard refactor.
+
+Agent 1 (ca-126): CSS restructure — completed in 48s
+  +142 -87 lines in src/dashboard.ts
+
+Agent 2 (ca-127): JS updates — running (3m 14s)
+  [done] Created switchPage() with URL hash support
+  [done] Added keyboard shortcuts: 1=Overview, 2=History...
+  [....] Migrating onTabActivated -> onPageActivated</div></div></div>
+        </div>
+
+        <!-- Failed task -->
+        <div class="task-card">
+          <div class="task-card-stripe failed"></div>
+          <div class="task-header">
+            <div class="task-status-icon failed"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></div>
+            <div class="task-header-body">
+              <div class="task-top-row"><span class="task-id">ca-121</span><span class="badge badge-status failed">Failed</span></div>
+              <div class="task-title">Add real-time WebSocket connection to replace polling for status updates</div>
+            </div>
+            <div class="task-header-right"><button class="btn btn-primary btn-sm"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Retry</button></div>
+          </div>
+          <div class="task-meta">
+            <span class="meta-chip mono">claude-sonnet-4-6</span><span class="meta-dot"></span>
+            <span class="meta-chip"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> 5m 14s</span><span class="meta-dot"></span>
+            <span class="cost-pill">$0.45 · 31k tok</span><span class="meta-dot"></span>
+            <span class="meta-chip" style="color:var(--text-dim);">Feb 21, 10:18 AM</span>
+          </div>
+          <div class="task-output-section"><button class="output-toggle open" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open');"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg> Error Output</button><div class="output-content open"><div class="output-box error-output">Build failed after adding WebSocket support:
+
+src/gateway.ts:145:22 - error TS2345: Argument of type 'WebSocket'
+  is not assignable to parameter of type 'FastifyWebSocket'.
+
+Attempted fix: installed @fastify/websocket types — introduced
+3 additional type conflicts. Rolled back changes.
+
+Validation: FAIL (build errors)</div></div></div>
+        </div>
+
+        <!-- Completed task -->
+        <div class="task-card">
+          <div class="task-card-stripe completed"></div>
+          <div class="task-header">
+            <div class="task-status-icon completed"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+            <div class="task-header-body">
+              <div class="task-top-row"><span class="task-id">ca-123</span><span class="badge badge-status completed">Completed</span></div>
+              <div class="task-title">Fix mobile responsive layout — sidebar overlapping content on screens below 768px</div>
+            </div>
+          </div>
+          <div class="task-meta">
+            <span class="meta-chip mono">claude-sonnet-4-5</span><span class="meta-dot"></span>
+            <span class="meta-chip"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> 1m 32s</span><span class="meta-dot"></span>
+            <span class="cost-pill">$0.08 · 5k tok</span><span class="meta-dot"></span>
+            <span class="diff-pill"><span class="added">+98</span> <span class="removed">-12</span> · 1 file</span><span class="meta-dot"></span>
+            <span class="meta-chip" style="color:var(--text-dim);">Feb 21, 11:45 AM</span>
+          </div>
+          <div class="task-output-section"><button class="output-toggle" onclick="this.classList.toggle('open'); this.nextElementSibling.classList.toggle('open');"><svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg> Output</button><div class="output-content"><div class="output-box">Added media query breakpoints at 1024px, 768px, and 480px.
+Files changed: src/dashboard.ts (+98 -12)
+Tests: PASS (362/362)</div><div class="synthesis-box"><div class="synthesis-label">Synthesis</div><div class="synthesis-text">Mobile layout fixed across all breakpoints. Sidebar collapses cleanly to a horizontal tab bar at 1024px. All 362 tests pass.</div></div></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════════════════
+         PAGE: AUDIT LOG
+         ════════════════════════════════════════════ -->
+    <div class="page" id="page-audit">
+      <div class="page-header">
+        <div class="page-title">Audit Log</div>
+        <div class="header-actions">
+          <span class="header-meta">142 traces today</span>
+          <button class="btn btn-sm"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Refresh</button>
+        </div>
+      </div>
+
+      <!-- Mini stats -->
+      <div class="audit-stats">
+        <div class="audit-stat-item"><div class="audit-stat-num" style="color:var(--success);">128</div><div class="audit-stat-label">OK</div></div>
+        <div class="audit-stat-item"><div class="audit-stat-num" style="color:var(--error);">3</div><div class="audit-stat-label">Errors</div></div>
+        <div class="audit-stat-item" style="margin-left:auto;">
+          <div class="audit-stat-label" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <span class="trigger-pill telegram">telegram</span> 47
+            <span class="trigger-pill cron">cron</span> 32
+            <span class="trigger-pill system">system</span> 41
+            <span class="trigger-pill code_agent">code</span> 11
+          </div>
+        </div>
+      </div>
+
+      <!-- Search + filter -->
+      <div class="audit-toolbar">
+        <div class="audit-search-wrap">
+          <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input class="audit-search" type="text" placeholder="Search traces, events, tool names..." />
+        </div>
+        <select class="audit-filter-select">
+          <option>All triggers</option>
+          <option>Telegram</option>
+          <option>Cron</option>
+          <option>System</option>
+          <option>Code Agent</option>
+          <option>API</option>
+          <option>Discord</option>
+        </select>
+        <select class="audit-filter-select" style="min-width:100px;">
+          <option>All status</option>
+          <option>OK</option>
+          <option>Error</option>
+        </select>
+      </div>
+
+      <!-- Timeline -->
+      <div class="audit-timeline">
+
+        <!-- Trace 1: Telegram message -->
+        <div class="audit-row">
+          <div class="audit-time-col">
+            <div class="audit-time">10:23</div>
+            <div class="audit-timeline-dot ok"></div>
+            <div class="audit-timeline-line"></div>
+          </div>
+          <div class="audit-card" onclick="this.querySelector('.audit-detail').classList.toggle('open')">
+            <div class="audit-card-header">
+              <span class="trigger-pill telegram">telegram</span>
+              <span class="audit-card-id">bd0704ea</span>
+              <span class="audit-card-status ok">OK</span>
+              <span class="audit-card-duration">2.8s</span>
+            </div>
+            <div class="audit-card-preview">Photo nutrition tracking — logged lunch at 520 cal, 38g protein</div>
+            <div class="audit-card-events">
+              <span class="audit-event-chip">tool_use: Read <span class="ev-dur">1ms</span></span>
+              <span class="audit-event-chip">tool_use: Write <span class="ev-dur">3ms</span></span>
+              <span class="audit-event-chip">response <span class="ev-dur">2.4s</span></span>
+            </div>
+            <div class="audit-detail">
+              <div class="audit-event-row"><div class="audit-event-type">tool_use</div><div class="audit-event-summary">Read({file_path: "/Users/katre/.skimpyclaw/memory/nutrition.json"})</div><div class="audit-event-dur">1ms</div></div>
+              <div class="audit-event-row"><div class="audit-event-type">tool_use</div><div class="audit-event-summary">Write({file_path: "/Users/katre/.skimpyclaw/memory/nutrition.json", ...})</div><div class="audit-event-dur">3ms</div></div>
+              <div class="audit-event-row"><div class="audit-event-type">response</div><div class="audit-event-summary">Lunch: ~520 cal, 38g protein. Logged. Total today: 1,340 cal.</div><div class="audit-event-dur">2.4s</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Trace 2: Cron job -->
+        <div class="audit-row">
+          <div class="audit-time-col">
+            <div class="audit-time">10:22</div>
+            <div class="audit-timeline-dot ok"></div>
+            <div class="audit-timeline-line"></div>
+          </div>
+          <div class="audit-card" onclick="this.querySelector('.audit-detail').classList.toggle('open')">
+            <div class="audit-card-header">
+              <span class="trigger-pill cron">cron</span>
+              <span class="audit-card-id">3c0ffee7</span>
+              <span class="audit-card-status ok">OK</span>
+              <span class="audit-card-duration">31s</span>
+            </div>
+            <div class="audit-card-preview">reading-digest completed — 10 articles from HN, GitHub, Reddit</div>
+            <div class="audit-card-events">
+              <span class="audit-event-chip">tool_use: Browser <span class="ev-dur">18s</span></span>
+              <span class="audit-event-chip">tool_use: Write <span class="ev-dur">5ms</span></span>
+              <span class="audit-event-chip">response <span class="ev-dur">12s</span></span>
+            </div>
+            <div class="audit-detail">
+              <div class="audit-event-row"><div class="audit-event-type">tool_use</div><div class="audit-event-summary">Browser(https://news.ycombinator.com — fetch top stories)</div><div class="audit-event-dur">18s</div></div>
+              <div class="audit-event-row"><div class="audit-event-type">tool_use</div><div class="audit-event-summary">Write({file_path: "~/.skimpyclaw/digests/2026-02-21-reading.json"})</div><div class="audit-event-dur">5ms</div></div>
+              <div class="audit-event-row"><div class="audit-event-type">response</div><div class="audit-event-summary">Compiled 10 articles into reading digest</div><div class="audit-event-dur">12s</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Trace 3: System heartbeat (collapsed, minimal) -->
+        <div class="audit-row">
+          <div class="audit-time-col">
+            <div class="audit-time">10:20</div>
+            <div class="audit-timeline-dot ok"></div>
+            <div class="audit-timeline-line"></div>
+          </div>
+          <div class="audit-card" onclick="this.querySelector('.audit-detail').classList.toggle('open')">
+            <div class="audit-card-header">
+              <span class="trigger-pill system">system</span>
+              <span class="audit-card-id">3f472094</span>
+              <span class="audit-card-status ok">OK</span>
+              <span class="audit-card-duration">0.2s</span>
+            </div>
+            <div class="audit-card-preview">Heartbeat check — all services healthy</div>
+            <div class="audit-detail">
+              <div class="audit-event-row"><div class="audit-event-type">heartbeat</div><div class="audit-event-summary">All services responding. Memory: 142MB. CPU: 3%.</div><div class="audit-event-dur">0.2s</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Trace 4: Code agent -->
+        <div class="audit-row">
+          <div class="audit-time-col">
+            <div class="audit-time">10:18</div>
+            <div class="audit-timeline-dot error"></div>
+            <div class="audit-timeline-line"></div>
+          </div>
+          <div class="audit-card" onclick="this.querySelector('.audit-detail').classList.toggle('open')">
+            <div class="audit-card-header">
+              <span class="trigger-pill code_agent">code agent</span>
+              <span class="audit-card-id">ca-121</span>
+              <span class="audit-card-status error">Error</span>
+              <span class="audit-card-duration">5m 14s</span>
+            </div>
+            <div class="audit-card-preview">WebSocket migration failed — 2 TS build errors, rolled back</div>
+            <div class="audit-card-events">
+              <span class="audit-event-chip">tool_use: Write <span class="ev-dur">2ms</span></span>
+              <span class="audit-event-chip">tool_use: Bash <span class="ev-dur">8s</span></span>
+              <span class="audit-event-chip" style="background:var(--error-soft);color:var(--error);">validation_fail <span class="ev-dur">12s</span></span>
+            </div>
+            <div class="audit-detail">
+              <div class="audit-event-row"><div class="audit-event-type">tool_use</div><div class="audit-event-summary">Write({file_path: "src/gateway.ts", ...WebSocket handler})</div><div class="audit-event-dur">2ms</div></div>
+              <div class="audit-event-row"><div class="audit-event-type">tool_use</div><div class="audit-event-summary">Bash("pnpm build")</div><div class="audit-event-dur">8s</div></div>
+              <div class="audit-event-row"><div class="audit-event-type" style="color:var(--error);">validation</div><div class="audit-event-summary" style="color:var(--error);">FAIL — TS2345: Argument of type 'WebSocket' not assignable to 'FastifyWebSocket'</div><div class="audit-event-dur">12s</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Trace 5: Telegram -->
+        <div class="audit-row">
+          <div class="audit-time-col">
+            <div class="audit-time">10:15</div>
+            <div class="audit-timeline-dot ok"></div>
+            <div class="audit-timeline-line"></div>
+          </div>
+          <div class="audit-card" onclick="this.querySelector('.audit-detail').classList.toggle('open')">
+            <div class="audit-card-header">
+              <span class="trigger-pill telegram">telegram</span>
+              <span class="audit-card-id">7c94a2b9</span>
+              <span class="audit-card-status ok">OK</span>
+              <span class="audit-card-duration">1.2s</span>
+            </div>
+            <div class="audit-card-preview">Weather check — Manila: 31°C, partly cloudy, UV index 8</div>
+            <div class="audit-detail">
+              <div class="audit-event-row"><div class="audit-event-type">tool_use</div><div class="audit-event-summary">Browser(https://wttr.in/Manila?format=j1)</div><div class="audit-event-dur">0.8s</div></div>
+              <div class="audit-event-row"><div class="audit-event-type">response</div><div class="audit-event-summary">Manila: 31°C, partly cloudy, UV index 8. Bring sunscreen!</div><div class="audit-event-dur">0.4s</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Trace 6: System -->
+        <div class="audit-row">
+          <div class="audit-time-col">
+            <div class="audit-time">10:12</div>
+            <div class="audit-timeline-dot ok"></div>
+            <div class="audit-timeline-line"></div>
+          </div>
+          <div class="audit-card" onclick="this.querySelector('.audit-detail').classList.toggle('open')">
+            <div class="audit-card-header">
+              <span class="trigger-pill system">system</span>
+              <span class="audit-card-id">eb66057e</span>
+              <span class="audit-card-status ok">OK</span>
+              <span class="audit-card-duration">0.1s</span>
+            </div>
+            <div class="audit-card-preview">Heartbeat — Read HEARTBEAT.md, agents/main/HEARTBEAT.md</div>
+            <div class="audit-card-events">
+              <span class="audit-event-chip">Read <span class="ev-dur">1ms</span></span>
+              <span class="audit-event-chip">Read <span class="ev-dur">1ms</span></span>
+            </div>
+            <div class="audit-detail">
+              <div class="audit-event-row"><div class="audit-event-type">tool_use</div><div class="audit-event-summary">Read({file_path: "/Users/katre/.skimpyclaw/HEARTBEAT.md"})</div><div class="audit-event-dur">1ms</div></div>
+              <div class="audit-event-row"><div class="audit-event-type">tool_use</div><div class="audit-event-summary">Read({file_path: "/Users/katre/.skimpyclaw/agents/main/HEARTBEAT.md"})</div><div class="audit-event-dur">1ms</div></div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div style="text-align:center;padding:24px;"><button class="btn">Load More</button></div>
+    </div>
+
+    <!-- ════════════════════════════════════════════
+         PAGE: TEMPLATES
+         ════════════════════════════════════════════ -->
+    <div class="page" id="page-templates">
+      <div class="page-header">
+        <div class="page-title">Templates</div>
+        <div class="header-actions">
+          <button class="btn btn-sm"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Refresh</button>
+        </div>
+      </div>
+
+      <div class="tmpl-split">
+        <!-- File list -->
+        <div class="tmpl-sidebar">
+          <div class="tmpl-sidebar-header">
+            <div class="tmpl-sidebar-title">Agent Files</div>
+            <select class="tmpl-agent-select"><option>main</option><option>digests</option><option>coding</option></select>
+          </div>
+          <div class="tmpl-file-list">
+            <div class="tmpl-file active">
+              <div class="tmpl-file-icon soul">SO</div>
+              <div class="tmpl-file-info">
+                <div class="tmpl-file-name">SOUL.md</div>
+                <div class="tmpl-file-desc">Core personality & values</div>
+                <div class="tmpl-file-meta">2.1 KB · edited 2h ago</div>
+              </div>
+            </div>
+            <div class="tmpl-file">
+              <div class="tmpl-file-icon identity">ID</div>
+              <div class="tmpl-file-info">
+                <div class="tmpl-file-name">IDENTITY.md</div>
+                <div class="tmpl-file-desc">System prompt & role definition</div>
+                <div class="tmpl-file-meta">4.3 KB · edited 3d ago</div>
+              </div>
+            </div>
+            <div class="tmpl-file">
+              <div class="tmpl-file-icon user">US</div>
+              <div class="tmpl-file-info">
+                <div class="tmpl-file-name">USER.md</div>
+                <div class="tmpl-file-desc">User context & preferences</div>
+                <div class="tmpl-file-meta">1.8 KB · edited 1d ago</div>
+              </div>
+            </div>
+            <div class="tmpl-file">
+              <div class="tmpl-file-icon tools">TL</div>
+              <div class="tmpl-file-info">
+                <div class="tmpl-file-name">TOOLS.md</div>
+                <div class="tmpl-file-desc">Available tools & usage rules</div>
+                <div class="tmpl-file-meta">3.2 KB · edited 5d ago</div>
+              </div>
+            </div>
+            <div class="tmpl-file">
+              <div class="tmpl-file-icon boot">BT</div>
+              <div class="tmpl-file-info">
+                <div class="tmpl-file-name">BOOT.md</div>
+                <div class="tmpl-file-desc">Startup sequence & init tasks</div>
+                <div class="tmpl-file-meta">0.6 KB · edited 1w ago</div>
+              </div>
+            </div>
+            <div class="tmpl-file">
+              <div class="tmpl-file-icon heartbeat">HB</div>
+              <div class="tmpl-file-info">
+                <div class="tmpl-file-name">HEARTBEAT.md</div>
+                <div class="tmpl-file-desc">Periodic check-in behavior</div>
+                <div class="tmpl-file-meta">0.4 KB · edited 2w ago</div>
+              </div>
+            </div>
+            <div class="tmpl-file">
+              <div class="tmpl-file-icon memory">MM</div>
+              <div class="tmpl-file-info">
+                <div class="tmpl-file-name">MEMORY.md</div>
+                <div class="tmpl-file-desc">Persistent memory & learning</div>
+                <div class="tmpl-file-meta">5.7 KB · edited 12h ago</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Editor -->
+        <div class="tmpl-editor">
+          <div class="tmpl-editor-header">
+            <div class="tmpl-editor-title-group">
+              <div class="tmpl-editor-title">SOUL.md</div>
+              <span class="tmpl-unsaved">unsaved</span>
+            </div>
+            <div class="header-actions">
+              <button class="btn btn-sm btn-ghost">Discard</button>
+              <button class="btn btn-sm btn-primary">Save</button>
+            </div>
+          </div>
+
+          <!-- Edit / Preview tabs -->
+          <div class="tmpl-editor-tabs">
+            <button class="tmpl-editor-tab" onclick="showEditorTab('edit', this)">Edit</button>
+            <button class="tmpl-editor-tab active" onclick="showEditorTab('preview', this)">Preview</button>
+          </div>
+
+          <!-- File metadata -->
+          <div class="tmpl-file-meta-card">
+            <div class="tmpl-meta-item"><div class="tmpl-meta-label">Size</div><div class="tmpl-meta-value">2.1 KB</div></div>
+            <div class="tmpl-meta-item"><div class="tmpl-meta-label">Last Edited</div><div class="tmpl-meta-value">2h ago</div></div>
+            <div class="tmpl-meta-item"><div class="tmpl-meta-label">Agent</div><div class="tmpl-meta-value">main</div></div>
+            <div class="tmpl-meta-item"><div class="tmpl-meta-label">Path</div><div class="tmpl-meta-value">~/.skimpyclaw/agents/main/SOUL.md</div></div>
+          </div>
+
+          <div class="tmpl-editor-body">
+            <div class="tmpl-preview">
+              <h1>SOUL.md</h1>
+              <p>You are my mini-me: a bold, opinionated thinking partner who challenges assumptions, spots weak ideas instantly, and keeps things fun.</p>
+              <p>You exist to improve my thinking, execution, and systems over time.</p>
+              <p>You maintain continuity across sessions and learn from experience.</p>
+              <hr>
+              <h2>Self-Model</h2>
+              <p>You understand what you are and how you operate.</p>
+              <p>You:</p>
+              <ul>
+                <li>Know your capabilities and limits</li>
+                <li>Track your own performance</li>
+                <li>Adapt your approach based on what works</li>
+                <li>Are transparent about uncertainty</li>
+              </ul>
+              <hr>
+              <h2>Communication Style</h2>
+              <p>Sharp, direct, and efficient. You don't pad responses with filler. You lead with the answer, then explain if needed. You use humor when it's natural, never forced.</p>
+              <blockquote>Think of yourself as a trusted advisor who happens to be really good with computers.</blockquote>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+function toggleTheme() {
+  const c = document.documentElement.getAttribute('data-theme') || 'light';
+  const n = c === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', n);
+  document.querySelector('.theme-toggle').innerHTML = n === 'dark'
+    ? '<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>'
+    : '<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>';
+}
+
+function switchPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.sidebar-item, .sidebar-footer-item').forEach(b => b.classList.remove('active'));
+  const page = document.getElementById('page-' + name);
+  const btn = document.querySelector('[data-page="' + name + '"]');
+  if (page) page.classList.add('active');
+  if (btn) btn.classList.add('active');
+  const titles = { coding: 'Coding Agent', audit: 'Audit Log', templates: 'Templates' };
+  document.querySelector('.page-title').textContent = titles[name] || name;
+}
+
+function showEditorTab(tab, el) {
+  el.parentElement.querySelectorAll('.tmpl-editor-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+}
+</script>
+
+</body>
+</html>
