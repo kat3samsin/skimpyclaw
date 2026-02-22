@@ -160,15 +160,61 @@ textarea::placeholder {
 .form-checkbox {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   font-size: 13px;
+  line-height: 1.35;
   color: var(--text-dim);
+  cursor: pointer;
+  user-select: none;
+}
+.form-checkbox input[type='checkbox'] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface);
+  display: inline-grid;
+  place-content: center;
+  margin: 0;
+  cursor: pointer;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+}
+.form-checkbox input[type='checkbox']::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  transform: scale(0);
+  transition: transform 0.1s ease-in-out;
+  background: #fff;
+  clip-path: polygon(14% 44%, 0 63%, 44% 100%, 100% 18%, 82% 0, 40% 64%);
+}
+.form-checkbox input[type='checkbox']:checked {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+.form-checkbox input[type='checkbox']:checked::before {
+  transform: scale(1);
+}
+.form-checkbox input[type='checkbox']:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 .form-check-row {
   display: flex;
   gap: 20px;
   align-items: center;
   flex-wrap: wrap;
+}
+.form-check-row.tight {
+  gap: 12px;
+}
+.form-check-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 .form-divider {
   height: 1px;
@@ -669,11 +715,25 @@ textarea::placeholder {
   border-radius: 4px;
   text-transform: uppercase;
 }
-.appr-chip.tier { background: var(--error-soft); color: var(--error); }
+.appr-chip.tier { background: var(--surface-alt); color: var(--text-dim); }
+.appr-chip.tier.tier-1 { background: var(--info-soft); color: var(--info); }
+.appr-chip.tier.tier-2 { background: var(--warning-soft); color: var(--warning); }
+.appr-chip.tier.tier-3 { background: var(--error-soft); color: var(--error); }
 .appr-chip.pending { background: var(--warning-soft); color: var(--warning); }
 .appr-chip.approved { background: var(--success-soft); color: var(--success); }
 .appr-chip.denied { background: var(--error-soft); color: var(--error); }
 .appr-chip.expired { background: var(--surface-alt); color: var(--text-muted); }
+.appr-tier-legend {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 10px;
+  align-items: center;
+}
+.appr-tier-label {
+  font-size: 12px;
+  color: var(--text-dim);
+}
 .appr-elapsed {
   display: inline-flex;
   align-items: center;

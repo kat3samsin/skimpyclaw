@@ -16,6 +16,30 @@ interface ConfigFormState {
   heartbeatIntervalMs: string;
   heartbeatPrompt: string;
   heartbeatModel: string;
+  execApprovalEnabled: boolean;
+  execApprovalTtlMs: string;
+  execApprovalTier1: boolean;
+  execApprovalTier2: boolean;
+  execApprovalTier3: boolean;
+}
+
+function readExecApprovalPolicy(cfg: Record<string, any>): {
+  enabled: boolean;
+  ttlMs: number;
+  requireForTiers: number[];
+} {
+  const fromTelegram = cfg.channels?.telegram?.tools?.execApproval;
+  const fromDiscord = cfg.channels?.discord?.tools?.execApproval;
+  const fromHeartbeat = cfg.heartbeat?.tools?.execApproval;
+  const policy = fromTelegram || fromDiscord || fromHeartbeat || {};
+  const requireForTiers = Array.isArray(policy.requireForTiers) && policy.requireForTiers.length > 0
+    ? policy.requireForTiers
+    : [2, 3];
+  return {
+    enabled: policy.enabled !== false,
+    ttlMs: Number(policy.ttlMs) > 0 ? Number(policy.ttlMs) : 300000,
+    requireForTiers,
+  };
 }
 
 export function Config({ showToast }: ConfigProps) {
@@ -34,6 +58,11 @@ export function Config({ showToast }: ConfigProps) {
     heartbeatIntervalMs: '300000',
     heartbeatPrompt: '',
     heartbeatModel: '',
+    execApprovalEnabled: true,
+    execApprovalTtlMs: '300000',
+    execApprovalTier1: false,
+    execApprovalTier2: true,
+    execApprovalTier3: true,
   });
 
   useEffect(() => {
@@ -45,6 +74,7 @@ export function Config({ showToast }: ConfigProps) {
     try {
       const data = await getConfig();
       const cfg = (data.config ?? {}) as Record<string, any>;
+      const execPolicy = readExecApprovalPolicy(cfg);
       setConfigData(cfg);
       setForm({
         gatewayHost: cfg.gateway?.host ?? '127.0.0.1',
@@ -59,6 +89,11 @@ export function Config({ showToast }: ConfigProps) {
         heartbeatIntervalMs: String(cfg.heartbeat?.intervalMs ?? 300000),
         heartbeatPrompt: cfg.heartbeat?.prompt ?? '',
         heartbeatModel: cfg.heartbeat?.model ?? '',
+        execApprovalEnabled: execPolicy.enabled,
+        execApprovalTtlMs: String(execPolicy.ttlMs),
+        execApprovalTier1: execPolicy.requireForTiers.includes(1),
+        execApprovalTier2: execPolicy.requireForTiers.includes(2),
+        execApprovalTier3: execPolicy.requireForTiers.includes(3),
       });
     } catch (e) {
       console.error('[config] load failed', e);
@@ -90,8 +125,11 @@ export function Config({ showToast }: ConfigProps) {
     next.channels = next.channels || {};
     next.channels.telegram = next.channels.telegram || {};
     next.channels.discord = next.channels.discord || {};
+    next.channels.telegram.tools = next.channels.telegram.tools || {};
+    next.channels.discord.tools = next.channels.discord.tools || {};
     next.agents = next.agents || {};
     next.heartbeat = next.heartbeat || {};
+    next.heartbeat.tools = next.heartbeat.tools || {};
     next.cron = next.cron || { jobs: [] };
     next.models = next.models || { providers: {}, aliases: {} };
 
@@ -110,6 +148,24 @@ export function Config({ showToast }: ConfigProps) {
     next.heartbeat.intervalMs = Number(form.heartbeatIntervalMs) || 300000;
     next.heartbeat.prompt = form.heartbeatPrompt;
     next.heartbeat.model = form.heartbeatModel.trim() || undefined;
+
+    const requireForTiers = [1, 2, 3].filter((tier) => {
+      if (tier === 1) return form.execApprovalTier1;
+      if (tier === 2) return form.execApprovalTier2;
+      return form.execApprovalTier3;
+    });
+    if (requireForTiers.length === 0) requireForTiers.push(2, 3);
+
+    const execApprovalPolicy = {
+      enabled: form.execApprovalEnabled,
+      ttlMs: Number(form.execApprovalTtlMs) || 300000,
+      requireForTiers,
+    };
+
+    // Apply the same exec approval policy everywhere bash tools run.
+    next.channels.telegram.tools.execApproval = execApprovalPolicy;
+    next.channels.discord.tools.execApproval = execApprovalPolicy;
+    next.heartbeat.tools.execApproval = execApprovalPolicy;
 
     setSaving(true);
     try {
@@ -215,6 +271,69 @@ export function Config({ showToast }: ConfigProps) {
               <span class="form-label">Prompt</span>
               <textarea value={form.heartbeatPrompt} onInput={(e) => setForm(f => ({ ...f, heartbeatPrompt: (e.target as HTMLTextAreaElement).value }))} placeholder="Heartbeat prompt" style={{ minHeight: 120 }} />
             </label>
+          </div>
+
+          <div class="card">
+            <div class="card-title" style={{ fontWeight: 700 }}>Exec Approvals</div>
+            <div class="form-grid" style={{ marginBottom: 10 }}>
+              <div class="form-check-col">
+                <span class="form-label">Gate</span>
+                <label class="form-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={form.execApprovalEnabled}
+                    onChange={(e) => setForm(f => ({ ...f, execApprovalEnabled: (e.target as HTMLInputElement).checked }))}
+                  />
+                  Enable approval gate
+                </label>
+              </div>
+              <label class="form-field" style={{ maxWidth: 260 }}>
+                <span class="form-label">Approval TTL (ms)</span>
+                <input
+                  value={form.execApprovalTtlMs}
+                  onInput={(e) => setForm(f => ({ ...f, execApprovalTtlMs: (e.target as HTMLInputElement).value }))}
+                  placeholder="300000"
+                  disabled={!form.execApprovalEnabled}
+                />
+              </label>
+            </div>
+            <div class="form-check-row tight">
+              <label class="form-checkbox">
+                <input
+                  type="checkbox"
+                  checked={form.execApprovalTier1}
+                  onChange={(e) => setForm(f => ({ ...f, execApprovalTier1: (e.target as HTMLInputElement).checked }))}
+                />
+                Require approval for Tier 1
+              </label>
+              <label class="form-checkbox">
+                <input
+                  type="checkbox"
+                  checked={form.execApprovalTier2}
+                  onChange={(e) => setForm(f => ({ ...f, execApprovalTier2: (e.target as HTMLInputElement).checked }))}
+                />
+                Require approval for Tier 2
+              </label>
+              <label class="form-checkbox">
+                <input
+                  type="checkbox"
+                  checked={form.execApprovalTier3}
+                  onChange={(e) => setForm(f => ({ ...f, execApprovalTier3: (e.target as HTMLInputElement).checked }))}
+                />
+                Require approval for Tier 3
+              </label>
+            </div>
+            <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-muted)' }}>
+              Applied to Telegram, Discord, and Heartbeat tool execution.
+            </div>
+            <div class="appr-tier-legend" style={{ marginTop: 10 }}>
+              <span class="appr-chip tier tier-1">TIER 1</span>
+              <span class="appr-tier-label">Low risk operations</span>
+              <span class="appr-chip tier tier-2">TIER 2</span>
+              <span class="appr-tier-label">Dangerous operations</span>
+              <span class="appr-chip tier tier-3">TIER 3</span>
+              <span class="appr-tier-label">Catastrophic operations</span>
+            </div>
           </div>
         </div>
       )}

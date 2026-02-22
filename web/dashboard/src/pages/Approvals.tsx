@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'preact/hooks';
-import { getApprovals, approveCommand, denyCommand } from '../api/client.js';
+import { getApprovals, approveCommand, denyCommand, getConfig } from '../api/client.js';
 import type { Approval } from '../types.js';
 import {
   LuCheck,
@@ -66,16 +66,24 @@ function shortenCwd(cwd?: string): string {
   return cwd.replace(/^\/Users\/[^/]+/, '~');
 }
 
+function tierClass(tier: number): string {
+  if (tier === 1) return 'tier-1';
+  if (tier === 2) return 'tier-2';
+  return 'tier-3';
+}
+
 export function Approvals({ showToast, onCountChange }: ApprovalsProps) {
   const [pending, setPending] = useState<Approval[]>([]);
   const [recent, setRecent] = useState<Approval[]>([]);
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState<Set<string>>(new Set());
+  const [policy, setPolicy] = useState<{ enabled: boolean; ttlMs: number; tiers: number[] } | null>(null);
   const tickRef = useRef(0);
   const [, setTick] = useState(0);
 
   useEffect(() => {
     load();
+    void loadPolicy();
     const pollInterval = setInterval(load, 5000);
     // Tick every second to update elapsed timers
     const tickInterval = setInterval(() => {
@@ -95,6 +103,24 @@ export function Approvals({ showToast, onCountChange }: ApprovalsProps) {
       // silently fail on poll
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadPolicy() {
+    try {
+      const cfg = (await getConfig()).config as Record<string, any>;
+      const fromTelegram = cfg.channels?.telegram?.tools?.execApproval;
+      const fromDiscord = cfg.channels?.discord?.tools?.execApproval;
+      const fromHeartbeat = cfg.heartbeat?.tools?.execApproval;
+      const raw = fromTelegram || fromDiscord || fromHeartbeat || {};
+      const tiers = Array.isArray(raw.requireForTiers) && raw.requireForTiers.length > 0 ? raw.requireForTiers : [2, 3];
+      setPolicy({
+        enabled: raw.enabled !== false,
+        ttlMs: Number(raw.ttlMs) > 0 ? Number(raw.ttlMs) : 300000,
+        tiers,
+      });
+    } catch {
+      setPolicy(null);
     }
   }
 
@@ -143,6 +169,27 @@ export function Approvals({ showToast, onCountChange }: ApprovalsProps) {
         </div>
       ) : (
         <>
+          {policy && (
+            <div class="card" style={{ marginBottom: 16 }}>
+              <div class="card-title" style={{ fontWeight: 700, marginBottom: 8 }}>Exec Approval Policy</div>
+              <div style={{ fontSize: 13, color: 'var(--text-dim)', lineHeight: 1.5 }}>
+                Gate: <strong>{policy.enabled ? 'Enabled' : 'Disabled'}</strong>
+                {' · '}
+                Tiers: <strong>{policy.tiers.map((t) => `T${t}`).join(', ')}</strong>
+                {' · '}
+                TTL: <strong>{Math.round(policy.ttlMs / 1000)}s</strong>
+              </div>
+              <div class="appr-tier-legend">
+                <span class="appr-chip tier tier-1">TIER 1</span>
+                <span class="appr-tier-label">Low risk</span>
+                <span class="appr-chip tier tier-2">TIER 2</span>
+                <span class="appr-tier-label">Dangerous / review required</span>
+                <span class="appr-chip tier tier-3">TIER 3</span>
+                <span class="appr-tier-label">Catastrophic / irreversible</span>
+              </div>
+            </div>
+          )}
+
           {/* PENDING */}
           <div class="appr-section-label">PENDING ({pending.length})</div>
 
@@ -163,7 +210,7 @@ export function Approvals({ showToast, onCountChange }: ApprovalsProps) {
                         <LuShieldAlert size={18} />
                       </div>
                       <span class="appr-item-id">req-{a.id}</span>
-                      <span class="appr-chip tier">TIER {a.tier}</span>
+                      <span class={`appr-chip tier ${tierClass(a.tier)}`}>TIER {a.tier}</span>
                       <span class="appr-chip pending">PENDING</span>
                       <span class="appr-elapsed">
                         <LuClock size={12} /> {formatElapsed(a.createdAt)}
@@ -222,7 +269,7 @@ export function Approvals({ showToast, onCountChange }: ApprovalsProps) {
                           {statusIconEl(a.status)}
                         </div>
                         <span class="appr-item-id">req-{a.id}</span>
-                        <span class="appr-chip tier">TIER {a.tier}</span>
+                        <span class={`appr-chip tier ${tierClass(a.tier)}`}>TIER {a.tier}</span>
                         <span class={`appr-chip ${a.status}`}>{a.status.toUpperCase()}</span>
                       </div>
 
