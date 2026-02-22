@@ -4,7 +4,7 @@
 
 ```bash
 pnpm build        # TypeScript compile (tsc)
-pnpm test         # Vitest (383 tests)
+pnpm test         # Vitest (390 tests)
 pnpm build && pnpm test  # Always run both after changes
 pnpm dev          # Hot reload dev server (tsx watch)
 ```
@@ -25,7 +25,13 @@ Always run `pnpm build && pnpm test` after making changes. Do not submit work wi
 | File | Purpose |
 |------|---------|
 | `src/agent.ts` | AI model runner — Anthropic (`chatWithTools`) + Codex (`codexChat`) + OpenAI-compatible |
-| `src/tools.ts` | Tool definitions + executor: Read, Write, Glob, Bash, Browser, spawn_subagent, code_with_agent, code_with_team, MCP |
+| `src/tools.ts` | Tool orchestration + code-agent runtime + MCP discovery/dispatch; delegates file/bash/browser to `src/tools/*` |
+| `src/tools/definitions.ts` | Claude/OpenAI tool name mapping + built-in tool definitions (`Read/Write/Glob/Bash/Browser`) + agent tool schemas |
+| `src/tools/file-tools.ts` | File tool executors (`read_file`, `write_file` with lock support, `list_directory`) |
+| `src/tools/bash-tool.ts` | Bash executor + exec-approval gate integration |
+| `src/tools/browser-tool.ts` | Browser tool runtime (Playwright lifecycle, actions, cleanup hooks) |
+| `src/tools/path-utils.ts` | Shared path allowlist validation helper |
+| `src/tools/execute-context.ts` | Shared `ExecuteToolContext` type used by agent/provider tool execution |
 | `src/exec-approval.ts` | Risk classification (tier 0–3) + pending approval registry for Bash commands |
 | `src/telegram.ts` | Telegram bot — commands, conversation history, typing indicator |
 | `src/discord.ts` | Discord bot — commands and message handling |

@@ -897,7 +897,7 @@ describe('Reload endpoint', () => {
 
   it('POST /api/dashboard/reload updates runtime config for auth checks', async () => {
     // Update config file with new token
-    const newConfig = { ...TEST_CONFIG };
+    const newConfig = structuredClone(TEST_CONFIG);
     newConfig.dashboard.token = 'new-secret-token';
     const { writeFileSync } = require('fs');
     writeFileSync(CONFIG_PATH, JSON.stringify(newConfig, null, 2));
@@ -924,11 +924,17 @@ describe('Reload endpoint', () => {
 
     // Restore config for other tests
     writeFileSync(CONFIG_PATH, JSON.stringify(TEST_CONFIG, null, 2));
+    const resetRes = await app.inject({
+      method: 'POST',
+      url: '/api/dashboard/reload',
+      headers: { authorization: 'Bearer new-secret-token' },
+    });
+    expect(resetRes.statusCode).toBe(200);
   });
 
   it('POST /api/dashboard/reload updates runtime config for status endpoint', async () => {
     // Update config with new agent name
-    const newConfig = { ...TEST_CONFIG };
+    const newConfig = structuredClone(TEST_CONFIG);
     newConfig.agents.default = 'updated-agent';
     const { writeFileSync } = require('fs');
     writeFileSync(CONFIG_PATH, JSON.stringify(newConfig, null, 2));
