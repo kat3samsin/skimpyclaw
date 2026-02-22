@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'preact/hooks';
 import { getCodeAgents } from '../api/client.js';
 import type { CodeAgent } from '../types.js';
 import { LuCheck, LuChevronDown, LuClock3, LuCode, LuDollarSign, LuRefreshCw, LuRotateCw, LuX } from 'react-icons/lu';
+import { Markdown } from '../components/Markdown.js';
 
 const CODING_ACCENTS: Array<{ color: string; soft: string }> = [
   { color: '#b48b7f', soft: 'rgba(180, 139, 127, 0.12)' },
@@ -221,9 +222,24 @@ export function Coding() {
 
                 <details class="coding-output">
                   <summary><LuChevronDown size={14} /> Live output</summary>
-                  {output ? <pre class={`ca-output${task.error ? ' ca-error' : ''}`}>{output}</pre> : null}
-                  {!output && task.error ? <pre class="ca-output ca-error">{task.error}</pre> : null}
-                  {!output && !task.error && task.synthesisResult ? <pre class="ca-output">{task.synthesisResult}</pre> : null}
+                  {output ? (
+                    <Markdown
+                      content={output}
+                      className={`ca-output markdown-content${task.error ? ' ca-error' : ''}`}
+                    />
+                  ) : null}
+                  {!output && task.error ? (
+                    <Markdown
+                      content={task.error}
+                      className="ca-output markdown-content ca-error"
+                    />
+                  ) : null}
+                  {!output && !task.error && task.synthesisResult ? (
+                    <Markdown
+                      content={task.synthesisResult}
+                      className="ca-output markdown-content"
+                    />
+                  ) : null}
                 </details>
               </div>
             );

@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'preact/hooks';
-import { getStatus, getAudit } from '../api/client.js';
-import type { StatusResponse, AuditTrace } from '../types.js';
+import { getStatus, getAudit, getApprovals, approveCommand, denyCommand } from '../api/client.js';
+import type { StatusResponse, AuditTrace, Approval } from '../types.js';
 import type { PageId } from '../components/Sidebar.js';
 import {
+  LuCheck,
   LuClock3,
   LuClock4,
   LuCpu,
@@ -10,6 +11,7 @@ import {
   LuMessageSquare,
   LuSend,
   LuServer,
+  LuShieldAlert,
 } from 'react-icons/lu';
 
 function formatUptime(ms: number): string {
@@ -41,6 +43,13 @@ function formatTimeAgo(dateStr: string): string {
   return `${Math.floor(hh / 24)}d ago`;
 }
 
+function formatMinSec(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const m = Math.floor(diff / 60000);
+  const s = Math.floor((diff % 60000) / 1000);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
 function formatNextCronRun(dateStr?: string): string {
   if (!dateStr) return 'N/A';
   const d = new Date(dateStr);
@@ -52,6 +61,13 @@ function formatNextCronRun(dateStr?: string): string {
   return `in ${hh}h ${m % 60}m`;
 }
 
+function channelLabel(channel?: string | null): string {
+  if (!channel) return '—';
+  if (channel === 'telegram') return 'Telegram';
+  if (channel === 'discord') return 'Discord';
+  return channel;
+}
+
 function getTraceSummary(trace: AuditTrace): string {
   const toolUses = trace.events.filter(e => e.type === 'tool_use').length;
   if (toolUses > 0) return `${toolUses} tool call${toolUses > 1 ? 's' : ''}`;
@@ -61,31 +77,54 @@ function getTraceSummary(trace: AuditTrace): string {
 
 interface OverviewProps {
   onNavigate: (page: PageId) => void;
+  showToast?: (msg: string, type?: 'success' | 'error' | 'warning') => void;
 }
 
-export function Overview({ onNavigate }: OverviewProps) {
+export function Overview({ onNavigate, showToast }: OverviewProps) {
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [traces, setTraces] = useState<AuditTrace[]>([]);
+  const [pendingApprovals, setPendingApprovals] = useState<Approval[]>([]);
+  const [actingOn, setActingOn] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadData();
-    const interval = setInterval(loadData, 30000);
+    const interval = setInterval(loadData, 10000);
     return () => clearInterval(interval);
   }, []);
 
   async function loadData() {
     try {
-      const [s, audit] = await Promise.all([
+      const [s, audit, approvals] = await Promise.all([
         getStatus(),
         getAudit({ limit: 8, offset: 0 }),
+        getApprovals(),
       ]);
       setStatus(s);
       setTraces(audit.traces ?? []);
+      setPendingApprovals(approvals.pending ?? []);
     } catch (e) {
       console.error('[overview] load failed', e);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleApproval(id: string, approve: boolean) {
+    setActingOn(prev => new Set([...prev, id]));
+    try {
+      if (approve) {
+        await approveCommand(id);
+        showToast?.('Command approved', 'success');
+      } else {
+        await denyCommand(id);
+        showToast?.('Command denied', 'warning');
+      }
+      await loadData();
+    } catch {
+      showToast?.('Action failed', 'error');
+    } finally {
+      setActingOn(prev => { const n = new Set(prev); n.delete(id); return n; });
     }
   }
 
@@ -130,37 +169,76 @@ export function Overview({ onNavigate }: OverviewProps) {
         </div>
       </div>
 
+      {/* Pending approvals banner */}
+      {pendingApprovals.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          {pendingApprovals.map(a => (
+            <div class="approval-card" key={a.id}>
+              <div class="approval-card-icon">
+                <LuShieldAlert size={20} />
+              </div>
+              <div class="approval-card-content">
+                <div class="approval-card-title">
+                  {pendingApprovals.length} pending approval{pendingApprovals.length > 1 ? 's' : ''}
+                </div>
+                <div class="approval-card-detail">
+                  Tier {a.tier} — <code class="approval-cmd">{a.command}</code>
+                </div>
+                {a.cwd && (
+                  <div class="approval-card-cwd">{a.cwd}</div>
+                )}
+              </div>
+              <div class="approval-card-time">{formatMinSec(a.createdAt)}</div>
+              <div class="approval-card-actions">
+                <button
+                  class="approval-btn-deny"
+                  disabled={actingOn.has(a.id)}
+                  onClick={() => handleApproval(a.id, false)}
+                >
+                  Deny
+                </button>
+                <button
+                  class="approval-btn-approve"
+                  disabled={actingOn.has(a.id)}
+                  onClick={() => handleApproval(a.id, true)}
+                >
+                  <LuCheck size={14} /> Approve
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Stat cards */}
       <div class="stats-grid">
         <div class="stat-card">
           <div class="stat-icon sage"><LuClock3 size={16} /></div>
-          <div class="stat-label">Uptime</div>
-          <div class="stat-value">{status ? formatUptime(status.uptime) : '—'}</div>
-          <div class="stat-sub">since last restart</div>
+          <div class="stat-body">
+            <div class="stat-value">{status ? formatUptime(status.uptime) : '—'}</div>
+            <div class="stat-subtitle">Uptime</div>
+          </div>
         </div>
         <div class="stat-card">
           <div class="stat-icon amber"><LuClock4 size={16} /></div>
-          <div class="stat-label">Next Cron</div>
-          <div class="stat-value" style={{ fontSize: '18px', paddingTop: '4px' }}>
-            {formatNextCronRun(soonestCron?.nextRun)}
+          <div class="stat-body">
+            <div class="stat-value stat-value-md">{formatNextCronRun(soonestCron?.nextRun)}</div>
+            <div class="stat-subtitle">Next cron · {status?.cronJobs.length ?? 0} jobs</div>
           </div>
-          <div class="stat-sub">{status?.cronJobs.length ?? 0} jobs scheduled</div>
         </div>
         <div class="stat-card">
           <div class="stat-icon green"><LuCpu size={16} /></div>
-          <div class="stat-label">Model</div>
-          <div class="stat-value" style={{ fontSize: '13px', paddingTop: '8px', fontFamily: 'var(--mono)' }}>
-            {status?.model ?? '—'}
+          <div class="stat-body">
+            <div class="stat-value stat-value-md">{status?.model ?? '—'}</div>
+            <div class="stat-subtitle">Active model</div>
           </div>
-          <div class="stat-sub">active agent: {status?.agent ?? '—'}</div>
         </div>
         <div class="stat-card">
           <div class="stat-icon blue"><LuMessageSquare size={16} /></div>
-          <div class="stat-label">Active Channel</div>
-          <div class="stat-value" style={{ fontSize: '18px', paddingTop: '4px' }}>
-            {status?.activeChannel ? status.activeChannel : '—'}
+          <div class="stat-body">
+            <div class="stat-value stat-value-md">{channelLabel(status?.activeChannel ?? null)}</div>
+            <div class="stat-subtitle">Active channel</div>
           </div>
-          <div class="stat-sub">discord / telegram</div>
         </div>
       </div>
 

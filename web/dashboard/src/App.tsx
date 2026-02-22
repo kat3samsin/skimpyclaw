@@ -148,7 +148,7 @@ export function App() {
   function renderPage() {
     switch (page) {
       case 'overview':
-        return <Overview onNavigate={navigate} />;
+        return <Overview onNavigate={navigate} showToast={showToast} />;
       case 'history':
         return <History />;
       case 'cron':
@@ -176,7 +176,7 @@ export function App() {
       case 'templates':
         return <Templates showToast={showToast} />;
       default:
-        return <Overview onNavigate={navigate} />;
+        return <Overview onNavigate={navigate} showToast={showToast} />;
     }
   }
 

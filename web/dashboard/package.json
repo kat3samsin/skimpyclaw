@@ -6,17 +6,22 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest run"
   },
   "dependencies": {
+    "dompurify": "^3.3.1",
+    "marked": "^17.0.3",
     "preact": "^10.24.3",
     "react-icons": "^5.5.0"
   },
   "devDependencies": {
     "@preact/preset-vite": "^2.9.1",
+    "@testing-library/preact": "^3.2.4",
+    "@types/dompurify": "^3.2.0",
+    "jsdom": "^28.1.0",
     "typescript": "^5.4.0",
     "vite": "^5.4.11",
-    "vitest": "^4.0.18",
-    "@testing-library/preact": "^3.2.4"
+    "vitest": "^4.0.18"
   }
 }

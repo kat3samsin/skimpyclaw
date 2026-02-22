@@ -12,7 +12,6 @@ interface ConfigFormState {
   activeChannel: '' | 'telegram' | 'discord';
   telegramEnabled: boolean;
   discordEnabled: boolean;
-  dashboardFrontend: 'legacy' | 'framework';
   agentsDefault: string;
   heartbeatIntervalMs: string;
   heartbeatPrompt: string;
@@ -30,7 +29,6 @@ export function Config({ showToast }: ConfigProps) {
     activeChannel: '',
     telegramEnabled: true,
     discordEnabled: false,
-    dashboardFrontend: 'framework',
     agentsDefault: 'main',
     heartbeatIntervalMs: '300000',
     heartbeatPrompt: '',
@@ -56,7 +54,6 @@ export function Config({ showToast }: ConfigProps) {
           : '',
         telegramEnabled: Boolean(cfg.channels?.telegram?.enabled),
         discordEnabled: Boolean(cfg.channels?.discord?.enabled),
-        dashboardFrontend: cfg.dashboard?.frontend === 'legacy' ? 'legacy' : 'framework',
         agentsDefault: cfg.agents?.default ?? 'main',
         heartbeatIntervalMs: String(cfg.heartbeat?.intervalMs ?? 300000),
         heartbeatPrompt: cfg.heartbeat?.prompt ?? '',
@@ -78,7 +75,6 @@ export function Config({ showToast }: ConfigProps) {
     next.channels = next.channels || {};
     next.channels.telegram = next.channels.telegram || {};
     next.channels.discord = next.channels.discord || {};
-    next.dashboard = next.dashboard || {};
     next.agents = next.agents || {};
     next.heartbeat = next.heartbeat || {};
     next.cron = next.cron || { jobs: [] };
@@ -94,7 +90,6 @@ export function Config({ showToast }: ConfigProps) {
     next.channels.telegram.enabled = form.telegramEnabled;
     next.channels.discord.enabled = form.discordEnabled;
 
-    next.dashboard.frontend = form.dashboardFrontend;
     next.agents.default = form.agentsDefault.trim() || 'main';
 
     next.heartbeat.intervalMs = Number(form.heartbeatIntervalMs) || 300000;
@@ -178,20 +173,12 @@ export function Config({ showToast }: ConfigProps) {
           </div>
 
           <div class="card">
-            <div class="card-title" style={{ fontWeight: 700 }}>Agent + Dashboard</div>
-            <div class="form-grid three">
+            <div class="card-title" style={{ fontWeight: 700 }}>Agent</div>
+            <div class="form-grid">
               <label class="form-field">
                 <span class="form-label">Default agent</span>
                 <input value={form.agentsDefault} onInput={(e) => setForm(f => ({ ...f, agentsDefault: (e.target as HTMLInputElement).value }))} placeholder="main" />
               </label>
-              <label class="form-field">
-                <span class="form-label">Dashboard frontend</span>
-                <select value={form.dashboardFrontend} onChange={(e) => setForm(f => ({ ...f, dashboardFrontend: (e.target as HTMLSelectElement).value as 'legacy' | 'framework' }))}>
-                  <option value="framework">framework</option>
-                  <option value="legacy">legacy</option>
-                </select>
-              </label>
-              <div />
             </div>
           </div>
 

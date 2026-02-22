@@ -1,0 +1,1775 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SkimpyClaw Dashboard — Inspired Themes</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700&family=JetBrains+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: #18181b;
+    color: #e4e4e7;
+    padding: 40px;
+  }
+
+  .page-header {
+    text-align: center;
+    margin-bottom: 60px;
+  }
+  .page-header h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 2.4rem;
+    margin-bottom: 8px;
+    background: linear-gradient(135deg, #e09b8a, #9b8ec4);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .page-header p {
+    color: #a1a1aa;
+    font-size: 0.95rem;
+  }
+
+  .theme-section {
+    margin-bottom: 80px;
+  }
+  .theme-label {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 32px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #27272a;
+  }
+  .theme-label .badge {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 4px 12px;
+    border-radius: 20px;
+    white-space: nowrap;
+  }
+  .theme-label h2 {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.6rem;
+    color: #fafafa;
+  }
+  .theme-label p {
+    color: #71717a;
+    font-size: 0.85rem;
+    margin-top: 4px;
+  }
+
+  /* ─── Theme frame ─── */
+  .theme-frame {
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.4);
+  }
+  .theme-frame-inner {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    min-height: 620px;
+  }
+
+  /* ─── Sidebar ─── */
+  .sidebar {
+    padding: 24px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .sidebar-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    margin-bottom: 20px;
+  }
+  .sidebar-brand .logo {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+  }
+  .sidebar-brand span {
+    font-weight: 700;
+    font-size: 0.95rem;
+  }
+  .sidebar-item {
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 0.82rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .sidebar-item svg {
+    width: 16px;
+    height: 16px;
+    opacity: 0.6;
+  }
+  .sidebar-item.active svg { opacity: 1; }
+  .sidebar-divider {
+    height: 1px;
+    margin: 12px 8px;
+  }
+  .sidebar-section-label {
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: 8px 14px 4px;
+  }
+
+  /* ─── Main content ─── */
+  .main {
+    padding: 32px;
+    overflow-y: auto;
+  }
+
+  .welcome-banner {
+    border-radius: 14px;
+    padding: 28px 32px;
+    margin-bottom: 28px;
+    position: relative;
+    overflow: hidden;
+  }
+  .welcome-banner h2 {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.5rem;
+    margin-bottom: 6px;
+  }
+  .welcome-banner p {
+    font-size: 0.85rem;
+    opacity: 0.85;
+  }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+  .stat-card {
+    border-radius: 12px;
+    padding: 18px 20px;
+  }
+  .stat-card .label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 6px;
+  }
+  .stat-card .value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.2rem;
+    font-weight: 600;
+  }
+  .stat-card .sub {
+    font-size: 0.72rem;
+    margin-top: 4px;
+  }
+
+  .approval-banner {
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 28px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .approval-banner .pulse {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(1.3); }
+  }
+  .approval-banner .info {
+    flex: 1;
+    font-size: 0.82rem;
+  }
+  .approval-banner .info strong { font-weight: 600; }
+  .approval-banner code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+  .approval-banner .actions {
+    display: flex;
+    gap: 8px;
+  }
+  .approval-banner .btn {
+    padding: 6px 16px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+  }
+
+  .two-col {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr;
+    gap: 24px;
+  }
+  .panel {
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .panel-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin-bottom: 16px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .activity-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 10px 0;
+  }
+  .activity-item + .activity-item {
+    border-top: 1px solid transparent;
+  }
+  .activity-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-top: 5px;
+    flex-shrink: 0;
+  }
+  .activity-text {
+    font-size: 0.8rem;
+    line-height: 1.5;
+  }
+  .activity-time {
+    font-size: 0.68rem;
+    margin-top: 2px;
+  }
+
+  .cron-card {
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+  }
+  .cron-card .name {
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .cron-card .schedule {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+  }
+  .cron-badge {
+    display: inline-block;
+    font-size: 0.6rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+    text-transform: uppercase;
+    margin-left: 8px;
+  }
+
+  /* ─── Dark mode toggle row ─── */
+  .mode-row {
+    display: flex;
+    gap: 24px;
+    margin-top: 24px;
+  }
+  .mode-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #71717a;
+    text-align: center;
+    margin-bottom: 12px;
+  }
+  .mode-card {
+    flex: 1;
+  }
+
+  /* ═══════════════════════════════════════
+     THEME A — "Warm Editorial" (Otilia-inspired)
+     Warm gray bg, soft coral accent, editorial type
+     ═══════════════════════════════════════ */
+
+  .theme-a .badge { background: #e8a090; color: #3d2017; }
+
+  /* Light */
+  .theme-a.light {
+    --bg: #e8e4df;
+    --surface: #f2efeb;
+    --surface-hover: #ece8e3;
+    --border: #d5d0ca;
+    --text: #2c2825;
+    --text-secondary: #6b6560;
+    --text-muted: #8a847f;
+    --accent: #c27a6b;
+    --accent-hover: #b06b5c;
+    --accent-soft: rgba(194,122,107,0.12);
+    --success: #5a8a6e;
+    --error: #9e2b2b;
+    --warning: #a07030;
+    --sidebar-bg: #dfd9d3;
+    --sidebar-active: rgba(194,122,107,0.15);
+    --sidebar-text: #5a5450;
+    --sidebar-text-active: #c27a6b;
+    --banner-from: #c27a6b;
+    --banner-to: #d4a090;
+    --banner-text: #fff;
+    --approval-bg: rgba(194,122,107,0.08);
+    --approval-border: rgba(194,122,107,0.2);
+    --code-bg: rgba(44,40,37,0.06);
+    --card-bg: #f2efeb;
+    --btn-deny-bg: rgba(158,43,43,0.08);
+    --btn-deny-text: #9e2b2b;
+    --btn-approve-bg: #c27a6b;
+    --btn-approve-text: #fff;
+  }
+
+  /* Dark */
+  .theme-a.dark {
+    --bg: #1c1a18;
+    --surface: #262321;
+    --surface-hover: #302d2a;
+    --border: #3a3633;
+    --text: #e8e4df;
+    --text-secondary: #a39e98;
+    --text-muted: #7a756f;
+    --accent: #d9a090;
+    --accent-hover: #e5b5a7;
+    --accent-soft: rgba(217,160,144,0.12);
+    --success: #7db89a;
+    --error: #ef5350;
+    --warning: #dea85e;
+    --sidebar-bg: #1a1816;
+    --sidebar-active: rgba(217,160,144,0.12);
+    --sidebar-text: #8a847f;
+    --sidebar-text-active: #d9a090;
+    --banner-from: #8a4f40;
+    --banner-to: #a06858;
+    --banner-text: #f2efeb;
+    --approval-bg: rgba(217,160,144,0.06);
+    --approval-border: rgba(217,160,144,0.15);
+    --code-bg: rgba(255,255,255,0.06);
+    --card-bg: #262321;
+    --btn-deny-bg: rgba(239,83,80,0.1);
+    --btn-deny-text: #ef5350;
+    --btn-approve-bg: #d9a090;
+    --btn-approve-text: #1c1a18;
+  }
+
+  /* ═══════════════════════════════════════
+     THEME B — "Soft Lavender" (Aniela-inspired)
+     Cream/butter bg, periwinkle accent, playful warmth
+     ═══════════════════════════════════════ */
+
+  .theme-b .badge { background: #b0a4d4; color: #2a2444; }
+
+  /* Light */
+  .theme-b.light {
+    --bg: #f7f3eb;
+    --surface: #fdfaf5;
+    --surface-hover: #f5f1ea;
+    --border: #e5dfd6;
+    --text: #2a2638;
+    --text-secondary: #5f5a70;
+    --text-muted: #847f92;
+    --accent: #7b6fa8;
+    --accent-hover: #6b5f98;
+    --accent-soft: rgba(123,111,168,0.1);
+    --success: #4a856a;
+    --error: #a33030;
+    --warning: #a07030;
+    --sidebar-bg: #f0ebe2;
+    --sidebar-active: rgba(123,111,168,0.12);
+    --sidebar-text: #6b6580;
+    --sidebar-text-active: #7b6fa8;
+    --banner-from: #7b6fa8;
+    --banner-to: #a090c0;
+    --banner-text: #fff;
+    --approval-bg: rgba(123,111,168,0.07);
+    --approval-border: rgba(123,111,168,0.18);
+    --code-bg: rgba(42,38,56,0.05);
+    --card-bg: #fdfaf5;
+    --btn-deny-bg: rgba(163,48,48,0.08);
+    --btn-deny-text: #a33030;
+    --btn-approve-bg: #7b6fa8;
+    --btn-approve-text: #fff;
+  }
+
+  /* Dark */
+  .theme-b.dark {
+    --bg: #1a1824;
+    --surface: #24222e;
+    --surface-hover: #2e2c3a;
+    --border: #3a374a;
+    --text: #e8e5f0;
+    --text-secondary: #a8a3b8;
+    --text-muted: #706b84;
+    --accent: #b0a4d4;
+    --accent-hover: #c4badf;
+    --accent-soft: rgba(176,164,212,0.1);
+    --success: #7db89a;
+    --error: #ef5350;
+    --warning: #dea85e;
+    --sidebar-bg: #181620;
+    --sidebar-active: rgba(176,164,212,0.12);
+    --sidebar-text: #706b84;
+    --sidebar-text-active: #b0a4d4;
+    --banner-from: #5a508a;
+    --banner-to: #7868a8;
+    --banner-text: #e8e5f0;
+    --approval-bg: rgba(176,164,212,0.06);
+    --approval-border: rgba(176,164,212,0.15);
+    --code-bg: rgba(255,255,255,0.06);
+    --card-bg: #24222e;
+    --btn-deny-bg: rgba(239,83,80,0.1);
+    --btn-deny-text: #ef5350;
+    --btn-approve-bg: #b0a4d4;
+    --btn-approve-text: #1a1824;
+  }
+
+  /* ═══════════════════════════════════════
+     THEME C — "Blush Minimal" (Hybrid)
+     Cool off-white bg, muted blush-mauve accent
+     ═══════════════════════════════════════ */
+
+  .theme-c .badge { background: #c4a0aa; color: #3a2028; }
+
+  /* Light */
+  .theme-c.light {
+    --bg: #f0edea;
+    --surface: #f8f5f3;
+    --surface-hover: #f0edea;
+    --border: #ddd8d4;
+    --text: #2e2628;
+    --text-secondary: #6b6065;
+    --text-muted: #8a8085;
+    --accent: #9b6b7a;
+    --accent-hover: #8a5c6a;
+    --accent-soft: rgba(155,107,122,0.1);
+    --success: #5a8a6e;
+    --error: #9e2b2b;
+    --warning: #a07030;
+    --sidebar-bg: #e8e4e0;
+    --sidebar-active: rgba(155,107,122,0.12);
+    --sidebar-text: #6b6065;
+    --sidebar-text-active: #9b6b7a;
+    --banner-from: #9b6b7a;
+    --banner-to: #b8909a;
+    --banner-text: #fff;
+    --approval-bg: rgba(155,107,122,0.07);
+    --approval-border: rgba(155,107,122,0.18);
+    --code-bg: rgba(46,38,40,0.05);
+    --card-bg: #f8f5f3;
+    --btn-deny-bg: rgba(158,43,43,0.08);
+    --btn-deny-text: #9e2b2b;
+    --btn-approve-bg: #9b6b7a;
+    --btn-approve-text: #fff;
+  }
+
+  /* Dark */
+  .theme-c.dark {
+    --bg: #1c1a1e;
+    --surface: #262428;
+    --surface-hover: #302e32;
+    --border: #3d3a40;
+    --text: #e8e4e6;
+    --text-secondary: #a8a0a5;
+    --text-muted: #7a7278;
+    --accent: #c4a0aa;
+    --accent-hover: #d4b4be;
+    --accent-soft: rgba(196,160,170,0.1);
+    --success: #7db89a;
+    --error: #ef5350;
+    --warning: #dea85e;
+    --sidebar-bg: #1a181c;
+    --sidebar-active: rgba(196,160,170,0.12);
+    --sidebar-text: #7a7278;
+    --sidebar-text-active: #c4a0aa;
+    --banner-from: #6a4a54;
+    --banner-to: #845868;
+    --banner-text: #e8e4e6;
+    --approval-bg: rgba(196,160,170,0.06);
+    --approval-border: rgba(196,160,170,0.15);
+    --code-bg: rgba(255,255,255,0.06);
+    --card-bg: #262428;
+    --btn-deny-bg: rgba(239,83,80,0.1);
+    --btn-deny-text: #ef5350;
+    --btn-approve-bg: #c4a0aa;
+    --btn-approve-text: #1c1a1e;
+  }
+
+  /* ═══════════════════════════════════════
+     THEME D — "Olive & Stone" (Editorial Minimal)
+     Stone bg, muted olive/sage accent, sophisticated
+     ═══════════════════════════════════════ */
+
+  .theme-d .badge { background: #a0aa8a; color: #2a2e20; }
+
+  /* Light */
+  .theme-d.light {
+    --bg: #eae7e2;
+    --surface: #f3f0ec;
+    --surface-hover: #ece9e4;
+    --border: #d6d1ca;
+    --text: #2c2a26;
+    --text-secondary: #686560;
+    --text-muted: #88847e;
+    --accent: #6a7a52;
+    --accent-hover: #5a6a44;
+    --accent-soft: rgba(106,122,82,0.1);
+    --success: #6a7a52;
+    --error: #9e2b2b;
+    --warning: #a07030;
+    --sidebar-bg: #e2ded8;
+    --sidebar-active: rgba(106,122,82,0.12);
+    --sidebar-text: #68655e;
+    --sidebar-text-active: #6a7a52;
+    --banner-from: #6a7a52;
+    --banner-to: #8a9a72;
+    --banner-text: #fff;
+    --approval-bg: rgba(106,122,82,0.07);
+    --approval-border: rgba(106,122,82,0.18);
+    --code-bg: rgba(44,42,38,0.05);
+    --card-bg: #f3f0ec;
+    --btn-deny-bg: rgba(158,43,43,0.08);
+    --btn-deny-text: #9e2b2b;
+    --btn-approve-bg: #6a7a52;
+    --btn-approve-text: #fff;
+  }
+
+  /* Dark */
+  .theme-d.dark {
+    --bg: #1a1c18;
+    --surface: #242620;
+    --surface-hover: #2e302a;
+    --border: #3a3c36;
+    --text: #e4e6e0;
+    --text-secondary: #a0a498;
+    --text-muted: #747870;
+    --accent: #a0b080;
+    --accent-hover: #b4c498;
+    --accent-soft: rgba(160,176,128,0.1);
+    --success: #a0b080;
+    --error: #ef5350;
+    --warning: #dea85e;
+    --sidebar-bg: #18191a;
+    --sidebar-active: rgba(160,176,128,0.12);
+    --sidebar-text: #747870;
+    --sidebar-text-active: #a0b080;
+    --banner-from: #4a5a38;
+    --banner-to: #607048;
+    --banner-text: #e4e6e0;
+    --approval-bg: rgba(160,176,128,0.06);
+    --approval-border: rgba(160,176,128,0.15);
+    --code-bg: rgba(255,255,255,0.06);
+    --card-bg: #242620;
+    --btn-deny-bg: rgba(239,83,80,0.1);
+    --btn-deny-text: #ef5350;
+    --btn-approve-bg: #a0b080;
+    --btn-approve-text: #1a1c18;
+  }
+
+  /* ─── Apply vars ─── */
+  .theme-frame-inner {
+    background: var(--bg);
+    color: var(--text);
+  }
+  .sidebar { background: var(--sidebar-bg); }
+  .sidebar-brand span { color: var(--text); }
+  .sidebar-item { color: var(--sidebar-text); }
+  .sidebar-item:hover { background: var(--surface-hover); }
+  .sidebar-item.active {
+    background: var(--sidebar-active);
+    color: var(--sidebar-text-active);
+    font-weight: 600;
+  }
+  .sidebar-divider { background: var(--border); }
+  .sidebar-section-label { color: var(--text-muted); }
+  .main { background: var(--bg); }
+  .welcome-banner {
+    background: linear-gradient(135deg, var(--banner-from), var(--banner-to));
+    color: var(--banner-text);
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+  }
+  .stat-card .label { color: var(--text-muted); }
+  .stat-card .value { color: var(--text); }
+  .stat-card .sub { color: var(--text-secondary); }
+  .approval-banner {
+    background: var(--approval-bg);
+    border: 1px solid var(--approval-border);
+  }
+  .approval-banner .pulse { background: var(--accent); }
+  .approval-banner .info { color: var(--text-secondary); }
+  .approval-banner .info strong { color: var(--text); }
+  .approval-banner code {
+    background: var(--code-bg);
+    color: var(--accent);
+  }
+  .approval-banner .btn-deny {
+    background: var(--btn-deny-bg);
+    color: var(--btn-deny-text);
+  }
+  .approval-banner .btn-approve {
+    background: var(--btn-approve-bg);
+    color: var(--btn-approve-text);
+  }
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+  }
+  .panel-title { color: var(--text-muted); }
+  .activity-item + .activity-item { border-top-color: var(--border); }
+  .activity-dot { background: var(--accent); }
+  .activity-dot.success { background: var(--success); }
+  .activity-dot.warning { background: var(--warning); }
+  .activity-dot.error { background: var(--error); }
+  .activity-text { color: var(--text); }
+  .activity-time { color: var(--text-muted); }
+  .cron-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+  }
+  .cron-card .name { color: var(--text); }
+  .cron-card .schedule { color: var(--text-muted); }
+  .cron-badge {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  .cron-badge.idle {
+    background: rgba(128,128,128,0.1);
+    color: var(--text-muted);
+  }
+
+  .sidebar-logo {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <h1>Dashboard Themes</h1>
+  <p>Inspired by Otilia Pandelea & Aniela Carolina portfolio aesthetics</p>
+</div>
+
+<!-- ════════════════════════════════════════════ -->
+<!-- THEME A — Warm Editorial -->
+<!-- ════════════════════════════════════════════ -->
+<div class="theme-section">
+  <div class="theme-label theme-a">
+    <div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <h2>Warm Editorial</h2>
+        <span class="badge">Otilia-inspired</span>
+      </div>
+      <p>Warm stone gray + soft coral · Editorial typography · Minimal, confident</p>
+    </div>
+  </div>
+
+  <div class="mode-row">
+    <div class="mode-card">
+      <div class="mode-label">Light</div>
+      <div class="theme-frame theme-a light">
+        <div class="theme-frame-inner">
+          <div class="sidebar">
+            <div class="sidebar-brand">
+              <div class="logo sidebar-logo">🦞</div>
+              <span>SkimpyClaw</span>
+            </div>
+            <div class="sidebar-item active">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+              Overview
+            </div>
+            <div class="sidebar-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+              Coding Agent
+            </div>
+            <div class="sidebar-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              Approvals
+            </div>
+            <div class="sidebar-divider"></div>
+            <div class="sidebar-section-label">Management</div>
+            <div class="sidebar-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              Audit Log
+            </div>
+            <div class="sidebar-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+              Templates
+            </div>
+            <div class="sidebar-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              Settings
+            </div>
+          </div>
+          <div class="main">
+            <div class="welcome-banner">
+              <h2>Good evening, Katrina</h2>
+              <p>All systems nominal · 3 cron jobs active · 1 pending approval</p>
+            </div>
+            <div class="stats-grid">
+              <div class="stat-card">
+                <div class="label">Uptime</div>
+                <div class="value">14d 6h</div>
+                <div class="sub">Since Feb 8</div>
+              </div>
+              <div class="stat-card">
+                <div class="label">Next Cron</div>
+                <div class="value">23m</div>
+                <div class="sub">news-digest</div>
+              </div>
+              <div class="stat-card">
+                <div class="label">Model</div>
+                <div class="value" style="font-size:0.95rem">claude-opus</div>
+                <div class="sub">Anthropic</div>
+              </div>
+              <div class="stat-card">
+                <div class="label">Channel</div>
+                <div class="value">Telegram</div>
+                <div class="sub">Active now</div>
+              </div>
+            </div>
+            <div class="approval-banner">
+              <div class="pulse"></div>
+              <div class="info">
+                <strong>1 Pending Approval</strong> · Tier 2 ·
+                <code>git push --force origin main</code>
+                · expires in 4m 12s
+              </div>
+              <div class="actions">
+                <button class="btn btn-deny">Deny</button>
+                <button class="btn btn-approve">Approve</button>
+              </div>
+            </div>
+            <div class="two-col">
+              <div class="panel">
+                <div class="panel-title">Recent Activity</div>
+                <div class="activity-item">
+                  <div class="activity-dot success"></div>
+                  <div>
+                    <div class="activity-text">Cron job <strong>news-digest</strong> completed</div>
+                    <div class="activity-time">2 minutes ago</div>
+                  </div>
+                </div>
+                <div class="activity-item">
+                  <div class="activity-dot"></div>
+                  <div>
+                    <div class="activity-text">Subagent spawned for <strong>code review</strong></div>
+                    <div class="activity-time">18 minutes ago</div>
+                  </div>
+                </div>
+                <div class="activity-item">
+                  <div class="activity-dot warning"></div>
+                  <div>
+                    <div class="activity-text">Approval <strong>tier-2</strong> requested</div>
+                    <div class="activity-time">22 minutes ago</div>
+                  </div>
+                </div>
+                <div class="activity-item">
+                  <div class="activity-dot success"></div>
+                  <div>
+                    <div class="activity-text">Template <strong>deploy.md</strong> updated</div>
+                    <div class="activity-time">1 hour ago</div>
+                  </div>
+                </div>
+              </div>
+              <div class="panel">
+                <div class="panel-title">Cron Jobs</div>
+                <div class="cron-card">
+                  <div class="name">news-digest <span class="cron-badge">active</span></div>
+                  <div class="schedule">0 */6 * * *</div>
+                </div>
+                <div class="cron-card">
+                  <div class="name">health-check <span class="cron-badge">active</span></div>
+                  <div class="schedule">*/30 * * * *</div>
+                </div>
+                <div class="cron-card">
+                  <div class="name">weekly-report <span class="cron-badge idle">idle</span></div>
+                  <div class="schedule">0 9 * * 1</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mode-card">
+      <div class="mode-label">Dark</div>
+      <div class="theme-frame theme-a dark">
+        <div class="theme-frame-inner">
+          <div class="sidebar">
+            <div class="sidebar-brand">
+              <div class="logo sidebar-logo">🦞</div>
+              <span>SkimpyClaw</span>
+            </div>
+            <div class="sidebar-item active">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+              Overview
+            </div>
+            <div class="sidebar-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+              Coding Agent
+            </div>
+            <div class="sidebar-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              Approvals
+            </div>
+            <div class="sidebar-divider"></div>
+            <div class="sidebar-section-label">Management</div>
+            <div class="sidebar-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              Audit Log
+            </div>
+            <div class="sidebar-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+              Templates
+            </div>
+            <div class="sidebar-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              Settings
+            </div>
+          </div>
+          <div class="main">
+            <div class="welcome-banner">
+              <h2>Good evening, Katrina</h2>
+              <p>All systems nominal · 3 cron jobs active · 1 pending approval</p>
+            </div>
+            <div class="stats-grid">
+              <div class="stat-card">
+                <div class="label">Uptime</div>
+                <div class="value">14d 6h</div>
+                <div class="sub">Since Feb 8</div>
+              </div>
+              <div class="stat-card">
+                <div class="label">Next Cron</div>
+                <div class="value">23m</div>
+                <div class="sub">news-digest</div>
+              </div>
+              <div class="stat-card">
+                <div class="label">Model</div>
+                <div class="value" style="font-size:0.95rem">claude-opus</div>
+                <div class="sub">Anthropic</div>
+              </div>
+              <div class="stat-card">
+                <div class="label">Channel</div>
+                <div class="value">Telegram</div>
+                <div class="sub">Active now</div>
+              </div>
+            </div>
+            <div class="approval-banner">
+              <div class="pulse"></div>
+              <div class="info">
+                <strong>1 Pending Approval</strong> · Tier 2 ·
+                <code>git push --force origin main</code>
+                · expires in 4m 12s
+              </div>
+              <div class="actions">
+                <button class="btn btn-deny">Deny</button>
+                <button class="btn btn-approve">Approve</button>
+              </div>
+            </div>
+            <div class="two-col">
+              <div class="panel">
+                <div class="panel-title">Recent Activity</div>
+                <div class="activity-item">
+                  <div class="activity-dot success"></div>
+                  <div>
+                    <div class="activity-text">Cron job <strong>news-digest</strong> completed</div>
+                    <div class="activity-time">2 minutes ago</div>
+                  </div>
+                </div>
+                <div class="activity-item">
+                  <div class="activity-dot"></div>
+                  <div>
+                    <div class="activity-text">Subagent spawned for <strong>code review</strong></div>
+                    <div class="activity-time">18 minutes ago</div>
+                  </div>
+                </div>
+                <div class="activity-item">
+                  <div class="activity-dot warning"></div>
+                  <div>
+                    <div class="activity-text">Approval <strong>tier-2</strong> requested</div>
+                    <div class="activity-time">22 minutes ago</div>
+                  </div>
+                </div>
+                <div class="activity-item">
+                  <div class="activity-dot success"></div>
+                  <div>
+                    <div class="activity-text">Template <strong>deploy.md</strong> updated</div>
+                    <div class="activity-time">1 hour ago</div>
+                  </div>
+                </div>
+              </div>
+              <div class="panel">
+                <div class="panel-title">Cron Jobs</div>
+                <div class="cron-card">
+                  <div class="name">news-digest <span class="cron-badge">active</span></div>
+                  <div class="schedule">0 */6 * * *</div>
+                </div>
+                <div class="cron-card">
+                  <div class="name">health-check <span class="cron-badge">active</span></div>
+                  <div class="schedule">*/30 * * * *</div>
+                </div>
+                <div class="cron-card">
+                  <div class="name">weekly-report <span class="cron-badge idle">idle</span></div>
+                  <div class="schedule">0 9 * * 1</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════ -->
+<!-- THEME B — Soft Lavender -->
+<!-- ════════════════════════════════════════════ -->
+<div class="theme-section">
+  <div class="theme-label theme-b">
+    <div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <h2>Soft Lavender</h2>
+        <span class="badge">Aniela-inspired</span>
+      </div>
+      <p>Warm cream + periwinkle lavender · Playful warmth · Rounded, approachable</p>
+    </div>
+  </div>
+
+  <div class="mode-row">
+    <div class="mode-card">
+      <div class="mode-label">Light</div>
+      <div class="theme-frame theme-b light">
+        <div class="theme-frame-inner">
+          <div class="sidebar">
+            <div class="sidebar-brand">
+              <div class="logo sidebar-logo">🦞</div>
+              <span>SkimpyClaw</span>
+            </div>
+            <div class="sidebar-item active">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+              Overview
+            </div>
+            <div class="sidebar-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+              Coding Agent
+            </div>
+            <div class="sidebar-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              Approvals
+            </div>
+            <div class="sidebar-divider"></div>
+            <div class="sidebar-section-label">Management</div>
+            <div class="sidebar-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              Audit Log
+            </div>
+            <div class="sidebar-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+              Templates
+            </div>
+            <div class="sidebar-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              Settings
+            </div>
+          </div>
+          <div class="main">
+            <div class="welcome-banner">
+              <h2>Good evening, Katrina</h2>
+              <p>All systems nominal · 3 cron jobs active · 1 pending approval</p>
+            </div>
+            <div class="stats-grid">
+              <div class="stat-card">
+                <div class="label">Uptime</div>
+                <div class="value">14d 6h</div>
+                <div class="sub">Since Feb 8</div>
+              </div>
+              <div class="stat-card">
+                <div class="label">Next Cron</div>
+                <div class="value">23m</div>
+                <div class="sub">news-digest</div>
+              </div>
+              <div class="stat-card">
+                <div class="label">Model</div>
+                <div class="value" style="font-size:0.95rem">claude-opus</div>
+                <div class="sub">Anthropic</div>
+              </div>
+              <div class="stat-card">
+                <div class="label">Channel</div>
+                <div class="value">Telegram</div>
+                <div class="sub">Active now</div>
+              </div>
+            </div>
+            <div class="approval-banner">
+              <div class="pulse"></div>
+              <div class="info">
+                <strong>1 Pending Approval</strong> · Tier 2 ·
+                <code>git push --force origin main</code>
+                · expires in 4m 12s
+              </div>
+              <div class="actions">
+                <button class="btn btn-deny">Deny</button>
+                <button class="btn btn-approve">Approve</button>
+              </div>
+            </div>
+            <div class="two-col">
+              <div class="panel">
+                <div class="panel-title">Recent Activity</div>
+                <div class="activity-item">
+                  <div class="activity-dot success"></div>
+                  <div>
+                    <div class="activity-text">Cron job <strong>news-digest</strong> completed</div>
+                    <div class="activity-time">2 minutes ago</div>
+                  </div>
+                </div>
+                <div class="activity-item">
+                  <div class="activity-dot"></div>
+                  <div>
+                    <div class="activity-text">Subagent spawned for <strong>code review</strong></div>
+                    <div class="activity-time">18 minutes ago</div>
+                  </div>
+                </div>
+                <div class="activity-item">
+                  <div class="activity-dot warning"></div>
+                  <div>
+                    <div class="activity-text">Approval <strong>tier-2</strong> requested</div>
+                    <div class="activity-time">22 minutes ago</div>
+                  </div>
+                </div>
+                <div class="activity-item">
+                  <div class="activity-dot success"></div>
+                  <div>
+                    <div class="activity-text">Template <strong>deploy.md</strong> updated</div>
+                    <div class="activity-time">1 hour ago</div>
+                  </div>
+                </div>
+              </div>
+              <div class="panel">
+                <div class="panel-title">Cron Jobs</div>
+                <div class="cron-card">
+                  <div class="name">news-digest <span class="cron-badge">active</span></div>
+                  <div class="schedule">0 */6 * * *</div>
+                </div>
+                <div class="cron-card">
+                  <div class="name">health-check <span class="cron-badge">active</span></div>
+                  <div class="schedule">*/30 * * * *</div>
+                </div>
+                <div class="cron-card">
+                  <div class="name">weekly-report <span class="cron-badge idle">idle</span></div>
+                  <div class="schedule">0 9 * * 1</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mode-card">
+      <div class="mode-label">Dark</div>
+      <div class="theme-frame theme-b dark">
+        <div class="theme-frame-inner">
+          <div class="sidebar">
+            <div class="sidebar-brand">
+              <div class="logo sidebar-logo">🦞</div>
+              <span>SkimpyClaw</span>
+            </div>
+            <div class="sidebar-item active">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+              Overview
+            </div>
+            <div class="sidebar-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+              Coding Agent
+            </div>
+            <div class="sidebar-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              Approvals
+            </div>
+            <div class="sidebar-divider"></div>
+            <div class="sidebar-section-label">Management</div>
+            <div class="sidebar-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              Audit Log
+            </div>
+            <div class="sidebar-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+              Templates
+            </div>
+            <div class="sidebar-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              Settings
+            </div>
+          </div>
+          <div class="main">
+            <div class="welcome-banner">
+              <h2>Good evening, Katrina</h2>
+              <p>All systems nominal · 3 cron jobs active · 1 pending approval</p>
+            </div>
+            <div class="stats-grid">
+              <div class="stat-card">
+                <div class="label">Uptime</div>
+                <div class="value">14d 6h</div>
+                <div class="sub">Since Feb 8</div>
+              </div>
+              <div class="stat-card">
+                <div class="label">Next Cron</div>
+                <div class="value">23m</div>
+                <div class="sub">news-digest</div>
+              </div>
+              <div class="stat-card">
+                <div class="label">Model</div>
+                <div class="value" style="font-size:0.95rem">claude-opus</div>
+                <div class="sub">Anthropic</div>
+              </div>
+              <div class="stat-card">
+                <div class="label">Channel</div>
+                <div class="value">Telegram</div>
+                <div class="sub">Active now</div>
+              </div>
+            </div>
+            <div class="approval-banner">
+              <div class="pulse"></div>
+              <div class="info">
+                <strong>1 Pending Approval</strong> · Tier 2 ·
+                <code>git push --force origin main</code>
+                · expires in 4m 12s
+              </div>
+              <div class="actions">
+                <button class="btn btn-deny">Deny</button>
+                <button class="btn btn-approve">Approve</button>
+              </div>
+            </div>
+            <div class="two-col">
+              <div class="panel">
+                <div class="panel-title">Recent Activity</div>
+                <div class="activity-item">
+                  <div class="activity-dot success"></div>
+                  <div>
+                    <div class="activity-text">Cron job <strong>news-digest</strong> completed</div>
+                    <div class="activity-time">2 minutes ago</div>
+                  </div>
+                </div>
+                <div class="activity-item">
+                  <div class="activity-dot"></div>
+                  <div>
+                    <div class="activity-text">Subagent spawned for <strong>code review</strong></div>
+                    <div class="activity-time">18 minutes ago</div>
+                  </div>
+                </div>
+                <div class="activity-item">
+                  <div class="activity-dot warning"></div>
+                  <div>
+                    <div class="activity-text">Approval <strong>tier-2</strong> requested</div>
+                    <div class="activity-time">22 minutes ago</div>
+                  </div>
+                </div>
+                <div class="activity-item">
+                  <div class="activity-dot success"></div>
+                  <div>
+                    <div class="activity-text">Template <strong>deploy.md</strong> updated</div>
+                    <div class="activity-time">1 hour ago</div>
+                  </div>
+                </div>
+              </div>
+              <div class="panel">
+                <div class="panel-title">Cron Jobs</div>
+                <div class="cron-card">
+                  <div class="name">news-digest <span class="cron-badge">active</span></div>
+                  <div class="schedule">0 */6 * * *</div>
+                </div>
+                <div class="cron-card">
+                  <div class="name">health-check <span class="cron-badge">active</span></div>
+                  <div class="schedule">*/30 * * * *</div>
+                </div>
+                <div class="cron-card">
+                  <div class="name">weekly-report <span class="cron-badge idle">idle</span></div>
+                  <div class="schedule">0 9 * * 1</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════ -->
+<!-- THEME C — Blush Minimal -->
+<!-- ════════════════════════════════════════════ -->
+<div class="theme-section">
+  <div class="theme-label theme-c">
+    <div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <h2>Blush Minimal</h2>
+        <span class="badge">Hybrid</span>
+      </div>
+      <p>Cool off-white + dusty mauve · Best of both worlds · Sophisticated restraint</p>
+    </div>
+  </div>
+
+  <div class="mode-row">
+    <div class="mode-card">
+      <div class="mode-label">Light</div>
+      <div class="theme-frame theme-c light">
+        <div class="theme-frame-inner">
+          <div class="sidebar">
+            <div class="sidebar-brand">
+              <div class="logo sidebar-logo">🦞</div>
+              <span>SkimpyClaw</span>
+            </div>
+            <div class="sidebar-item active">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+              Overview
+            </div>
+            <div class="sidebar-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+              Coding Agent
+            </div>
+            <div class="sidebar-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              Approvals
+            </div>
+            <div class="sidebar-divider"></div>
+            <div class="sidebar-section-label">Management</div>
+            <div class="sidebar-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              Audit Log
+            </div>
+            <div class="sidebar-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+              Templates
+            </div>
+            <div class="sidebar-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              Settings
+            </div>
+          </div>
+          <div class="main">
+            <div class="welcome-banner">
+              <h2>Good evening, Katrina</h2>
+              <p>All systems nominal · 3 cron jobs active · 1 pending approval</p>
+            </div>
+            <div class="stats-grid">
+              <div class="stat-card">
+                <div class="label">Uptime</div>
+                <div class="value">14d 6h</div>
+                <div class="sub">Since Feb 8</div>
+              </div>
+              <div class="stat-card">
+                <div class="label">Next Cron</div>
+                <div class="value">23m</div>
+                <div class="sub">news-digest</div>
+              </div>
+              <div class="stat-card">
+                <div class="label">Model</div>
+                <div class="value" style="font-size:0.95rem">claude-opus</div>
+                <div class="sub">Anthropic</div>
+              </div>
+              <div class="stat-card">
+                <div class="label">Channel</div>
+                <div class="value">Telegram</div>
+                <div class="sub">Active now</div>
+              </div>
+            </div>
+            <div class="approval-banner">
+              <div class="pulse"></div>
+              <div class="info">
+                <strong>1 Pending Approval</strong> · Tier 2 ·
+                <code>git push --force origin main</code>
+                · expires in 4m 12s
+              </div>
+              <div class="actions">
+                <button class="btn btn-deny">Deny</button>
+                <button class="btn btn-approve">Approve</button>
+              </div>
+            </div>
+            <div class="two-col">
+              <div class="panel">
+                <div class="panel-title">Recent Activity</div>
+                <div class="activity-item">
+                  <div class="activity-dot success"></div>
+                  <div>
+                    <div class="activity-text">Cron job <strong>news-digest</strong> completed</div>
+                    <div class="activity-time">2 minutes ago</div>
+                  </div>
+                </div>
+                <div class="activity-item">
+                  <div class="activity-dot"></div>
+                  <div>
+                    <div class="activity-text">Subagent spawned for <strong>code review</strong></div>
+                    <div class="activity-time">18 minutes ago</div>
+                  </div>
+                </div>
+                <div class="activity-item">
+                  <div class="activity-dot warning"></div>
+                  <div>
+                    <div class="activity-text">Approval <strong>tier-2</strong> requested</div>
+                    <div class="activity-time">22 minutes ago</div>
+                  </div>
+                </div>
+                <div class="activity-item">
+                  <div class="activity-dot success"></div>
+                  <div>
+                    <div class="activity-text">Template <strong>deploy.md</strong> updated</div>
+                    <div class="activity-time">1 hour ago</div>
+                  </div>
+                </div>
+              </div>
+              <div class="panel">
+                <div class="panel-title">Cron Jobs</div>
+                <div class="cron-card">
+                  <div class="name">news-digest <span class="cron-badge">active</span></div>
+                  <div class="schedule">0 */6 * * *</div>
+                </div>
+                <div class="cron-card">
+                  <div class="name">health-check <span class="cron-badge">active</span></div>
+                  <div class="schedule">*/30 * * * *</div>
+                </div>
+                <div class="cron-card">
+                  <div class="name">weekly-report <span class="cron-badge idle">idle</span></div>
+                  <div class="schedule">0 9 * * 1</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mode-card">
+      <div class="mode-label">Dark</div>
+      <div class="theme-frame theme-c dark">
+        <div class="theme-frame-inner">
+          <div class="sidebar">
+            <div class="sidebar-brand">
+              <div class="logo sidebar-logo">🦞</div>
+              <span>SkimpyClaw</span>
+            </div>
+            <div class="sidebar-item active">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+              Overview
+            </div>
+            <div class="sidebar-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+              Coding Agent
+            </div>
+            <div class="sidebar-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              Approvals
+            </div>
+            <div class="sidebar-divider"></div>
+            <div class="sidebar-section-label">Management</div>
+            <div class="sidebar-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              Audit Log
+            </div>
+            <div class="sidebar-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+              Templates
+            </div>
+            <div class="sidebar-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              Settings
+            </div>
+          </div>
+          <div class="main">
+            <div class="welcome-banner">
+              <h2>Good evening, Katrina</h2>
+              <p>All systems nominal · 3 cron jobs active · 1 pending approval</p>
+            </div>
+            <div class="stats-grid">
+              <div class="stat-card">
+                <div class="label">Uptime</div>
+                <div class="value">14d 6h</div>
+                <div class="sub">Since Feb 8</div>
+              </div>
+              <div class="stat-card">
+                <div class="label">Next Cron</div>
+                <div class="value">23m</div>
+                <div class="sub">news-digest</div>
+              </div>
+              <div class="stat-card">
+                <div class="label">Model</div>
+                <div class="value" style="font-size:0.95rem">claude-opus</div>
+                <div class="sub">Anthropic</div>
+              </div>
+              <div class="stat-card">
+                <div class="label">Channel</div>
+                <div class="value">Telegram</div>
+                <div class="sub">Active now</div>
+              </div>
+            </div>
+            <div class="approval-banner">
+              <div class="pulse"></div>
+              <div class="info">
+                <strong>1 Pending Approval</strong> · Tier 2 ·
+                <code>git push --force origin main</code>
+                · expires in 4m 12s
+              </div>
+              <div class="actions">
+                <button class="btn btn-deny">Deny</button>
+                <button class="btn btn-approve">Approve</button>
+              </div>
+            </div>
+            <div class="two-col">
+              <div class="panel">
+                <div class="panel-title">Recent Activity</div>
+                <div class="activity-item">
+                  <div class="activity-dot success"></div>
+                  <div>
+                    <div class="activity-text">Cron job <strong>news-digest</strong> completed</div>
+                    <div class="activity-time">2 minutes ago</div>
+                  </div>
+                </div>
+                <div class="activity-item">
+                  <div class="activity-dot"></div>
+                  <div>
+                    <div class="activity-text">Subagent spawned for <strong>code review</strong></div>
+                    <div class="activity-time">18 minutes ago</div>
+                  </div>
+                </div>
+                <div class="activity-item">
+                  <div class="activity-dot warning"></div>
+                  <div>
+                    <div class="activity-text">Approval <strong>tier-2</strong> requested</div>
+                    <div class="activity-time">22 minutes ago</div>
+                  </div>
+                </div>
+                <div class="activity-item">
+                  <div class="activity-dot success"></div>
+                  <div>
+                    <div class="activity-text">Template <strong>deploy.md</strong> updated</div>
+                    <div class="activity-time">1 hour ago</div>
+                  </div>
+                </div>
+              </div>
+              <div class="panel">
+                <div class="panel-title">Cron Jobs</div>
+                <div class="cron-card">
+                  <div class="name">news-digest <span class="cron-badge">active</span></div>
+                  <div class="schedule">0 */6 * * *</div>
+                </div>
+                <div class="cron-card">
+                  <div class="name">health-check <span class="cron-badge">active</span></div>
+                  <div class="schedule">*/30 * * * *</div>
+                </div>
+                <div class="cron-card">
+                  <div class="name">weekly-report <span class="cron-badge idle">idle</span></div>
+                  <div class="schedule">0 9 * * 1</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════ -->
+<!-- THEME D — Olive & Stone -->
+<!-- ════════════════════════════════════════════ -->
+<div class="theme-section">
+  <div class="theme-label theme-d">
+    <div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <h2>Olive & Stone</h2>
+        <span class="badge">Editorial minimal</span>
+      </div>
+      <p>Warm stone + muted olive sage · Organic, grounded · Understated confidence</p>
+    </div>
+  </div>
+
+  <div class="mode-row">
+    <div class="mode-card">
+      <div class="mode-label">Light</div>
+      <div class="theme-frame theme-d light">
+        <div class="theme-frame-inner">
+          <div class="sidebar">
+            <div class="sidebar-brand">
+              <div class="logo sidebar-logo">🦞</div>
+              <span>SkimpyClaw</span>
+            </div>
+            <div class="sidebar-item active">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+              Overview
+            </div>
+            <div class="sidebar-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+              Coding Agent
+            </div>
+            <div class="sidebar-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              Approvals
+            </div>
+            <div class="sidebar-divider"></div>
+            <div class="sidebar-section-label">Management</div>
+            <div class="sidebar-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              Audit Log
+            </div>
+            <div class="sidebar-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+              Templates
+            </div>
+            <div class="sidebar-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              Settings
+            </div>
+          </div>
+          <div class="main">
+            <div class="welcome-banner">
+              <h2>Good evening, Katrina</h2>
+              <p>All systems nominal · 3 cron jobs active · 1 pending approval</p>
+            </div>
+            <div class="stats-grid">
+              <div class="stat-card">
+                <div class="label">Uptime</div>
+                <div class="value">14d 6h</div>
+                <div class="sub">Since Feb 8</div>
+              </div>
+              <div class="stat-card">
+                <div class="label">Next Cron</div>
+                <div class="value">23m</div>
+                <div class="sub">news-digest</div>
+              </div>
+              <div class="stat-card">
+                <div class="label">Model</div>
+                <div class="value" style="font-size:0.95rem">claude-opus</div>
+                <div class="sub">Anthropic</div>
+              </div>
+              <div class="stat-card">
+                <div class="label">Channel</div>
+                <div class="value">Telegram</div>
+                <div class="sub">Active now</div>
+              </div>
+            </div>
+            <div class="approval-banner">
+              <div class="pulse"></div>
+              <div class="info">
+                <strong>1 Pending Approval</strong> · Tier 2 ·
+                <code>git push --force origin main</code>
+                · expires in 4m 12s
+              </div>
+              <div class="actions">
+                <button class="btn btn-deny">Deny</button>
+                <button class="btn btn-approve">Approve</button>
+              </div>
+            </div>
+            <div class="two-col">
+              <div class="panel">
+                <div class="panel-title">Recent Activity</div>
+                <div class="activity-item">
+                  <div class="activity-dot success"></div>
+                  <div>
+                    <div class="activity-text">Cron job <strong>news-digest</strong> completed</div>
+                    <div class="activity-time">2 minutes ago</div>
+                  </div>
+                </div>
+                <div class="activity-item">
+                  <div class="activity-dot"></div>
+                  <div>
+                    <div class="activity-text">Subagent spawned for <strong>code review</strong></div>
+                    <div class="activity-time">18 minutes ago</div>
+                  </div>
+                </div>
+                <div class="activity-item">
+                  <div class="activity-dot warning"></div>
+                  <div>
+                    <div class="activity-text">Approval <strong>tier-2</strong> requested</div>
+                    <div class="activity-time">22 minutes ago</div>
+                  </div>
+                </div>
+                <div class="activity-item">
+                  <div class="activity-dot success"></div>
+                  <div>
+                    <div class="activity-text">Template <strong>deploy.md</strong> updated</div>
+                    <div class="activity-time">1 hour ago</div>
+                  </div>
+                </div>
+              </div>
+              <div class="panel">
+                <div class="panel-title">Cron Jobs</div>
+                <div class="cron-card">
+                  <div class="name">news-digest <span class="cron-badge">active</span></div>
+                  <div class="schedule">0 */6 * * *</div>
+                </div>
+                <div class="cron-card">
+                  <div class="name">health-check <span class="cron-badge">active</span></div>
+                  <div class="schedule">*/30 * * * *</div>
+                </div>
+                <div class="cron-card">
+                  <div class="name">weekly-report <span class="cron-badge idle">idle</span></div>
+                  <div class="schedule">0 9 * * 1</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mode-card">
+      <div class="mode-label">Dark</div>
+      <div class="theme-frame theme-d dark">
+        <div class="theme-frame-inner">
+          <div class="sidebar">
+            <div class="sidebar-brand">
+              <div class="logo sidebar-logo">🦞</div>
+              <span>SkimpyClaw</span>
+            </div>
+            <div class="sidebar-item active">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+              Overview
+            </div>
+            <div class="sidebar-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+              Coding Agent
+            </div>
+            <div class="sidebar-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              Approvals
+            </div>
+            <div class="sidebar-divider"></div>
+            <div class="sidebar-section-label">Management</div>
+            <div class="sidebar-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              Audit Log
+            </div>
+            <div class="sidebar-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+              Templates
+            </div>
+            <div class="sidebar-item">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              Settings
+            </div>
+          </div>
+          <div class="main">
+            <div class="welcome-banner">
+              <h2>Good evening, Katrina</h2>
+              <p>All systems nominal · 3 cron jobs active · 1 pending approval</p>
+            </div>
+            <div class="stats-grid">
+              <div class="stat-card">
+                <div class="label">Uptime</div>
+                <div class="value">14d 6h</div>
+                <div class="sub">Since Feb 8</div>
+              </div>
+              <div class="stat-card">
+                <div class="label">Next Cron</div>
+                <div class="value">23m</div>
+                <div class="sub">news-digest</div>
+              </div>
+              <div class="stat-card">
+                <div class="label">Model</div>
+                <div class="value" style="font-size:0.95rem">claude-opus</div>
+                <div class="sub">Anthropic</div>
+              </div>
+              <div class="stat-card">
+                <div class="label">Channel</div>
+                <div class="value">Telegram</div>
+                <div class="sub">Active now</div>
+              </div>
+            </div>
+            <div class="approval-banner">
+              <div class="pulse"></div>
+              <div class="info">
+                <strong>1 Pending Approval</strong> · Tier 2 ·
+                <code>git push --force origin main</code>
+                · expires in 4m 12s
+              </div>
+              <div class="actions">
+                <button class="btn btn-deny">Deny</button>
+                <button class="btn btn-approve">Approve</button>
+              </div>
+            </div>
+            <div class="two-col">
+              <div class="panel">
+                <div class="panel-title">Recent Activity</div>
+                <div class="activity-item">
+                  <div class="activity-dot success"></div>
+                  <div>
+                    <div class="activity-text">Cron job <strong>news-digest</strong> completed</div>
+                    <div class="activity-time">2 minutes ago</div>
+                  </div>
+                </div>
+                <div class="activity-item">
+                  <div class="activity-dot"></div>
+                  <div>
+                    <div class="activity-text">Subagent spawned for <strong>code review</strong></div>
+                    <div class="activity-time">18 minutes ago</div>
+                  </div>
+                </div>
+                <div class="activity-item">
+                  <div class="activity-dot warning"></div>
+                  <div>
+                    <div class="activity-text">Approval <strong>tier-2</strong> requested</div>
+                    <div class="activity-time">22 minutes ago</div>
+                  </div>
+                </div>
+                <div class="activity-item">
+                  <div class="activity-dot success"></div>
+                  <div>
+                    <div class="activity-text">Template <strong>deploy.md</strong> updated</div>
+                    <div class="activity-time">1 hour ago</div>
+                  </div>
+                </div>
+              </div>
+              <div class="panel">
+                <div class="panel-title">Cron Jobs</div>
+                <div class="cron-card">
+                  <div class="name">news-digest <span class="cron-badge">active</span></div>
+                  <div class="schedule">0 */6 * * *</div>
+                </div>
+                <div class="cron-card">
+                  <div class="name">health-check <span class="cron-badge">active</span></div>
+                  <div class="schedule">*/30 * * * *</div>
+                </div>
+                <div class="cron-card">
+                  <div class="name">weekly-report <span class="cron-badge idle">idle</span></div>
+                  <div class="schedule">0 9 * * 1</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

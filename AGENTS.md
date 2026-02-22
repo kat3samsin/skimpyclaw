@@ -33,7 +33,7 @@ Always run `pnpm build && pnpm test` after making changes. Do not submit work wi
 | `src/file-lock.ts` | In-memory file lock manager for concurrent subagent writes |
 | `src/gateway.ts` | Fastify HTTP server on port 18790, registers all routes |
 | `src/api.ts` | Dashboard REST API under `/api/dashboard/*` |
-| `src/dashboard.ts` | Single-page dashboard (inline HTML/CSS/JS, no build step) |
+| `src/dashboard-frontend.ts` | Framework dashboard route + static asset serving from `dist/dashboard/` |
 | `src/cron.ts` | Cron scheduler — `agentTurn` and `script` payload types |
 | `src/heartbeat.ts` | Periodic keep-alive with Telegram alerts |
 | `src/skills.ts` | Skills system — loads from `~/.skimpyclaw/skills/`, injects into system prompt |
@@ -88,60 +88,23 @@ priority: 100
 
 ## Dashboard Architecture
 
-The dashboard is currently served as **inline HTML/CSS/JS** from `src/dashboard.ts` — no build step, no framework.
-
-### Current (Legacy Inline)
+The dashboard is framework-only (Preact/Vite).
 
 | Concern | Location |
 |---------|---------|
-| HTML/CSS/JS | `src/dashboard.ts` — single `DASHBOARD_HTML` string constant |
-| Route | `GET /dashboard` registered via `registerDashboard()` in `src/dashboard.ts` |
+| Frontend source | `web/dashboard/` |
+| Built assets | `dist/dashboard/` |
+| Route | `GET /dashboard` via `registerDashboard()` in `src/dashboard-frontend.ts` |
 | Backend API | `src/api.ts` — all endpoints under `/api/dashboard/*` |
 | Auth | Bearer token from `config.dashboard.token` |
 
-Pages: `overview`, `history`, `approvals`, `digests`, `audit`, `coding`, `memory`, `templates`, `model`, `skills`, `cron`, `config`, `logs`, `health`
-
-### Planned Migration (Preact/Vite — see `dashboard_refactor.md`)
-
-A future migration to Preact + Vite is planned. The migration plan lives in `dashboard_refactor.md`. Until it ships, the inline dashboard remains authoritative.
-
-Migration flag (when implemented): `config.dashboard.frontend: "legacy" | "framework"`
-- `framework` (default) → built SPA from `web/dashboard/dist/` with index.html fallback
-- `legacy` → existing inline HTML path
-
-Frontend project (when created): `web/dashboard/` — Vite + TypeScript + Preact
-
-**Build commands (post-migration):**
-```bash
-pnpm dashboard:dev    # Vite dev server for frontend
-pnpm dashboard:build  # Build frontend assets to web/dashboard/dist/
-pnpm build            # TypeScript compile (backend) + dashboard:build
-```
-
-### Migration Rules
-
-1. **Do not remove legacy dashboard** until framework parity is confirmed.
-2. **Backend API contracts are stable** — `/api/dashboard/*` response shapes must not change.
-3. **Feature flag gates rollout** — default `legacy` until real-usage validated.
-4. Every migration milestone must pass `pnpm build && pnpm test`.
-5. Both `AGENTS.md` and `CLAUDE.md` must be updated in the same PR as any migration phase.
+If `dist/dashboard/index.html` is missing, `GET /dashboard` returns `503` with a build hint.
 
 ### Dashboard Tests
 
-- `src/__tests__/dashboard.test.ts` — parity contract tests (116 tests):
-  - Route (200, content-type, non-empty body)
-  - HTML document structure (DOCTYPE, charset, viewport, fonts)
-  - Theme system (light/dark CSS variables)
-  - Sidebar nav tabs (all 14 pages, no duplicates, no Doctor tab)
-  - Page panel IDs (all 14 panels present)
-  - Unified Health panel (Doctor elements merged into Health)
-  - JavaScript API call coverage (all 12 backend endpoints referenced)
-  - `onPageActivated` routing (all 13 page branches wired correctly)
-  - `switchPage` / `api()` helper functions
-  - Authentication (token, localStorage)
-
-- `src/__tests__/api.test.ts` — backend API contract tests (full suite):
-  - Auth (401 flows), status, sessions, memory, cron, model, templates, logs, config, TODOs, health, doctor
+- `src/__tests__/dashboard.test.ts` — framework route contract tests
+- `src/__tests__/dashboard-mode.test.ts` — framework static serving and safety checks
+- `src/__tests__/api.test.ts` — backend API contract tests
 
 ## Critical Rules
 
@@ -151,7 +114,7 @@ pnpm build            # TypeScript compile (backend) + dashboard:build
 - **code_with_team agent selection** — team workers support `claude`, `codex`, or `kimi`; default comes from `subagents.defaultCodeAgent`.
 - **Path validation** — all file/dir operations restricted to `ToolConfig.allowedPaths`.
 - **Hardcode paths** — prefer simple over configurable.
-- **Dashboard is inline** — no framework, no build step. HTML/CSS/JS in a single string in `dashboard.ts`. See migration plan in `dashboard_refactor.md`.
+- **Dashboard is framework-only** — route serves built frontend from `dist/dashboard/` via `src/dashboard-frontend.ts`.
 - **Codex auth** — uses `~/.codex/auth.json` with ChatGPT backend headers (`chatgpt-account-id`, `OpenAI-Beta`, `originator: codex_cli_rs`).
 - **Skills directory** — `~/.skimpyclaw/skills/`, NOT `~/.claude/skills/`.
 

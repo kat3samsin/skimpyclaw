@@ -50,6 +50,7 @@ export interface AuditEvent {
   summary: string;
   durationMs?: number;
   timestamp?: string;
+  detail?: Record<string, unknown> | string;
 }
 
 export interface AuditTrace {
@@ -66,12 +67,32 @@ export interface AuditResponse {
   total: number;
 }
 
+export interface ApprovalChannelMeta {
+  channel: 'telegram' | 'discord' | 'dashboard' | string;
+  chatId?: number | string;
+  userId?: string;
+  username?: string;
+}
+
 export interface Approval {
   id: string;
   command: string;
+  cwd?: string;
   reason?: string;
   tier: number;
-  timestamp: string;
+  status: 'pending' | 'approved' | 'denied' | 'expired';
+  createdAt: string;
+  expiresAt: string;
+  resolvedAt?: string;
+  approvedBy?: string;
+  deniedBy?: string;
+  channelMeta?: ApprovalChannelMeta;
+}
+
+export interface ApprovalsResponse {
+  pending: Approval[];
+  recent: Approval[];
+  now: string;
 }
 
 export interface HealthCheck {

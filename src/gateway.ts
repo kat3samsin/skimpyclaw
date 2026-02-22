@@ -6,7 +6,7 @@ import type { Config, GatewayStatus } from './types.js';
 import { runAgentTurn } from './agent.js';
 import { getCronJobs, runCronJob } from './cron.js';
 import { registerDashboardAPI } from './api.js';
-import { registerDashboard } from './dashboard.js';
+import { registerDashboard } from './dashboard-frontend.js';
 import { ensureDashboardToken } from './config.js';
 
 let config: Config;
@@ -118,9 +118,8 @@ export async function createGateway(cfg: Config): Promise<FastifyInstance> {
   // Register dashboard API routes (includes auth hook)
   registerDashboardAPI(fastify, config);
 
-  // Register dashboard frontend (legacy inline HTML or built framework app)
+  // Register dashboard frontend (framework app)
   registerDashboard(fastify, {
-    mode: config.dashboard?.frontend === 'legacy' ? 'legacy' : 'framework',
     frameworkDistDir: join(process.cwd(), 'dist', 'dashboard'),
     botName: config.agents.list[config.agents.default]?.identity?.name || 'SkimpyClaw',
     botEmoji: config.agents.list[config.agents.default]?.identity?.emoji || '👙🦞',

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { getDigest, getDigests } from '../api/client.js';
 import type { Digest, DigestResponse } from '../types.js';
 import { LuExternalLink, LuNewspaper, LuRefreshCw } from 'react-icons/lu';
+import { Markdown } from '../components/Markdown.js';
 
 export function Digests() {
   const [digests, setDigests] = useState<Digest[]>([]);
@@ -71,7 +72,7 @@ export function Digests() {
                   key={d.id}
                   onClick={() => void openDigest(d.id)}
                   class={`list-item${selected === d.id ? ' active' : ''}`}
-                  style={{ width: '100%', textAlign: 'left', border: 'none', background: 'transparent' }}
+                  style={{ width: '100%', textAlign: 'left', border: 'none', background: 'none', cursor: 'pointer', font: 'inherit', color: 'inherit' }}
                 >
                   <div class="list-item-title">{d.jobName}</div>
                   <div class="list-item-sub">
@@ -108,9 +109,11 @@ export function Digests() {
                 </div>
 
                 {detail.summary && detail.summary.trim().length > 0 && (
-                  <div class="digest-reader" style={{ marginBottom: 12 }}>
-                    {detail.summary}
-                  </div>
+                  <Markdown
+                    content={detail.summary}
+                    className="digest-reader markdown-content"
+                    style={{ marginBottom: 12 }}
+                  />
                 )}
 
                 {detail.articles?.length > 0 ? (
@@ -128,9 +131,11 @@ export function Digests() {
                           </div>
                         )}
                         {article.summary && (
-                          <div style={{ fontSize: 13, color: 'var(--text-dim)', marginTop: 8, lineHeight: 1.5 }}>
-                            {article.summary}
-                          </div>
+                          <Markdown
+                            content={article.summary}
+                            className="markdown-content"
+                            style={{ fontSize: 13, color: 'var(--text-dim)', marginTop: 8 }}
+                          />
                         )}
                       </div>
                     ))}

@@ -14,10 +14,11 @@ export function Templates({ showToast }: TemplatesProps) {
   const [templates, setTemplates] = useState<TemplateListItem[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [content, setContent] = useState('');
+  const [originalContent, setOriginalContent] = useState('');
   const [loading, setLoading] = useState(true);
   const [fileLoading, setFileLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [view, setView] = useState<'edit' | 'markdown'>('edit');
+  const [view, setView] = useState<'edit' | 'preview'>('edit');
 
   useEffect(() => {
     load();
@@ -37,14 +38,17 @@ export function Templates({ showToast }: TemplatesProps) {
 
   async function select(name: string) {
     setSelected(name);
-    setView(name.toLowerCase().endsWith('.md') ? 'markdown' : 'edit');
+    setView(name.toLowerCase().endsWith('.md') ? 'preview' : 'edit');
     setFileLoading(true);
     try {
       const data = await getTemplate(DEFAULT_AGENT, name);
-      setContent(data.content ?? '');
+      const fileContent = data.content ?? '';
+      setContent(fileContent);
+      setOriginalContent(fileContent);
     } catch (e) {
       console.error('[templates] file load failed', e);
       setContent('');
+      setOriginalContent('');
     } finally {
       setFileLoading(false);
     }
@@ -55,6 +59,7 @@ export function Templates({ showToast }: TemplatesProps) {
     setSaving(true);
     try {
       await saveTemplate(DEFAULT_AGENT, selected, content);
+      setOriginalContent(content);
       showToast('Template saved', 'success');
     } catch {
       showToast('Failed to save template', 'error');
@@ -63,30 +68,24 @@ export function Templates({ showToast }: TemplatesProps) {
     }
   }
 
+  function discard() {
+    setContent(originalContent);
+  }
+
+  const hasUnsavedChanges = content !== originalContent;
+  const selectedTemplate = templates.find(t => t.name === selected);
+
   return (
-    <div>
-      <div class="page-header">
+    <div class="templates-page">
+      <div class="templates-header">
         <div class="page-title">Templates</div>
-        <div class="header-actions">
-          {selected && (
-            <>
-              <button class={`btn btn-sm${view === 'edit' ? ' btn-primary' : ''}`} onClick={() => setView('edit')}>Edit</button>
-              <button class={`btn btn-sm${view === 'markdown' ? ' btn-primary' : ''}`} onClick={() => setView('markdown')}>Markdown</button>
-            </>
-          )}
-          {selected && (
-            <button class="btn btn-sm btn-primary" onClick={save} disabled={saving}>
-              {saving ? 'Saving…' : 'Save'}
-            </button>
-          )}
-          <button class="btn-refresh" onClick={load}>
-            <LuRefreshCw size={14} /> Refresh
-          </button>
-        </div>
+        <button class="btn-refresh" onClick={load}>
+          <LuRefreshCw size={14} /> Refresh
+        </button>
       </div>
 
       {loading ? (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: '48px' }}>
+        <div class="templates-loading">
           <div class="spinner" />
         </div>
       ) : templates.length === 0 ? (
@@ -95,65 +94,131 @@ export function Templates({ showToast }: TemplatesProps) {
           <div class="empty-state-text">No templates found</div>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 20 }}>
-          <div class="feed-card" style={{ height: 'fit-content', overflow: 'hidden' }}>
-              <div class="feed">
+        <div class="templates-layout">
+          {/* Left sidebar */}
+          <div class="templates-sidebar">
+            <div class="templates-sidebar-header">
+              <div class="templates-sidebar-label">Agent Templates</div>
+              <select class="templates-agent-select" value={DEFAULT_AGENT} disabled>
+                <option value="main">main</option>
+              </select>
+            </div>
+            <div class="templates-list">
               {templates.map(template => (
                 <button
                   key={template.name}
-                  style={{
-                    display: 'block',
-                    width: '100%',
-                    textAlign: 'left',
-                    padding: '12px 16px',
-                    border: 'none',
-                    borderBottom: '1px solid var(--border-light)',
-                    background: selected === template.name ? 'var(--accent-soft)' : 'transparent',
-                    cursor: 'pointer',
-                    fontFamily: 'var(--mono)',
-                    fontSize: 13,
-                    color: selected === template.name ? 'var(--accent)' : 'var(--text-dim)',
-                    fontWeight: selected === template.name ? 600 : 400,
-                  }}
+                  class={`templates-list-item${selected === template.name ? ' active' : ''}`}
                   onClick={() => select(template.name)}
                 >
-                  {template.name}
+                  <div class="templates-list-icon">
+                    {template.name.substring(0, 2).toUpperCase()}
+                  </div>
+                  <div class="templates-list-content">
+                    <div class="templates-list-title">{template.name}</div>
+                    <div class="templates-list-meta">{Math.round((template.size || 0) / 1024)}KB</div>
+                  </div>
                 </button>
               ))}
             </div>
           </div>
 
-          <div class="feed-card" style={{ padding: '20px 24px' }}>
+          {/* Right panel */}
+          <div class="templates-main">
             {!selected ? (
-              <div class="empty-state" style={{ padding: '32px 0' }}>
-                <div class="empty-state-text">Select a template to edit</div>
+              <div class="templates-empty">
+                <LuFileText size={32} />
+                <p>Select a template to edit</p>
               </div>
             ) : fileLoading ? (
-              <div style={{ display: 'flex', justifyContent: 'center', padding: '32px' }}>
+              <div class="templates-loading">
                 <div class="spinner" />
               </div>
-            ) : view === 'markdown' ? (
-              <MarkdownView content={content} />
             ) : (
-              <textarea
-                value={content}
-                onInput={(e) => setContent((e.target as HTMLTextAreaElement).value)}
-                spellcheck={false}
-                style={{
-                  width: '100%',
-                  minHeight: 480,
-                  fontFamily: 'var(--mono)',
-                  fontSize: 13,
-                  lineHeight: 1.6,
-                  padding: '16px',
-                  background: 'var(--surface-alt)',
-                  color: 'var(--text)',
-                  border: '1px solid var(--border)',
-                  borderRadius: 'var(--radius-sm)',
-                  resize: 'vertical',
-                  outline: 'none',
-                }}
-              />
+              <>
+                {/* Header row */}
+                <div class="templates-editor-header">
+                  <div class="templates-editor-title-row">
+                    <h2 class="templates-editor-title">{selected}</h2>
+                    {hasUnsavedChanges && (
+                      <span class="templates-unsaved-pill">Unsaved changes</span>
+                    )}
+                  </div>
+                  <div class="templates-editor-actions">
+                    {hasUnsavedChanges && (
+                      <button class="templates-discard-btn" onClick={discard}>
+                        Discard
+                      </button>
+                    )}
+                    <button
+                      class="templates-save-btn"
+                      onClick={save}
+                      disabled={saving || !hasUnsavedChanges}
+                    >
+                      {saving ? 'Saving…' : 'Save'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Tabs */}
+                <div class="templates-tabs">
+                  <button
+                    class={`templates-tab${view === 'edit' ? ' active' : ''}`}
+                    onClick={() => setView('edit')}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    class={`templates-tab${view === 'preview' ? ' active' : ''}`}
+                    onClick={() => setView('preview')}
+                  >
+                    Preview
+                  </button>
+                </div>
+
+                {/* Metadata card */}
+                {selectedTemplate && (
+                  <div class="templates-metadata">
+                    <div class="templates-metadata-item">
+                      <div class="templates-metadata-label">SIZE</div>
+                      <div class="templates-metadata-value">
+                        {(selectedTemplate.size || 0) > 1024
+                          ? `${Math.round((selectedTemplate.size || 0) / 1024)}KB`
+                          : `${selectedTemplate.size || 0}B`}
+                      </div>
+                    </div>
+                    <div class="templates-metadata-item">
+                      <div class="templates-metadata-label">LAST EDITED</div>
+                      <div class="templates-metadata-value">—</div>
+                    </div>
+                    <div class="templates-metadata-item">
+                      <div class="templates-metadata-label">AGENT</div>
+                      <div class="templates-metadata-value">{DEFAULT_AGENT}</div>
+                    </div>
+                    <div class="templates-metadata-item">
+                      <div class="templates-metadata-label">PATH</div>
+                      <div class="templates-metadata-value templates-metadata-path">
+                        ~/.skimpyclaw/agents/{DEFAULT_AGENT}/{selected}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Editor or preview */}
+                <div class="templates-content">
+                  {view === 'preview' ? (
+                    <div class="templates-markdown-preview">
+                      <MarkdownView content={content} />
+                    </div>
+                  ) : (
+                    <textarea
+                      class="templates-textarea"
+                      value={content}
+                      onInput={(e) => setContent((e.target as HTMLTextAreaElement).value)}
+                      spellcheck={false}
+                    />
+                  )}
+                </div>
+              </>
             )}
           </div>
         </div>

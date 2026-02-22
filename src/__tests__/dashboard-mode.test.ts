@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync
 import { join, resolve } from 'path';
 import { tmpdir } from 'os';
 import Fastify, { FastifyInstance } from 'fastify';
-import { registerDashboard } from '../dashboard.js';
+import { registerDashboard } from '../dashboard-frontend.js';
 
 const ROOT = resolve(import.meta.url.replace(/^file:\/\//, ''), '../../..');
 const WEB_DASHBOARD = join(ROOT, 'web', 'dashboard');
@@ -21,14 +21,11 @@ afterAll(async () => {
   await app.close();
 });
 
-describe('Legacy dashboard mode', () => {
-  it('serves inline dashboard by default', async () => {
+describe('Default dashboard mode', () => {
+  it('serves framework dashboard when dist exists', async () => {
     const res = await app.inject({ method: 'GET', url: '/dashboard' });
     expect(res.statusCode).toBe(200);
     expect(res.headers['content-type']).toContain('text/html');
-    expect(res.body).toContain('<style>');
-    expect(res.body).toContain('/api/dashboard/');
-    expect(res.body).toContain('data-page="templates"');
   });
 });
 
@@ -45,7 +42,7 @@ describe('Framework dashboard mode', () => {
     writeFileSync(join(assetsDir, 'app.js'), 'console.log("ok")', 'utf-8');
 
     const frameworkApp = Fastify();
-    registerDashboard(frameworkApp, { mode: 'framework', frameworkDistDir: distDir });
+    registerDashboard(frameworkApp, { frameworkDistDir: distDir });
     await frameworkApp.ready();
 
     const htmlRes = await frameworkApp.inject({ method: 'GET', url: '/dashboard' });
@@ -68,7 +65,7 @@ describe('Framework dashboard mode', () => {
     writeFileSync(join(distDir, 'favicon.svg'), '<svg xmlns="http://www.w3.org/2000/svg"></svg>', 'utf-8');
 
     const faviconApp = Fastify();
-    registerDashboard(faviconApp, { mode: 'framework', frameworkDistDir: distDir });
+    registerDashboard(faviconApp, { frameworkDistDir: distDir });
     await faviconApp.ready();
 
     const res = await faviconApp.inject({ method: 'GET', url: '/favicon.svg' });
@@ -86,7 +83,7 @@ describe('Framework dashboard mode', () => {
     writeFileSync(join(distDir, 'index.html'), '<!doctype html><html><body></body></html>', 'utf-8');
 
     const noFavApp = Fastify();
-    registerDashboard(noFavApp, { mode: 'framework', frameworkDistDir: distDir });
+    registerDashboard(noFavApp, { frameworkDistDir: distDir });
     await noFavApp.ready();
 
     const res = await noFavApp.inject({ method: 'GET', url: '/favicon.svg' });
@@ -102,7 +99,7 @@ describe('Framework dashboard mode', () => {
     writeFileSync(join(distDir, 'index.html'), '<!doctype html><html><body></body></html>', 'utf-8');
 
     const traverseApp = Fastify();
-    registerDashboard(traverseApp, { mode: 'framework', frameworkDistDir: distDir });
+    registerDashboard(traverseApp, { frameworkDistDir: distDir });
     await traverseApp.ready();
 
     const res = await traverseApp.inject({ method: 'GET', url: '/..%2F..%2Fetc%2Fpasswd.svg' });
@@ -119,7 +116,7 @@ describe('Framework dashboard mode', () => {
     writeFileSync(join(distDir, 'secret.json'), '{"key":"value"}', 'utf-8');
 
     const extApp = Fastify();
-    registerDashboard(extApp, { mode: 'framework', frameworkDistDir: distDir });
+    registerDashboard(extApp, { frameworkDistDir: distDir });
     await extApp.ready();
 
     // .json is not in the allowed extensions list
@@ -131,16 +128,15 @@ describe('Framework dashboard mode', () => {
     rmSync(distDir, { recursive: true, force: true });
   });
 
-  it('falls back to legacy dashboard when framework dist is missing', async () => {
+  it('returns 503 when framework dist is missing', async () => {
     const missingDir = join(tmpdir(), 'missing-dashboard-dist-123');
     const fallbackApp = Fastify();
-    registerDashboard(fallbackApp, { mode: 'framework', frameworkDistDir: missingDir });
+    registerDashboard(fallbackApp, { frameworkDistDir: missingDir });
     await fallbackApp.ready();
 
     const res = await fallbackApp.inject({ method: 'GET', url: '/dashboard' });
-    expect(res.statusCode).toBe(200);
-    expect(res.body).toContain('<style>');
-    expect(res.body).toContain('/api/dashboard/');
+    expect(res.statusCode).toBe(503);
+    expect(res.body).toContain('pnpm dashboard:build');
 
     await fallbackApp.close();
   });
@@ -163,7 +159,7 @@ describe('Framework scaffold contract', () => {
     const src = readFileSync(join(WEB_SRC, 'api', 'client.ts'), 'utf-8');
     expect(src).toContain('/api/dashboard/');
     expect(src).toContain("request<StatusResponse>('status')");
-    expect(src).toContain("request<{ approvals: Approval[] }>('approvals')");
+    expect(src).toContain("request<ApprovalsResponse>('approvals')");
     expect(src).toContain("request<HealthResponse>('health')");
     expect(src).toContain('Authorization');
     expect(src).toContain('Bearer');

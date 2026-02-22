@@ -3,7 +3,7 @@
 
 import type {
   AuditResponse,
-  Approval,
+  ApprovalsResponse,
   CodeAgentsResponse,
   ConversationDetail,
   ConversationSummary,
@@ -52,13 +52,18 @@ async function request<T>(
   options: RequestInit = {},
 ): Promise<T> {
   const token = getToken();
+  const headers: Record<string, string> = {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(options.headers as Record<string, string> ?? {}),
+  };
+  // Only set Content-Type when there's a body — Fastify rejects
+  // Content-Type: application/json on bodyless POST requests
+  if (options.body) {
+    headers['Content-Type'] = 'application/json';
+  }
   const res = await fetch(`/api/dashboard/${path}`, {
     ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(options.headers ?? {}),
-    },
+    headers,
   });
 
   if (!res.ok) {
@@ -94,7 +99,7 @@ export function getAudit(params: AuditQueryParams = {}): Promise<AuditResponse> 
 
 // ── Approvals ────────────────────────────────────────────────────────
 
-export const getApprovals = () => request<{ approvals: Approval[] }>('approvals');
+export const getApprovals = () => request<ApprovalsResponse>('approvals');
 export const approveCommand = (id: string) =>
   request<{ approved: boolean }>(`approvals/${encodeURIComponent(id)}/approve`, { method: 'POST' });
 export const denyCommand = (id: string) =>

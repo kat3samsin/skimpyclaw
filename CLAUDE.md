@@ -1,39 +1,20 @@
 @AGENTS.md
 
-## Dashboard Migration Notes
+## Dashboard Notes
 
-The inline dashboard (`src/dashboard.ts`) has a planned migration to Preact + Vite.
-Migration plan: `dashboard_refactor.md`
+The dashboard is now framework-only (Preact/Vite). The old inline dashboard has been removed.
 
-### Verification Checklist (per migration phase)
+### Current Behavior
 
-Before marking any phase done:
-- [ ] `pnpm build` passes (no TypeScript errors)
-- [ ] `pnpm test` passes (all 362+ tests green)
-- [ ] `src/__tests__/dashboard.test.ts` — all 116 parity tests pass
-- [ ] `src/__tests__/api.test.ts` — all backend API contract tests pass
-- [ ] Legacy dashboard still reachable at `GET /dashboard` when flag = `legacy`
-- [ ] Feature flag (`config.dashboard.frontend`) defaults to `framework`
-- [ ] Both `AGENTS.md` and `CLAUDE.md` updated in same PR
+- Frontend route: `GET /dashboard` serves the built SPA from `dist/dashboard/index.html`
+- Static assets: `GET /assets/*` and allowed root static files from `dist/dashboard`
+- If frontend build is missing, `GET /dashboard` returns `503` with a build hint
+- Dashboard token auth remains unchanged for `/api/dashboard/*`
 
-### Dashboard Feature Flag (when implemented)
+### Verification
 
-```json
-// ~/.skimpyclaw/config.json
-{
-  "dashboard": {
-    "token": "...",
-    "frontend": "framework"   // "legacy" | "framework"
-  }
-}
-```
-
-### Parity Expectations
-
-The framework dashboard must preserve:
-- All 14 sidebar tabs with identical `data-page` values
-- All 14 `page-*` panel IDs
-- All 12 backend API endpoints (paths and response shapes unchanged)
-- Unified Health panel (no separate Doctor tab)
-- `healthRecheckBtn`, `doctorSummary`, `doctorCategories`, `doctorTimestamp`, `healthEnvVars`, `healthFeatures` element IDs
-- Bearer token auth flow with `localStorage` persistence
+Before shipping dashboard changes:
+- [ ] `pnpm build` passes
+- [ ] `pnpm test` passes
+- [ ] `src/__tests__/dashboard.test.ts` passes (framework route contract)
+- [ ] `src/__tests__/dashboard-mode.test.ts` passes (framework serving + static safety)
