@@ -1,0 +1,446 @@
+// Code Agent Orchestrator - Team coordination logic
+
+import type { Config } from '../types.js';
+import type { ExecuteToolContext } from '../tools/execute-context.js';
+import type { CodeAgentTask, DecomposedSubtask, ChildResult } from './types.js';
+import { getNextCodeAgentId, storeCodeAgentTask, writeCodeAgentTask, getCodeAgent } from './registry.js';
+import { runCodeAgentBackground, runValidation } from './executor.js';
+import { notifyCodeAgentResult, resolveModelAlias } from './utils.js';
+import { runAgentTurn } from '../agent.js';
+import { startTrace, addEvent, endTrace } from '../audit.js';
+
+/**
+ * Compute execution waves from dependency info.
+ * Returns an array of waves, where each wave is an array of subtask indices that can run in parallel.
+ * Throws if there's a cycle in the dependency graph.
+ */
+export function computeWaves(subtasks: DecomposedSubtask[]): number[][] {
+  const n = subtasks.length;
+  const assigned = new Array<number>(n).fill(-1);  // wave assignment per subtask
+  const waves: number[][] = [];
+
+  // Topological wave assignment
+  let remaining = n;
+  let waveIdx = 0;
+  while (remaining > 0) {
+    const wave: number[] = [];
+    for (let i = 0; i < n; i++) {
+      if (assigned[i] >= 0) continue;  // already assigned
+      // Check if all dependencies are satisfied
+      const depsOk = subtasks[i].dependsOn.every(d => assigned[d] >= 0);
+      if (depsOk) wave.push(i);
+    }
+    if (wave.length === 0) {
+      // Cycle detected — force remaining into current wave
+      console.warn('[team] Dependency cycle detected, forcing remaining subtasks into current wave');
+      for (let i = 0; i < n; i++) {
+        if (assigned[i] < 0) {
+          wave.push(i);
+        }
+      }
+    }
+    for (const idx of wave) {
+      assigned[idx] = waveIdx;
+    }
+    waves.push(wave);
+    remaining -= wave.length;
+    waveIdx++;
+  }
+
+  return waves;
+}
+
+/**
+ * Use a quick model call to decompose a complex task into N subtasks with optional dependency info.
+ * Falls back to numbered subtask splitting on parse error.
+ * Falls back to all-independent if dependency info is missing or invalid.
+ */
+export async function decomposeTask(
+  task: string,
+  teamSize: number,
+  config: Config,
+): Promise<DecomposedSubtask[]> {
+  try {
+    const prompt = `You are a task decomposition assistant. Break the following task into exactly ${teamSize} subtasks for separate coding agents. Each subtask should be specific and self-contained.
+
+If some subtasks depend on others (e.g. "write queries" depends on "create schema"), specify dependencies using the dependsOn array with 0-based indices. Independent subtasks should have an empty dependsOn array. Tasks within the same wave (no mutual dependencies) will run in parallel.
+
+Return ONLY a JSON object in this exact format, no other text:
+{"subtasks": [{"description": "subtask 1", "dependsOn": []}, {"description": "subtask 2", "dependsOn": [0]}, ...]}
+
+Task to decompose:
+${task}`;
+
+    const result = await runAgentTurn('main', prompt, config);
+    const match = result.match(/\{[\s\S]*"subtasks"[\s\S]*\}/);
+    if (match) {
+      const parsed = JSON.parse(match[0]);
+      if (Array.isArray(parsed.subtasks) && parsed.subtasks.length > 0) {
+        // Handle both new format (objects with dependsOn) and legacy format (plain strings)
+        const normalized: DecomposedSubtask[] = parsed.subtasks.map((item: any, _idx: number) => {
+          if (typeof item === 'string') {
+            return { description: item, dependsOn: [] };
+          }
+          if (item && typeof item.description === 'string') {
+            const deps = Array.isArray(item.dependsOn)
+              ? item.dependsOn.filter((d: any) => typeof d === 'number' && d >= 0 && d < parsed.subtasks.length)
+              : [];
+            return { description: item.description, dependsOn: deps };
+          }
+          return null;
+        }).filter((x: DecomposedSubtask | null): x is DecomposedSubtask => x !== null);
+
+        if (normalized.length > 0) {
+          // Remove self-references from dependsOn
+          for (let i = 0; i < normalized.length; i++) {
+            normalized[i].dependsOn = normalized[i].dependsOn.filter(d => d !== i);
+          }
+          // Pad or trim to match teamSize
+          while (normalized.length < teamSize) {
+            normalized.push({ description: normalized[normalized.length - 1].description, dependsOn: [] });
+          }
+          return normalized.slice(0, teamSize);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[team] Task decomposition failed, using fallback:', err instanceof Error ? err.message : err);
+  }
+
+  // Fallback: numbered subtask splitting (all independent)
+  return Array.from({ length: teamSize }, (_, i) => ({
+    description: `Part ${i + 1} of ${teamSize}: ${task}`,
+    dependsOn: [],
+  }));
+}
+
+/**
+ * Use a quick model call to synthesize results from multiple subtask completions.
+ */
+export async function synthesizeResults(
+  originalTask: string,
+  results: ChildResult[],
+  config: Config,
+): Promise<string> {
+  try {
+    const resultSummary = results.map((r, i) =>
+      `### Subtask ${i + 1}: ${r.subtask}\nStatus: ${r.status}\n${r.output ? `Output: ${r.output.slice(0, 1000)}` : ''}${r.error ? `Error: ${r.error}` : ''}`
+    ).join('\n\n');
+
+    const prompt = `You are a results synthesizer. Summarize the results of a multi-agent coding task.
+
+Original task: ${originalTask}
+
+Results from each agent:
+${resultSummary}
+
+Provide a concise markdown summary of what was accomplished, what succeeded, and what failed (if anything). Be specific about files changed and outcomes.`;
+
+    return await runAgentTurn('main', prompt, config);
+  } catch (err) {
+    // Fallback: mechanical summary
+    const succeeded = results.filter(r => r.status === 'completed').length;
+    const failed = results.filter(r => r.status !== 'completed').length;
+    return `Team completed: ${succeeded}/${results.length} subtasks succeeded${failed > 0 ? `, ${failed} failed` : ''}.\n\n${results.map((r, i) => `${i + 1}. [${r.status}] ${r.subtask}`).join('\n')}`;
+  }
+}
+
+/**
+ * Team orchestrator — decomposes task, spawns parallel agents, monitors, synthesizes.
+ */
+export async function runTeamOrchestrator(
+  parentId: string,
+  task: string,
+  teamSize: number,
+  workdir: string,
+  validate: boolean,
+  agent: string,
+  model: string | undefined,
+  startedAt: Date,
+  context?: ExecuteToolContext,
+): Promise<void> {
+  const parentTask = getCodeAgent(parentId);
+  if (!parentTask) {
+    throw new Error(`Parent task ${parentId} not found`);
+  }
+
+  const traceId = startTrace('code_team');
+  addEvent(traceId, {
+    type: 'spawn',
+    summary: `team-coordinator: ${task.slice(0, 150)}`,
+    durationMs: 0,
+    detail: { teamSize, workdir, agent, model, validate },
+  });
+
+  const timeoutMinutes = Math.min(context?.fullConfig?.subagents?.maxConcurrent ? 60 : 20, 60);
+  const perChildTimeout = Math.max(5, Math.floor(timeoutMinutes / teamSize));
+  const CANCELLED_MESSAGE = 'Cancelled by user';
+
+  try {
+    if (getCodeAgent(parentId)?.status === 'cancelled') throw new Error(CANCELLED_MESSAGE);
+    // Phase 1: Decompose
+    parentTask.liveOutput = 'Phase: Decomposing task...';
+    writeCodeAgentTask(parentTask);
+
+    const fullConfig = context?.fullConfig;
+    if (!fullConfig) throw new Error('No config available for task decomposition');
+
+    const subtasks = await decomposeTask(task, teamSize, fullConfig);
+    const waves = computeWaves(subtasks);
+    addEvent(traceId, {
+      type: 'decompose',
+      summary: `Decomposed into ${subtasks.length} subtasks in ${waves.length} wave(s)`,
+      durationMs: Date.now() - startedAt.getTime(),
+    });
+
+    // Phase 2: Create child task entries and schedule waves
+    const totalWaves = waves.length;
+
+    parentTask.liveOutput = `Phase: Scheduling ${subtasks.length} agents in ${totalWaves} wave(s)...`;
+    writeCodeAgentTask(parentTask);
+
+    // Create all child tasks upfront (pending for later waves)
+    const childIds: string[] = [];
+    const childIdByIndex: string[] = [];  // subtask index → child id
+    for (let i = 0; i < subtasks.length; i++) {
+      const childId = getNextCodeAgentId();
+      const waveNum = waves.findIndex(w => w.includes(i));
+      const childTask: CodeAgentTask = {
+        id: childId,
+        agent,
+        task: subtasks[i].description,
+        status: waveNum === 0 ? 'running' : 'pending',
+        chatId: context?.chatId,
+        startedAt: new Date().toISOString(),
+        workdir,
+        model,
+        parentTaskId: parentId,
+        subtask: subtasks[i].description,
+        dependsOn: subtasks[i].dependsOn,
+        wave: waveNum,
+      };
+      storeCodeAgentTask(childTask);
+      writeCodeAgentTask(childTask);
+      childIds.push(childId);
+      childIdByIndex.push(childId);
+    }
+
+    parentTask.childTaskIds = childIds;
+    writeCodeAgentTask(parentTask);
+
+    // Helper: build task prompt with predecessor context for dependent subtasks
+    function buildChildPrompt(subtaskIdx: number): string {
+      const sub = subtasks[subtaskIdx];
+      if (sub.dependsOn.length === 0) return sub.description;
+
+      const contextParts: string[] = [];
+      for (const depIdx of sub.dependsOn) {
+        const depChild = getCodeAgent(childIdByIndex[depIdx]);
+        if (depChild && depChild.outputPreview) {
+          contextParts.push(`- Task "${subtasks[depIdx].description}": ${depChild.outputPreview.slice(0, 1000)}`);
+        }
+      }
+      if (contextParts.length === 0) return sub.description;
+
+      return `Context from completed prerequisite tasks:\n${contextParts.join('\n')}\n\nYour task: ${sub.description}`;
+    }
+
+    // Phase 3: Execute waves sequentially, tasks within each wave in parallel
+    const POLL_INTERVAL = 3000;
+    const totalTimeoutMs = timeoutMinutes * 60 * 1000;
+
+    for (let waveIdx = 0; waveIdx < totalWaves; waveIdx++) {
+      if (getCodeAgent(parentId)?.status === 'cancelled') throw new Error(CANCELLED_MESSAGE);
+      const waveIndices = waves[waveIdx];
+
+      addEvent(traceId, {
+        type: 'wave_start',
+        summary: `Starting wave ${waveIdx + 1}/${totalWaves} (${waveIndices.length} tasks)`,
+        durationMs: Date.now() - startedAt.getTime(),
+      });
+
+      // Spawn all tasks in this wave
+      for (const subtaskIdx of waveIndices) {
+        const childId = childIdByIndex[subtaskIdx];
+        const child = getCodeAgent(childId)!;
+        const prompt = buildChildPrompt(subtaskIdx);
+
+        child.status = 'running';
+        child.task = prompt;
+        child.startedAt = new Date().toISOString();
+        writeCodeAgentTask(child);
+
+        runCodeAgentBackground(
+          childId,
+          agent,
+          prompt,
+          workdir,
+          false, // children don't validate individually
+          { task: prompt, model, timeout_minutes: perChildTimeout },
+          new Date(),
+          { skipNotification: true, defaultTimeoutMinutes: perChildTimeout, maxTimeoutMinutes: perChildTimeout },
+        ).catch((err) => {
+          console.error(`[code-team] Child ${childId} background error:`, err);
+        });
+      }
+
+      // Poll until all tasks in this wave complete
+      const waveChildIds = waveIndices.map(i => childIdByIndex[i]);
+
+      while (true) {
+        await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL));
+        if (getCodeAgent(parentId)?.status === 'cancelled') throw new Error(CANCELLED_MESSAGE);
+
+        const allChildren = childIds.map(id => getCodeAgent(id)!);
+        const waveChildren = waveChildIds.map(id => getCodeAgent(id)!);
+        const waveDone = waveChildren.filter(c => c.status !== 'running' && c.status !== 'validating').length;
+
+        // Build wave-grouped status display
+        const waveStatusLines: string[] = [];
+        for (let w = 0; w < totalWaves; w++) {
+          const wIndices = waves[w];
+          const wChildren = wIndices.map(i => getCodeAgent(childIdByIndex[i])!);
+          const wDone = wChildren.every(c => c.status !== 'running' && c.status !== 'validating' && c.status !== 'pending');
+          const wRunning = w === waveIdx;
+          const wPending = w > waveIdx;
+          const wLabel = wDone ? 'done' : wRunning ? 'running' : 'pending';
+
+          const childLines = wChildren.map(c => {
+            if (c.status === 'pending') return `  ${c.id} [pending]`;
+            const elapsed = Math.round((Date.now() - new Date(c.startedAt).getTime()) / 1000);
+            const elapsedStr = elapsed < 60 ? `${elapsed}s` : `${Math.floor(elapsed / 60)}m${elapsed % 60}s`;
+            const preview = (c.subtask || c.task).slice(0, 150);
+            return `  ${c.id} [${c.status}] (${elapsedStr}): ${preview}`;
+          }).join('\n');
+
+          waveStatusLines.push(`Wave ${w + 1} [${wLabel}]:\n${childLines}`);
+        }
+
+        const completedWaves = waves.filter((_, w) => w < waveIdx).length;
+        parentTask.liveOutput = `Phase: Running Wave ${waveIdx + 1}/${totalWaves} (${completedWaves}/${totalWaves} complete)\n${waveStatusLines.join('\n')}`;
+        writeCodeAgentTask(parentTask);
+
+        if (waveDone === waveChildren.length) break;
+
+        // Check total timeout
+        if (Date.now() - startedAt.getTime() > totalTimeoutMs) {
+          // Kill all remaining running/pending children
+          for (const child of allChildren) {
+            if (child.status === 'running' || child.status === 'validating' || child.status === 'pending') {
+              Object.assign(child, {
+                status: 'timeout',
+                endedAt: new Date().toISOString(),
+                durationSeconds: Math.round((Date.now() - new Date(child.startedAt).getTime()) / 1000),
+                error: 'Parent team timed out',
+              });
+              writeCodeAgentTask(child);
+            }
+          }
+          // Jump to synthesis
+          break;
+        }
+      }
+
+      // If we timed out, don't start more waves
+      if (Date.now() - startedAt.getTime() > totalTimeoutMs) break;
+    }
+
+    // Phase 4: Collect results and synthesize
+    if (getCodeAgent(parentId)?.status === 'cancelled') throw new Error(CANCELLED_MESSAGE);
+    parentTask.liveOutput = 'Phase: Synthesizing results...';
+    writeCodeAgentTask(parentTask);
+
+    const childResults: ChildResult[] = childIds.map(id => {
+      const child = getCodeAgent(id)!;
+      return {
+        subtask: child.subtask || child.task,
+        status: child.status,
+        output: child.outputPreview,
+        error: child.error,
+      };
+    });
+
+    addEvent(traceId, {
+      type: 'synthesize',
+      summary: `Synthesizing ${childResults.length} results`,
+      durationMs: Date.now() - startedAt.getTime(),
+    });
+
+    const synthesis = await synthesizeResults(task, childResults, fullConfig);
+    parentTask.synthesisResult = synthesis;
+
+    // Phase 5: Validation (once, on the combined result)
+    if (validate) {
+      parentTask.liveOutput = 'Phase: Validating...';
+      parentTask.status = 'validating';
+      writeCodeAgentTask(parentTask);
+
+      const { passed, output } = await runValidation(workdir);
+      const endedAt = new Date();
+      const duration = Math.round((endedAt.getTime() - startedAt.getTime()) / 1000);
+
+      if (!passed) {
+        addEvent(traceId, { type: 'validation', summary: 'Team validation failed', durationMs: Date.now() - startedAt.getTime() });
+        await endTrace(traceId, 'error');
+        Object.assign(parentTask, {
+          status: 'failed',
+          endedAt: endedAt.toISOString(),
+          durationSeconds: duration,
+          validationPassed: false,
+          validationOutput: output,
+          outputPreview: synthesis.slice(0, 5000),
+          error: 'Validation failed',
+          liveOutput: undefined,
+        });
+        writeCodeAgentTask(parentTask);
+        await notifyCodeAgentResult(parentTask, getCodeAgent);
+        return;
+      }
+
+      addEvent(traceId, { type: 'validation', summary: 'Team validation passed', durationMs: Date.now() - startedAt.getTime() });
+      await endTrace(traceId, 'ok');
+      Object.assign(parentTask, {
+        status: 'completed',
+        endedAt: endedAt.toISOString(),
+        durationSeconds: duration,
+        validationPassed: true,
+        outputPreview: synthesis.slice(0, 5000),
+        liveOutput: undefined,
+      });
+      writeCodeAgentTask(parentTask);
+      await notifyCodeAgentResult(parentTask, getCodeAgent);
+      return;
+    }
+
+    // No validation — mark complete
+    const endedAt = new Date();
+    addEvent(traceId, { type: 'complete', summary: 'Team completed (no validation)', durationMs: Date.now() - startedAt.getTime() });
+    await endTrace(traceId, 'ok');
+    Object.assign(parentTask, {
+      status: 'completed',
+      endedAt: endedAt.toISOString(),
+      durationSeconds: Math.round((endedAt.getTime() - startedAt.getTime()) / 1000),
+      outputPreview: synthesis.slice(0, 5000),
+      liveOutput: undefined,
+    });
+    writeCodeAgentTask(parentTask);
+    await notifyCodeAgentResult(parentTask, getCodeAgent);
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    addEvent(traceId, { type: 'error', summary: errMsg.slice(0, 200), durationMs: Date.now() - startedAt.getTime() });
+    await endTrace(traceId, 'error');
+    Object.assign(parentTask, {
+      status: errMsg.includes(CANCELLED_MESSAGE) || parentTask.status === 'cancelled'
+        ? 'cancelled'
+        : errMsg.includes('timed out')
+          ? 'timeout'
+          : 'failed',
+      endedAt: new Date().toISOString(),
+      durationSeconds: Math.round((Date.now() - startedAt.getTime()) / 1000),
+      error: errMsg,
+      liveOutput: undefined,
+    });
+    writeCodeAgentTask(parentTask);
+    if (parentTask.status !== 'cancelled') await notifyCodeAgentResult(parentTask, (id) => getCodeAgent(id) ?? null);
+  }
+}

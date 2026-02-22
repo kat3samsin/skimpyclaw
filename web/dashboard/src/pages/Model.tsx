@@ -6,13 +6,14 @@ interface ModelProps {
 }
 
 const PRESET_MODELS = [
-  'claude-sonnet-4-5',
-  'claude-opus-4',
-  'claude-haiku-4-5',
+  'codex5.1',
+  'codex5.2',
+  'codex5.3',
   'claude-fast',
   'claude-think',
   'claude-opus',
-  'codex5.3',
+  'kimi',
+  'minimax',
 ];
 
 export function Model({ showToast }: ModelProps) {

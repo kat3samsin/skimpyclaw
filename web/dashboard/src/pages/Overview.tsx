@@ -3,6 +3,7 @@ import { getStatus, getAudit, getApprovals, approveCommand, denyCommand, getUsag
 import type { StatusResponse, AuditTrace, Approval, UsageSummaryResponse } from '../types.js';
 import type { PageId } from '../components/Sidebar.js';
 import {
+  LuArrowRight,
   LuCheck,
   LuClock3,
   LuClock4,
@@ -265,7 +266,9 @@ export function Overview({ onNavigate, showToast }: OverviewProps) {
               onNavigate('audit');
             }}
           >
-            View all -&gt;
+            <span class="section-link-content">
+              View all <LuArrowRight size={14} />
+            </span>
           </a>
         </div>
         <div class="feed-card">
@@ -306,7 +309,9 @@ export function Overview({ onNavigate, showToast }: OverviewProps) {
                 onNavigate('cron');
               }}
             >
-              Manage -&gt;
+              <span class="section-link-content">
+                Manage <LuArrowRight size={14} />
+              </span>
             </a>
           </div>
           <div class="cron-grid">

@@ -22,6 +22,33 @@ import {
 import { getToken, setToken } from './api/client.js';
 import './styles/base.css';
 
+const PAGE_IDS: PageId[] = [
+  'overview',
+  'history',
+  'cron',
+  'memory',
+  'model',
+  'coding',
+  'logs',
+  'audit',
+  'digests',
+  'skills',
+  'approvals',
+  'health',
+  'usage',
+  'config',
+  'templates',
+];
+
+function isPageId(value: string): value is PageId {
+  return PAGE_IDS.includes(value as PageId);
+}
+
+function readPageFromHash(): PageId {
+  const raw = window.location.hash.replace(/^#/, '').trim();
+  return isPageId(raw) ? raw : 'overview';
+}
+
 function getConfiguredBot(): { name: string; emoji: string } {
   const data = (window as any).__SKIMPY_DASHBOARD__;
   const name = typeof data?.botName === 'string' && data.botName.trim()
@@ -122,7 +149,7 @@ function LoginScreen({
 export function App() {
   const bot = getConfiguredBot();
   const [authed, setAuthed] = useState(!!getToken());
-  const [page, setPage] = useState<PageId>('overview');
+  const [page, setPage] = useState<PageId>(() => readPageFromHash());
   const [isNarrow, setIsNarrow] = useState<boolean>(() => window.innerWidth <= 980);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => window.innerWidth > 980);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
@@ -160,12 +187,34 @@ export function App() {
     };
   }, [isNarrow, sidebarOpen]);
 
+  useEffect(() => {
+    const applyFromHash = () => {
+      const next = readPageFromHash();
+      setPage(next);
+      if (isNarrow) setSidebarOpen(false);
+    };
+
+    if (!window.location.hash) {
+      window.location.hash = '#overview';
+    } else {
+      applyFromHash();
+    }
+
+    window.addEventListener('hashchange', applyFromHash);
+    return () => window.removeEventListener('hashchange', applyFromHash);
+  }, [isNarrow]);
+
   function toggleTheme() {
     setTheme(t => t === 'light' ? 'dark' : 'light');
   }
 
   function navigate(p: PageId) {
-    setPage(p);
+    const nextHash = `#${p}`;
+    if (window.location.hash !== nextHash) {
+      window.location.hash = nextHash;
+    } else {
+      setPage(p);
+    }
     if (isNarrow) setSidebarOpen(false);
   }
 

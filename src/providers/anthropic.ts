@@ -1,0 +1,285 @@
+// Anthropic Provider
+
+import Anthropic from '@anthropic-ai/sdk';
+import { startObservation } from '@langfuse/tracing';
+import type { ProviderChatParams, ProviderToolChatParams, ToolChatResult } from './types.js';
+import { buildSystemParam, addToolCacheBreakpoint, contentToText, stripProvider, buildThinkingConfig } from './utils.js';
+import { toAnthropicUsageDetails, toCostDetails } from './observability.js';
+import { getToolDefinitions, executeTool, type ExecuteToolContext } from '../tools.js';
+import { startTrace, addEvent, endTrace } from '../audit.js';
+
+let anthropicClient: Anthropic | null = null;
+
+export function setAnthropicClient(client: Anthropic | null): void {
+  anthropicClient = client;
+}
+
+export function getAnthropicClient(): Anthropic | null {
+  return anthropicClient;
+}
+
+export function isAnthropicAvailable(): boolean {
+  return anthropicClient !== null;
+}
+
+const LANGFUSE_APP_NAME = 'skimpyclaw';
+
+async function startGenerationObservation(name: string, attributes: Record<string, any>) {
+  // Check langfuse enabled through dynamic import to avoid circular deps
+  const { isLangfuseEnabled } = await import('../langfuse.js');
+  if (!isLangfuseEnabled()) return null;
+  attributes.metadata = { app: LANGFUSE_APP_NAME, ...attributes.metadata };
+  return startObservation(name, attributes, { asType: 'generation' });
+}
+
+export async function chatAnthropic(params: ProviderChatParams): Promise<string> {
+  if (!anthropicClient) {
+    throw new Error('Anthropic client not initialized');
+  }
+
+  const { messages, options, config } = params;
+  const modelId = stripProvider(options.model);
+  
+  const systemMessage = messages.find(m => m.role === 'system');
+  const chatMessages = messages
+    .filter(m => m.role !== 'system')
+    .map(m => ({
+      role: m.role as 'user' | 'assistant',
+      content: m.content as any,
+    }));
+
+  // Build request parameters
+  const cacheEnabled = config.models?.promptCaching !== false;
+  const anthropicParams: Anthropic.MessageCreateParams = {
+    model: modelId,
+    max_tokens: options.maxTokens || 4096,
+    messages: chatMessages,
+  };
+
+  const systemParam = buildSystemParam(contentToText(systemMessage?.content || ''), cacheEnabled);
+  if (systemParam) {
+    anthropicParams.system = systemParam;
+  }
+
+  // Add extended thinking if requested
+  const thinkingConfig = buildThinkingConfig(options.thinking);
+  if (thinkingConfig) {
+    anthropicParams.thinking = {
+      type: 'enabled',
+      budget_tokens: thinkingConfig.budget,
+    };
+    anthropicParams.max_tokens = Math.max(anthropicParams.max_tokens, thinkingConfig.maxTokens);
+  }
+
+  const genObs = await startGenerationObservation(`anthropic:${modelId}`, {
+    input: { system: systemMessage?.content, messages: chatMessages },
+    model: modelId,
+    modelParameters: {
+      max_tokens: anthropicParams.max_tokens,
+      ...(options.thinking && options.thinking !== 'none' ? { thinking: options.thinking } : {}),
+    },
+    metadata: { provider: 'anthropic' },
+  });
+
+  try {
+    const response = await anthropicClient.messages.create(anthropicParams);
+    const usage = (response as any).usage;
+
+    // Log cache metrics
+    if (usage?.cache_read_input_tokens > 0 || usage?.cache_creation_input_tokens > 0) {
+      console.log(`[cache] read=${usage.cache_read_input_tokens || 0} created=${usage.cache_creation_input_tokens || 0}`);
+    }
+
+    // Extract text content
+    const textContent = response.content.find(c => c.type === 'text');
+    const text = textContent?.text || '';
+    
+    genObs?.update({
+      output: { text },
+      usageDetails: toAnthropicUsageDetails(usage),
+      costDetails: toCostDetails(modelId, usage),
+    });
+    genObs?.end();
+
+    return text;
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    genObs?.update({ level: 'ERROR', statusMessage: errorMessage, output: { error: errorMessage } });
+    genObs?.end();
+    throw err;
+  }
+}
+
+export async function chatWithToolsAnthropic(params: ProviderToolChatParams): Promise<ToolChatResult> {
+  if (!anthropicClient) {
+    throw new Error('Anthropic client not initialized');
+  }
+
+  const { messages, options, config, toolConfig, toolContext } = params;
+  const modelId = stripProvider(options.model);
+  const maxIterations = toolConfig.maxIterations || 20;
+
+  // Resolve tools once at start of agent loop
+  const includeSpawn = !!(toolContext?.chatId && toolContext?.fullConfig);
+  const toolDefs = await getToolDefinitions(toolConfig, { includeSpawnSubagent: includeSpawn, projects: toolContext?.fullConfig?.projects });
+
+  // Enable prompt caching for system + tools
+  const cacheEnabled = config.models?.promptCaching !== false;
+  if (cacheEnabled) addToolCacheBreakpoint(toolDefs);
+
+  // Build system param with OAuth identity guard
+  const systemMessage = messages.find(m => m.role === 'system');
+  const systemParam = buildSystemParam(contentToText(systemMessage?.content || ''), cacheEnabled);
+
+  // Build initial messages (exclude system)
+  const apiMessages: any[] = messages
+    .filter(m => m.role !== 'system')
+    .map(m => ({ role: m.role, content: m.content }));
+
+  // Track tool calls for logging
+  const toolLog: string[] = [];
+
+  // Start audit trace
+  const auditTraceId = toolContext?.auditTraceId || startTrace((toolContext?.trigger || 'api') as any);
+
+  for (let i = 0; i < maxIterations; i++) {
+    // Check abort signal before each iteration
+    if (toolContext?.abortSignal?.aborted) {
+      return {
+        response: `[Cancelled after ${toolLog.length} tool calls]`,
+        toolCalls: toolLog,
+      };
+    }
+
+    const anthropicParams: any = {
+      model: modelId,
+      max_tokens: options.maxTokens || 16384,
+      messages: apiMessages,
+      tools: toolDefs,
+    };
+
+    if (systemParam) {
+      anthropicParams.system = systemParam;
+    }
+
+    // Add thinking if configured
+    const thinkingConfig = buildThinkingConfig(options.thinking);
+    if (thinkingConfig) {
+      anthropicParams.thinking = { type: 'enabled', budget_tokens: thinkingConfig.budget };
+      anthropicParams.max_tokens = Math.max(anthropicParams.max_tokens, thinkingConfig.maxTokens);
+    }
+
+    console.log(`[agent:tools] Iteration ${i + 1}/${maxIterations}`);
+
+    const genObs = await startGenerationObservation(`anthropic:${modelId}`, {
+      input: { messages: apiMessages },
+      model: modelId,
+      modelParameters: { max_tokens: anthropicParams.max_tokens },
+      metadata: { provider: 'anthropic', iteration: i + 1 },
+    });
+
+    let response: any;
+    try {
+      response = await anthropicClient.messages.create(anthropicParams);
+      const usage = (response as any).usage;
+
+      // Log cache metrics
+      if (usage?.cache_read_input_tokens > 0 || usage?.cache_creation_input_tokens > 0) {
+        console.log(`[cache] read=${usage.cache_read_input_tokens || 0} created=${usage.cache_creation_input_tokens || 0}`);
+      }
+
+      genObs?.update({
+        output: response.content,
+        usageDetails: toAnthropicUsageDetails(usage),
+        costDetails: toCostDetails(modelId, usage),
+      });
+      genObs?.end();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      genObs?.update({ level: 'ERROR', statusMessage: errorMessage, output: { error: errorMessage } });
+      genObs?.end();
+      throw err;
+    }
+
+    // If no tool use, we're done — extract text
+    if (response.stop_reason !== 'tool_use') {
+      const textBlocks = response.content.filter((c: any) => c.type === 'text');
+      let responseText = textBlocks.map((b: any) => b.text).join('\n') || '';
+      // Fallback when model did tool work but returned no text summary
+      if (!responseText && toolLog.length > 0) {
+        responseText = `[Completed with ${toolLog.length} tool calls, no text response]`;
+      }
+      return {
+        response: responseText,
+        toolCalls: toolLog,
+      };
+    }
+
+    // Add assistant response (full content including tool_use blocks)
+    apiMessages.push({ role: 'assistant', content: response.content });
+
+    // Execute each tool_use block
+    const toolResults: any[] = [];
+    for (const block of response.content) {
+      if (block.type !== 'tool_use') continue;
+
+      const inputStr = JSON.stringify(block.input).slice(0, 200);
+      console.log(`[agent:tools] -> ${block.name}(${inputStr})`);
+
+      // Dynamic import to avoid circular dependency
+      const { isLangfuseEnabled } = await import('../langfuse.js');
+      const { startObservation } = await import('@langfuse/tracing');
+      const toolObs = isLangfuseEnabled()
+        ? startObservation(`tool:${block.name}`, { input: block.input, metadata: { app: LANGFUSE_APP_NAME, tool: block.name } }, { asType: 'tool' })
+        : null;
+
+      const toolStart = Date.now();
+      try {
+        const result = await executeTool(block.name, block.input as Record<string, any>, toolConfig, toolContext);
+        const resultPreview = result.slice(0, 200) + (result.length > 200 ? '...' : '');
+        console.log(`[agent:tools] <- ${resultPreview}`);
+        toolLog.push(`${block.name}(${inputStr}) → ${resultPreview}`);
+
+        toolObs?.update({ output: result });
+        toolObs?.end();
+
+        // Record audit event
+        if (toolContext?.auditTraceId) {
+          addEvent(toolContext.auditTraceId, {
+            type: 'tool_use',
+            summary: `${block.name}(${inputStr})`,
+            durationMs: Date.now() - toolStart,
+          });
+        }
+
+        toolResults.push({
+          type: 'tool_result',
+          tool_use_id: block.id,
+          content: result,
+        });
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        toolObs?.update({ level: 'ERROR', statusMessage: errorMessage, output: { error: errorMessage } });
+        toolObs?.end();
+
+        if (toolContext?.auditTraceId) {
+          addEvent(toolContext.auditTraceId, {
+            type: 'tool_error',
+            summary: `${block.name} error: ${errorMessage.slice(0, 150)}`,
+            durationMs: Date.now() - toolStart,
+          });
+        }
+        throw err;
+      }
+    }
+
+    // Send tool results back
+    apiMessages.push({ role: 'user', content: toolResults });
+  }
+
+  console.warn(`[agent:tools] Max iterations (${maxIterations}) reached`);
+  return {
+    response: '[Tool use loop reached maximum iterations]',
+    toolCalls: toolLog,
+  };
+}
