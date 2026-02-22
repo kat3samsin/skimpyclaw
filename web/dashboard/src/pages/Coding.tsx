@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
-import { getCodeAgents, getUsageSummary } from '../api/client.js';
+import { cancelCodeAgent, getCodeAgents, getUsageSummary } from '../api/client.js';
 import type { CodeAgent } from '../types.js';
-import { LuCheck, LuChevronDown, LuClock3, LuCode, LuDollarSign, LuRefreshCw, LuRotateCw, LuX } from 'react-icons/lu';
+import { LuCheck, LuChevronDown, LuClock3, LuCode, LuDollarSign, LuRefreshCw, LuX } from 'react-icons/lu';
 import { Markdown } from '../components/Markdown.js';
 
 const CODING_ACCENTS: Array<{ color: string; soft: string }> = [
@@ -41,6 +41,7 @@ function formatElapsed(task: CodeAgent): string {
 
 function statusClass(status: CodeAgent['status']): 'running' | 'completed' | 'failed' | 'pending' {
   if (status === 'completed') return 'completed';
+  if (status === 'cancelled') return 'failed';
   if (status === 'failed' || status === 'timeout') return 'failed';
   if (status === 'pending') return 'pending';
   return 'running';
@@ -54,6 +55,7 @@ function formatShortTime(ts?: string): string {
 
 function statusIcon(status: CodeAgent['status']) {
   if (status === 'completed') return <LuCheck size={20} />;
+  if (status === 'cancelled') return <LuX size={20} />;
   if (status === 'failed' || status === 'timeout') return <LuX size={20} />;
   return <LuRefreshCw size={20} />;
 }
@@ -63,6 +65,7 @@ export function Coding() {
   const [todayCost, setTodayCost] = useState(0);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
+  const [cancellingIds, setCancellingIds] = useState<Set<string>>(new Set());
   const [accent] = useState(() => CODING_ACCENTS[Math.floor(Math.random() * CODING_ACCENTS.length)]);
   const PAGE_SIZE = 10;
 
@@ -84,6 +87,23 @@ export function Coding() {
       // ignore polling errors
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function onCancel(taskId: string) {
+    if (cancellingIds.has(taskId)) return;
+    setCancellingIds(prev => new Set(prev).add(taskId));
+    try {
+      await cancelCodeAgent(taskId);
+      await load();
+    } catch {
+      // Ignore and allow poller to recover.
+    } finally {
+      setCancellingIds(prev => {
+        const next = new Set(prev);
+        next.delete(taskId);
+        return next;
+      });
     }
   }
 
@@ -180,7 +200,7 @@ export function Coding() {
             const children = childMap.get(task.id) ?? [];
             const output = task.liveOutput || task.outputPreview;
             const cls = statusClass(task.status);
-            const actionLabel = cls === 'running' ? 'Cancel' : cls === 'failed' ? 'Retry' : '';
+            const canCancel = cls === 'running';
             const cardAccent = accentForTask(task.id);
             return (
               <div
@@ -209,10 +229,14 @@ export function Coding() {
                       <span>{formatShortTime(task.startedAt)}</span>
                     </div>
                   </div>
-                  {actionLabel ? (
-                    <button class={`coding-task-action ${cls}`} type="button">
-                      {cls === 'failed' ? <LuRotateCw size={12} /> : null}
-                      {actionLabel}
+                  {canCancel ? (
+                    <button
+                      class={`coding-task-action ${cls}`}
+                      type="button"
+                      disabled={cancellingIds.has(task.id)}
+                      onClick={() => { void onCancel(task.id); }}
+                    >
+                      {cancellingIds.has(task.id) ? 'Cancelling…' : 'Cancel'}
                     </button>
                   ) : null}
                 </div>

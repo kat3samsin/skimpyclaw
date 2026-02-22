@@ -1525,7 +1525,7 @@ textarea::placeholder {
 .ca-status-badge.running { background: var(--accent-soft); color: var(--accent); }
 .ca-status-badge.validating { background: var(--warning-soft); color: var(--warning); }
 .ca-status-badge.completed { background: var(--success-soft); color: var(--success); }
-.ca-status-badge.failed, .ca-status-badge.timeout { background: var(--error-soft); color: var(--error); }
+.ca-status-badge.failed, .ca-status-badge.timeout, .ca-status-badge.cancelled { background: var(--error-soft); color: var(--error); }
 .tree-container { display: flex; flex-direction: column; gap: 8px; }
 .ca-tree { margin-bottom: 12px; }
 .ca-tree-children {

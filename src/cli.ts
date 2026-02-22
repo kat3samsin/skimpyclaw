@@ -175,8 +175,19 @@ function daemonStatus(): string {
     return 'unsupported';
   }
 
-  const result = runLaunchctl(['list', LAUNCHD_LABEL]);
-  return result.ok ? 'loaded' : 'not-loaded';
+  const uid = typeof process.getuid === 'function' ? process.getuid() : undefined;
+  const probes: string[][] = [];
+  if (uid !== undefined) {
+    probes.push(['print', `gui/${uid}/${LAUNCHD_LABEL}`]);
+  }
+  probes.push(['list', LAUNCHD_LABEL]);
+  probes.push(['print', `system/${LAUNCHD_LABEL}`]);
+
+  for (const args of probes) {
+    const result = runLaunchctl(args);
+    if (result.ok) return 'loaded';
+  }
+  return 'not-loaded';
 }
 
 async function requestGateway(path: string, init?: RequestInit, port?: number): Promise<any> {
@@ -229,25 +240,26 @@ async function runForeground(): Promise<number> {
 }
 
 async function commandStatus(): Promise<number> {
-  const ds = daemonStatus();
-
   let port = DEFAULT_PORT;
+  let dashboardToken = '';
   try {
-    port = loadConfig().gateway.port;
+    const raw = loadRawConfig();
+    const rawPort = Number((raw as any)?.gateway?.port);
+    if (Number.isFinite(rawPort) && rawPort > 0) {
+      port = rawPort;
+    }
+    dashboardToken = String((raw as any)?.dashboard?.token || '');
   } catch {
     // Keep default when config does not exist yet.
   }
 
-  let dashboardToken = '';
-  try {
-    const cfg = loadConfig();
-    dashboardToken = (cfg as any).dashboard?.token || '';
-  } catch { /* ignore */ }
+  const ds = daemonStatus();
 
   try {
     const health = await requestGateway('/health', undefined, port);
     const status = await requestGateway('/status', undefined, port);
-    console.log(`Daemon: ${ds}`);
+    const daemonLine = ds === 'not-loaded' ? 'running (not managed by launchd)' : ds;
+    console.log(`Daemon: ${daemonLine}`);
     console.log(`Gateway: running (http://127.0.0.1:${port})`);
     console.log(`Uptime: ${Math.round((health.uptime || 0) / 1000)}s`);
     console.log(`Agent: ${status.agent}`);

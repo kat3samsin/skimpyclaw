@@ -153,6 +153,10 @@ export const getLogContent = (path: string) => request<{ content: string }>(path
 // ── Code Agents ──────────────────────────────────────────────────────
 
 export const getCodeAgents = () => request<CodeAgentsResponse>('code-agents');
+export const cancelCodeAgent = (id: string) =>
+  request<{ cancelled: boolean; id: string; status: string }>(`code-agents/${encodeURIComponent(id)}/cancel`, {
+    method: 'POST',
+  });
 
 // ── Messages ────────────────────────────────────────────────────────
 

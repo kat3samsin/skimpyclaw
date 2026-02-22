@@ -167,7 +167,7 @@ export interface LogListResponse {
 export interface CodeAgent {
   id: string;
   agent: string;
-  status: 'running' | 'completed' | 'failed' | 'validating' | 'timeout' | 'pending';
+  status: 'running' | 'completed' | 'failed' | 'validating' | 'timeout' | 'pending' | 'cancelled';
   task: string;
   startedAt: string;
   endedAt?: string;

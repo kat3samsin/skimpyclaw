@@ -4,6 +4,7 @@ import { readFileSync, writeFileSync, readdirSync, existsSync, statSync, mkdirSy
 import { join, resolve, dirname, sep } from 'path';
 import { homedir } from 'os';
 import { exec, spawn } from 'child_process';
+import type { ChildProcess } from 'child_process';
 import { execSync } from 'child_process';
 import { isBashCommandSafe } from './security.js';
 import { TTLCache } from './cache.js';
@@ -634,7 +635,7 @@ export interface CodeAgentTask {
   id: string;                    // "ca-1", "ca-2"
   agent: string;                 // "claude" | "codex" | "team-coordinator"
   task: string;                  // full prompt
-  status: 'running' | 'validating' | 'completed' | 'failed' | 'timeout' | 'pending';
+  status: 'running' | 'validating' | 'completed' | 'failed' | 'timeout' | 'pending' | 'cancelled';
   chatId?: number;               // for notification delivery
   startedAt: string;
   endedAt?: string;
@@ -661,6 +662,7 @@ export interface CodeAgentTask {
 // In-memory tracking
 let codeAgentCounter = 0;
 const codeAgentTasks = new Map<string, CodeAgentTask>();
+const codeAgentCancellers = new Map<string, () => void>();
 
 // Reference to config for notifications — set via setCodeAgentConfig()
 let _codeAgentConfig: import('./types.js').Config | null = null;
@@ -701,6 +703,45 @@ export function getAllCodeAgents(): CodeAgentTask[] {
 /** Get a single code agent by ID. */
 export function getCodeAgent(id: string): CodeAgentTask | null {
   return codeAgentTasks.get(id) || null;
+}
+
+/** Cancel a running/pending code agent. For team coordinators, cascades to children. */
+export function cancelCodeAgent(id: string): CodeAgentTask | null {
+  const task = codeAgentTasks.get(id);
+  if (!task) return null;
+
+  const isTerminal = ['completed', 'failed', 'timeout', 'cancelled'].includes(task.status);
+  if (isTerminal) return task;
+
+  for (const childId of task.childTaskIds || []) {
+    const child = codeAgentTasks.get(childId);
+    if (!child) continue;
+    const childTerminal = ['completed', 'failed', 'timeout', 'cancelled'].includes(child.status);
+    if (childTerminal) continue;
+
+    const childCanceller = codeAgentCancellers.get(childId);
+    if (childCanceller) {
+      try { childCanceller(); } catch { /* best effort */ }
+    }
+    child.status = 'cancelled';
+    child.endedAt = new Date().toISOString();
+    child.durationSeconds = Math.round((Date.now() - new Date(child.startedAt).getTime()) / 1000);
+    child.error = 'Cancelled by user';
+    child.liveOutput = undefined;
+    writeCodeAgentTask(child);
+  }
+
+  const canceller = codeAgentCancellers.get(id);
+  if (canceller) {
+    try { canceller(); } catch { /* best effort */ }
+  }
+  task.status = 'cancelled';
+  task.endedAt = new Date().toISOString();
+  task.durationSeconds = Math.round((Date.now() - new Date(task.startedAt).getTime()) / 1000);
+  task.error = 'Cancelled by user';
+  task.liveOutput = undefined;
+  writeCodeAgentTask(task);
+  return task;
 }
 
 /** Restore code agent tasks from disk on startup. */
@@ -1269,6 +1310,23 @@ export async function runCodeAgentBackground(
   options?: CodeAgentBackgroundOptions,
 ): Promise<void> {
   const caTask = codeAgentTasks.get(id)!;
+  const CANCELLED_MESSAGE = 'Cancelled by user';
+  let cancelled = false;
+  let activeProc: ChildProcess | null = null;
+  let activeTimer: NodeJS.Timeout | null = null;
+  let activeExecProc: ChildProcess | null = null;
+
+  const setActiveCanceller = (fn: () => void) => {
+    codeAgentCancellers.set(id, () => {
+      cancelled = true;
+      try { fn(); } catch { /* best effort */ }
+    });
+  };
+  setActiveCanceller(() => {});
+
+  const ensureNotCancelled = () => {
+    if (cancelled || caTask.status === 'cancelled') throw new Error(CANCELLED_MESSAGE);
+  };
 
   // Start audit trace
   const traceId = startTrace('code_agent');
@@ -1307,6 +1365,7 @@ export async function runCodeAgentBackground(
   logStream.write(`Workdir: ${workdir}\n\n`);
 
   try {
+    ensureNotCancelled();
     const exitCode = await new Promise<number | null>((resolvePromise, reject) => {
       const spawnEnv = { ...process.env };
       delete spawnEnv.CLAUDECODE;
@@ -1317,6 +1376,7 @@ export async function runCodeAgentBackground(
         stdio: ['ignore', 'pipe', 'pipe'],
         env: spawnEnv,
       });
+      activeProc = proc;
 
       let lastStatusWrite = 0;
       const STATUS_WRITE_INTERVAL = 3000;
@@ -1352,11 +1412,23 @@ export async function runCodeAgentBackground(
         timedOut = true;
         proc.kill('SIGTERM');
       }, timeoutMs);
+      activeTimer = timer;
+      setActiveCanceller(() => {
+        if (activeTimer) clearTimeout(activeTimer);
+        activeTimer = null;
+        try { activeProc?.kill('SIGTERM'); } catch { /* best effort */ }
+      });
 
       proc.on('close', (code) => {
-        clearTimeout(timer);
+        if (activeTimer) clearTimeout(activeTimer);
+        activeTimer = null;
+        activeProc = null;
         logStream.write(`\n=== EXIT ${code} | ${new Date().toISOString()} ===\n`);
         logStream.end();
+        if (cancelled || caTask.status === 'cancelled') {
+          reject(new Error(CANCELLED_MESSAGE));
+          return;
+        }
         if (timedOut) {
           reject(new Error(`${agent} agent timed out after ${timeoutMinutes} minutes`));
         } else {
@@ -1365,12 +1437,15 @@ export async function runCodeAgentBackground(
       });
 
       proc.on('error', (err) => {
-        clearTimeout(timer);
+        if (activeTimer) clearTimeout(activeTimer);
+        activeTimer = null;
+        activeProc = null;
         logStream.write(`\n=== ERROR: ${err.message} ===\n`);
         logStream.end();
         reject(err);
       });
     });
+    ensureNotCancelled();
 
     // Parse output — stream-json format is newline-delimited JSON events
     let agentOutput: string;
@@ -1456,20 +1531,27 @@ export async function runCodeAgentBackground(
       writeCodeAgentTask(caTask);
 
       const runValidation = (): Promise<string> => new Promise((res) => {
-        exec('pnpm build && pnpm test', {
+        const validationProc = exec('pnpm build && pnpm test', {
           cwd: workdir,
           timeout: VALIDATE_TIMEOUT_MS,
           maxBuffer: 5 * 1024 * 1024,
         }, (error, vStdout, vStderr) => {
+          activeExecProc = null;
           if (error) {
             res([`VALIDATION FAILED (exit ${error.code}):`, vStdout, vStderr].filter(Boolean).join('\n').slice(0, 8_000));
           } else {
             res('PASS');
           }
         });
+        activeExecProc = validationProc;
+        setActiveCanceller(() => {
+          try { activeExecProc?.kill('SIGTERM'); } catch { /* best effort */ }
+          activeExecProc = null;
+        });
       });
 
       let validateResult = await runValidation();
+      ensureNotCancelled();
 
       // Internal retry: if validation failed, re-run the agent with test errors injected
       if (validateResult !== 'PASS' && !caTask.retryCount) {
@@ -1501,6 +1583,7 @@ export async function runCodeAgentBackground(
             stdio: ['ignore', 'pipe', 'pipe'],
             env: spawnEnv,
           });
+          activeProc = retryProc;
 
           let lastStatusWrite = 0;
           retryProc.stdout.on('data', (chunk: Buffer) => {
@@ -1527,9 +1610,30 @@ export async function runCodeAgentBackground(
           });
 
           const retryTimer = setTimeout(() => retryProc.kill('SIGTERM'), timeoutMs);
-          retryProc.on('close', (code) => { clearTimeout(retryTimer); resolveRetry(code); });
-          retryProc.on('error', (err) => { clearTimeout(retryTimer); rejectRetry(err); });
+          activeTimer = retryTimer;
+          setActiveCanceller(() => {
+            if (activeTimer) clearTimeout(activeTimer);
+            activeTimer = null;
+            try { activeProc?.kill('SIGTERM'); } catch { /* best effort */ }
+          });
+          retryProc.on('close', (code) => {
+            if (activeTimer) clearTimeout(activeTimer);
+            activeTimer = null;
+            activeProc = null;
+            if (cancelled || caTask.status === 'cancelled') {
+              rejectRetry(new Error(CANCELLED_MESSAGE));
+              return;
+            }
+            resolveRetry(code);
+          });
+          retryProc.on('error', (err) => {
+            if (activeTimer) clearTimeout(activeTimer);
+            activeTimer = null;
+            activeProc = null;
+            rejectRetry(err);
+          });
         });
+        ensureNotCancelled();
 
         if (retryExitCode === 0) {
           if (agent === 'claude') {
@@ -1541,6 +1645,7 @@ export async function runCodeAgentBackground(
           caTask.liveOutput = undefined;
           writeCodeAgentTask(caTask);
           validateResult = await runValidation();
+          ensureNotCancelled();
         }
         // if retry exit code non-zero, fall through with original validateResult (still !== 'PASS')
       }
@@ -1600,14 +1705,24 @@ export async function runCodeAgentBackground(
     addEvent(traceId, { type: 'error', summary: errMsg.slice(0, 200), durationMs: Date.now() - startedAt.getTime() });
     await endTrace(traceId, 'error');
     Object.assign(caTask, {
-      status: errMsg.includes('timed out') ? 'timeout' : 'failed',
+      status: errMsg.includes(CANCELLED_MESSAGE) || cancelled || caTask.status === 'cancelled'
+        ? 'cancelled'
+        : errMsg.includes('timed out')
+          ? 'timeout'
+          : 'failed',
       endedAt: new Date().toISOString(),
       durationSeconds: Math.round((Date.now() - startedAt.getTime()) / 1000),
       error: errMsg,
       liveOutput: undefined,
     });
     writeCodeAgentTask(caTask);
-    if (!options?.skipNotification) await notifyCodeAgentResult(caTask);
+    if (!options?.skipNotification && caTask.status !== 'cancelled') await notifyCodeAgentResult(caTask);
+  } finally {
+    if (activeTimer) clearTimeout(activeTimer);
+    activeTimer = null;
+    activeProc = null;
+    activeExecProc = null;
+    codeAgentCancellers.delete(id);
   }
 }
 
@@ -1637,8 +1752,10 @@ async function runTeamOrchestrator(
 
   const timeoutMinutes = Math.min(context?.fullConfig?.subagents?.maxConcurrent ? 60 : 20, 60);
   const perChildTimeout = Math.max(5, Math.floor(timeoutMinutes / teamSize));
+  const CANCELLED_MESSAGE = 'Cancelled by user';
 
   try {
+    if (codeAgentTasks.get(parentId)?.status === 'cancelled') throw new Error(CANCELLED_MESSAGE);
     // Phase 1: Decompose
     parentTask.liveOutput = 'Phase: Decomposing task...';
     writeCodeAgentTask(parentTask);
@@ -1711,6 +1828,7 @@ async function runTeamOrchestrator(
     const totalTimeoutMs = timeoutMinutes * 60 * 1000;
 
     for (let waveIdx = 0; waveIdx < totalWaves; waveIdx++) {
+      if (codeAgentTasks.get(parentId)?.status === 'cancelled') throw new Error(CANCELLED_MESSAGE);
       const waveIndices = waves[waveIdx];
 
       addEvent(traceId, {
@@ -1749,6 +1867,7 @@ async function runTeamOrchestrator(
 
       while (true) {
         await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL));
+        if (codeAgentTasks.get(parentId)?.status === 'cancelled') throw new Error(CANCELLED_MESSAGE);
 
         const allChildren = childIds.map(id => codeAgentTasks.get(id)!);
         const waveChildren = waveChildIds.map(id => codeAgentTasks.get(id)!);
@@ -1805,6 +1924,7 @@ async function runTeamOrchestrator(
     }
 
     // Phase 4: Collect results and synthesize
+    if (codeAgentTasks.get(parentId)?.status === 'cancelled') throw new Error(CANCELLED_MESSAGE);
     parentTask.liveOutput = 'Phase: Synthesizing results...';
     writeCodeAgentTask(parentTask);
 
@@ -1888,14 +2008,18 @@ async function runTeamOrchestrator(
     addEvent(traceId, { type: 'error', summary: errMsg.slice(0, 200), durationMs: Date.now() - startedAt.getTime() });
     await endTrace(traceId, 'error');
     Object.assign(parentTask, {
-      status: errMsg.includes('timed out') ? 'timeout' : 'failed',
+      status: errMsg.includes(CANCELLED_MESSAGE) || parentTask.status === 'cancelled'
+        ? 'cancelled'
+        : errMsg.includes('timed out')
+          ? 'timeout'
+          : 'failed',
       endedAt: new Date().toISOString(),
       durationSeconds: Math.round((Date.now() - startedAt.getTime()) / 1000),
       error: errMsg,
       liveOutput: undefined,
     });
     writeCodeAgentTask(parentTask);
-    await notifyCodeAgentResult(parentTask);
+    if (parentTask.status !== 'cancelled') await notifyCodeAgentResult(parentTask);
   }
 }
 
