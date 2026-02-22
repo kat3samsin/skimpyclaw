@@ -2,22 +2,24 @@
 
 Main config file: `~/.skimpyclaw/config.json`
 
-## Top-level sections
+## Top-Level Sections
 
 | Section | Description |
 |---------|-------------|
-| `gateway` | HTTP port and mode (`local` \| `remote`) |
-| `agents` | Default agent + agent definitions |
-| `models` | Provider credentials + model aliases |
+| `gateway` | HTTP port, host, and mode (`local` \| `remote`) |
+| `agents` | Default agent + agent definitions with identity and model |
+| `models` | Provider credentials + model aliases + prompt caching |
 | `channels` | Telegram, Discord, active channel selection |
-| `cron.jobs` | Scheduled tasks |
+| `cron.jobs` | Scheduled tasks (agentTurn or script) |
 | `heartbeat` | Interval, prompt, optional model + tools |
-| `dashboard.token` | Bearer token for `/api/dashboard/*` |
-| `subagents` | Concurrency + retry limits |
+| `dashboard` | Token for `/api/dashboard/*` auth |
+| `subagents` | Concurrency, retry limits, default code agent |
 | `langfuse` | Optional observability tracing |
 | `voice` | Optional TTS/STT configuration |
+| `skills` | Skills system configuration |
+| `projects` | Named project paths for code agents |
 
-## Environment placeholders
+## Environment Placeholders
 
 JSON values support env var substitution:
 
@@ -29,103 +31,219 @@ JSON values support env var substitution:
 "${CLAUDE_CODE_OAUTH_TOKEN}"
 ```
 
+## Gateway
+
+```json
+"gateway": {
+  "port": 18790,
+  "host": "127.0.0.1",
+  "mode": "local"
+}
+```
+
+## Agents
+
+```json
+"agents": {
+  "default": "main",
+  "list": {
+    "main": {
+      "identity": {
+        "name": "SkimpyClaw",
+        "emoji": "👙🦞"
+      },
+      "model": "claude-fast",
+      "thinking": "medium"
+    }
+  }
+}
+```
+
+Thinking levels: `none`, `low`, `medium`, `high` (enables extended thinking for supported models).
+
 ## Models
 
 ```json
 "models": {
   "providers": {
     "anthropic": { "apiKey": "${ANTHROPIC_API_KEY}" },
-    "openrouter": { "apiKey": "${OPENROUTER_KEY}", "baseURL": "https://openrouter.ai/api/v1" },
-    "codex": { "authPath": "${HOME}/.codex/auth.json" }
+    "openrouter": { 
+      "apiKey": "${OPENROUTER_KEY}", 
+      "baseURL": "https://openrouter.ai/api/v1" 
+    },
+    "codex": { 
+      "authToken": "codex",
+      "authPath": "${HOME}/.codex/auth.json"
+    },
+    "kimi": {
+      "apiKey": "${KIMI_API_KEY}",
+      "baseURL": "https://api.kimi.com/v1"
+    }
   },
   "aliases": {
-    "claude-fast":  "anthropic/claude-haiku-4-5",
+    "claude-fast": "anthropic/claude-haiku-4-5",
     "claude-think": "anthropic/claude-sonnet-4-5",
-    "claude-opus":  "anthropic/claude-opus-4",
-    "codex5.3":     "codex/gpt-5.3-codex"
-  }
+    "claude-opus": "anthropic/claude-opus-4",
+    "codex5.3": "codex/gpt-5.3-codex"
+  },
+  "promptCaching": true
 }
 ```
 
-Provider is determined by the prefix before `/` in the model string (e.g. `openrouter/google/gemini-2.0-flash`).
+Provider is determined by the prefix before `/` in the model string (e.g., `openrouter/google/gemini-2.0-flash`).
+
+### Provider-Specific Notes
+
+- **Anthropic**: Supports both API key and OAuth (Claude Code) authentication
+- **Codex**: Uses ChatGPT backend via `~/.codex/auth.json` (created by `codex` CLI)
+- **Kimi**: Requires `User-Agent` header with version string (handled automatically)
 
 ## Channels
+
+### Telegram
 
 ```json
 "channels": {
   "active": "telegram",
   "telegram": {
+    "enabled": true,
     "token": "${TELEGRAM_BOT_TOKEN}",
     "allowFrom": ["@username", "123456789"],
     "tools": {
       "enabled": true,
-      "allowedPaths": ["${HOME}/.skimpyclaw", "${HOME}/Library/Mobile Documents/iCloud~md~obsidian"],
-      "maxIterations": 20,
-      "bashTimeout": 30000
-    }
-  },
-  "discord": {
-    "token": "${DISCORD_BOT_TOKEN}",
-    "allowFrom": ["username#0000"],
-    "defaultChannelId": "123456789"
+      "allowedPaths": ["${HOME}/.skimpyclaw", "${HOME}/Projects"],
+      "maxIterations": 100,
+      "bashTimeout": 30000,
+      "browser": {
+        "enabled": true,
+        "type": "chromium",
+        "headless": true,
+        "profileDir": "${HOME}/.skimpyclaw/browser-profile"
+      },
+      "execApproval": {
+        "enabled": true,
+        "ttlMs": 300000,
+        "requireForTiers": [2, 3]
+      }
+    },
+    "dailyNotesDir": "${HOME}/Notes/Daily"
   }
 }
 ```
 
-## Cron jobs
+### Discord
 
-Two payload types:
+```json
+"discord": {
+  "enabled": true,
+  "token": "${DISCORD_BOT_TOKEN}",
+  "allowFrom": ["username", "123456789"],
+  "defaultChannelId": "123456789",
+  "tools": {
+    "enabled": true,
+    "allowedPaths": ["${HOME}/.skimpyclaw"]
+  }
+}
+```
 
-**agentTurn** — runs an agent prompt:
+## Cron Jobs
+
+Two payload types: `agentTurn` and `script`.
+
+### Agent Turn
+
 ```json
 {
   "id": "morning",
-  "cron": "0 8 * * *",
+  "name": "Morning Briefing",
+  "schedule": {
+    "kind": "cron",
+    "expr": "0 8 * * *",
+    "tz": "America/New_York"
+  },
   "payload": {
-    "type": "agentTurn",
-    "agentId": "main",
-    "model": "claude-think",
-    "prompt": "Good morning! Here's the plan for today...",
-    "tools": { "enabled": true, "allowedPaths": ["${HOME}/.skimpyclaw"] }
+    "kind": "agentTurn",
+    "message": "Good morning! What's on the agenda today?",
+    "sendAsVoice": false
+  },
+  "model": "claude-think"
+}
+```
+
+### Script
+
+```json
+{
+  "id": "backup",
+  "name": "Daily Backup",
+  "schedule": {
+    "kind": "cron", 
+    "expr": "0 2 * * *",
+    "tz": "UTC"
+  },
+  "payload": {
+    "kind": "script",
+    "script": "rsync -av ~/Documents /Volumes/Backup/",
+    "cwd": "${HOME}",
+    "timeoutMs": 600000
   }
 }
 ```
 
-**script** — runs a shell command:
+### Message from File
+
+The `message` field can reference a markdown file:
+
 ```json
 {
-  "id": "backup",
-  "cron": "0 2 * * *",
   "payload": {
-    "type": "script",
-    "command": "rsync -av ~/Documents /Volumes/Backup/",
-    "cwd": "${HOME}",
-    "timeoutMs": 60000
+    "kind": "agentTurn",
+    "message": "~/prompts/morning-brief.md"
   }
 }
 ```
+
+Files are resolved relative to `~/.skimpyclaw/prompts/` or as absolute paths.
 
 ## Subagents
 
 ```json
 "subagents": {
   "maxConcurrent": 5,
-  "maxRetries": 2
+  "maxRetries": 2,
+  "defaultCodeAgent": "claude"
 }
 ```
+
+- `maxConcurrent`: Maximum parallel subagent tasks (default: 5)
+- `maxRetries`: Retry attempts on failure (default: 2)
+- `defaultCodeAgent`: Default CLI for `code_with_agent` (`claude`, `codex`, or `kimi`)
 
 ## Heartbeat
 
 ```json
 "heartbeat": {
   "intervalMs": 300000,
-  "prompt": "Check for anything urgent.",
+  "prompt": "Check for anything urgent. If nothing needs attention, respond with 'HEARTBEAT_OK'.",
   "model": "claude-fast",
-  "tools": { "enabled": false }
+  "tools": {
+    "enabled": false
+  }
 }
 ```
 
-## Langfuse (optional)
+## Dashboard
+
+```json
+"dashboard": {
+  "token": "auto-generated-uuid",
+  "frontend": "framework"
+}
+```
+
+The token is auto-generated on first startup if not present.
+
+## Langfuse (Optional)
 
 ```json
 "langfuse": {
@@ -141,7 +259,7 @@ Two payload types:
 
 Traces are created per agent turn. Tool calls appear as child observations. Token costs may be blank for OAuth/Codex unless Langfuse has model pricing configured.
 
-## Voice (optional)
+## Voice (Optional)
 
 ```json
 "voice": {
@@ -150,11 +268,135 @@ Traces are created per agent turn. Tool calls appear as child observations. Toke
   "providers": {
     "elevenlabs": {
       "apiKey": "${ELEVENLABS_API_KEY}",
-      "tts": { "voiceId": "your-voice-id" }
+      "tts": {
+        "voiceId": "your-voice-id",
+        "model": "eleven_multilingual_v2"
+      }
+    },
+    "openai": {
+      "apiKey": "${OPENAI_API_KEY}",
+      "tts": {
+        "model": "tts-1",
+        "voice": "nova"
+      },
+      "stt": {
+        "model": "whisper-1"
+      }
+    },
+    "macos": {
+      "tts": {
+        "voice": "Zoe"
+      }
     }
   },
   "channels": {
-    "telegram": { "acceptVoice": true, "sendVoice": false }
+    "telegram": {
+      "acceptVoice": true,
+      "sendVoice": true
+    },
+    "discord": {
+      "acceptVoice": true,
+      "sendVoice": true
+    }
+  }
+}
+```
+
+### Voice Providers
+
+- **ElevenLabs**: High-quality voices, requires `voiceId`
+- **OpenAI**: `tts-1`/`tts-1-hd` models, supports multiple voices
+- **macOS**: Uses `say` command + ffmpeg (local, free)
+
+### Transcription Priority
+
+1. Local whisper.cpp (`whisper-cli`) — fastest, free
+2. Local Python whisper (`whisper`) — free
+3. Configured API provider — fallback
+
+## Skills
+
+```json
+"skills": {
+  "enabled": true,
+  "directory": "${HOME}/.skimpyclaw/skills",
+  "entries": {
+    "my-skill": true,
+    "another-skill": false
+  },
+  "maxPromptTokens": 4000
+}
+```
+
+- `enabled`: Master switch for skills system
+- `directory`: Path to skills directory
+- `entries`: Per-skill enable/disable overrides
+- `maxPromptTokens`: Budget for injected skills content
+
+## Projects
+
+Named project paths for use with `code_with_agent`:
+
+```json
+"projects": {
+  "skimpyclaw": "${HOME}/Sites/skimpyclaw",
+  "my-app": "${HOME}/Projects/my-app"
+}
+```
+
+Projects are automatically added to tool `allowedPaths` and can be referenced by name in `code_with_agent` and `code_with_team` calls.
+
+## Complete Example
+
+```json
+{
+  "gateway": {
+    "port": 18790,
+    "host": "127.0.0.1",
+    "mode": "local"
+  },
+  "agents": {
+    "default": "main",
+    "list": {
+      "main": {
+        "identity": {
+          "name": "SkimpyClaw",
+          "emoji": "👙🦞"
+        },
+        "model": "claude-fast"
+      }
+    }
+  },
+  "models": {
+    "providers": {
+      "anthropic": {
+        "apiKey": "${ANTHROPIC_API_KEY}"
+      }
+    },
+    "aliases": {
+      "claude-fast": "anthropic/claude-sonnet-4-5",
+      "claude-opus": "anthropic/claude-opus-4"
+    },
+    "promptCaching": true
+  },
+  "channels": {
+    "active": "telegram",
+    "telegram": {
+      "enabled": true,
+      "token": "${TELEGRAM_BOT_TOKEN}",
+      "allowFrom": ["@yourusername"],
+      "tools": {
+        "enabled": true,
+        "allowedPaths": ["${HOME}/.skimpyclaw"]
+      }
+    }
+  },
+  "cron": {
+    "jobs": []
+  },
+  "heartbeat": {
+    "intervalMs": 300000,
+    "prompt": "Check for anything urgent."
   }
 }
 ```
