@@ -468,6 +468,10 @@ export interface ExecuteToolContext {
   approverUserId?: string;
   /** Username of the approver */
   approverUsername?: string;
+  /** Trigger source for usage tracking */
+  trigger?: string;
+  /** Agent ID for usage tracking */
+  agentId?: string;
 }
 
 export async function executeTool(

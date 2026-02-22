@@ -83,24 +83,33 @@ export function formatEventDuration(ms: number | undefined): string {
 export function Audit() {
   const [traces, setTraces] = useState<AuditTrace[]>([]);
   const [total, setTotal] = useState(0);
-  const [offset, setOffset] = useState(0);
+  const [page, setPage] = useState(0);
   const [query, setQuery] = useState('');
   const [trigger, setTrigger] = useState('');
   const [status, setStatus] = useState<'all' | 'success' | 'error' | 'running'>('all');
   const [loading, setLoading] = useState(true);
   const [expandedTraces, setExpandedTraces] = useState<Set<string>>(new Set());
-  const limit = 20;
+  const PAGE_SIZE = 20;
 
-  useEffect(() => { load(0); }, [trigger]);
+  useEffect(() => {
+    setPage(0);
+  }, [trigger]);
 
-  async function load(off: number) {
+  useEffect(() => {
+    load();
+  }, [page, trigger]);
+
+  useEffect(() => {
+    const maxPage = Math.max(0, Math.ceil(total / PAGE_SIZE) - 1);
+    if (page > maxPage) setPage(maxPage);
+  }, [page, total]);
+
+  async function load() {
     setLoading(true);
     try {
-      const data = await getAudit({ limit, offset: off, trigger: trigger || undefined });
-      if (off === 0) setTraces(data.traces ?? []);
-      else setTraces(prev => [...prev, ...(data.traces ?? [])]);
+      const data = await getAudit({ limit: PAGE_SIZE, offset: page * PAGE_SIZE, trigger: trigger || undefined });
+      setTraces(data.traces ?? []);
       setTotal(data.total ?? 0);
-      setOffset(off);
     } catch (e) {
       console.error('[audit] load failed', e);
     } finally {
@@ -166,7 +175,7 @@ export function Audit() {
         <div class="page-title">Audit Log</div>
         <div class="header-actions">
           <div class="audit-header-meta">{todayCount} traces today</div>
-          <button class="btn-refresh" onClick={() => load(0)}>
+          <button class="btn-refresh" onClick={() => load()}>
             <LuRefreshCw size={14} /> Refresh
           </button>
         </div>
@@ -293,10 +302,24 @@ export function Audit() {
             )}
           </div>
 
-          {traces.length < total && (
-            <div class="audit-load-more-wrap">
-              <button class="btn btn-sm" onClick={() => load(offset + limit)} disabled={loading}>
-                {loading ? 'Loading…' : 'Load More'}
+          {total > PAGE_SIZE && (
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', padding: '12px' }}>
+              <button
+                class="btn btn-sm"
+                disabled={page === 0 || loading}
+                onClick={() => setPage(p => Math.max(0, p - 1))}
+              >
+                Previous
+              </button>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)', alignSelf: 'center' }}>
+                {total === 0 ? 0 : page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, total)} of {total}
+              </span>
+              <button
+                class="btn btn-sm"
+                disabled={(page + 1) * PAGE_SIZE >= total || loading}
+                onClick={() => setPage(p => p + 1)}
+              >
+                Next
               </button>
             </div>
           )}

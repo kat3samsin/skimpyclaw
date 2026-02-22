@@ -32,6 +32,23 @@
 }
 
 .sidebar-brand { display: flex; flex-direction: column; }
+.sidebar-close-btn {
+  display: none;
+  margin-left: auto;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-dim);
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.sidebar-close-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
 .sidebar-brand-name {
   font-family: var(--serif);
   font-size: 17px; font-weight: 800; color: var(--text);
@@ -143,3 +160,7 @@
 .sidebar-footer-item:hover { background: var(--sidebar-hover); color: var(--text-dim); }
 .sidebar-footer-item.active { background: var(--sidebar-active); color: var(--accent); font-weight: 600; }
 .sidebar-footer-item svg { width: 18px; height: 18px; flex-shrink: 0; opacity: 0.5; }
+
+@media (max-width: 980px) {
+  .sidebar-close-btn { display: inline-flex; }
+}

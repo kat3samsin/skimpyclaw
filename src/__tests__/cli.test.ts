@@ -142,6 +142,29 @@ describe('runCli', () => {
     }));
   });
 
+  it('lists all models with aliases', async () => {
+    mockLoadConfig.mockReturnValue({
+      gateway: { port: 18790 },
+      models: {
+        providers: {
+          anthropic: { apiKey: 'test' },
+          codex: { authPath: '~/.codex/auth.json' },
+        },
+        aliases: {
+          'claude-fast': 'anthropic/claude-haiku-4-5',
+          'codex5.1': 'codex/gpt-5.1-codex',
+          'codex5.3': 'codex/gpt-5.3-codex',
+        },
+      },
+      agents: { default: 'main', list: { main: { model: 'anthropic/claude-opus-4' } } },
+    });
+
+    const code = await runCli(['models']);
+    expect(code).toBe(0);
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('codex5.1'));
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('codex/gpt-5.1-codex'));
+  });
+
   it('sets model through gateway request using alias resolution', async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockResolvedValue(mockJsonResponse({ model: 'anthropic/claude-3-5-haiku-20241022' }));
@@ -153,6 +176,26 @@ describe('runCli', () => {
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ model: 'anthropic/claude-3-5-haiku-20241022' }),
+      })
+    );
+  });
+
+  it('resolves codex5.1 alias when setting model', async () => {
+    mockLoadConfig.mockReturnValue({
+      gateway: { port: 18790 },
+      models: { aliases: { 'codex5.1': 'codex/gpt-5.1-codex' } },
+    });
+
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValue(mockJsonResponse({ model: 'codex/gpt-5.1-codex' }));
+
+    const code = await runCli(['model', 'codex5.1']);
+    expect(code).toBe(0);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:18790/model',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ model: 'codex/gpt-5.1-codex' }),
       })
     );
   });

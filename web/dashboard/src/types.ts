@@ -263,6 +263,53 @@ export interface SkillResponse {
   rawContent?: string;
 }
 
+// --- Usage ---
+
+export interface UsageModelBreakdown {
+  calls: number;
+  inputTokens: number;
+  outputTokens: number;
+  cost: number;
+}
+
+export interface UsageAggregation {
+  totalCost: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalCalls: number;
+  byModel: Record<string, UsageModelBreakdown>;
+}
+
+export interface UsageSummaryResponse {
+  today: UsageAggregation;
+  week: UsageAggregation;
+  month: UsageAggregation;
+}
+
+export interface UsageRecord {
+  id: string;
+  timestamp: string;
+  model: string;
+  provider: string;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  inputCost: number;
+  outputCost: number;
+  totalCost: number;
+  trigger: string;
+  agentId?: string;
+  cacheReadTokens?: number;
+  cacheCreationTokens?: number;
+}
+
+export interface UsageRecordsResponse {
+  records: UsageRecord[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 export interface ConversationSummary {
   id: string;
   channel: 'telegram' | 'discord';

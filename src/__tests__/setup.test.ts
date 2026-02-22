@@ -20,6 +20,9 @@ describe('setup config generation', () => {
     expect(config.channels.telegram.defaultAllowedPaths).toContain('/tmp/workspace');
     expect(config.models.aliases['claude-think']).toBe('anthropic/claude-sonnet-4-5');
     expect(config.models.aliases.codex).toBe('codex/gpt-5.3-codex');
+    expect(config.models.aliases['codex5.1']).toBe('codex/gpt-5.1-codex');
+    expect(config.models.aliases['codex5.2']).toBe('codex/gpt-5.2-codex');
+    expect(config.models.aliases['codex5.3']).toBe('codex/gpt-5.3-codex');
   });
 
   it('builds OpenAI-only config and env content', () => {

@@ -14,6 +14,10 @@ let startTime: Date;
 let lastMessage: Date | undefined;
 let currentModel: string;
 
+export function setGatewayConfig(cfg: Config): void {
+  config = cfg;
+}
+
 export async function createGateway(cfg: Config): Promise<FastifyInstance> {
   config = cfg;
   startTime = new Date();

@@ -155,12 +155,19 @@ describe('Framework scaffold contract', () => {
     expect(src).toContain("id: 'templates'");
   });
 
+  it('framework sidebar includes usage tab', () => {
+    const src = readFileSync(join(WEB_SRC, 'components', 'Sidebar.tsx'), 'utf-8');
+    expect(src).toContain("id: 'usage'");
+    expect(src).toContain('LuDollarSign');
+  });
+
   it('framework API client targets dashboard endpoints', () => {
     const src = readFileSync(join(WEB_SRC, 'api', 'client.ts'), 'utf-8');
     expect(src).toContain('/api/dashboard/');
     expect(src).toContain("request<StatusResponse>('status')");
     expect(src).toContain("request<ApprovalsResponse>('approvals')");
     expect(src).toContain("request<HealthResponse>('health')");
+    expect(src).toContain("request<UsageSummaryResponse>('usage')");
     expect(src).toContain('Authorization');
     expect(src).toContain('Bearer');
     expect(src).toContain('localStorage');

@@ -344,6 +344,7 @@ function buildAliases(providers: Set<ProviderChoice>): Record<string, string> {
     'claude-fast': 'anthropic/claude-haiku-4-5',
     'claude-think': 'anthropic/claude-sonnet-4-5',
     'claude-opus': 'anthropic/claude-opus-4',
+    'codex5.1': 'codex/gpt-5.1-codex',
     'codex5.2': 'codex/gpt-5.2-codex',
     'codex5.3': 'codex/gpt-5.3-codex',
     'minimax': 'minimax/MiniMax-M2.5',

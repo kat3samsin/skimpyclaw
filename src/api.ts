@@ -21,10 +21,11 @@ import {
   saveAgentTemplate,
 } from './agent.js';
 import { getCronJobs, getCronJobDetails, runCronJob } from './cron.js';
-import { getCurrentModel, setCurrentModel, getLastMessage } from './gateway.js';
+import { getCurrentModel, setCurrentModel, getLastMessage, setGatewayConfig } from './gateway.js';
 import { redactSecrets } from './security.js';
 import { getActiveTasks, getRecentTasks } from './subagent.js';
 import { readAuditTraces } from './audit.js';
+import { getUsageSummary, readUsageRecords } from './usage.js';
 import { getAllCodeAgents, getCodeAgent } from './tools.js';
 import { listApprovals, getApproval, approveRequest, denyRequest } from './exec-approval.js';
 import { getDigests, getDigest, deleteDigest, updateArticleReadStatus } from './digests.js';
@@ -32,7 +33,11 @@ import { loadSkills } from './skills.js';
 import type { SkillConfig } from './skills-types.js';
 import { runDoctor as runDoctorChecks } from './doctor/runner.js';
 import { sendActiveChannelProactiveMessage, getActiveChannelId } from './channels.js';
-import { runAgentTurn } from './agent.js';
+import { runAgentTurn, initProviders } from './agent.js';
+import { initCron } from './cron.js';
+import { initHeartbeat, stopHeartbeat } from './heartbeat.js';
+import { initActiveChannel, stopActiveChannel, startActiveChannel } from './channels.js';
+import { setCodeAgentConfig } from './tools.js';
 
 function validateFilename(filename: string): boolean {
   return !filename.includes('..') && filename === basename(filename);
@@ -47,8 +52,8 @@ function validateSkillName(name: string): boolean {
   return /^[a-zA-Z0-9-]+$/.test(name) && name.length <= 100;
 }
 
-function getSkillsDir(config: Config): string {
-  return (config as any).skills?.directory || join(homedir(), '.skimpyclaw', 'skills');
+function getSkillsDir(cfg: Config): string {
+  return (cfg as any).skills?.directory || join(homedir(), '.skimpyclaw', 'skills');
 }
 
 function validateModelString(model: string): boolean {
@@ -115,6 +120,9 @@ function parseTodoItems(content: string): TodoItem[] {
 }
 
 export function registerDashboardAPI(fastify: FastifyInstance, config: Config): void {
+  // Mutable live config reference - updated on reload
+  let runtimeConfig = config;
+
   // --- Auth middleware for all dashboard routes ---
   fastify.addHook('onRequest', async (request, reply) => {
     const url = request.url;
@@ -124,7 +132,7 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
       return; // Not a dashboard API route, skip auth
     }
 
-    const token = config.dashboard?.token;
+    const token = runtimeConfig.dashboard?.token;
     if (!token) {
       return; // No token configured, allow access
     }
@@ -151,14 +159,14 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
     const recentCompleted = recentTasks.filter(t => t.status === 'completed').length;
     const recentFailed = recentTasks.filter(t => t.status === 'failed').length;
     const recentCancelled = recentTasks.filter(t => t.status === 'cancelled').length;
-    const maxConcurrent = config.subagents?.maxConcurrent ?? 5;
+    const maxConcurrent = runtimeConfig.subagents?.maxConcurrent ?? 5;
 
     return {
       uptime,
       model: getCurrentModel(),
-      agent: config.agents.default,
+      agent: runtimeConfig.agents.default,
       lastMessage: getLastMessage(),
-      activeChannel: getActiveChannelId() ?? config.channels.active ?? null,
+      activeChannel: getActiveChannelId() ?? runtimeConfig.channels.active ?? null,
       cronJobs: jobs,
       subagents: {
         maxConcurrent,
@@ -396,7 +404,7 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
 
   // --- Cron ---
   fastify.get('/api/dashboard/cron', async () => {
-    const jobs = getCronJobDetails(config);
+    const jobs = getCronJobDetails(runtimeConfig);
     return { jobs };
   });
 
@@ -433,7 +441,7 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
     }
 
     try {
-      const sent = await sendActiveChannelProactiveMessage(config, message);
+      const sent = await sendActiveChannelProactiveMessage(runtimeConfig, message);
       if (!sent) {
         return reply.code(400).send({ error: 'No active channel target configured' });
       }
@@ -457,9 +465,9 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
 
     try {
       const response = await runAgentTurn(
-        config.agents.default,
+        runtimeConfig.agents.default,
         message,
-        config,
+        runtimeConfig,
         request.body?.model || getCurrentModel(),
         undefined,
         undefined,
@@ -484,7 +492,7 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
   fastify.post<{ Params: { id: string } }>('/api/dashboard/cron/:id/run', async (request, reply) => {
     const { id } = request.params;
     try {
-      await runCronJob(id, config);
+      await runCronJob(id, runtimeConfig);
       return { status: 'triggered', id };
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Unknown error';
@@ -496,9 +504,9 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
   fastify.get('/api/dashboard/model', async () => {
     return {
       current: getCurrentModel(),
-      aliases: config.models.aliases,
+      aliases: runtimeConfig.models.aliases,
       agents: Object.fromEntries(
-        Object.entries(config.agents.list).map(([id, agent]) => [id, agent.model])
+        Object.entries(runtimeConfig.agents.list).map(([id, agent]) => [id, agent.model])
       ),
     };
   });
@@ -736,6 +744,48 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
     return { restarting: true };
   });
 
+  fastify.post('/api/dashboard/reload', async (_request, reply) => {
+    try {
+      const newConfig = loadConfig();
+
+      // Update runtimeConfig BEFORE reinit calls that depend on it
+      runtimeConfig = newConfig;
+
+      // Update gateway's live config reference
+      setGatewayConfig(newConfig);
+
+      // Reinitialize providers (clears stale state first)
+      initProviders(newConfig);
+
+      // Reinitialize code agent config
+      setCodeAgentConfig(newConfig);
+
+      // Reinitialize cron scheduler
+      initCron(newConfig);
+
+      // Reinitialize heartbeat (stop existing timer first, then start new one)
+      stopHeartbeat();
+      initHeartbeat(newConfig);
+
+      // Reinitialize active channel (best-effort restart sequence)
+      try {
+        await stopActiveChannel();
+        await initActiveChannel(newConfig);
+        await startActiveChannel();
+      } catch (channelErr) {
+        const msg = channelErr instanceof Error ? channelErr.message : String(channelErr);
+        console.warn('[reload] Channel restart warning:', msg);
+      }
+
+      console.log('[reload] Config reloaded successfully');
+      return { reloaded: true, timestamp: new Date().toISOString() };
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      console.error('[reload] Failed to reload config:', msg);
+      return reply.code(500).send({ error: `Reload failed: ${msg}` });
+    }
+  });
+
   // --- Audit Log ---
   // Reads from ~/.skimpyclaw/logs/audit/YYYY-MM-DD.jsonl files
   fastify.get<{
@@ -750,20 +800,36 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
     return { traces, total, limit, offset };
   });
 
+  // --- Usage ---
+  fastify.get('/api/dashboard/usage', async () => {
+    return getUsageSummary();
+  });
+
+  fastify.get<{
+    Querystring: { limit?: string; offset?: string; model?: string };
+  }>('/api/dashboard/usage/records', async (request) => {
+    const limit = Math.min(parseInt(request.query.limit || '50', 10), 200);
+    const offset = parseInt(request.query.offset || '0', 10);
+    const model = request.query.model;
+
+    const { records, total } = readUsageRecords({ limit, offset, model });
+    return { records, total, limit, offset };
+  });
+
   // --- Health ---
   fastify.get('/api/dashboard/health', async () => {
     const { report } = await runDoctorChecks();
 
     // Build feature toggles summary from config
     const features: Record<string, boolean> = {
-      telegram: config.channels.telegram?.enabled ?? false,
-      discord: config.channels.discord?.enabled ?? false,
+      telegram: runtimeConfig.channels.telegram?.enabled ?? false,
+      discord: runtimeConfig.channels.discord?.enabled ?? false,
       browser: Boolean(
-        config.channels.telegram?.tools?.browser?.enabled
-        || config.channels.discord?.tools?.browser?.enabled
-        || config.heartbeat?.tools?.browser?.enabled,
+        runtimeConfig.channels.telegram?.tools?.browser?.enabled
+        || runtimeConfig.channels.discord?.tools?.browser?.enabled
+        || runtimeConfig.heartbeat?.tools?.browser?.enabled,
       ),
-      voice: Boolean(config.voice?.enabled),
+      voice: Boolean(runtimeConfig.voice?.enabled),
     };
 
     // Check which env vars are set vs missing by reading raw config for ${VAR} refs
@@ -886,10 +952,10 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
 
   // --- Skills ---
   fastify.get('/api/dashboard/skills', async () => {
-    const skillConfig = (config as any).skills as SkillConfig | undefined;
+    const skillConfig = (runtimeConfig as any).skills as SkillConfig | undefined;
     // Use active channel's toolConfig so eligibility checks reflect actual tool availability
-    const activeChannel = config.channels?.active || 'telegram';
-    const toolConfig = (config.channels as any)?.[activeChannel]?.tools;
+    const activeChannel = runtimeConfig.channels?.active || 'telegram';
+    const toolConfig = (runtimeConfig.channels as any)?.[activeChannel]?.tools;
     const skills = loadSkills(skillConfig, toolConfig);
     return {
       skills: skills.map(s => ({
@@ -913,9 +979,9 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
       return reply.code(400).send({ error: 'Invalid skill name' });
     }
 
-    const skillConfig = (config as any).skills as SkillConfig | undefined;
-    const activeChannel = config.channels?.active || 'telegram';
-    const toolConfig = (config.channels as any)?.[activeChannel]?.tools;
+    const skillConfig = (runtimeConfig as any).skills as SkillConfig | undefined;
+    const activeChannel = runtimeConfig.channels?.active || 'telegram';
+    const toolConfig = (runtimeConfig.channels as any)?.[activeChannel]?.tools;
     const skills = loadSkills(skillConfig, toolConfig);
     const skill = skills.find(s => s.name === name);
     if (!skill) {
@@ -955,7 +1021,7 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
     }
 
     // Verify skill exists
-    const skillDir = join(getSkillsDir(config), name);
+    const skillDir = join(getSkillsDir(runtimeConfig), name);
     if (!existsSync(join(skillDir, 'SKILL.md'))) {
       return reply.code(404).send({ error: 'Skill not found' });
     }
@@ -994,7 +1060,7 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
       return reply.code(400).send({ error: 'content (string) required' });
     }
 
-    const skillsDir = getSkillsDir(config);
+    const skillsDir = getSkillsDir(runtimeConfig);
     const skillDir = join(skillsDir, name);
 
     if (existsSync(join(skillDir, 'SKILL.md'))) {
@@ -1014,7 +1080,7 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
       return reply.code(400).send({ error: 'Invalid skill name' });
     }
 
-    const skillDir = join(getSkillsDir(config), name);
+    const skillDir = join(getSkillsDir(runtimeConfig), name);
     if (!existsSync(skillDir)) {
       return reply.code(404).send({ error: 'Skill not found' });
     }

@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'preact/hooks';
-import { getStatus, getAudit, getApprovals, approveCommand, denyCommand } from '../api/client.js';
-import type { StatusResponse, AuditTrace, Approval } from '../types.js';
+import { getStatus, getAudit, getApprovals, approveCommand, denyCommand, getUsageSummary } from '../api/client.js';
+import type { StatusResponse, AuditTrace, Approval, UsageSummaryResponse } from '../types.js';
 import type { PageId } from '../components/Sidebar.js';
 import {
   LuCheck,
   LuClock3,
   LuClock4,
   LuCpu,
+  LuDollarSign,
   LuHistory,
   LuMessageSquare,
   LuSend,
@@ -84,6 +85,7 @@ export function Overview({ onNavigate, showToast }: OverviewProps) {
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [traces, setTraces] = useState<AuditTrace[]>([]);
   const [pendingApprovals, setPendingApprovals] = useState<Approval[]>([]);
+  const [usageSummary, setUsageSummary] = useState<UsageSummaryResponse | null>(null);
   const [actingOn, setActingOn] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
 
@@ -95,14 +97,16 @@ export function Overview({ onNavigate, showToast }: OverviewProps) {
 
   async function loadData() {
     try {
-      const [s, audit, approvals] = await Promise.all([
+      const [s, audit, approvals, usage] = await Promise.all([
         getStatus(),
         getAudit({ limit: 8, offset: 0 }),
         getApprovals(),
+        getUsageSummary().catch(() => null),
       ]);
       setStatus(s);
       setTraces(audit.traces ?? []);
       setPendingApprovals(approvals.pending ?? []);
+      if (usage) setUsageSummary(usage);
     } catch (e) {
       console.error('[overview] load failed', e);
     } finally {
@@ -211,7 +215,7 @@ export function Overview({ onNavigate, showToast }: OverviewProps) {
       )}
 
       {/* Stat cards */}
-      <div class="stats-grid">
+      <div class="stats-grid stats-grid-5">
         <div class="stat-card">
           <div class="stat-icon sage"><LuClock3 size={16} /></div>
           <div class="stat-body">
@@ -238,6 +242,13 @@ export function Overview({ onNavigate, showToast }: OverviewProps) {
           <div class="stat-body">
             <div class="stat-value stat-value-md">{channelLabel(status?.activeChannel ?? null)}</div>
             <div class="stat-subtitle">Active channel</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon rose"><LuDollarSign size={16} /></div>
+          <div class="stat-body">
+            <div class="stat-value stat-value-md">{usageSummary ? `$${usageSummary.today.totalCost.toFixed(2)}` : '—'}</div>
+            <div class="stat-subtitle">Cost today</div>
           </div>
         </div>
       </div>

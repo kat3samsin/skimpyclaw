@@ -2,10 +2,12 @@ import '../styles/sidebar.css';
 import type { IconType } from 'react-icons';
 import {
   LuBadgeCheck,
+  LuChevronLeft,
   LuClock3,
   LuCode,
   LuCpu,
   LuDatabase,
+  LuDollarSign,
   LuFileText,
   LuHeartPulse,
   LuLayoutDashboard,
@@ -30,6 +32,7 @@ export type PageId =
   | 'skills'
   | 'approvals'
   | 'health'
+  | 'usage'
   | 'config'
   | 'templates';
 
@@ -47,6 +50,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'approvals', label: 'Approvals', icon: LuBadgeCheck, section: 'dashboard' },
   { id: 'digests', label: 'Digests', icon: LuNewspaper, section: 'dashboard' },
   { id: 'audit', label: 'Audit', icon: LuSearch, section: 'dashboard' },
+  { id: 'usage', label: 'Usage', icon: LuDollarSign, section: 'dashboard' },
   { id: 'coding', label: 'Coding Agent', icon: LuCode, section: 'dashboard' },
   { id: 'memory', label: 'Memory', icon: LuDatabase, section: 'settings' },
   { id: 'templates', label: 'Templates', icon: LuFileText, section: 'settings' },
@@ -69,6 +73,8 @@ interface SidebarProps {
   botName: string;
   botEmoji: string;
   pendingApprovals?: number;
+  isNarrow?: boolean;
+  onClose?: () => void;
 }
 
 export function Sidebar({
@@ -77,6 +83,8 @@ export function Sidebar({
   botName,
   botEmoji,
   pendingApprovals,
+  isNarrow,
+  onClose,
 }: SidebarProps) {
   return (
     <nav class="sidebar">
@@ -86,6 +94,11 @@ export function Sidebar({
           <span class="sidebar-brand-name">{botName}</span>
           <span class="sidebar-brand-status">Online</span>
         </div>
+        {isNarrow && (
+          <button class="sidebar-close-btn" onClick={onClose} aria-label="Close sidebar">
+            <LuChevronLeft size={16} />
+          </button>
+        )}
       </div>
 
       {SECTIONS.map(section => {

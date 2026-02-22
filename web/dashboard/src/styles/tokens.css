@@ -1,4 +1,4 @@
-/* Design tokens — light theme (warm cream + sage) */
+/* Design tokens — light theme (warm cream + terracotta) */
 :root,
 [data-theme="light"] {
   --bg: #f5f2ee;
@@ -9,12 +9,12 @@
   --text: #2c2825;
   --text-dim: #5c5652;
   --text-muted: #9b948e;
-  --accent: #d88f86;
-  --accent-hover: #cc8278;
-  --accent-soft: rgba(216, 143, 134, 0.18);
-  --accent-soft-2: rgba(216, 143, 134, 0.10);
-  --success: #d88f86;
-  --success-soft: rgba(216, 143, 134, 0.18);
+  --accent: #ad5038;
+  --accent-hover: #964633;
+  --accent-soft: rgba(173, 80, 56, 0.16);
+  --accent-soft-2: rgba(173, 80, 56, 0.08);
+  --success: #ad5038;
+  --success-soft: rgba(173, 80, 56, 0.16);
   --warning: #c4873a;
   --warning-soft: rgba(196, 135, 58, 0.08);
   --error: #c25450;
@@ -26,9 +26,9 @@
   --shadow-md: 0 4px 16px rgba(0,0,0,0.06);
   --sidebar-active: #ffffff;
   --sidebar-hover: rgba(0,0,0,0.03);
-  --welcome-from: #d88f86;
-  --welcome-to: #e6a198;
-  --welcome-shadow: rgba(216, 143, 134, 0.30);
+  --welcome-from: #ad5038;
+  --welcome-to: #c97861;
+  --welcome-shadow: rgba(173, 80, 56, 0.30);
   --welcome-text: #ffffff;
   --log-info: #5c5652;
   --log-warn: #b07c1a;
@@ -53,7 +53,7 @@
   --sidebar-width: 260px;
 }
 
-/* Dark theme — warm charcoal + sage */
+/* Dark theme — warm charcoal + terracotta */
 [data-theme="dark"] {
   --bg: #1a1816;
   --bg-sidebar: #1a1816;
@@ -63,12 +63,12 @@
   --text: #ede9e4;
   --text-dim: #c4bfba;
   --text-muted: #8a8480;
-  --accent: #e0a299;
-  --accent-hover: #ebb0a8;
-  --accent-soft: rgba(224, 162, 153, 0.20);
-  --accent-soft-2: rgba(224, 162, 153, 0.10);
-  --success: #e0a299;
-  --success-soft: rgba(224, 162, 153, 0.18);
+  --accent: #d88972;
+  --accent-hover: #e09a86;
+  --accent-soft: rgba(216, 137, 114, 0.20);
+  --accent-soft-2: rgba(216, 137, 114, 0.10);
+  --success: #d88972;
+  --success-soft: rgba(216, 137, 114, 0.18);
   --warning: #e0a95e;
   --warning-soft: rgba(224, 169, 94, 0.12);
   --error: #e08a87;
@@ -78,11 +78,11 @@
   --shadow-sm: 0 1px 2px rgba(0,0,0,0.2);
   --shadow: 0 2px 8px rgba(0,0,0,0.2);
   --shadow-md: 0 4px 16px rgba(0,0,0,0.3);
-  --sidebar-active: rgba(224, 162, 153, 0.16);
+  --sidebar-active: rgba(216, 137, 114, 0.16);
   --sidebar-hover: rgba(255,255,255,0.04);
-  --welcome-from: #c9877e;
-  --welcome-to: #db9b92;
-  --welcome-shadow: rgba(201, 135, 126, 0.38);
+  --welcome-from: #ad5038;
+  --welcome-to: #c97861;
+  --welcome-shadow: rgba(173, 80, 56, 0.38);
   --welcome-text: #ffffff;
   --log-info: #c4bfba;
   --log-warn: #e0a95e;

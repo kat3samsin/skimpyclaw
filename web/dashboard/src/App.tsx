@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'preact/hooks';
-import { LuMoon, LuSun } from 'react-icons/lu';
+import { LuMenu, LuMoon, LuSun } from 'react-icons/lu';
 import { Sidebar, type PageId } from './components/Sidebar.js';
 import { ToastContainer, useToast } from './components/Toast.js';
 import {
@@ -17,6 +17,7 @@ import {
   Skills,
   Health,
   Templates,
+  Usage,
 } from './pages/index.js';
 import { getToken, setToken } from './api/client.js';
 import './styles/base.css';
@@ -122,6 +123,8 @@ export function App() {
   const bot = getConfiguredBot();
   const [authed, setAuthed] = useState(!!getToken());
   const [page, setPage] = useState<PageId>('overview');
+  const [isNarrow, setIsNarrow] = useState<boolean>(() => window.innerWidth <= 980);
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => window.innerWidth > 980);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     return (localStorage.getItem('theme') as 'light' | 'dark') ?? 'light';
   });
@@ -133,12 +136,37 @@ export function App() {
     localStorage.setItem('theme', theme);
   }, [theme]);
 
+  useEffect(() => {
+    function onResize() {
+      const narrow = window.innerWidth <= 980;
+      setIsNarrow(prev => {
+        if (prev !== narrow) setSidebarOpen(!narrow);
+        return narrow;
+      });
+    }
+
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  useEffect(() => {
+    if (!isNarrow || !sidebarOpen) {
+      document.body.style.overflow = '';
+      return;
+    }
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isNarrow, sidebarOpen]);
+
   function toggleTheme() {
     setTheme(t => t === 'light' ? 'dark' : 'light');
   }
 
   function navigate(p: PageId) {
     setPage(p);
+    if (isNarrow) setSidebarOpen(false);
   }
 
   if (!authed) {
@@ -153,6 +181,8 @@ export function App() {
         return <History />;
       case 'cron':
         return <Cron showToast={showToast} />;
+      case 'usage':
+        return <Usage />;
       case 'coding':
         return <Coding />;
       case 'audit':
@@ -182,14 +212,26 @@ export function App() {
 
   return (
     <>
-      <div class="shell">
+      <div class={`shell${isNarrow ? ' shell-narrow' : ''}${isNarrow && sidebarOpen ? ' sidebar-open' : ''}`}>
+        {isNarrow && (
+          <button
+            class="global-sidebar-toggle"
+            onClick={() => setSidebarOpen(true)}
+            aria-label="Open sidebar"
+          >
+            <LuMenu size={16} />
+          </button>
+        )}
         <Sidebar
           currentPage={page}
           onNavigate={navigate}
           botName={bot.name}
           botEmoji={bot.emoji}
           pendingApprovals={pendingApprovals}
+          isNarrow={isNarrow}
+          onClose={() => setSidebarOpen(false)}
         />
+        {isNarrow && sidebarOpen ? <button class="sidebar-backdrop" onClick={() => setSidebarOpen(false)} aria-label="Close sidebar" /> : null}
         <main class="main">
           <button class="global-theme-toggle" onClick={toggleTheme} aria-label="Toggle theme">
             {theme === 'light' ? <LuMoon size={16} /> : <LuSun size={16} />}

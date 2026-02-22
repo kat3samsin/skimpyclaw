@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
-import { getCodeAgents } from '../api/client.js';
+import { getCodeAgents, getUsageSummary } from '../api/client.js';
 import type { CodeAgent } from '../types.js';
 import { LuCheck, LuChevronDown, LuClock3, LuCode, LuDollarSign, LuRefreshCw, LuRotateCw, LuX } from 'react-icons/lu';
 import { Markdown } from '../components/Markdown.js';
@@ -60,8 +60,11 @@ function statusIcon(status: CodeAgent['status']) {
 
 export function Coding() {
   const [agents, setAgents] = useState<CodeAgent[]>([]);
+  const [todayCost, setTodayCost] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(0);
   const [accent] = useState(() => CODING_ACCENTS[Math.floor(Math.random() * CODING_ACCENTS.length)]);
+  const PAGE_SIZE = 10;
 
   useEffect(() => {
     load();
@@ -71,8 +74,12 @@ export function Coding() {
 
   async function load() {
     try {
-      const data = await getCodeAgents();
+      const [data, usage] = await Promise.all([
+        getCodeAgents(),
+        getUsageSummary().catch(() => null),
+      ]);
       setAgents(data.agents ?? []);
+      if (usage) setTodayCost(usage.today.totalCost);
     } catch {
       // ignore polling errors
     } finally {
@@ -92,13 +99,22 @@ export function Coding() {
   }, [agents]);
 
   const roots = useMemo(() => agents.filter(a => !a.parentTaskId), [agents]);
+  const pagedRoots = useMemo(() => {
+    const start = page * PAGE_SIZE;
+    return roots.slice(start, start + PAGE_SIZE);
+  }, [roots, page]);
+
+  useEffect(() => {
+    const maxPage = Math.max(0, Math.ceil(roots.length / PAGE_SIZE) - 1);
+    if (page > maxPage) setPage(maxPage);
+  }, [roots.length, page]);
 
   const stats = useMemo(() => {
     const running = roots.filter(t => statusClass(t.status) === 'running').length;
     const completed = roots.filter(t => statusClass(t.status) === 'completed').length;
     const failed = roots.filter(t => statusClass(t.status) === 'failed').length;
-    return { running, completed, failed, cost: 0 };
-  }, [roots]);
+    return { running, completed, failed, cost: todayCost };
+  }, [roots, todayCost]);
 
   return (
     <div
@@ -160,7 +176,7 @@ export function Coding() {
             </div>
           </div>
 
-          {roots.map(task => {
+          {pagedRoots.map(task => {
             const children = childMap.get(task.id) ?? [];
             const output = task.liveOutput || task.outputPreview;
             const cls = statusClass(task.status);
@@ -244,6 +260,28 @@ export function Coding() {
               </div>
             );
           })}
+
+          {roots.length > PAGE_SIZE && (
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', padding: '12px' }}>
+              <button
+                class="btn btn-sm"
+                disabled={page === 0}
+                onClick={() => setPage(p => Math.max(0, p - 1))}
+              >
+                Previous
+              </button>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)', alignSelf: 'center' }}>
+                {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, roots.length)} of {roots.length}
+              </span>
+              <button
+                class="btn btn-sm"
+                disabled={(page + 1) * PAGE_SIZE >= roots.length}
+                onClick={() => setPage(p => p + 1)}
+              >
+                Next
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

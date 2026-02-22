@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'preact/hooks';
-import { getConfig, saveConfig } from '../api/client.js';
+import { getConfig, saveConfig, reloadConfig } from '../api/client.js';
 
 interface ConfigProps {
   showToast: (msg: string, type?: 'success' | 'error' | 'warning') => void;
@@ -22,6 +22,7 @@ export function Config({ showToast }: ConfigProps) {
   const [configData, setConfigData] = useState<Record<string, any> | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [reloading, setReloading] = useState(false);
   const [form, setForm] = useState<ConfigFormState>({
     gatewayHost: '127.0.0.1',
     gatewayPort: '18790',
@@ -64,6 +65,20 @@ export function Config({ showToast }: ConfigProps) {
       showToast('Failed to load config', 'error');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function reload() {
+    setReloading(true);
+    try {
+      await reloadConfig();
+      showToast('Config reloaded', 'success');
+      await load();
+    } catch (e) {
+      console.error('[config] reload failed', e);
+      showToast('Reload failed', 'error');
+    } finally {
+      setReloading(false);
     }
   }
 
@@ -114,7 +129,9 @@ export function Config({ showToast }: ConfigProps) {
       <div class="page-header">
         <div class="page-title">Config</div>
         <div class="header-actions">
-          <button class="btn btn-sm" onClick={() => void load()}>Reload</button>
+          <button class="btn btn-sm" onClick={() => void reload()} disabled={reloading}>
+            {reloading ? 'Reloading…' : 'Reload'}
+          </button>
           <button class="btn btn-sm btn-primary" onClick={() => void save()} disabled={saving}>
             {saving ? 'Saving…' : 'Save'}
           </button>

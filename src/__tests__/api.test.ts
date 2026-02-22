@@ -105,10 +105,12 @@ vi.mock('../config.js', () => ({
 let mockCurrentModel = 'claude-sonnet-4-20250514';
 let mockLastMessage: Date | undefined = undefined;
 
+const mockSetGatewayConfig = vi.fn();
 vi.mock('../gateway.js', () => ({
   getCurrentModel: () => mockCurrentModel,
   setCurrentModel: (m: string) => { mockCurrentModel = m; },
   getLastMessage: () => mockLastMessage,
+  setGatewayConfig: (...args: any[]) => mockSetGatewayConfig(...args),
 }));
 
 // Mock cron.ts
@@ -129,9 +131,11 @@ vi.mock('../cron.js', () => ({
     const job = config.cron.jobs.find((j: any) => j.id === id);
     if (!job) throw new Error(`Cron job not found: ${id}`);
   },
+  initCron: (...args: any[]) => mockInitCron(...args),
 }));
 
 // Mock agent.ts
+const mockInitProviders = vi.fn();
 vi.mock('../agent.js', () => ({
   TEMPLATE_FILES: ['SOUL.md', 'IDENTITY.md', 'USER.md', 'TOOLS.md', 'BOOT.md', 'HEARTBEAT.md', 'MEMORY.md'],
   getAgentTemplateContent: (agentId: string, name: string) => {
@@ -150,6 +154,39 @@ vi.mock('../agent.js', () => ({
     const { writeFileSync } = require('fs');
     writeFileSync(join(TEST_ROOT, 'agents', agentId, name), content, 'utf-8');
   },
+  initProviders: (...args: any[]) => mockInitProviders(...args),
+  runAgentTurn: vi.fn().mockResolvedValue('ok'),
+}));
+
+// Mock cron.ts additions for reload
+const mockInitCron = vi.fn();
+
+// Mock heartbeat.ts for reload
+const mockInitHeartbeat = vi.fn();
+const mockStopHeartbeat = vi.fn();
+vi.mock('../heartbeat.js', () => ({
+  initHeartbeat: (...args: any[]) => mockInitHeartbeat(...args),
+  stopHeartbeat: () => mockStopHeartbeat(),
+}));
+
+// Mock channels.ts for reload
+const mockInitActiveChannel = vi.fn().mockResolvedValue('telegram');
+const mockStopActiveChannel = vi.fn().mockResolvedValue(undefined);
+const mockStartActiveChannel = vi.fn().mockResolvedValue(undefined);
+vi.mock('../channels.js', () => ({
+  initActiveChannel: (...args: any[]) => mockInitActiveChannel(...args),
+  stopActiveChannel: () => mockStopActiveChannel(),
+  startActiveChannel: () => mockStartActiveChannel(),
+  getActiveChannelId: () => 'telegram',
+  sendActiveChannelProactiveMessage: vi.fn().mockResolvedValue(true),
+}));
+
+// Mock tools.ts for reload
+const mockSetCodeAgentConfig = vi.fn();
+vi.mock('../tools.js', () => ({
+  setCodeAgentConfig: (...args: any[]) => mockSetCodeAgentConfig(...args),
+  getAllCodeAgents: () => [],
+  getCodeAgent: () => null,
 }));
 
 // Mock security.ts - only need redactSecrets
@@ -186,6 +223,21 @@ vi.mock('../doctor/runner.js', () => ({
       ],
     },
     exitCode: 0,
+  }),
+}));
+
+// Mock usage.ts
+vi.mock('../usage.js', () => ({
+  getUsageSummary: () => ({
+    today: { totalCost: 0.42, totalInputTokens: 10000, totalOutputTokens: 5000, totalCalls: 3, byModel: { 'claude-sonnet-4-5': { calls: 3, inputTokens: 10000, outputTokens: 5000, cost: 0.42 } } },
+    week: { totalCost: 2.50, totalInputTokens: 50000, totalOutputTokens: 25000, totalCalls: 15, byModel: {} },
+    month: { totalCost: 8.00, totalInputTokens: 200000, totalOutputTokens: 100000, totalCalls: 50, byModel: {} },
+  }),
+  readUsageRecords: (opts: any) => ({
+    records: [
+      { id: 'test-1', timestamp: '2026-02-21T10:00:00Z', model: 'claude-sonnet-4-5', provider: 'anthropic', inputTokens: 1000, outputTokens: 500, totalTokens: 1500, inputCost: 0.003, outputCost: 0.0075, totalCost: 0.0105, trigger: 'telegram' },
+    ],
+    total: 1,
   }),
 }));
 
@@ -794,5 +846,132 @@ describe('Doctor endpoint', () => {
   it('GET /api/dashboard/doctor requires auth', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/dashboard/doctor' });
     expect(res.statusCode).toBe(401);
+  });
+});
+
+describe('Reload endpoint', () => {
+  beforeEach(() => {
+    mockInitProviders.mockClear();
+    mockInitCron.mockClear();
+    mockInitHeartbeat.mockClear();
+    mockStopHeartbeat.mockClear();
+    mockInitActiveChannel.mockClear();
+    mockStopActiveChannel.mockClear();
+    mockStartActiveChannel.mockClear();
+    mockSetCodeAgentConfig.mockClear();
+    mockSetGatewayConfig.mockClear();
+  });
+
+  it('POST /api/dashboard/reload reloads config and returns reloaded:true', async () => {
+    const res = await inject({ method: 'POST', url: '/api/dashboard/reload' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.reloaded).toBe(true);
+    expect(body).toHaveProperty('timestamp');
+    expect(mockSetGatewayConfig).toHaveBeenCalledOnce();
+    expect(mockInitProviders).toHaveBeenCalledOnce();
+    expect(mockSetCodeAgentConfig).toHaveBeenCalledOnce();
+    expect(mockInitCron).toHaveBeenCalledOnce();
+    expect(mockStopHeartbeat).toHaveBeenCalledOnce();
+    expect(mockInitHeartbeat).toHaveBeenCalledOnce();
+    expect(mockStopActiveChannel).toHaveBeenCalledOnce();
+    expect(mockInitActiveChannel).toHaveBeenCalledOnce();
+    expect(mockStartActiveChannel).toHaveBeenCalledOnce();
+  });
+
+  it('POST /api/dashboard/reload requires auth', async () => {
+    const res = await app.inject({ method: 'POST', url: '/api/dashboard/reload' });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('POST /api/dashboard/reload returns 500 when initProviders throws', async () => {
+    mockInitProviders.mockImplementationOnce(() => {
+      throw new Error('provider init failed');
+    });
+    const res = await inject({ method: 'POST', url: '/api/dashboard/reload' });
+    expect(res.statusCode).toBe(500);
+    const body = res.json();
+    expect(body).toHaveProperty('error');
+    expect(body.error).toContain('provider init failed');
+  });
+
+  it('POST /api/dashboard/reload updates runtime config for auth checks', async () => {
+    // Update config file with new token
+    const newConfig = { ...TEST_CONFIG };
+    newConfig.dashboard.token = 'new-secret-token';
+    const { writeFileSync } = require('fs');
+    writeFileSync(CONFIG_PATH, JSON.stringify(newConfig, null, 2));
+
+    // Reload config
+    const reloadRes = await inject({ method: 'POST', url: '/api/dashboard/reload' });
+    expect(reloadRes.statusCode).toBe(200);
+
+    // Old token should now fail
+    const oldTokenRes = await app.inject({
+      method: 'GET',
+      url: '/api/dashboard/status',
+      headers: { authorization: 'Bearer test-dashboard-token-123' },
+    });
+    expect(oldTokenRes.statusCode).toBe(401);
+
+    // New token should work
+    const newTokenRes = await app.inject({
+      method: 'GET',
+      url: '/api/dashboard/status',
+      headers: { authorization: 'Bearer new-secret-token' },
+    });
+    expect(newTokenRes.statusCode).toBe(200);
+
+    // Restore config for other tests
+    writeFileSync(CONFIG_PATH, JSON.stringify(TEST_CONFIG, null, 2));
+  });
+
+  it('POST /api/dashboard/reload updates runtime config for status endpoint', async () => {
+    // Update config with new agent name
+    const newConfig = { ...TEST_CONFIG };
+    newConfig.agents.default = 'updated-agent';
+    const { writeFileSync } = require('fs');
+    writeFileSync(CONFIG_PATH, JSON.stringify(newConfig, null, 2));
+
+    // Reload config
+    const reloadRes = await inject({ method: 'POST', url: '/api/dashboard/reload' });
+    expect(reloadRes.statusCode).toBe(200);
+
+    // Status should reflect new agent name
+    const statusRes = await inject({ method: 'GET', url: '/api/dashboard/status' });
+    expect(statusRes.statusCode).toBe(200);
+    expect(statusRes.json().agent).toBe('updated-agent');
+
+    // Restore config for other tests
+    writeFileSync(CONFIG_PATH, JSON.stringify(TEST_CONFIG, null, 2));
+  });
+});
+
+describe('Usage endpoints', () => {
+  it('GET /api/dashboard/usage returns summary with three periods', async () => {
+    const res = await inject({ method: 'GET', url: '/api/dashboard/usage' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body).toHaveProperty('today');
+    expect(body).toHaveProperty('week');
+    expect(body).toHaveProperty('month');
+    expect(body.today.totalCost).toBe(0.42);
+    expect(body.today.totalCalls).toBe(3);
+  });
+
+  it('GET /api/dashboard/usage requires auth', async () => {
+    const res = await app.inject({ method: 'GET', url: '/api/dashboard/usage' });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('GET /api/dashboard/usage/records returns paginated records', async () => {
+    const res = await inject({ method: 'GET', url: '/api/dashboard/usage/records?limit=10' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body).toHaveProperty('records');
+    expect(body).toHaveProperty('total');
+    expect(Array.isArray(body.records)).toBe(true);
+    expect(body.records[0]).toHaveProperty('model');
+    expect(body.records[0]).toHaveProperty('totalCost');
   });
 });

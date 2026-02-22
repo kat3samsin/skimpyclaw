@@ -4,7 +4,7 @@
 
 ```bash
 pnpm build        # TypeScript compile (tsc)
-pnpm test         # Vitest (469 tests)
+pnpm test         # Vitest (383 tests)
 pnpm build && pnpm test  # Always run both after changes
 pnpm dev          # Hot reload dev server (tsx watch)
 ```
@@ -40,6 +40,7 @@ Always run `pnpm build && pnpm test` after making changes. Do not submit work wi
 | `src/skills-types.ts` | TypeScript types for skills (SkillFrontmatter, LoadedSkill, SkillConfig, SkillContext) |
 | `src/voice.ts` | Voice transcription — local Whisper CLI (C++/Python) with API fallback |
 | `src/digests.ts` | Digest storage and management for cron job article outputs |
+| `src/usage.ts` | Cost & token usage tracking — JSONL storage, aggregation, summary |
 | `src/types.ts` | All TypeScript interfaces and types |
 | `src/security.ts` | Auth, path validation, bash command blocklist, rate limiting |
 | `src/config.ts` | Config loading and validation |

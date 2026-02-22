@@ -21,6 +21,8 @@ import type {
   StatusResponse,
   TemplateListResponse,
   Template,
+  UsageSummaryResponse,
+  UsageRecordsResponse,
 } from '../types.js';
 
 const TOKEN_KEY = 'dashboard_token';
@@ -184,6 +186,8 @@ export const saveConfig = (config: Record<string, unknown>) =>
     method: 'PUT',
     body: JSON.stringify({ config }),
   });
+export const reloadConfig = () =>
+  request<{ reloaded: boolean; timestamp: string }>('reload', { method: 'POST' });
 
 // ── Digests ──────────────────────────────────────────────────────────
 
@@ -213,5 +217,17 @@ export const updateSkillContent = (name: string, content: string) =>
   });
 export const deleteSkill = (name: string) =>
   request<{ deleted: boolean }>(`skills/${encodeURIComponent(name)}`, { method: 'DELETE' });
+
+// ── Usage ───────────────────────────────────────────────────────────
+
+export const getUsageSummary = () => request<UsageSummaryResponse>('usage');
+export function getUsageRecords(params?: { limit?: number; offset?: number; model?: string }): Promise<UsageRecordsResponse> {
+  const q = new URLSearchParams();
+  if (params?.limit !== undefined) q.set('limit', String(params.limit));
+  if (params?.offset !== undefined) q.set('offset', String(params.offset));
+  if (params?.model) q.set('model', params.model);
+  const qs = q.toString();
+  return request<UsageRecordsResponse>(`usage/records${qs ? `?${qs}` : ''}`);
+}
 
 export { ApiError };
