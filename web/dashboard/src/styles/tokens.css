@@ -5,7 +5,7 @@
 :root[data-theme="light"],
 [data-theme="light"] {
   --text: #0c0303;
-  --background: #f7f2ea;
+  --background: #fffaf5;
   --text-dim: #5a4a40;
   --text-muted: #9a8a80;
   --bg: var(--background);
@@ -17,8 +17,8 @@
   --primary-hover: #c65a24;
   --primary-soft: rgba(219, 111, 57, 0.16);
   --primary-soft-2: rgba(219, 111, 57, 0.08);
-  --secondary: #e4a886;
-  --secondary-soft: rgba(213, 182, 165, 0.20);
+  --secondary: #f2ded2;
+  --secondary-soft: rgba(242, 222, 210, 0.22);
   --accent: #dfaa6d;
   --accent-hover: #e07030;
   --accent-soft: rgba(243, 134, 70, 0.16);
@@ -79,8 +79,8 @@
   --primary-hover: #db6f39;
   --primary-soft: rgba(198, 90, 36, 0.20);
   --primary-soft-2: rgba(198, 90, 36, 0.10);
-  --secondary: #793d1b;
-  --secondary-soft: rgba(90, 59, 42, 0.25);
+  --secondary: #f2ded2;
+  --secondary-soft: rgba(242, 222, 210, 0.22);
   --accent: #dfaa6d;
   --accent-hover: #d65a1a;
   --accent-soft: rgba(187, 76, 12, 0.20);

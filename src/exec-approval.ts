@@ -18,6 +18,145 @@ interface DangerousPattern {
   reason: string;
 }
 
+function tokenizeShellCommand(command: string): string[] {
+  const tokens: string[] = [];
+  let current = '';
+  let quote: '"' | "'" | null = null;
+  let escaped = false;
+
+  const pushCurrent = () => {
+    if (current.length > 0) {
+      tokens.push(current);
+      current = '';
+    }
+  };
+
+  for (let i = 0; i < command.length; i++) {
+    const ch = command[i];
+    const next = command[i + 1];
+
+    if (escaped) {
+      current += ch;
+      escaped = false;
+      continue;
+    }
+
+    if (quote) {
+      if (ch === '\\' && quote === '"') {
+        escaped = true;
+        continue;
+      }
+      if (ch === quote) {
+        quote = null;
+      } else {
+        current += ch;
+      }
+      continue;
+    }
+
+    if (ch === '\\') {
+      escaped = true;
+      continue;
+    }
+    if (ch === '"' || ch === "'") {
+      quote = ch;
+      continue;
+    }
+    if (/\s/.test(ch)) {
+      pushCurrent();
+      continue;
+    }
+
+    if (ch === '&' || ch === '|') {
+      pushCurrent();
+      if (next === ch) {
+        tokens.push(ch + next);
+        i++;
+      } else {
+        tokens.push(ch);
+      }
+      continue;
+    }
+    if (ch === ';') {
+      pushCurrent();
+      tokens.push(ch);
+      continue;
+    }
+
+    current += ch;
+  }
+
+  if (escaped) current += '\\';
+  pushCurrent();
+  return tokens;
+}
+
+function isCommandSeparator(token: string): boolean {
+  return token === '&&' || token === '||' || token === '|' || token === ';';
+}
+
+function isGitForcePushCommand(command: string): boolean {
+  const tokens = tokenizeShellCommand(command);
+  let start = 0;
+
+  for (let i = 0; i <= tokens.length; i++) {
+    if (i !== tokens.length && !isCommandSeparator(tokens[i])) continue;
+
+    const segment = tokens.slice(start, i);
+    if (isGitForcePushSegment(segment)) return true;
+    start = i + 1;
+  }
+
+  return false;
+}
+
+function isGitForcePushSegment(segment: string[]): boolean {
+  if (segment.length < 2) return false;
+
+  let idx = 0;
+  while (idx < segment.length && segment[idx].includes('=') && !segment[idx].startsWith('-')) {
+    idx++;
+  }
+  if (idx >= segment.length || segment[idx].toLowerCase() !== 'git') return false;
+  idx++;
+
+  // Skip git-global options before subcommand.
+  while (idx < segment.length) {
+    const tok = segment[idx].toLowerCase();
+    if (tok === 'push') break;
+    if (!tok.startsWith('-')) return false;
+
+    // Options with explicit values.
+    if (
+      tok === '-c' ||
+      tok === '-c' ||
+      tok === '--git-dir' ||
+      tok === '--work-tree' ||
+      tok === '--namespace' ||
+      tok === '--exec-path'
+    ) {
+      idx += 2;
+      continue;
+    }
+
+    idx++;
+  }
+
+  if (idx >= segment.length || segment[idx].toLowerCase() !== 'push') return false;
+
+  for (let i = idx + 1; i < segment.length; i++) {
+    const tok = segment[i].toLowerCase();
+    if (tok === '--force' || tok.startsWith('--force=') || tok === '--force-with-lease' || tok.startsWith('--force-with-lease=')) {
+      return true;
+    }
+    if (tok.startsWith('-') && !tok.startsWith('--') && tok.includes('f')) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 const DANGEROUS_PATTERNS: DangerousPattern[] = [
   // Tier 3: catastrophic / irreversible
   { pattern: /rm\s+-rf/i, tier: 3, reason: 'Recursive force delete' },
@@ -33,8 +172,6 @@ const DANGEROUS_PATTERNS: DangerousPattern[] = [
   { pattern: /kubectl\s+delete/i, tier: 2, reason: 'Kubernetes resource deletion' },
   { pattern: /docker\s+system\s+prune/i, tier: 2, reason: 'Docker system prune' },
   { pattern: /docker\s+volume\s+prune/i, tier: 2, reason: 'Docker volume prune' },
-  { pattern: /git\s+push\s+--force/i, tier: 2, reason: 'Force push to remote' },
-  { pattern: /git\s+push\s+-f\b/i, tier: 2, reason: 'Force push to remote' },
 
   // Tier 1: mildly risky (informational only, no approval needed by default)
   { pattern: /git\s+reset/i, tier: 1, reason: 'Git reset' },
@@ -48,6 +185,10 @@ const DANGEROUS_PATTERNS: DangerousPattern[] = [
  */
 export function classifyCommandRisk(command: string): RiskClassification {
   let highest: RiskClassification = { tier: 0, reason: 'No dangerous patterns detected' };
+
+  if (isGitForcePushCommand(command)) {
+    highest = { tier: 2, reason: 'Force push to remote' };
+  }
 
   for (const entry of DANGEROUS_PATTERNS) {
     if (entry.pattern.test(command) && entry.tier > highest.tier) {

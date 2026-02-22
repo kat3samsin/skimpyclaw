@@ -66,23 +66,27 @@ export function Digests() {
       ) : (
         <div class="split">
           <div class="split-list">
-            <div>
+            <div class="templates-list">
               {digests.map(d => (
                 <button
                   key={d.id}
                   onClick={() => void openDigest(d.id)}
-                  class={`list-item${selected === d.id ? ' active' : ''}`}
-                  style={{ width: '100%', textAlign: 'left', border: 'none', background: 'none', cursor: 'pointer', font: 'inherit', color: 'inherit' }}
+                  class={`templates-list-item${selected === d.id ? ' active' : ''}`}
                 >
-                  <div class="list-item-title">{d.jobName}</div>
-                  <div class="list-item-sub">
-                    {d.articleCount} article{d.articleCount === 1 ? '' : 's'} · {formatDate(d.createdAt)}
+                  <div class="templates-list-icon">
+                    <LuNewspaper size={14} />
                   </div>
-                  {d.preview?.length > 0 && (
-                    <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 6, lineHeight: 1.45 }}>
-                      {d.preview[0]}
+                  <div class="templates-list-content">
+                    <div class="templates-list-title">{d.jobName}</div>
+                    <div class="templates-list-meta">
+                      {d.articleCount} article{d.articleCount === 1 ? '' : 's'} · {formatDate(d.createdAt)}
                     </div>
-                  )}
+                    {d.preview?.length > 0 && (
+                      <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 6, lineHeight: 1.45 }}>
+                        {d.preview[0]}
+                      </div>
+                    )}
+                  </div>
                 </button>
               ))}
             </div>

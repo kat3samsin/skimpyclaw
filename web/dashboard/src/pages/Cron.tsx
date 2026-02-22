@@ -218,20 +218,20 @@ export function Cron({ showToast }: CronProps) {
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 16 }}>
           <div class="card" style={{ marginBottom: 0, padding: 0, overflow: 'hidden' }}>
-            <div class="feed">
+            <div class="templates-list">
               {jobs.map(j => (
                 <button
                   key={j.id}
-                  class="feed-item"
-                  style={{ border: 'none', width: '100%', textAlign: 'left', background: selected === j.id ? 'var(--accent-soft)' : 'transparent', cursor: 'pointer' }}
+                  class={`templates-list-item${selected === j.id ? ' active' : ''}`}
                   onClick={() => openJob(j.id)}
                 >
-                  <div class="feed-icon cron"><LuClock3 size={14} /></div>
-                  <div>
-                    <div class="feed-title">{j.name}</div>
-                    <div class="feed-detail">{j.id}</div>
+                  <div class="templates-list-icon">
+                    <LuClock3 size={14} />
                   </div>
-                  <div class="feed-time">{formatNextRun(j.nextRun)}</div>
+                  <div class="templates-list-content">
+                    <div class="templates-list-title">{j.name}</div>
+                    <div class="templates-list-meta">{j.id} · {formatNextRun(j.nextRun)}</div>
+                  </div>
                 </button>
               ))}
             </div>

@@ -37,11 +37,18 @@ function renderMarkdown(markdown: string): string {
   let inCode = false;
   let codeLines: string[] = [];
   let listType: 'ul' | 'ol' | null = null;
+  let paragraphLines: string[] = [];
 
   function closeList() {
     if (!listType) return;
     html.push(`</${listType}>`);
     listType = null;
+  }
+
+  function closeParagraph() {
+    if (paragraphLines.length === 0) return;
+    html.push(`<p>${renderInline(paragraphLines.join(' '))}</p>`);
+    paragraphLines = [];
   }
 
   function closeCode() {
@@ -53,6 +60,7 @@ function renderMarkdown(markdown: string): string {
 
   for (const line of lines) {
     if (line.trim().startsWith('```')) {
+      closeParagraph();
       closeList();
       if (inCode) closeCode();
       else inCode = true;
@@ -66,6 +74,7 @@ function renderMarkdown(markdown: string): string {
 
     const heading = /^(#{1,6})\s+(.*)$/.exec(line);
     if (heading) {
+      closeParagraph();
       closeList();
       const level = heading[1].length;
       html.push(`<h${level}>${renderInline(heading[2])}</h${level}>`);
@@ -74,6 +83,7 @@ function renderMarkdown(markdown: string): string {
 
     const ul = /^[-*]\s+(.*)$/.exec(line);
     if (ul) {
+      closeParagraph();
       if (listType !== 'ul') {
         closeList();
         listType = 'ul';
@@ -85,6 +95,7 @@ function renderMarkdown(markdown: string): string {
 
     const ol = /^\d+\.\s+(.*)$/.exec(line);
     if (ol) {
+      closeParagraph();
       if (listType !== 'ol') {
         closeList();
         listType = 'ol';
@@ -95,20 +106,22 @@ function renderMarkdown(markdown: string): string {
     }
 
     if (line.trim() === '') {
+      closeParagraph();
       closeList();
-      html.push('<br />');
       continue;
     }
 
     closeList();
     if (line.startsWith('> ')) {
+      closeParagraph();
       html.push(`<blockquote>${renderInline(line.slice(2))}</blockquote>`);
       continue;
     }
 
-    html.push(`<p>${renderInline(line)}</p>`);
+    paragraphLines.push(line.trim());
   }
 
+  closeParagraph();
   closeList();
   closeCode();
 

@@ -744,17 +744,17 @@ textarea::placeholder {
 /* Markdown preview */
 .markdown-view {
   font-size: 14px;
-  line-height: 1.65;
+  line-height: 1.55;
   color: var(--text-dim);
 }
 .markdown-view h1, .markdown-view h2, .markdown-view h3, .markdown-view h4, .markdown-view h5, .markdown-view h6 {
   font-family: var(--serif);
   color: var(--text);
   font-weight: 800;
-  margin: 0 0 10px;
+  margin: 0 0 8px;
 }
-.markdown-view p { margin: 0 0 10px; }
-.markdown-view ul, .markdown-view ol { padding-left: 20px; margin: 0 0 10px; }
+.markdown-view p { margin: 0 0 7px; }
+.markdown-view ul, .markdown-view ol { padding-left: 20px; margin: 0 0 7px; }
 .markdown-view code {
   font-family: var(--mono);
   background: var(--surface-alt);
@@ -763,7 +763,7 @@ textarea::placeholder {
   font-size: 12px;
 }
 .markdown-view pre {
-  margin: 0 0 12px;
+  margin: 0 0 9px;
   background: var(--surface-alt);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-sm);
@@ -774,7 +774,7 @@ textarea::placeholder {
 .markdown-view blockquote {
   border-left: 3px solid var(--accent);
   padding-left: 10px;
-  margin: 0 0 12px;
+  margin: 0 0 9px;
   color: var(--text-muted);
 }
 
@@ -2223,7 +2223,7 @@ textarea::placeholder {
   font-family: var(--serif);
   color: var(--text);
   font-weight: 800;
-  margin: 24px 0 12px;
+  margin: 16px 0 8px;
   line-height: 1.3;
 }
 
@@ -2248,14 +2248,14 @@ textarea::placeholder {
 }
 
 .templates-markdown-preview .markdown-view p {
-  margin: 0 0 16px;
-  line-height: 1.7;
+  margin: 0 0 8px;
+  line-height: 1.58;
 }
 
 .templates-markdown-preview .markdown-view blockquote {
   border-left: 4px solid var(--accent);
   padding-left: 16px;
-  margin: 16px 0;
+  margin: 10px 0;
   color: var(--text-dim);
   font-style: italic;
 }
@@ -2263,7 +2263,7 @@ textarea::placeholder {
 .templates-markdown-preview .markdown-view hr {
   border: none;
   border-top: 1px solid var(--border-light);
-  margin: 32px 0;
+  margin: 18px 0;
 }
 
 .templates-markdown-preview .markdown-view code {
@@ -2279,8 +2279,8 @@ textarea::placeholder {
   background: var(--surface-alt);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-sm);
-  padding: 16px;
-  margin: 16px 0;
+  padding: 12px;
+  margin: 10px 0;
   overflow-x: auto;
 }
 

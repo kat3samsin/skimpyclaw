@@ -104,6 +104,21 @@ describe('classifyCommandRisk', () => {
     expect(result.tier).toBe(2);
   });
 
+  it('returns tier 2 for git push when --force is at the end', () => {
+    const result = classifyCommandRisk('git push origin main --force');
+    expect(result.tier).toBe(2);
+  });
+
+  it('returns tier 2 for git push --force-with-lease', () => {
+    const result = classifyCommandRisk('git push --force-with-lease origin main');
+    expect(result.tier).toBe(2);
+  });
+
+  it('returns tier 2 for chained command containing force push', () => {
+    const result = classifyCommandRisk('cd /tmp && git push origin trunk --force');
+    expect(result.tier).toBe(2);
+  });
+
   it('returns tier 1 for git reset', () => {
     const result = classifyCommandRisk('git reset --hard HEAD~1');
     expect(result.tier).toBe(1);
