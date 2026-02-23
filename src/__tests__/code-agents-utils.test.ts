@@ -32,4 +32,19 @@ describe('resolveSelectedCodeAgent', () => {
   it('uses claude as hard default', () => {
     expect(resolveSelectedCodeAgent(undefined, undefined)).toBe('claude');
   });
+
+  it('auto-selects codex when model is a GPT model and no agent specified', () => {
+    expect(resolveSelectedCodeAgent(undefined, 'claude', 'gpt-4.1')).toBe('codex');
+    expect(resolveSelectedCodeAgent(undefined, 'claude', 'gpt-5.3-codex')).toBe('codex');
+    expect(resolveSelectedCodeAgent(undefined, 'claude', 'openai/gpt-4.1')).toBe('codex');
+    expect(resolveSelectedCodeAgent(undefined, 'claude', 'o3-pro')).toBe('codex');
+  });
+
+  it('auto-selects kimi when model is a kimi model and no agent specified', () => {
+    expect(resolveSelectedCodeAgent(undefined, 'claude', 'kimi-for-coding')).toBe('kimi');
+  });
+
+  it('respects explicit agent even when model suggests different agent', () => {
+    expect(resolveSelectedCodeAgent('claude', 'claude', 'gpt-4.1')).toBe('claude');
+  });
 });

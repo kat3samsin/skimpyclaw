@@ -11,13 +11,13 @@ describe('provider utils', () => {
   it('detects provider from explicit prefix', () => {
     expect(getProvider('openai/gpt-5.3-codex')).toBe('openai');
     expect(getProvider('codex/gpt-5.3-codex')).toBe('codex');
-    expect(getProvider('anthropic/claude-sonnet-4-5')).toBe('anthropic');
+    expect(getProvider('anthropic/claude-sonnet-4-6')).toBe('anthropic');
   });
 
   it('strips provider prefix when registries are omitted', () => {
     expect(stripProvider('openai/gpt-5.3-codex')).toBe('gpt-5.3-codex');
     expect(stripProvider('codex/gpt-5.3-codex')).toBe('gpt-5.3-codex');
-    expect(stripProvider('anthropic/claude-sonnet-4-5')).toBe('claude-sonnet-4-5');
+    expect(stripProvider('anthropic/claude-sonnet-4-6')).toBe('claude-sonnet-4-6');
   });
 
   it('resolves provider route from aliases', () => {
@@ -42,22 +42,26 @@ describe('provider utils', () => {
 
   it('migrates deprecated claude 3.5 sonnet model ids', () => {
     const cfg: any = { models: { aliases: {} } };
-    expect(resolveModel('claude-3-5-sonnet-20241022', cfg)).toBe('claude-sonnet-4-5');
-    expect(resolveModel('anthropic/claude-3-5-sonnet-20241022', cfg)).toBe('anthropic/claude-sonnet-4-5');
+    expect(resolveModel('claude-3-5-sonnet-20241022', cfg)).toBe('claude-sonnet-4-6');
+    expect(resolveModel('anthropic/claude-3-5-sonnet-20241022', cfg)).toBe('anthropic/claude-sonnet-4-6');
+    // dot variant (e.g. claude-3.5-sonnet from model hallucination)
+    expect(resolveModel('claude-3.5-sonnet', cfg)).toBe('claude-sonnet-4-6');
+    expect(resolveModel('claude.3.5.sonnet', cfg)).toBe('claude-sonnet-4-6');
   });
 
   it('migrates deprecated claude 3.5 haiku model ids', () => {
     const cfg: any = { models: { aliases: {} } };
     expect(resolveModel('claude-3-5-haiku-20241022', cfg)).toBe('claude-haiku-4-5');
     expect(resolveModel('anthropic/claude-3-5-haiku-20241022', cfg)).toBe('anthropic/claude-haiku-4-5');
+    expect(resolveModel('claude-3.5-haiku', cfg)).toBe('claude-haiku-4-5');
   });
 
   it('normalizes provider route fields after deprecated model migration', () => {
     const cfg: any = { models: { aliases: {} } };
     const route = resolveProviderRoute('anthropic/claude-3-5-sonnet-20241022', cfg);
-    expect(route.resolvedModel).toBe('anthropic/claude-sonnet-4-5');
+    expect(route.resolvedModel).toBe('anthropic/claude-sonnet-4-6');
     expect(route.provider).toBe('anthropic');
-    expect(route.modelId).toBe('claude-sonnet-4-5');
+    expect(route.modelId).toBe('claude-sonnet-4-6');
     expect(route.isCodexModel).toBe(false);
   });
 });

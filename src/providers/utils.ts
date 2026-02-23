@@ -115,9 +115,9 @@ function migrateDeprecatedModelSpec(modelSpec: string): string {
   const bare = hasProvider ? modelSpec.slice(slashIdx + 1) : modelSpec;
 
   let migratedBare = bare;
-  if (/^claude-3-5-sonnet(?:[-_.].*)?$/i.test(bare)) {
-    migratedBare = 'claude-sonnet-4-5';
-  } else if (/^claude-3-5-haiku(?:[-_.].*)?$/i.test(bare)) {
+  if (/^claude[-.]3[-.]5[-.]sonnet(?:[-_.].*)?$/i.test(bare)) {
+    migratedBare = 'claude-sonnet-4-6';
+  } else if (/^claude[-.]3[-.]5[-.]haiku(?:[-_.].*)?$/i.test(bare)) {
     migratedBare = 'claude-haiku-4-5';
   }
 

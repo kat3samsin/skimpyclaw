@@ -141,9 +141,15 @@ export async function executeCodeWithAgent(
   const task = input.task as string;
   if (!task) return 'Error: task is required';
 
+  // Resolve model alias first so agent auto-selection can inspect it
+  const resolvedModel = resolveModelAlias(
+    input.model as string | undefined,
+    context?.fullConfig?.models?.aliases
+  );
+
   const configDefault = context?.fullConfig?.subagents?.defaultCodeAgent || 'claude';
-  const requestedAgent = (input.agent as string | undefined) || configDefault;
-  const agent = resolveSelectedCodeAgent(requestedAgent, configDefault);
+  const requestedAgent = input.agent as string | undefined;
+  const agent = resolveSelectedCodeAgent(requestedAgent, configDefault, resolvedModel);
   if (!agent) {
     return `Error: Invalid agent "${requestedAgent}". Must be claude, codex, or kimi.`;
   }
@@ -173,12 +179,6 @@ export async function executeCodeWithAgent(
   }
 
   const validate = input.validate !== false; // default true
-
-  // Resolve model alias to real model ID
-  const resolvedModel = resolveModelAlias(
-    input.model as string | undefined,
-    context?.fullConfig?.models?.aliases
-  );
 
   // Create task with unique ID
   const id = getNextCodeAgentId();
@@ -217,9 +217,15 @@ export async function executeCodeWithTeam(
   const task = input.task as string;
   if (!task) return 'Error: task is required';
 
+  // Resolve model alias first so agent auto-selection can inspect it
+  const resolvedModel = resolveModelAlias(
+    input.model as string | undefined,
+    context?.fullConfig?.models?.aliases
+  );
+
   const configDefault = context?.fullConfig?.subagents?.defaultCodeAgent || 'claude';
-  const requestedAgent = (input.agent as string | undefined) || configDefault;
-  const agent = resolveSelectedCodeAgent(requestedAgent, configDefault);
+  const requestedAgent = input.agent as string | undefined;
+  const agent = resolveSelectedCodeAgent(requestedAgent, configDefault, resolvedModel);
   if (!agent) {
     return `Error: Invalid agent "${requestedAgent}". Must be claude, codex, or kimi.`;
   }
@@ -251,12 +257,6 @@ export async function executeCodeWithTeam(
   }
 
   const validate = input.validate !== false;
-
-  // Resolve model alias
-  const resolvedModel = resolveModelAlias(
-    input.model as string | undefined,
-    context?.fullConfig?.models?.aliases
-  );
 
   // Create parent task
   const id = getNextCodeAgentId();

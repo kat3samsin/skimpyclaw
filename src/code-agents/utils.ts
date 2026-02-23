@@ -1,7 +1,8 @@
 // Code Agent Utilities
 
 import { execSync } from 'child_process';
-import { resolve } from 'path';
+import { resolve, join } from 'path';
+import { homedir } from 'os';
 import type { BuildCodeAgentArgsInput, CodeAgentTask, ChildResult } from './types.js';
 import type { Config } from '../types.js';
 
@@ -34,11 +35,22 @@ export function normalizeCodeAgent(agent: string | undefined): 'claude' | 'codex
 /**
  * Resolve requested/default agent selection to a supported CLI agent ID.
  * Preference order: explicit request -> configured default -> "claude".
+ * If no agent is explicit and the model is a GPT/OpenAI model, auto-select codex.
+ * If the model is a kimi model, auto-select kimi.
  */
 export function resolveSelectedCodeAgent(
   requestedAgent: string | undefined,
-  defaultAgent: string | undefined
+  defaultAgent: string | undefined,
+  model?: string
 ): 'claude' | 'codex' | 'kimi' | null {
+  // If no explicit agent was requested, infer from model
+  if (!requestedAgent && model) {
+    const m = model.toLowerCase();
+    if (m.includes('gpt') || m.includes('codex') || m.startsWith('openai/') || m.startsWith('o1') || m.startsWith('o3') || m.startsWith('o4')) {
+      return 'codex';
+    }
+    if (m.includes('kimi')) return 'kimi';
+  }
   const candidate = requestedAgent || defaultAgent || 'claude';
   return normalizeCodeAgent(candidate);
 }
@@ -87,11 +99,26 @@ export function buildCodeAgentArgs(input: BuildCodeAgentArgsInput): { cmd: strin
   // Each --allowedTools flag takes one tool name — repeat the flag per tool
   const allowedTools = ['Edit', 'Read', 'Write', 'Bash', 'Glob', 'Grep'];
   const toolArgs = allowedTools.flatMap(t => ['--allowedTools', t]);
+
+  // Pass Playwright MCP server so coding agents share SkimpyClaw's browser profile
+  // Must use chromium (not chrome) to match SkimpyClaw's browser-tool.ts persistent context
+  const playwrightMcp = JSON.stringify({
+    mcpServers: {
+      playwright: {
+        command: 'npx',
+        args: ['-y', '@playwright/mcp@latest', '--browser', 'chromium',
+               '--user-data-dir', join(homedir(), '.skimpyclaw', 'browser-profile'),
+               '--caps', 'vision'],
+      },
+    },
+  });
+
   const args = [
     '-p',
     '--verbose',
     '--output-format', 'stream-json',
     '--dangerously-skip-permissions',
+    '--mcp-config', playwrightMcp,
     ...toolArgs,
     '--max-turns', maxTurns,
     '--append-system-prompt', 'Output text only. Never use say or TTS. Focus on the coding task. Run pnpm build && pnpm test to verify changes.',
@@ -114,7 +141,7 @@ export function buildTeamNotification(
 ): string {
   const dur = formatDuration(task.durationSeconds);
   const taskPreview = task.task.length > 100 ? task.task.slice(0, 100) + '...' : task.task;
-  const statusIcon = task.status === 'completed' ? '✅' : task.status === 'timeout' ? '⏰' : '❌';
+  const statusIcon = task.status === 'completed' ? '[OK]' : task.status === 'timeout' ? '[TIMEOUT]' : '[FAIL]';
   const validation = task.validationPassed ? ' Tests pass.' : '';
 
   const lines: string[] = [];
@@ -128,7 +155,7 @@ export function buildTeamNotification(
     for (const childId of childIds) {
       const child = getChildTask(childId);
       if (!child) continue;
-      const childIcon = child.status === 'completed' ? '✓' : child.status === 'failed' ? '✗' : child.status === 'timeout' ? '⏰' : '?';
+      const childIcon = child.status === 'completed' ? '[OK]' : child.status === 'failed' ? '[FAIL]' : child.status === 'timeout' ? '[TIMEOUT]' : '?';
       const childDur = formatDuration(child.durationSeconds);
       const subtask = (child.subtask || child.task || '').slice(0, 80);
       lines.push(`  ${childIcon} ${child.id} (${childDur}): ${subtask}`);
@@ -153,17 +180,17 @@ export function buildSoloNotification(task: CodeAgentTask): string {
 
   if (task.status === 'completed') {
     const validation = task.validationPassed ? ' Build/tests pass.' : '';
-    let message = `✅ Coding agent ${task.id} completed (${dur}).${validation}\n\nTask: ${taskPreview}`;
+    let message = `[OK] Coding agent ${task.id} completed (${dur}).${validation}\n\nTask: ${taskPreview}`;
     if (task.outputPreview) {
       const preview = task.outputPreview.slice(0, 300);
       message += `\n\nResult: ${preview}`;
     }
     return message;
   } else if (task.status === 'timeout') {
-    return `⏰ Coding agent ${task.id} timed out after ${dur}.\n\nTask: ${taskPreview}`;
+    return `[TIMEOUT] Coding agent ${task.id} timed out after ${dur}.\n\nTask: ${taskPreview}`;
   } else {
     const retryNote = task.retryCount ? ` (retried ${task.retryCount}x)` : '';
-    let message = `❌ Coding agent ${task.id} failed (${dur})${retryNote}.\n\nTask: ${taskPreview}`;
+    let message = `[FAIL] Coding agent ${task.id} failed (${dur})${retryNote}.\n\nTask: ${taskPreview}`;
     if (task.error) message += `\n\nError: ${task.error}`;
     if (task.validationOutput) {
       message += `\n\nBuild/test output:\n${task.validationOutput.slice(0, 1_500)}`;
@@ -212,16 +239,18 @@ export function resolveModelAlias(
 ): string | undefined {
   if (!model) return undefined;
   if (aliases?.[model]) {
-    return aliases[model];
+    model = aliases[model];
   }
   // Strip provider prefix for CLI tools
   if (model.includes('/')) {
     model = model.split('/').slice(1).join('/');
   }
-  // Normalize model names: convert dots to dashes for Claude models
-  // e.g., claude-3.5-sonnet -> claude-3-5-sonnet
-  if (model.includes('claude') && model.includes('.')) {
-    model = model.replace(/claude-3\.5/, 'claude-3-5').replace(/claude-3\.7/, 'claude-3-7');
+  // Migrate deprecated Claude model names to current equivalents
+  if (/^claude[-.]3[-.]5[-.]sonnet(?:[-_.].*)?$/i.test(model)) {
+    return 'claude-sonnet-4-6';
+  }
+  if (/^claude[-.]3[-.]5[-.]haiku(?:[-_.].*)?$/i.test(model)) {
+    return 'claude-haiku-4-5';
   }
   return model;
 }

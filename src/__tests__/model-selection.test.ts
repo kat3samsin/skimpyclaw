@@ -55,7 +55,7 @@ describe('model-selection', () => {
   it('migrates deprecated model ids through shared resolver', () => {
     const resolved = resolveModelSelection('claude-3-5-sonnet-20241022', mockConfig());
     expect(resolved.ok).toBe(true);
-    expect(resolved.resolved).toBe('claude-sonnet-4-5');
+    expect(resolved.resolved).toBe('claude-sonnet-4-6');
   });
 
   it('rejects unknown values with consistent error', () => {

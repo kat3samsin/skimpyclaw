@@ -424,16 +424,20 @@ describe('code_with_agent', () => {
       expect(resolveModelAlias('openai/gpt-4.1', {})).toBe('gpt-4.1');
     });
 
-    it('normalizes claude-3.5-sonnet to claude-3-5-sonnet', () => {
-      expect(resolveModelAlias('claude-3.5-sonnet', {})).toBe('claude-3-5-sonnet');
+    it('migrates claude-3.5-sonnet to claude-sonnet-4-6', () => {
+      expect(resolveModelAlias('claude-3.5-sonnet', {})).toBe('claude-sonnet-4-6');
+      expect(resolveModelAlias('claude-3-5-sonnet', {})).toBe('claude-sonnet-4-6');
+      expect(resolveModelAlias('claude-3-5-sonnet-20241022', {})).toBe('claude-sonnet-4-6');
     });
 
-    it('normalizes claude-3.7-sonnet to claude-3-7-sonnet', () => {
-      expect(resolveModelAlias('claude-3.7-sonnet', {})).toBe('claude-3-7-sonnet');
+    it('migrates claude-3.5-haiku to claude-haiku-4-5', () => {
+      expect(resolveModelAlias('claude-3.5-haiku', {})).toBe('claude-haiku-4-5');
+      expect(resolveModelAlias('claude-3-5-haiku', {})).toBe('claude-haiku-4-5');
     });
 
-    it('normalizes with provider prefix', () => {
-      expect(resolveModelAlias('anthropic/claude-3.5-sonnet', {})).toBe('claude-3-5-sonnet');
+    it('migrates with provider prefix stripped', () => {
+      expect(resolveModelAlias('anthropic/claude-3.5-sonnet', {})).toBe('claude-sonnet-4-6');
+      expect(resolveModelAlias('anthropic/claude-3-5-sonnet-20241022', {})).toBe('claude-sonnet-4-6');
     });
 
     it('returns model as-is when no transformation needed', () => {
