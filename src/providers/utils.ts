@@ -104,10 +104,59 @@ export function toOpenAITools(toolDefs: any[]): any[] {
  */
 export function resolveModel(modelSpec: string, config: Config): string {
   // Check aliases first
-  if (config.models.aliases[modelSpec]) {
-    return config.models.aliases[modelSpec];
+  const aliased = config.models.aliases[modelSpec] || modelSpec;
+  return migrateDeprecatedModelSpec(aliased);
+}
+
+function migrateDeprecatedModelSpec(modelSpec: string): string {
+  const slashIdx = modelSpec.indexOf('/');
+  const hasProvider = slashIdx > 0;
+  const provider = hasProvider ? modelSpec.slice(0, slashIdx) : '';
+  const bare = hasProvider ? modelSpec.slice(slashIdx + 1) : modelSpec;
+
+  let migratedBare = bare;
+  if (/^claude-3-5-sonnet(?:[-_.].*)?$/i.test(bare)) {
+    migratedBare = 'claude-sonnet-4-5';
+  } else if (/^claude-3-5-haiku(?:[-_.].*)?$/i.test(bare)) {
+    migratedBare = 'claude-haiku-4-5';
   }
-  return modelSpec;
+
+  if (migratedBare === bare) return modelSpec;
+  return hasProvider ? `${provider}/${migratedBare}` : migratedBare;
+}
+
+export interface ResolvedProviderRoute {
+  resolvedModel: string;
+  provider: string;
+  modelId: string;
+  isCodexModel: boolean;
+}
+
+/**
+ * Resolve model alias and derive normalized provider route fields.
+ */
+export function resolveProviderRoute(modelSpec: string, config: Config): ResolvedProviderRoute {
+  const resolvedModel = resolveModel(modelSpec, config);
+  const provider = getProvider(resolvedModel);
+  const modelId = stripProvider(resolvedModel);
+  const isCodexModel = /\bcodex\b/i.test(modelId);
+  return {
+    resolvedModel,
+    provider,
+    modelId,
+    isCodexModel,
+  };
+}
+
+/**
+ * Legacy compatibility: route openai/*codex models to codex provider when configured.
+ */
+export function shouldUseCodexAliasProvider(
+  provider: string,
+  isCodexModel: boolean,
+  codexProviderConfigured: boolean
+): boolean {
+  return provider === 'openai' && isCodexModel && codexProviderConfigured;
 }
 
 /**

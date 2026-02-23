@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { getProvider, stripProvider } from '../providers/utils.js';
+import {
+  getProvider,
+  stripProvider,
+  resolveModel,
+  resolveProviderRoute,
+  shouldUseCodexAliasProvider,
+} from '../providers/utils.js';
 
 describe('provider utils', () => {
   it('detects provider from explicit prefix', () => {
@@ -12,5 +18,46 @@ describe('provider utils', () => {
     expect(stripProvider('openai/gpt-5.3-codex')).toBe('gpt-5.3-codex');
     expect(stripProvider('codex/gpt-5.3-codex')).toBe('gpt-5.3-codex');
     expect(stripProvider('anthropic/claude-sonnet-4-5')).toBe('claude-sonnet-4-5');
+  });
+
+  it('resolves provider route from aliases', () => {
+    const route = resolveProviderRoute('codex5.3', {
+      models: {
+        aliases: { 'codex5.3': 'codex/gpt-5.3-codex' },
+        providers: {},
+      },
+    } as any);
+    expect(route.resolvedModel).toBe('codex/gpt-5.3-codex');
+    expect(route.provider).toBe('codex');
+    expect(route.modelId).toBe('gpt-5.3-codex');
+    expect(route.isCodexModel).toBe(true);
+  });
+
+  it('detects openai codex alias compatibility', () => {
+    expect(shouldUseCodexAliasProvider('openai', true, true)).toBe(true);
+    expect(shouldUseCodexAliasProvider('openai', true, false)).toBe(false);
+    expect(shouldUseCodexAliasProvider('codex', true, true)).toBe(false);
+    expect(shouldUseCodexAliasProvider('openai', false, true)).toBe(false);
+  });
+
+  it('migrates deprecated claude 3.5 sonnet model ids', () => {
+    const cfg: any = { models: { aliases: {} } };
+    expect(resolveModel('claude-3-5-sonnet-20241022', cfg)).toBe('claude-sonnet-4-5');
+    expect(resolveModel('anthropic/claude-3-5-sonnet-20241022', cfg)).toBe('anthropic/claude-sonnet-4-5');
+  });
+
+  it('migrates deprecated claude 3.5 haiku model ids', () => {
+    const cfg: any = { models: { aliases: {} } };
+    expect(resolveModel('claude-3-5-haiku-20241022', cfg)).toBe('claude-haiku-4-5');
+    expect(resolveModel('anthropic/claude-3-5-haiku-20241022', cfg)).toBe('anthropic/claude-haiku-4-5');
+  });
+
+  it('normalizes provider route fields after deprecated model migration', () => {
+    const cfg: any = { models: { aliases: {} } };
+    const route = resolveProviderRoute('anthropic/claude-3-5-sonnet-20241022', cfg);
+    expect(route.resolvedModel).toBe('anthropic/claude-sonnet-4-5');
+    expect(route.provider).toBe('anthropic');
+    expect(route.modelId).toBe('claude-sonnet-4-5');
+    expect(route.isCodexModel).toBe(false);
   });
 });

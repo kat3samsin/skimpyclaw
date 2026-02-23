@@ -15,6 +15,7 @@ import { runAgentTurn } from './agent.js';
 import { getCurrentModel } from './gateway.js';
 import { getAgentDir } from './config.js';
 import { releaseAllLocks } from './file-lock.js';
+import { resolveModel } from './providers/utils.js';
 
 const DEFAULT_MAX_CONCURRENT = 5;
 const DEFAULT_MAX_RETRIES = 2;
@@ -181,7 +182,7 @@ export function ensureAgentSetup(type: SubagentType, config: Config): void {
     const identity = AGENT_IDENTITIES[type];
     config.agents.list[preset.agentId] = {
       identity,
-      model: preset.defaultModel || 'anthropic/claude-sonnet-4-5',
+      model: resolveModel(preset.defaultModel || 'anthropic/claude-sonnet-4-5', config),
       thinking: 'medium'
     };
     console.log(`[subagent] Registered agent in config: ${preset.agentId}`);
@@ -262,7 +263,7 @@ export function dispatchSubagent(
 
   taskCounter++;
   const id = `t${taskCounter}`;
-  const model = modelOverride || preset.defaultModel || getCurrentModel();
+  const model = resolveModel(modelOverride || preset.defaultModel || getCurrentModel(), config);
   const maxRetries = options?.maxRetries ?? config.subagents?.maxRetries ?? DEFAULT_MAX_RETRIES;
 
   const task: SubagentTask = {

@@ -38,6 +38,7 @@ import { initCron } from './cron.js';
 import { initHeartbeat, stopHeartbeat } from './heartbeat.js';
 import { initActiveChannel, stopActiveChannel, startActiveChannel } from './channels.js';
 import { setCodeAgentConfig } from './tools.js';
+import { resolveModelSelection } from './model-selection.js';
 
 function validateFilename(filename: string): boolean {
   return !filename.includes('..') && filename === basename(filename);
@@ -54,11 +55,6 @@ function validateSkillName(name: string): boolean {
 
 function getSkillsDir(cfg: Config): string {
   return (cfg as any).skills?.directory || join(homedir(), '.skimpyclaw', 'skills');
-}
-
-function validateModelString(model: string): boolean {
-  // Allow alphanumeric, hyphens, underscores, dots, slashes (for provider/model format)
-  return /^[a-zA-Z0-9_./-]+$/.test(model) && model.length <= 100;
 }
 
 function resolveCronPromptPath(inputPath: string): string | null {
@@ -512,15 +508,18 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
   });
 
   fastify.post<{ Body: { model: string } }>('/api/dashboard/model', async (request, reply) => {
-    const { model } = request.body;
-    if (!model) {
+    const modelInput = request.body?.model;
+    if (!modelInput) {
       return reply.code(400).send({ error: 'model required' });
     }
-    if (!validateModelString(model)) {
-      return reply.code(400).send({ error: 'Invalid model string' });
+
+    const selection = resolveModelSelection(modelInput, runtimeConfig);
+    if (!selection.ok || !selection.resolved) {
+      return reply.code(400).send({ error: selection.error || 'Invalid model selection' });
     }
-    setCurrentModel(model);
-    return { model };
+
+    setCurrentModel(selection.resolved);
+    return { model: selection.resolved };
   });
 
   // --- Templates ---

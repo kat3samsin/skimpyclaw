@@ -167,7 +167,7 @@ describe('runCli', () => {
 
   it('sets model through gateway request using alias resolution', async () => {
     const fetchMock = vi.mocked(fetch);
-    fetchMock.mockResolvedValue(mockJsonResponse({ model: 'anthropic/claude-3-5-haiku-20241022' }));
+    fetchMock.mockResolvedValue(mockJsonResponse({ model: 'anthropic/claude-haiku-4-5' }));
 
     const code = await runCli(['model', 'fast']);
     expect(code).toBe(0);
@@ -175,7 +175,7 @@ describe('runCli', () => {
       'http://127.0.0.1:18790/model',
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({ model: 'anthropic/claude-3-5-haiku-20241022' }),
+        body: JSON.stringify({ model: 'anthropic/claude-haiku-4-5' }),
       })
     );
   });
@@ -197,6 +197,25 @@ describe('runCli', () => {
         method: 'POST',
         body: JSON.stringify({ model: 'codex/gpt-5.1-codex' }),
       })
+    );
+  });
+
+  it('rejects unknown model aliases that are not model ids', async () => {
+    const fetchMock = vi.mocked(fetch);
+    const code = await runCli(['model', 'fast_alias']);
+    expect(code).toBe(1);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('Unknown model alias: "fast_alias"'));
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('Available aliases:'));
+  });
+
+  it('rejects malformed model selections', async () => {
+    const fetchMock = vi.mocked(fetch);
+    const code = await runCli(['model', 'anthropic/']);
+    expect(code).toBe(1);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('Invalid model selection: "anthropic/". Use alias, provider/model, or model-id.')
     );
   });
 

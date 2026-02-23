@@ -104,7 +104,7 @@ describe('subagent', () => {
       expect(task.type).toBe('coding');
       expect(task.prompt).toBe('list TODOs');
       expect(task.chatId).toBe(123);
-      expect(task.model).toBe('claude-opus');
+      expect(task.model).toBe('anthropic/claude-opus-4');
       expect(task.createdAt).toBeInstanceOf(Date);
     });
 
@@ -118,6 +118,11 @@ describe('subagent', () => {
     it('uses model override when provided', () => {
       const task = dispatchSubagent('coding', 'test', 123, mockConfig, 'anthropic/claude-opus-4');
       expect(task.model).toBe('anthropic/claude-opus-4');
+    });
+
+    it('resolves model override aliases to canonical model ids', () => {
+      const task = dispatchSubagent('coding', 'test', 123, mockConfig, 'claude-think');
+      expect(task.model).toBe('anthropic/claude-sonnet-4-5');
     });
 
     it('rejects when max concurrent reached', () => {

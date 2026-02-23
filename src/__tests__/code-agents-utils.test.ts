@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeCodeAgent } from '../code-agents/utils.js';
+import { normalizeCodeAgent, resolveSelectedCodeAgent } from '../code-agents/utils.js';
 
 describe('normalizeCodeAgent', () => {
   it('accepts strict ids', () => {
@@ -17,5 +17,19 @@ describe('normalizeCodeAgent', () => {
   it('returns null for unknown values', () => {
     expect(normalizeCodeAgent('gpt')).toBeNull();
     expect(normalizeCodeAgent(undefined)).toBeNull();
+  });
+});
+
+describe('resolveSelectedCodeAgent', () => {
+  it('prefers requested agent when provided', () => {
+    expect(resolveSelectedCodeAgent('codex5.3', 'claude')).toBe('codex');
+  });
+
+  it('falls back to configured default agent', () => {
+    expect(resolveSelectedCodeAgent(undefined, 'claude-think')).toBe('claude');
+  });
+
+  it('uses claude as hard default', () => {
+    expect(resolveSelectedCodeAgent(undefined, undefined)).toBe('claude');
   });
 });

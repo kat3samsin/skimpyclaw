@@ -9,6 +9,24 @@
 | MCP | Auto-discovered from mcporter | All servers in `~/.mcporter/mcporter.json` |
 | Agent | spawn_subagent, code_with_agent | When chatId + config present |
 
+For coding worker details, see `docs/coding-agents.md`.
+
+## Agent coding tools
+
+`code_with_agent` and `code_with_team` run external coding CLIs (not in-process Read/Write/Bash tool calls).
+
+Exact command builders live in `src/code-agents/utils.ts` (`buildCodeAgentArgs`):
+
+- **Claude worker**: `claude -p --verbose --output-format stream-json --dangerously-skip-permissions ... <task>`
+- **Codex worker**: `codex exec --full-auto --json --color never ... <task>`
+- **Kimi worker**: `kimi --yolo -p <task> ...`
+
+Related files:
+
+- Tool schemas: `src/tools/definitions.ts` (`code_with_agent`, `code_with_team`)
+- Orchestration/runtime: `src/code-agents/index.ts`
+- Command construction: `src/code-agents/utils.ts`
+
 ## Built-in tools
 
 - **Read** — read a file (restricted to `allowedPaths`)

@@ -16,6 +16,7 @@ import type {
   MemoryResponse,
   MemoryFileResponse,
   ModelResponse,
+  SetModelResponse,
   SkillsResponse,
   SkillResponse,
   StatusResponse,
@@ -119,7 +120,7 @@ export const getCronPromptFile = (path: string) =>
 
 export const getModel = () => request<ModelResponse>('model');
 export const setModel = (model: string) =>
-  request<ModelResponse>('model', {
+  request<SetModelResponse>('model', {
     method: 'POST',
     body: JSON.stringify({ model }),
   });

@@ -7,11 +7,13 @@ Top 10 first-run issues and how to fix them.
 **Symptom:** `curl http://localhost:18790/health` times out or refuses connection.
 
 **Causes:**
+
 - Service isn't running — check `launchctl list | grep skimpyclaw`
 - Wrong host/port — check `gateway.host` and `gateway.port` in `~/.skimpyclaw/config.json`
 - Port already in use — run `lsof -i :18790` to see what's using it
 
 **Fix:**
+
 ```bash
 # Check if it's running
 launchctl list | grep skimpyclaw
@@ -27,11 +29,13 @@ tail -100 /tmp/com.skimpyclaw.gateway.log
 **Symptom:** Bot doesn't respond, doctor shows `telegram_token_valid: FAIL`.
 
 **Causes:**
+
 - Token typo in `~/.skimpyclaw/.env`
 - Token revoked in BotFather
 - `TELEGRAM_BOT_TOKEN` env var not set
 
 **Fix:**
+
 ```bash
 # Test token directly
 curl https://api.telegram.org/bot<YOUR_TOKEN>/getMe
@@ -45,11 +49,13 @@ echo "TELEGRAM_BOT_TOKEN=new-token-here" >> ~/.skimpyclaw/.env
 **Symptom:** Agent returns errors, doctor shows `provider_*_auth: FAIL`.
 
 **Causes:**
+
 - API key not set in `~/.skimpyclaw/.env`
 - API key expired or invalid
 - Config references `${VAR}` but env var is empty (check startup logs for warnings)
 
 **Fix:**
+
 ```bash
 # Check which vars are missing (look for "[config] env var ${...} is not set")
 pnpm dev 2>&1 | head -20
@@ -65,11 +71,13 @@ curl -H "x-api-key: $ANTHROPIC_API_KEY" https://api.anthropic.com/v1/models
 **Symptom:** Browser tool errors with "browser not found" or similar.
 
 **Causes:**
+
 - Chrome/Chromium not installed
 - `browser.enabled` is true but no browser binary available
 - Wrong `executablePath` in config
 
 **Fix:**
+
 ```bash
 # Check if Chrome exists
 ls '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
@@ -86,11 +94,13 @@ brew install --cask google-chrome
 **Symptom:** Voice messages ignored, transcription fails.
 
 **Causes:**
+
 - Voice not enabled in config (`voice.enabled: false` or missing)
 - ffmpeg not installed
 - whisper-cli/whisper not installed
 
 **Fix:**
+
 ```bash
 # Install dependencies
 brew install ffmpeg
@@ -108,11 +118,13 @@ pip install openai-whisper
 **Symptom:** `launchctl load` succeeds but service isn't running.
 
 **Causes:**
+
 - Node.js path wrong in plist
 - pnpm not in PATH for launchd
 - Build not compiled
 
 **Fix:**
+
 ```bash
 # Check launchd status
 launchctl list | grep skimpyclaw
@@ -132,11 +144,13 @@ pnpm run onboard
 **Symptom:** Agent responds with empty string or XML-looking garbage.
 
 **Causes:**
+
 - `toolConfig` not passed to `runAgentTurn` — model hallucinates XML tool calls
 - Model quota exceeded
 - Invalid model name
 
 **Fix:**
+
 - Ensure any code calling `runAgentTurn` passes a `ToolConfig` object
 - Check model name in config matches a valid provider model
 - Verify API quota: check provider dashboard
@@ -146,17 +160,19 @@ pnpm run onboard
 **Symptom:** MCP tools missing from tool list, errors about mcporter.
 
 **Causes:**
+
 - mcporter not configured at `~/.mcporter/mcporter.json`
 - mcporter server not running
 - MCP tools not enabled in config
 
 **Fix:**
+
 ```bash
 # Check mcporter config exists
 cat ~/.mcporter/mcporter.json
 
 # Verify mcporter can start
-~/.mcporter/run-context-a8c.sh
+~/.mcporter/my-custom-mcp.sh
 
 # If not set up, see internal mcporter docs
 ```
@@ -166,11 +182,13 @@ cat ~/.mcporter/mcporter.json
 **Symptom:** Scheduled jobs don't run or produce errors.
 
 **Causes:**
+
 - Invalid cron expression
 - Model provider down
 - Tool paths not accessible
 
 **Fix:**
+
 ```bash
 # Check cron logs
 ls ~/.skimpyclaw/logs/cron/
@@ -186,10 +204,12 @@ curl -X POST http://localhost:18790/cron/<job-id>/run
 **Symptom:** Dashboard loads but API calls return 401.
 
 **Causes:**
+
 - Dashboard token not entered in the UI prompt
 - Token doesn't match config
 
 **Fix:**
+
 ```bash
 # Find your dashboard token
 grep -o '"token":"[^"]*"' ~/.skimpyclaw/config.json

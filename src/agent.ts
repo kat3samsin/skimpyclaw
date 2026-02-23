@@ -20,13 +20,7 @@ import {
   chat,
   chatWithTools,
   setUsingOAuth,
-  isResponsesApiProvider,
-  isCodexAvailable,
-  isAnthropicAvailable,
-  isOpenAIAvailable,
-  stripProvider,
-  getProvider,
-  resolveModel,
+  resolveProviderRoute,
   toAnthropicUsageDetails,
   toCostDetails,
 } from './providers/index.js';
@@ -200,9 +194,8 @@ export async function runAgentTurn(
   const model = modelOverride || agentConfig.model;
   const chatOptions: ChatOptions = { model, thinking: agentConfig.thinking };
 
-  const resolvedModel = resolveModel(model, config);
-  const provider = getProvider(resolvedModel);
-  const modelId = stripProvider(resolvedModel);
+  const route = resolveProviderRoute(model, config);
+  const { resolvedModel, provider, modelId } = route;
 
   let response: string = '';
   let toolCalls: string[] = [];
@@ -236,24 +229,11 @@ export async function runAgentTurn(
   };
 
   const runTurn = async (): Promise<string> => {
-    if (toolConfig?.enabled && provider === 'anthropic' && isAnthropicAvailable()) {
-      // Anthropic tool_use loop
-      console.log(`[agent] Running with tools enabled (paths: ${toolConfig.allowedPaths.join(', ')})`);
-      const result = await chatWithTools(messages, chatOptions, config, toolConfig, toolCtx);
-      response = result.response;
-      toolCalls = result.toolCalls;
-    } else if (toolConfig?.enabled && isResponsesApiProvider(provider) && isCodexAvailable()) {
-      // Codex tool_use loop via Responses API
-      console.log(`[agent] Running Codex with tools enabled (paths: ${toolConfig.allowedPaths.join(', ')})`);
-      const result = await chatWithTools(messages, chatOptions, config, toolConfig, toolCtx);
-      response = result.response;
-      toolCalls = result.toolCalls;
-    } else if (isResponsesApiProvider(provider) && isCodexAvailable()) {
-      // Codex without tools
-      response = await chat(messages, chatOptions, config);
-    } else if (toolConfig?.enabled && isOpenAIAvailable(provider)) {
-      // OpenAI-compatible tool_use loop (Kimi, MiniMax, etc.)
-      console.log(`[agent] Running OpenAI-compatible tools (provider: ${provider}, paths: ${toolConfig.allowedPaths.join(', ')})`);
+    if (toolConfig?.enabled) {
+      // Provider-specific routing is centralized in providers/chatWithTools.
+      console.log(
+        `[agent] Running with tools (provider: ${provider}, model: ${modelId}, paths: ${toolConfig.allowedPaths.join(', ')})`
+      );
       const result = await chatWithTools(messages, chatOptions, config, toolConfig, toolCtx);
       response = result.response;
       toolCalls = result.toolCalls;

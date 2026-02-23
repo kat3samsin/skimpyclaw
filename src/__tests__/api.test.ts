@@ -515,6 +515,17 @@ describe('Model endpoints', () => {
     expect(mockCurrentModel).toBe('claude-haiku-4-20250414');
   });
 
+  it('POST /api/dashboard/model resolves aliases before switching', async () => {
+    const res = await inject({
+      method: 'POST',
+      url: '/api/dashboard/model',
+      payload: { model: 'fast' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ model: 'claude-haiku-4-20250414' });
+    expect(mockCurrentModel).toBe('claude-haiku-4-20250414');
+  });
+
   it('POST /api/dashboard/model rejects empty model', async () => {
     const res = await inject({
       method: 'POST',
@@ -523,6 +534,26 @@ describe('Model endpoints', () => {
     });
     expect(res.statusCode).toBe(400);
     expect(res.json()).toHaveProperty('error', 'model required');
+  });
+
+  it('POST /api/dashboard/model rejects unknown aliases', async () => {
+    const res = await inject({
+      method: 'POST',
+      url: '/api/dashboard/model',
+      payload: { model: 'unknown_alias' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toHaveProperty('error', 'Unknown model alias: "unknown_alias"');
+  });
+
+  it('POST /api/dashboard/model rejects malformed provider/model selections', async () => {
+    const res = await inject({
+      method: 'POST',
+      url: '/api/dashboard/model',
+      payload: { model: 'anthropic/' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toHaveProperty('error', 'Invalid model selection: "anthropic/". Use alias, provider/model, or model-id.');
   });
 });
 

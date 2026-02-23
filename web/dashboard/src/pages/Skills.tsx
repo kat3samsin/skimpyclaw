@@ -9,6 +9,7 @@ interface SkillsProps {
 }
 
 export function Skills({ showToast }: SkillsProps) {
+  const skillMutationsAvailable = false;
   const [skills, setSkills] = useState<Skill[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [detail, setDetail] = useState<SkillResponse | null>(null);
@@ -82,16 +83,23 @@ export function Skills({ showToast }: SkillsProps) {
   }
 
   async function removeSkill(name: string) {
+    const confirmed = window.confirm(`Delete skill "${name}"? This action cannot be undone.`);
+    if (!confirmed) return;
+
+    // Optimistic UI update so the list/detail reflects deletion immediately.
+    setSkills(prev => prev.filter(s => s.name !== name));
+    if (selected === name) {
+      setSelected(null);
+      setDetail(null);
+    }
+
     try {
       await deleteSkill(name);
       showToast(`Deleted ${name}`, 'warning');
-      if (selected === name) {
-        setSelected(null);
-        setDetail(null);
-      }
       await load();
     } catch {
       showToast('Failed to delete skill', 'error');
+      await load();
     }
   }
 
@@ -155,7 +163,12 @@ export function Skills({ showToast }: SkillsProps) {
                   )}
                   <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
                     <button class="btn btn-sm" onClick={() => void openSkill(s.name)}>View</button>
-                    <button class="btn btn-sm" onClick={() => void toggleEnabled(s)}>
+                    <button
+                      class="btn btn-sm"
+                      disabled={!skillMutationsAvailable}
+                      title="Coming soon"
+                      onClick={() => void toggleEnabled(s)}
+                    >
                       {s.enabled ? 'Disable' : 'Enable'}
                     </button>
                     <button class="btn btn-sm btn-danger" onClick={() => void removeSkill(s.name)}>Delete</button>
@@ -210,16 +223,6 @@ export function Skills({ showToast }: SkillsProps) {
                       <button class="btn btn-sm" onClick={() => setDetailView(v => v === 'raw' ? 'markdown' : 'raw')}>
                         {detailView === 'raw' ? 'Markdown' : 'Raw'}
                       </button>
-                      <button class="btn btn-sm" onClick={() => {
-                        setEditing(v => !v);
-                        setEditContent(detail.rawContent || detail.body || '');
-                      }}>
-                        {editing ? 'Cancel' : 'Edit'}
-                      </button>
-                      <button class="btn btn-sm" onClick={() => {
-                        const s = skills.find(x => x.name === detail.name);
-                        if (s) void toggleEnabled(s);
-                      }}>Toggle</button>
                       <button class="btn btn-sm btn-danger" onClick={() => void removeSkill(detail.name)}>Delete</button>
                     </div>
                   </div>

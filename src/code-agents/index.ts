@@ -25,7 +25,7 @@ import {
   setCodeAgentConfig,
   getCodeAgentConfig,
   buildCodeAgentArgs,
-  normalizeCodeAgent,
+  resolveSelectedCodeAgent,
   resolveWorkdir,
   resolveModelAlias,
   readTeamState,
@@ -72,7 +72,7 @@ export {
   setCodeAgentConfig,
   getCodeAgentConfig,
   buildCodeAgentArgs,
-  normalizeCodeAgent,
+  resolveSelectedCodeAgent,
   resolveWorkdir,
   resolveModelAlias,
   readTeamState,
@@ -143,7 +143,7 @@ export async function executeCodeWithAgent(
 
   const configDefault = context?.fullConfig?.subagents?.defaultCodeAgent || 'claude';
   const requestedAgent = (input.agent as string | undefined) || configDefault;
-  const agent = normalizeCodeAgent(requestedAgent);
+  const agent = resolveSelectedCodeAgent(requestedAgent, configDefault);
   if (!agent) {
     return `Error: Invalid agent "${requestedAgent}". Must be claude, codex, or kimi.`;
   }
@@ -219,7 +219,7 @@ export async function executeCodeWithTeam(
 
   const configDefault = context?.fullConfig?.subagents?.defaultCodeAgent || 'claude';
   const requestedAgent = (input.agent as string | undefined) || configDefault;
-  const agent = normalizeCodeAgent(requestedAgent);
+  const agent = resolveSelectedCodeAgent(requestedAgent, configDefault);
   if (!agent) {
     return `Error: Invalid agent "${requestedAgent}". Must be claude, codex, or kimi.`;
   }

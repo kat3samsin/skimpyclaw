@@ -17,6 +17,8 @@ export {
   contentToText,
   toOpenAITools,
   resolveModel,
+  resolveProviderRoute,
+  shouldUseCodexAliasProvider,
   getProvider,
   stripProvider,
   buildThinkingConfig,
@@ -63,9 +65,33 @@ import {
   chatWithToolsCodex,
 } from './codex.js';
 
-import { setUsingOAuth, getProvider, stripProvider, resolveModel } from './utils.js';
+import {
+  setUsingOAuth,
+  resolveProviderRoute,
+  shouldUseCodexAliasProvider,
+} from './utils.js';
 import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
+
+interface NormalizedChatRoute {
+  resolvedModel: string;
+  provider: string;
+  modelId: string;
+  chatOpts: ChatOptions;
+  useCodexAliasProvider: boolean;
+}
+
+function normalizeChatRoute(options: ChatOptions, config: Config): NormalizedChatRoute {
+  const route = resolveProviderRoute(options.model, config);
+  const { resolvedModel, provider, modelId, isCodexModel } = route;
+  return {
+    resolvedModel,
+    provider,
+    modelId,
+    chatOpts: { ...options, model: modelId },
+    useCodexAliasProvider: shouldUseCodexAliasProvider(provider, isCodexModel, isResponsesApiProvider('codex')),
+  };
+}
 
 // Re-export all provider functions
 export {
@@ -171,12 +197,7 @@ export async function chat(
   options: ChatOptions,
   config: Config
 ): Promise<string> {
-  const resolvedModel = resolveModel(options.model, config);
-  const provider = getProvider(resolvedModel);
-  const modelId = stripProvider(resolvedModel);
-  const chatOpts = { ...options, model: modelId };
-  const isCodexModel = /\bcodex\b/i.test(modelId);
-  const useCodexAliasProvider = provider === 'openai' && isCodexModel && isResponsesApiProvider('codex');
+  const { resolvedModel, provider, chatOpts, useCodexAliasProvider } = normalizeChatRoute(options, config);
 
   // Route to Codex if available (supports openai/*-codex legacy alias)
   if ((isResponsesApiProvider(provider) || useCodexAliasProvider) && isCodexAvailable()) {
@@ -207,12 +228,7 @@ export async function chatWithTools(
   toolConfig: ToolConfig,
   toolContext?: ExecuteToolContext
 ): Promise<ToolChatResult> {
-  const resolvedModel = resolveModel(options.model, config);
-  const provider = getProvider(resolvedModel);
-  const modelId = stripProvider(resolvedModel);
-  const chatOpts = { ...options, model: modelId };
-  const isCodexModel = /\bcodex\b/i.test(modelId);
-  const useCodexAliasProvider = provider === 'openai' && isCodexModel && isResponsesApiProvider('codex');
+  const { resolvedModel, provider, chatOpts, useCodexAliasProvider } = normalizeChatRoute(options, config);
 
   // Route to Codex if available (supports openai/*-codex legacy alias)
   if ((isResponsesApiProvider(provider) || useCodexAliasProvider) && isCodexAvailable()) {

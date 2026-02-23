@@ -5,20 +5,27 @@ interface ModelProps {
   showToast: (msg: string, type?: 'success' | 'error' | 'warning') => void;
 }
 
-const PRESET_MODELS = [
-  'codex5.1',
-  'codex5.2',
-  'codex5.3',
-  'claude-fast',
-  'claude-think',
-  'claude-opus',
-  'kimi',
-  'minimax',
-];
+const FULL_MODEL_SPEC_RE = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._/-]+$/;
+const BARE_MODEL_ID_RE = /^[A-Za-z0-9.-]+$/;
+const SAFE_MODEL_INPUT_RE = /^[A-Za-z0-9._/-]+$/;
+
+function validateModelSelection(
+  input: string,
+  aliases: Record<string, string>
+): { ok: true } | { ok: false; error: string } {
+  if (aliases[input]) return { ok: true };
+  if (FULL_MODEL_SPEC_RE.test(input)) return { ok: true };
+  if (BARE_MODEL_ID_RE.test(input) && /[-.]/.test(input)) return { ok: true };
+  if (!SAFE_MODEL_INPUT_RE.test(input) || input.includes('/')) {
+    return { ok: false, error: `Invalid model selection: "${input}". Use alias, provider/model, or model-id.` };
+  }
+  return { ok: false, error: `Unknown model alias: "${input}"` };
+}
 
 export function Model({ showToast }: ModelProps) {
   const [model, setModelState] = useState('');
   const [input, setInput] = useState('');
+  const [aliases, setAliases] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -32,6 +39,7 @@ export function Model({ showToast }: ModelProps) {
       const data = await getModel();
       setModelState(data.current ?? '');
       setInput(data.current ?? '');
+      setAliases(data.aliases ?? {});
     } catch (e) {
       console.error('[model] load failed', e);
     } finally {
@@ -40,11 +48,19 @@ export function Model({ showToast }: ModelProps) {
   }
 
   async function save() {
-    if (!input.trim()) return;
+    const value = input.trim();
+    if (!value) return;
+    const validation = validateModelSelection(value, aliases);
+    if (!validation.ok) {
+      showToast(validation.error, 'error');
+      return;
+    }
+
     setSaving(true);
     try {
-      await setModel(input.trim());
-      setModelState(input.trim());
+      const data = await setModel(value);
+      setModelState(data.model);
+      setInput(data.model);
       showToast('Model updated', 'success');
     } catch {
       showToast('Failed to update model', 'error');
@@ -98,15 +114,18 @@ export function Model({ showToast }: ModelProps) {
                 }}
               />
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
-                {PRESET_MODELS.map(m => (
-                  <button
-                    key={m}
-                    class={`btn btn-sm${input === m ? ' btn-primary' : ''}`}
-                    onClick={() => setInput(m)}
-                  >
-                    {m}
-                  </button>
-                ))}
+                {Object.entries(aliases)
+                  .sort(([a], [b]) => a.localeCompare(b))
+                  .map(([alias, target]) => (
+                    <button
+                      key={alias}
+                      class={`btn btn-sm${input === alias ? ' btn-primary' : ''}`}
+                      onClick={() => setInput(alias)}
+                      title={target}
+                    >
+                      {alias}
+                    </button>
+                  ))}
               </div>
               <button class="btn btn-primary" onClick={save} disabled={saving || !input.trim()}>
                 {saving ? 'Saving…' : 'Switch Model'}

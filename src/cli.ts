@@ -11,6 +11,7 @@ import { startRuntime } from './service.js';
 import { runSetup } from './setup.js';
 import { runDoctor as runDoctorCommand } from './doctor/index.js';
 import { executeTool, getToolDefinitions, BUILTIN_TOOL_DEFINITIONS, BROWSER_TOOL_DEFINITION } from './tools.js';
+import { formatModelSelectionError, getModelSelectionUsage, resolveModelSelection } from './model-selection.js';
 
 const APP_NAME = 'skimpyclaw';
 const DEFAULT_PORT = 18790;
@@ -372,7 +373,8 @@ async function commandModel(args: string[]): Promise<number> {
   const requested = args[0];
   if (!requested) {
     const aliases = Object.entries(config.models.aliases || {});
-    console.log('Usage: skimpyclaw model <alias|model>\n');
+    console.log('Usage: skimpyclaw model <alias|provider/model|model-id>\n');
+    console.log(`${getModelSelectionUsage()}\n`);
     if (aliases.length > 0) {
       console.log('Available aliases:');
       for (const [alias, model] of aliases) {
@@ -384,10 +386,16 @@ async function commandModel(args: string[]): Promise<number> {
     return 1;
   }
 
-  const resolved = config.models.aliases[requested] || requested;
+  const selection = resolveModelSelection(requested, config);
+  if (!selection.ok || !selection.resolved) {
+    const errorMessage = selection.error || 'Invalid model selection';
+    console.error(formatModelSelectionError(errorMessage, config));
+    return 1;
+  }
+
   const data = await requestGateway('/model', {
     method: 'POST',
-    body: JSON.stringify({ model: resolved }),
+    body: JSON.stringify({ model: selection.resolved }),
   }, config.gateway.port);
 
   console.log(`Model set to ${data.model}`);

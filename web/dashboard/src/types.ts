@@ -198,6 +198,10 @@ export interface ModelResponse {
   agents: Record<string, string>;
 }
 
+export interface SetModelResponse {
+  model: string;
+}
+
 export interface Digest {
   id: string;
   jobId: string;

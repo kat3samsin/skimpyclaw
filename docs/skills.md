@@ -11,14 +11,12 @@ Skills are reusable, domain-specific capabilities stored in `~/.skimpyclaw/skill
 
 ## Built-in skills
 
-| Skill | Description |
-|-------|-------------|
-| `a8c-search` | Search Automattic internal sources (FieldGuide, P2s, Slack, Linear) |
-| `a8c-second-brain` | Set up personalized productivity system using Obsidian + Claude Code |
-| `dev-team` | Spawn a 5-person dev team (PM, coder, reviewer, tester, docs) for complex features |
-| `ical-sync` | Sync macOS Calendar events using icalBuddy |
-| `qmd-vault-search` | Search Obsidian vault for notes, context, or references |
-| `test-image-studio` | Test Image Studio asset loading on WordPress using Playwright |
+| Skill               | Description                                                                        |
+| ------------------- | ---------------------------------------------------------------------------------- |
+| `dev-team`          | Spawn a 5-person dev team (PM, coder, reviewer, tester, docs) for complex features |
+| `ical-sync`         | Sync macOS Calendar events using icalBuddy                                         |
+| `qmd-vault-search`  | Search Obsidian vault for notes, context, or references                            |
+| `test-image-studio` | Test Image Studio asset loading on WordPress using Playwright                      |
 
 ## Creating a skill
 
@@ -29,7 +27,7 @@ Skills are reusable, domain-specific capabilities stored in `~/.skimpyclaw/skill
 ---
 name: my-skill
 description: What this skill does
-triggers: ["keyword1", "keyword2"]
+triggers: ['keyword1', 'keyword2']
 priority: 100
 ---
 

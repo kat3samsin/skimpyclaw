@@ -31,6 +31,18 @@ export function normalizeCodeAgent(agent: string | undefined): 'claude' | 'codex
   return null;
 }
 
+/**
+ * Resolve requested/default agent selection to a supported CLI agent ID.
+ * Preference order: explicit request -> configured default -> "claude".
+ */
+export function resolveSelectedCodeAgent(
+  requestedAgent: string | undefined,
+  defaultAgent: string | undefined
+): 'claude' | 'codex' | 'kimi' | null {
+  const candidate = requestedAgent || defaultAgent || 'claude';
+  return normalizeCodeAgent(candidate);
+}
+
 // Reference to config for notifications — set via setCodeAgentConfig()
 let _codeAgentConfig: Config | null = null;
 

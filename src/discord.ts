@@ -31,6 +31,7 @@ import {
 } from './exec-approval.js';
 import { transcribeAudio, synthesizeSpeech } from './voice.js';
 import * as sessions from './sessions.js';
+import { formatAliases, formatModelSelectionError, getModelSelectionUsage, resolveModelSelection } from './model-selection.js';
 
 function getDiscordRunContext(message: Message): AgentRunContext {
   return {
@@ -212,13 +213,22 @@ async function handleCommand(message: Message, command: string, args: string[]):
   if (command === 'model') {
     if (!rawArgs) {
       const current = getCurrentModel();
-      const aliases = Object.keys(config.models.aliases).join(', ');
-      await message.reply(`Current: ${current}\nAliases: ${aliases}\n\nUsage: /model <alias>`);
+      const aliases = formatAliases(config);
+      await message.reply(`Current: ${current}\nAliases: ${aliases}\n\nUsage: /model <alias|provider/model|model-id>\n${getModelSelectionUsage()}`);
       return;
     }
-    const resolved = config.models.aliases[rawArgs] || rawArgs;
-    setCurrentModel(resolved);
-    await message.reply(`Model switched to: ${resolved}`);
+    const selection = resolveModelSelection(rawArgs, config);
+    if (!selection.ok || !selection.resolved) {
+      const errorMessage = selection.error || 'Invalid model selection';
+      await message.reply(formatModelSelectionError(errorMessage, config));
+      return;
+    }
+    setCurrentModel(selection.resolved);
+    if (selection.aliasUsed) {
+      await message.reply(`Model switched to: ${selection.aliasUsed} (${selection.resolved})`);
+    } else {
+      await message.reply(`Model switched to: ${selection.resolved}`);
+    }
     return;
   }
 

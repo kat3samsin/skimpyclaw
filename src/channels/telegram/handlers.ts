@@ -15,6 +15,7 @@ import type { SkillConfig } from '../../skills-types.js';
 import { loadRawConfig, saveConfig } from '../../config.js';
 import { readFileSync } from 'fs';
 import { runAgentTurn } from '../../agent.js';
+import { formatAliases, formatModelSelectionError, getModelSelectionUsage, resolveModelSelection } from '../../model-selection.js';
 import { state, LAUNCHD_LABEL, BOT_COMMANDS } from './types.js';
 import {
   buildHelpText,
@@ -44,23 +45,25 @@ export async function handleModel(ctx: Context, cfg: Config): Promise<void> {
   const modelAlias = String(ctx.match || '');
   if (!modelAlias) {
     const current = getCurrentModel();
-    const aliases = Object.keys(cfg.models.aliases).join(', ');
+    const aliases = formatAliases(cfg);
     await ctx.reply(
-      `Current: ${current}\nAliases: ${aliases}\n\nUsage: /model <alias>`
+      `Current: ${current}\nAliases: ${aliases}\n\nUsage: /model <alias|provider/model|model-id>\n${getModelSelectionUsage()}`
     );
     return;
   }
 
-  const resolved = cfg.models.aliases[modelAlias];
-  if (!resolved) {
-    const aliases = Object.keys(cfg.models.aliases).join(', ');
-    await ctx.reply(
-      `Unknown model alias: "${modelAlias}"\n\nAvailable: ${aliases}`
-    );
+  const selection = resolveModelSelection(modelAlias, cfg);
+  if (!selection.ok || !selection.resolved) {
+    const errorMessage = selection.error || 'Invalid model selection';
+    await ctx.reply(formatModelSelectionError(errorMessage, cfg));
     return;
   }
-  setCurrentModel(resolved);
-  await ctx.reply(`Model switched to: ${modelAlias} (${resolved})`);
+  setCurrentModel(selection.resolved);
+  if (selection.aliasUsed) {
+    await ctx.reply(`Model switched to: ${selection.aliasUsed} (${selection.resolved})`);
+  } else {
+    await ctx.reply(`Model switched to: ${selection.resolved}`);
+  }
 }
 
 export async function handleStatus(ctx: Context, cfg: Config): Promise<void> {

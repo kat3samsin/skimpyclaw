@@ -4,7 +4,7 @@
 
 ```bash
 pnpm build        # TypeScript compile (tsc)
-pnpm test         # Vitest (390 tests)
+pnpm test         # Vitest (423 tests)
 pnpm build && pnpm test  # Always run both after changes
 pnpm dev          # Hot reload dev server (tsx watch)
 ```
@@ -55,6 +55,7 @@ Always run `pnpm build && pnpm test` after making changes. Do not submit work wi
 | `src/service.ts` | Systemd service management |
 | `src/setup.ts` | Interactive setup wizard |
 | `src/cli.ts` | CLI command definitions |
+| `src/model-selection.ts` | Shared model-selection contract for API/CLI/chat commands (alias/provider-model/bare-id + errors) |
 
 ## Model Provider Architecture
 
@@ -67,6 +68,43 @@ Three provider paths in `agent.ts`:
 Both Anthropic and Codex share `ExecuteToolContext` for spawn_subagent and file locking. New tools must be wired into BOTH paths.
 
 Provider determined by model prefix: `anthropic/claude-opus-4-6`, `openai/gpt-5.3-codex`
+
+### Model Selection Contract
+
+`src/model-selection.ts` is the single source of truth for model input parsing:
+
+- Accepted inputs:
+  - configured alias (e.g. `claude-think`)
+  - full provider/model (e.g. `anthropic/claude-sonnet-4-5`)
+  - bare model ID with `-` or `.` (e.g. `claude-sonnet-4-5`)
+- Deprecated model IDs are migrated via provider utils (e.g. Claude 3.5 -> Claude 4.5 aliases).
+- Standardized errors:
+  - unknown alias: `Unknown model alias: "<value>"`
+  - malformed value: `Invalid model selection: "<value>". Use alias, provider/model, or model-id.`
+- All entry points must use this contract:
+  - `POST /api/dashboard/model`
+  - `skimpyclaw model ...`
+  - `/model` in Telegram/Discord handlers
+  - Dashboard `Model` page client-side validation mirrors the same rules.
+
+## Coding Agent Execution
+
+`code_with_agent` and `code_with_team` run external CLIs via `buildCodeAgentArgs()` in `src/code-agents/utils.ts`.
+
+- Claude worker command:
+  - `claude -p --verbose --output-format stream-json --dangerously-skip-permissions ... <task>`
+- Codex worker command:
+  - `codex exec --full-auto --json --color never ... <task>`
+- Kimi worker command:
+  - `kimi --yolo -p <task> ...`
+
+Execution flow:
+
+- Tool schemas: `src/tools/definitions.ts` (`code_with_agent`, `code_with_team`)
+- Orchestration: `src/code-agents/index.ts`
+- Command construction: `src/code-agents/utils.ts`
+
+Normal tool calling (`Read/Write/Bash/Browser`) is separate from coding-agent CLI execution.
 
 ## Exec Approval
 
@@ -124,6 +162,7 @@ If `dist/dashboard/index.html` is missing, `GET /dashboard` returns `503` with a
 - **Dashboard is framework-only** — route serves built frontend from `dist/dashboard/` via `src/dashboard-frontend.ts`.
 - **Codex auth** — uses `~/.codex/auth.json` with ChatGPT backend headers (`chatgpt-account-id`, `OpenAI-Beta`, `originator: codex_cli_rs`).
 - **Skills directory** — `~/.skimpyclaw/skills/`, NOT `~/.claude/skills/`.
+- **Model selection contract** — do not duplicate alias parsing; always call `resolveModelSelection`.
 
 ## Testing
 
