@@ -54,6 +54,54 @@ const TEST_CONFIG = {
 
 const AUTH_HEADERS = { authorization: 'Bearer test-dashboard-token-123' };
 
+const mockCodeAgents = vi.hoisted(() => ({
+  list: [
+    {
+      id: 'ca-1',
+      agent: 'claude',
+      status: 'running',
+      task: 'test task',
+      startedAt: '2026-02-21T10:00:00Z',
+    },
+  ] as any[],
+}));
+
+const mockApprovalsState = vi.hoisted(() => ({
+  items: [
+    {
+      id: 'ap-1',
+      command: 'npm test',
+      status: 'pending',
+      tier: 1,
+      createdAt: '2026-02-21T10:00:00Z',
+      expiresAt: '2026-02-21T10:10:00Z',
+    },
+    {
+      id: 'ap-2',
+      command: 'rm -rf /tmp/x',
+      status: 'denied',
+      tier: 3,
+      createdAt: '2026-02-21T10:00:00Z',
+      expiresAt: '2026-02-21T10:10:00Z',
+    },
+  ] as any[],
+}));
+
+const mockDigestsState = vi.hoisted(() => ({
+  items: [
+    {
+      id: 'dg-1',
+      jobId: 'daily-check',
+      jobName: 'Daily Check',
+      createdAt: '2026-02-21T10:00:00Z',
+      summary: 'Digest summary',
+      articles: [
+        { id: 'a-1', title: 'Article 1', source: 'HN', url: 'https://example.com/1', read: false },
+      ],
+    },
+  ] as any[],
+}));
+
 // --- Mock modules before importing api.ts ---
 
 // Mock config.ts
@@ -185,8 +233,62 @@ vi.mock('../channels.js', () => ({
 const mockSetCodeAgentConfig = vi.fn();
 vi.mock('../tools.js', () => ({
   setCodeAgentConfig: (...args: any[]) => mockSetCodeAgentConfig(...args),
-  getAllCodeAgents: () => [],
-  getCodeAgent: () => null,
+  getAllCodeAgents: () => mockCodeAgents.list,
+  getCodeAgent: (id: string) => mockCodeAgents.list.find((a: any) => a.id === id) || null,
+  cancelCodeAgent: (id: string) => {
+    const agent = mockCodeAgents.list.find((a: any) => a.id === id);
+    if (!agent) return null;
+    agent.status = 'cancelled';
+    return agent;
+  },
+}));
+
+vi.mock('../exec-approval.js', () => ({
+  listApprovals: (opts?: { includeResolved?: boolean; limit?: number }) => {
+    const all = mockApprovalsState.items;
+    if (opts?.includeResolved) return all.slice(0, opts.limit || all.length);
+    return all.filter((a: any) => a.status === 'pending');
+  },
+  getApproval: (id: string) => mockApprovalsState.items.find((a: any) => a.id === id) || null,
+  approveRequest: (id: string) => {
+    const item = mockApprovalsState.items.find((a: any) => a.id === id);
+    if (!item || item.status !== 'pending') return false;
+    item.status = 'approved';
+    return true;
+  },
+  denyRequest: (id: string) => {
+    const item = mockApprovalsState.items.find((a: any) => a.id === id);
+    if (!item || item.status !== 'pending') return false;
+    item.status = 'denied';
+    return true;
+  },
+}));
+
+vi.mock('../digests.js', () => ({
+  getDigests: () =>
+    mockDigestsState.items.map((d: any) => ({
+      id: d.id,
+      jobId: d.jobId,
+      jobName: d.jobName,
+      createdAt: d.createdAt,
+      articleCount: d.articles.length,
+      preview: d.articles.slice(0, 3).map((a: any) => a.title),
+    })),
+  getDigest: (id: string) => mockDigestsState.items.find((d: any) => d.id === id) || null,
+  deleteDigest: (id: string) => {
+    const idx = mockDigestsState.items.findIndex((d: any) => d.id === id);
+    if (idx < 0) return false;
+    mockDigestsState.items.splice(idx, 1);
+    return true;
+  },
+  updateArticleReadStatus: (digestId: string, articleId: string, read: boolean) => {
+    const digest = mockDigestsState.items.find((d: any) => d.id === digestId);
+    if (!digest) return false;
+    const article = digest.articles.find((a: any) => a.id === articleId);
+    if (!article) return false;
+    article.read = read;
+    return true;
+  },
 }));
 
 // Mock security.ts - only need redactSecrets
@@ -362,6 +464,45 @@ beforeEach(() => {
   // Reset mutable state
   mockCurrentModel = 'claude-sonnet-4-20250514';
   mockLastMessage = undefined;
+  mockCodeAgents.list = [
+    {
+      id: 'ca-1',
+      agent: 'claude',
+      status: 'running',
+      task: 'test task',
+      startedAt: '2026-02-21T10:00:00Z',
+    },
+  ];
+  mockApprovalsState.items = [
+    {
+      id: 'ap-1',
+      command: 'npm test',
+      status: 'pending',
+      tier: 1,
+      createdAt: '2026-02-21T10:00:00Z',
+      expiresAt: '2026-02-21T10:10:00Z',
+    },
+    {
+      id: 'ap-2',
+      command: 'rm -rf /tmp/x',
+      status: 'denied',
+      tier: 3,
+      createdAt: '2026-02-21T10:00:00Z',
+      expiresAt: '2026-02-21T10:10:00Z',
+    },
+  ];
+  mockDigestsState.items = [
+    {
+      id: 'dg-1',
+      jobId: 'daily-check',
+      jobName: 'Daily Check',
+      createdAt: '2026-02-21T10:00:00Z',
+      summary: 'Digest summary',
+      articles: [
+        { id: 'a-1', title: 'Article 1', source: 'HN', url: 'https://example.com/1', read: false },
+      ],
+    },
+  ];
   // Re-seed config in case a test modified it
   writeFileSync(CONFIG_PATH, JSON.stringify(TEST_CONFIG, null, 2));
   // Re-seed TODO file in case a test modified it
@@ -1010,5 +1151,222 @@ describe('Usage endpoints', () => {
     expect(Array.isArray(body.records)).toBe(true);
     expect(body.records[0]).toHaveProperty('model');
     expect(body.records[0]).toHaveProperty('totalCost');
+  });
+});
+
+describe('Conversations endpoints', () => {
+  it('GET /api/dashboard/conversations lists jsonl conversations', async () => {
+    writeFileSync(
+      join(SESSIONS_DIR, 'telegram-12345.jsonl'),
+      [
+        JSON.stringify({ ts: '2026-02-01T10:00:00Z', user: 'hello' }),
+        JSON.stringify({ ts: '2026-02-01T10:01:00Z', assistant: 'hi' }),
+      ].join('\n'),
+      'utf-8'
+    );
+
+    const res = await inject({ method: 'GET', url: '/api/dashboard/conversations' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(Array.isArray(body.conversations)).toBe(true);
+    expect(body.conversations[0]).toHaveProperty('id', 'telegram-12345');
+  });
+
+  it('GET /api/dashboard/conversations/:id returns messages', async () => {
+    writeFileSync(
+      join(SESSIONS_DIR, 'discord-abc.jsonl'),
+      [
+        JSON.stringify({ ts: '2026-02-01T10:00:00Z', user: 'u1', assistant: 'a1' }),
+        JSON.stringify({ ts: '2026-02-01T10:02:00Z', user: 'u2' }),
+      ].join('\n'),
+      'utf-8'
+    );
+
+    const res = await inject({ method: 'GET', url: '/api/dashboard/conversations/discord-abc?limit=10&offset=0' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body).toHaveProperty('id', 'discord-abc');
+    expect(Array.isArray(body.messages)).toBe(true);
+    expect(body.total).toBeGreaterThan(0);
+  });
+
+  it('GET /api/dashboard/conversations/:id rejects invalid ids', async () => {
+    const res = await inject({ method: 'GET', url: '/api/dashboard/conversations/..%2Fbad' });
+    expect(res.statusCode).toBe(400);
+  });
+});
+
+describe('Messages endpoints', () => {
+  it('POST /api/dashboard/messages/send sends proactive message', async () => {
+    const res = await inject({
+      method: 'POST',
+      url: '/api/dashboard/messages/send',
+      payload: { message: 'Hello channel' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toHaveProperty('sent', true);
+  });
+
+  it('POST /api/dashboard/messages/send rejects empty message', async () => {
+    const res = await inject({
+      method: 'POST',
+      url: '/api/dashboard/messages/send',
+      payload: {},
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toHaveProperty('error', 'message required');
+  });
+
+  it('POST /api/dashboard/messages/agent runs agent turn', async () => {
+    const res = await inject({
+      method: 'POST',
+      url: '/api/dashboard/messages/agent',
+      payload: { message: 'ping' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toHaveProperty('ok', true);
+    expect(res.json()).toHaveProperty('response', 'ok');
+  });
+});
+
+describe('Cron prompt-file endpoint', () => {
+  it('GET /api/dashboard/cron/prompt-file rejects missing path', async () => {
+    const res = await inject({ method: 'GET', url: '/api/dashboard/cron/prompt-file' });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toHaveProperty('error', 'path required');
+  });
+
+  it('GET /api/dashboard/cron/prompt-file rejects invalid path traversal', async () => {
+    const res = await inject({ method: 'GET', url: '/api/dashboard/cron/prompt-file?path=../../etc/passwd' });
+    expect(res.statusCode).toBe(400);
+  });
+});
+
+describe('Restart endpoint', () => {
+  it('POST /api/dashboard/restart returns restarting true', async () => {
+    vi.useFakeTimers();
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as any);
+
+    const res = await inject({ method: 'POST', url: '/api/dashboard/restart' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ restarting: true });
+
+    vi.runOnlyPendingTimers();
+    expect(exitSpy).toHaveBeenCalledWith(0);
+
+    exitSpy.mockRestore();
+    vi.useRealTimers();
+  });
+});
+
+describe('Code Agents endpoints', () => {
+  it('GET /api/dashboard/code-agents returns agents', async () => {
+    const res = await inject({ method: 'GET', url: '/api/dashboard/code-agents' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().agents).toHaveLength(1);
+  });
+
+  it('GET /api/dashboard/code-agents/:id returns one agent', async () => {
+    const res = await inject({ method: 'GET', url: '/api/dashboard/code-agents/ca-1' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toHaveProperty('id', 'ca-1');
+  });
+
+  it('POST /api/dashboard/code-agents/:id/cancel cancels agent', async () => {
+    const res = await inject({ method: 'POST', url: '/api/dashboard/code-agents/ca-1/cancel' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toHaveProperty('cancelled', true);
+  });
+});
+
+describe('Approvals endpoints', () => {
+  it('GET /api/dashboard/approvals returns pending and recent', async () => {
+    const res = await inject({ method: 'GET', url: '/api/dashboard/approvals' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toHaveProperty('pending');
+    expect(res.json()).toHaveProperty('recent');
+  });
+
+  it('POST /api/dashboard/approvals/:id/approve approves pending request', async () => {
+    const res = await inject({ method: 'POST', url: '/api/dashboard/approvals/ap-1/approve' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toHaveProperty('approved', true);
+  });
+
+  it('POST /api/dashboard/approvals/:id/deny returns 400 when already resolved', async () => {
+    const res = await inject({ method: 'POST', url: '/api/dashboard/approvals/ap-2/deny' });
+    expect(res.statusCode).toBe(400);
+  });
+});
+
+describe('Digests endpoints', () => {
+  it('GET /api/dashboard/digests returns digest list', async () => {
+    const res = await inject({ method: 'GET', url: '/api/dashboard/digests' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().digests).toHaveLength(1);
+  });
+
+  it('GET /api/dashboard/digests/:id returns one digest', async () => {
+    const res = await inject({ method: 'GET', url: '/api/dashboard/digests/dg-1' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toHaveProperty('id', 'dg-1');
+  });
+
+  it('POST /api/dashboard/digests/:digestId/articles/:articleId/read updates read flag', async () => {
+    const res = await inject({
+      method: 'POST',
+      url: '/api/dashboard/digests/dg-1/articles/a-1/read',
+      payload: { read: true },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ updated: true, read: true });
+  });
+
+  it('DELETE /api/dashboard/digests/:id deletes digest', async () => {
+    const res = await inject({ method: 'DELETE', url: '/api/dashboard/digests/dg-1' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ deleted: true });
+  });
+});
+
+describe('Skills endpoints', () => {
+  it('GET /api/dashboard/skills returns skill list', async () => {
+    const res = await inject({ method: 'GET', url: '/api/dashboard/skills' });
+    expect(res.statusCode).toBe(200);
+    expect(Array.isArray(res.json().skills)).toBe(true);
+    expect(res.json().skills.some((s: any) => s.name === 'test-skill')).toBe(true);
+  });
+
+  it('GET /api/dashboard/skills/:name returns skill details', async () => {
+    const res = await inject({ method: 'GET', url: '/api/dashboard/skills/test-skill' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toHaveProperty('name', 'test-skill');
+    expect(res.json()).toHaveProperty('rawContent');
+  });
+
+  it('PUT /api/dashboard/skills/:name updates enabled state', async () => {
+    const res = await inject({
+      method: 'PUT',
+      url: '/api/dashboard/skills/test-skill',
+      payload: { enabled: false },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toHaveProperty('updated', true);
+  });
+
+  it('POST /api/dashboard/skills creates skill', async () => {
+    const res = await inject({
+      method: 'POST',
+      url: '/api/dashboard/skills',
+      payload: { name: 'new-skill', content: '---\nname: new-skill\ndescription: New\n---\n\nBody' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toHaveProperty('created', true);
+  });
+
+  it('DELETE /api/dashboard/skills/:name deletes skill', async () => {
+    const res = await inject({ method: 'DELETE', url: '/api/dashboard/skills/disabled-skill' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toHaveProperty('deleted', true);
   });
 });
