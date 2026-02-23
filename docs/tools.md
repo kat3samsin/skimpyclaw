@@ -7,7 +7,7 @@
 | Built-in | Read, Write, Glob, Bash | Always (when tools enabled) |
 | Browser | Browser (Playwright) | When `tools.browser.enabled` is true |
 | MCP | Auto-discovered from mcporter | All servers in `~/.mcporter/mcporter.json` |
-| Agent | spawn_subagent, code_with_agent | When chatId + config present |
+| Agent | spawn_subagent, code_with_agent, code_with_team | When chatId + config present |
 
 For coding worker details, see `docs/coding-agents.md`.
 

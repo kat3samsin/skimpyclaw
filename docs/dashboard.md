@@ -4,7 +4,10 @@
 
 Open `http://127.0.0.1:18790/dashboard` in a browser. The bearer token is shown in startup logs and stored in `config.dashboard.token`.
 
-The dashboard is a single-page app (inline HTML/CSS/JS, no build step) with tabs for:
+The dashboard is a framework SPA (Preact/Vite) served from built assets in `dist/dashboard/`.
+If the build output is missing, `/dashboard` returns a `503` with build instructions.
+
+Current pages include:
 
 - **Status** — service health, active model, active channel
 - **Cron** — job list, trigger on-demand runs
@@ -21,7 +24,7 @@ The dashboard is a single-page app (inline HTML/CSS/JS, no build step) with tabs
 | GET    | `/health`       | Service health check                       |
 | GET    | `/status`       | Runtime status                             |
 | POST   | `/message`      | Send a message `{ message, model? }`       |
-| POST   | `/model`        | Switch model `{ model }`                   |
+| POST   | `/model`        | Switch model `{ model }` (alias/provider/model/model-id) |
 | POST   | `/cron/:id/run` | Trigger a cron job                         |
 | POST   | `/reload`       | Reload config (currently requires restart) |
 | GET    | `/dashboard`    | Dashboard UI                               |
@@ -40,7 +43,7 @@ All routes require `Authorization: Bearer <token>`.
 | GET    | `/api/dashboard/cron`                      | List cron jobs                          |
 | POST   | `/api/dashboard/cron/:id/run`              | Trigger cron job                        |
 | GET    | `/api/dashboard/model`                     | Current model                           |
-| POST   | `/api/dashboard/model`                     | Switch model                            |
+| POST   | `/api/dashboard/model`                     | Switch model (returns resolved model)   |
 | GET    | `/api/dashboard/templates/:agentId`        | List templates                          |
 | GET    | `/api/dashboard/templates/:agentId/:name`  | Read template                           |
 | PUT    | `/api/dashboard/templates/:agentId/:name`  | Update template                         |

@@ -22,8 +22,10 @@ skimpyclaw config set gateway.port 18790
 ## Model
 
 ```bash
+skimpyclaw model <alias|provider/model|model-id>
 skimpyclaw model smart
-skimpyclaw model claude-opus
+skimpyclaw model anthropic/claude-sonnet-4-5
+skimpyclaw model claude-sonnet-4-5
 ```
 
 ## Messaging

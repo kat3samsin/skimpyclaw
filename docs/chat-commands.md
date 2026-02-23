@@ -5,7 +5,7 @@
 | Command | Description |
 |---------|-------------|
 | `/start` | Greet and show help |
-| `/model <alias-or-model>` | Switch active model |
+| `/model <alias\|provider/model\|model-id>` | Switch active model |
 | `/status` | Service status + subagent stats (active, running, pending, recent completed/failed) |
 | `/cron list` | List scheduled jobs |
 | `/cron run <job-id>` | Trigger a cron job on demand |

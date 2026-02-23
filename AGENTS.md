@@ -4,7 +4,7 @@
 
 ```bash
 pnpm build        # TypeScript compile (tsc)
-pnpm test         # Vitest (423 tests)
+pnpm test         # Vitest (430 tests)
 pnpm build && pnpm test  # Always run both after changes
 pnpm dev          # Hot reload dev server (tsx watch)
 ```

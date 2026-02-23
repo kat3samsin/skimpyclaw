@@ -8,6 +8,7 @@ import { registerDashboard } from '../dashboard-frontend.js';
 const ROOT = resolve(import.meta.url.replace(/^file:\/\//, ''), '../../..');
 const WEB_DASHBOARD = join(ROOT, 'web', 'dashboard');
 const WEB_SRC = join(WEB_DASHBOARD, 'src');
+const DEFAULT_DIST_INDEX = join(ROOT, 'dist', 'dashboard', 'index.html');
 
 let app: FastifyInstance;
 
@@ -22,10 +23,15 @@ afterAll(async () => {
 });
 
 describe('Default dashboard mode', () => {
-  it('serves framework dashboard when dist exists', async () => {
+  it('serves framework dashboard when dist exists, otherwise returns build hint', async () => {
     const res = await app.inject({ method: 'GET', url: '/dashboard' });
-    expect(res.statusCode).toBe(200);
-    expect(res.headers['content-type']).toContain('text/html');
+    if (existsSync(DEFAULT_DIST_INDEX)) {
+      expect(res.statusCode).toBe(200);
+      expect(res.headers['content-type']).toContain('text/html');
+    } else {
+      expect(res.statusCode).toBe(503);
+      expect(res.body).toContain('pnpm dashboard:build');
+    }
   });
 });
 
