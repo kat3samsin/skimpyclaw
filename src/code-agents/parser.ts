@@ -1,5 +1,92 @@
 // Code Agent Output Parser
 
+interface ClaudeContentBlock {
+  type?: string;
+  text?: string;
+  name?: string;
+  input?: unknown;
+}
+
+function asString(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function pushText(parts: string[], value: unknown): void {
+  const text = asString(value);
+  if (text) parts.push(text);
+}
+
+function extractContentBlocks(
+  content: unknown,
+  parts: string[],
+  options?: { includeTools?: boolean },
+): void {
+  if (!Array.isArray(content)) return;
+  for (const block of content as ClaudeContentBlock[]) {
+    if (block?.type === 'text') {
+      pushText(parts, block.text);
+      continue;
+    }
+    if (options?.includeTools && block?.type === 'tool_use') {
+      const name = block.name || 'tool';
+      const inputPreview = block.input ? JSON.stringify(block.input).slice(0, 120) : '';
+      parts.push(`[${name}] ${inputPreview}`.trim());
+    }
+  }
+}
+
+function extractClaudeEventParts(
+  event: Record<string, unknown>,
+  options?: { includeSystem?: boolean; includeTools?: boolean },
+): string[] {
+  const parts: string[] = [];
+  const type = event.type;
+
+  // Legacy Claude CLI stream-json format
+  if (type === 'assistant') {
+    const message = event.message as Record<string, unknown> | undefined;
+    extractContentBlocks(message?.content, parts, { includeTools: options?.includeTools !== false });
+    return parts;
+  }
+  if (type === 'result') {
+    pushText(parts, event.result);
+    return parts;
+  }
+  if (type === 'system' && options?.includeSystem && event.message != null) {
+    if (typeof event.message === 'string') {
+      parts.push(`[system] ${event.message}`);
+    } else {
+      parts.push(`[system] ${JSON.stringify(event.message).slice(0, 200)}`);
+    }
+    return parts;
+  }
+
+  // Newer Claude stream events: item.completed with item.type === "agent_message"
+  if (type === 'item.completed' || type === 'item.delta') {
+    const item = (event.item || event.delta) as Record<string, unknown> | undefined;
+    if (!item) return parts;
+    const itemType = item.type;
+
+    if (itemType === 'agent_message') {
+      pushText(parts, item.text);
+      const message = item.message as Record<string, unknown> | undefined;
+      extractContentBlocks(message?.content, parts, { includeTools: options?.includeTools !== false });
+      extractContentBlocks(item.content, parts, { includeTools: options?.includeTools !== false });
+      return parts;
+    }
+
+    if (options?.includeTools && itemType === 'tool_use') {
+      const name = typeof item.name === 'string' ? item.name : 'tool';
+      const inputPreview = item.input ? JSON.stringify(item.input).slice(0, 120) : '';
+      parts.push(`[${name}] ${inputPreview}`.trim());
+    }
+  }
+
+  return parts;
+}
+
 /**
  * Parse stream-json stdout into human-readable live output.
  * Extracts assistant text, tool use summaries, and system messages.
@@ -12,25 +99,8 @@ export function parseStreamJsonForLive(raw: string, maxChars = 5000): string {
   for (const line of lines) {
     if (!line.trim()) continue;
     try {
-      const event = JSON.parse(line);
-
-      if (event.type === 'assistant' && event.message?.content) {
-        for (const block of event.message.content) {
-          if (block.type === 'text' && block.text) {
-            parts.push(block.text);
-          } else if (block.type === 'tool_use') {
-            const name = block.name || 'tool';
-            const inputPreview = block.input
-              ? JSON.stringify(block.input).slice(0, 120)
-              : '';
-            parts.push(`[${name}] ${inputPreview}`);
-          }
-        }
-      } else if (event.type === 'result') {
-        if (event.result) parts.push(event.result);
-      } else if (event.type === 'system' && event.message) {
-        parts.push(`[system] ${typeof event.message === 'string' ? event.message : JSON.stringify(event.message).slice(0, 200)}`);
-      }
+      const event = JSON.parse(line) as Record<string, unknown>;
+      parts.push(...extractClaudeEventParts(event, { includeSystem: true, includeTools: true }));
     } catch {
       // Non-JSON line — include if it looks like meaningful output
       if (line.trim().length > 0 && !line.startsWith('{')) {
@@ -54,19 +124,14 @@ export function parseClaudeOutput(stdout: string): { text: string; metadata?: Re
   for (const line of lines) {
     if (!line.trim()) continue;
     try {
-      const event = JSON.parse(line);
-      // Capture assistant text messages
-      if (event.type === 'assistant' && event.message?.content) {
-        for (const block of event.message.content) {
-          if (block.type === 'text' && block.text) {
-            resultText += block.text + '\n';
-          }
-        }
+      const event = JSON.parse(line) as Record<string, unknown>;
+      const extracted = extractClaudeEventParts(event, { includeSystem: false, includeTools: false });
+      if (extracted.length > 0) {
+        resultText += extracted.join('\n') + '\n';
       }
-      // The final "result" event has metadata
+      // The final "result" event may include metadata
       if (event.type === 'result') {
         lastResult = event;
-        if (event.result) resultText += event.result;
       }
     } catch { /* skip non-JSON lines */ }
   }

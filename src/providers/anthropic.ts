@@ -7,6 +7,7 @@ import { buildSystemParam, addToolCacheBreakpoint, contentToText, stripProvider,
 import { toAnthropicUsageDetails, toCostDetails } from './observability.js';
 import { getToolDefinitions, executeTool, type ExecuteToolContext } from '../tools.js';
 import { startTrace, addEvent, endTrace } from '../audit.js';
+import { buildUsageRecord, recordUsage } from '../usage.js';
 
 let anthropicClient: Anthropic | null = null;
 
@@ -23,6 +24,33 @@ export function isAnthropicAvailable(): boolean {
 }
 
 const LANGFUSE_APP_NAME = 'skimpyclaw';
+
+function recordAnthropicUsage(params: {
+  model: string;
+  usage: any;
+  trigger?: string;
+  agentId?: string;
+}): void {
+  const usage = params.usage;
+  const inputTokens = typeof usage?.input_tokens === 'number' ? usage.input_tokens : 0;
+  const outputTokens = typeof usage?.output_tokens === 'number' ? usage.output_tokens : 0;
+  if (inputTokens === 0 && outputTokens === 0) return;
+
+  const cost = toCostDetails(params.model, usage);
+  recordUsage(buildUsageRecord({
+    model: params.model,
+    provider: 'anthropic',
+    inputTokens,
+    outputTokens,
+    inputCost: cost?.input ?? 0,
+    outputCost: cost?.output ?? 0,
+    totalCost: cost?.total ?? 0,
+    trigger: params.trigger || 'api',
+    agentId: params.agentId,
+    cacheReadTokens: typeof usage?.cache_read_input_tokens === 'number' ? usage.cache_read_input_tokens : undefined,
+    cacheCreationTokens: typeof usage?.cache_creation_input_tokens === 'number' ? usage.cache_creation_input_tokens : undefined,
+  }));
+}
 
 async function startGenerationObservation(name: string, attributes: Record<string, any>) {
   // Check langfuse enabled through dynamic import to avoid circular deps
@@ -89,6 +117,7 @@ export async function chatAnthropic(params: ProviderChatParams): Promise<string>
     if (usage?.cache_read_input_tokens > 0 || usage?.cache_creation_input_tokens > 0) {
       console.log(`[cache] read=${usage.cache_read_input_tokens || 0} created=${usage.cache_creation_input_tokens || 0}`);
     }
+    recordAnthropicUsage({ model: modelId, usage, trigger: 'api' });
 
     // Extract text content
     const textContent = response.content.find(c => c.type === 'text');
@@ -187,6 +216,12 @@ export async function chatWithToolsAnthropic(params: ProviderToolChatParams): Pr
       if (usage?.cache_read_input_tokens > 0 || usage?.cache_creation_input_tokens > 0) {
         console.log(`[cache] read=${usage.cache_read_input_tokens || 0} created=${usage.cache_creation_input_tokens || 0}`);
       }
+      recordAnthropicUsage({
+        model: modelId,
+        usage,
+        trigger: toolContext?.trigger || 'api',
+        agentId: toolContext?.agentId,
+      });
 
       genObs?.update({
         output: response.content,
@@ -209,9 +244,16 @@ export async function chatWithToolsAnthropic(params: ProviderToolChatParams): Pr
       if (!responseText && toolLog.length > 0) {
         responseText = `[Completed with ${toolLog.length} tool calls, no text response]`;
       }
+      const usage = (response as any).usage;
       return {
         response: responseText,
         toolCalls: toolLog,
+        usage: {
+          prompt_tokens: usage?.input_tokens ?? 0,
+          completion_tokens: usage?.output_tokens ?? 0,
+          total_tokens: (usage?.input_tokens ?? 0) + (usage?.output_tokens ?? 0),
+        },
+        cost: toCostDetails(modelId, usage),
       };
     }
 
@@ -281,5 +323,14 @@ export async function chatWithToolsAnthropic(params: ProviderToolChatParams): Pr
   return {
     response: '[Tool use loop reached maximum iterations]',
     toolCalls: toolLog,
+  };
+}
+
+/** Build UsageDetails from Anthropic usage response */
+function buildUsageDetails(usage: any) {
+  return {
+    prompt_tokens: usage?.input_tokens ?? 0,
+    completion_tokens: usage?.output_tokens ?? 0,
+    total_tokens: (usage?.input_tokens ?? 0) + (usage?.output_tokens ?? 0),
   };
 }

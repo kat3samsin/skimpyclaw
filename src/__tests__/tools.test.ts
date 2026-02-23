@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { existsSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { executeTool, BUILTIN_TOOL_DEFINITIONS, BROWSER_TOOL_DEFINITION, CODE_WITH_AGENT_TOOL, CODE_WITH_TEAM_TOOL, CHECK_CODE_AGENT_TOOL, getToolDefinitions, fromClaudeCodeName, toClaudeCodeName, buildCodeAgentArgs, getActiveCodeAgents, getRecentCodeAgents, getCodeAgent, readTeamState, decomposeTask, synthesizeResults, computeWaves } from '../tools.js';
+import { resolveModelAlias } from '../code-agents/utils.js';
 import type { DecomposedSubtask } from '../tools.js';
 import type { ToolConfig } from '../types.js';
 
@@ -406,6 +407,38 @@ describe('code_with_agent', () => {
     it('includes --append-system-prompt for claude', () => {
       const { args } = buildCodeAgentArgs({ task: 'fix it' });
       expect(args).toContain('--append-system-prompt');
+    });
+  });
+
+  describe('resolveModelAlias', () => {
+    it('returns undefined for undefined input', () => {
+      expect(resolveModelAlias(undefined, {})).toBeUndefined();
+    });
+
+    it('resolves aliases from config', () => {
+      expect(resolveModelAlias('fast', { fast: 'claude-haiku-4-5' })).toBe('claude-haiku-4-5');
+    });
+
+    it('strips provider prefix', () => {
+      expect(resolveModelAlias('anthropic/claude-sonnet-4-5', {})).toBe('claude-sonnet-4-5');
+      expect(resolveModelAlias('openai/gpt-4.1', {})).toBe('gpt-4.1');
+    });
+
+    it('normalizes claude-3.5-sonnet to claude-3-5-sonnet', () => {
+      expect(resolveModelAlias('claude-3.5-sonnet', {})).toBe('claude-3-5-sonnet');
+    });
+
+    it('normalizes claude-3.7-sonnet to claude-3-7-sonnet', () => {
+      expect(resolveModelAlias('claude-3.7-sonnet', {})).toBe('claude-3-7-sonnet');
+    });
+
+    it('normalizes with provider prefix', () => {
+      expect(resolveModelAlias('anthropic/claude-3.5-sonnet', {})).toBe('claude-3-5-sonnet');
+    });
+
+    it('returns model as-is when no transformation needed', () => {
+      expect(resolveModelAlias('claude-sonnet-4-5', {})).toBe('claude-sonnet-4-5');
+      expect(resolveModelAlias('gpt-4.1', {})).toBe('gpt-4.1');
     });
   });
 

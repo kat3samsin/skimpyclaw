@@ -21,8 +21,6 @@ import {
   chatWithTools,
   setUsingOAuth,
   resolveProviderRoute,
-  toAnthropicUsageDetails,
-  toCostDetails,
 } from './providers/index.js';
 
 // Re-export providers for backward compatibility

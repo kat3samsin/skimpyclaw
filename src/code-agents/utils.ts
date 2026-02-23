@@ -216,7 +216,12 @@ export function resolveModelAlias(
   }
   // Strip provider prefix for CLI tools
   if (model.includes('/')) {
-    return model.split('/').slice(1).join('/');
+    model = model.split('/').slice(1).join('/');
+  }
+  // Normalize model names: convert dots to dashes for Claude models
+  // e.g., claude-3.5-sonnet -> claude-3-5-sonnet
+  if (model.includes('claude') && model.includes('.')) {
+    model = model.replace(/claude-3\.5/, 'claude-3-5').replace(/claude-3\.7/, 'claude-3-7');
   }
   return model;
 }

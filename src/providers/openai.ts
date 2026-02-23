@@ -8,6 +8,7 @@ import { toOpenAIContent } from './content.js';
 import { toUsageDetails, toCostDetails } from './observability.js';
 import { getToolDefinitions, executeTool } from '../tools.js';
 import { addEvent } from '../audit.js';
+import { buildUsageRecord, recordUsage } from '../usage.js';
 
 // Map of provider name → OpenAI client
 const openaiClients = new Map<string, OpenAI>();
@@ -37,6 +38,32 @@ export function isOpenAIAvailable(provider: string): boolean {
 }
 
 const LANGFUSE_APP_NAME = 'skimpyclaw';
+
+function recordOpenAIUsage(params: {
+  model: string;
+  provider: string;
+  usage: any;
+  trigger?: string;
+  agentId?: string;
+}): void {
+  const usage = params.usage;
+  const inputTokens = typeof usage?.prompt_tokens === 'number' ? usage.prompt_tokens : 0;
+  const outputTokens = typeof usage?.completion_tokens === 'number' ? usage.completion_tokens : 0;
+  if (inputTokens === 0 && outputTokens === 0) return;
+
+  const cost = toCostDetails(params.model, usage);
+  recordUsage(buildUsageRecord({
+    model: params.model,
+    provider: params.provider,
+    inputTokens,
+    outputTokens,
+    inputCost: cost?.input ?? 0,
+    outputCost: cost?.output ?? 0,
+    totalCost: cost?.total ?? 0,
+    trigger: params.trigger || 'api',
+    agentId: params.agentId,
+  }));
+}
 
 async function startGenerationObservation(name: string, attributes: Record<string, any>) {
   const { isLangfuseEnabled } = await import('../langfuse.js');
@@ -80,6 +107,8 @@ export async function chatOpenAI(params: ProviderChatParams, provider: string): 
     let content = response.choices[0]?.message?.content || '';
     // Strip <think>...</think> reasoning blocks (e.g. MiniMax M2.x)
     content = content.replace(/<think>[\s\S]*?<\/think>\s*/g, '').trim();
+
+    recordOpenAIUsage({ model: modelId, provider, usage: response.usage, trigger: 'api' });
     
     genObs?.update({
       output: response.choices[0]?.message,
@@ -161,6 +190,13 @@ export async function chatWithToolsOpenAI(params: ProviderToolChatParams, provid
         max_tokens: options.maxTokens || 4096,
         temperature: options.temperature,
       });
+      recordOpenAIUsage({
+        model: modelId,
+        provider,
+        usage: completion.usage,
+        trigger: toolContext?.trigger || 'api',
+        agentId: toolContext?.agentId,
+      });
       genObs?.update({
         output: completion.choices[0]?.message,
         usageDetails: toUsageDetails(completion.usage),
@@ -176,7 +212,16 @@ export async function chatWithToolsOpenAI(params: ProviderToolChatParams, provid
 
     const message = completion.choices[0]?.message;
     if (!message) {
-      return { response: '[No response from model]', toolCalls: toolLog };
+      return {
+        response: '[No response from model]',
+        toolCalls: toolLog,
+        usage: {
+          prompt_tokens: completion.usage?.prompt_tokens ?? 0,
+          completion_tokens: completion.usage?.completion_tokens ?? 0,
+          total_tokens: completion.usage?.total_tokens ?? 0,
+        },
+        cost: toCostDetails(modelId, completion.usage),
+      };
     }
 
     // No tool calls — return the text response
@@ -187,7 +232,16 @@ export async function chatWithToolsOpenAI(params: ProviderToolChatParams, provid
       if (!content && toolLog.length > 0) {
         content = `[Completed with ${toolLog.length} tool calls, no text response]`;
       }
-      return { response: content, toolCalls: toolLog };
+      return {
+        response: content,
+        toolCalls: toolLog,
+        usage: {
+          prompt_tokens: completion.usage?.prompt_tokens ?? 0,
+          completion_tokens: completion.usage?.completion_tokens ?? 0,
+          total_tokens: completion.usage?.total_tokens ?? 0,
+        },
+        cost: toCostDetails(modelId, completion.usage),
+      };
     }
 
     // Append assistant message with tool_calls to conversation
@@ -256,5 +310,14 @@ export async function chatWithToolsOpenAI(params: ProviderToolChatParams, provid
   return {
     response: '[Tool use loop reached maximum iterations]',
     toolCalls: toolLog,
+  };
+}
+
+/** Build UsageDetails from OpenAI usage response */
+function buildOpenAIUsageDetails(usage: any) {
+  return {
+    prompt_tokens: usage?.prompt_tokens ?? 0,
+    completion_tokens: usage?.completion_tokens ?? 0,
+    total_tokens: usage?.total_tokens ?? 0,
   };
 }

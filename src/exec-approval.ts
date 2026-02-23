@@ -95,18 +95,25 @@ function isCommandSeparator(token: string): boolean {
   return token === '&&' || token === '||' || token === '|' || token === ';';
 }
 
-function isGitForcePushCommand(command: string): boolean {
+function getCommandSegments(command: string): string[][] {
   const tokens = tokenizeShellCommand(command);
+  const segments: string[][] = [];
   let start = 0;
 
   for (let i = 0; i <= tokens.length; i++) {
     if (i !== tokens.length && !isCommandSeparator(tokens[i])) continue;
-
     const segment = tokens.slice(start, i);
-    if (isGitForcePushSegment(segment)) return true;
+    if (segment.length > 0) segments.push(segment);
     start = i + 1;
   }
+  return segments;
+}
 
+function isGitForcePushCommand(command: string): boolean {
+  const segments = getCommandSegments(command);
+  for (const segment of segments) {
+    if (isGitForcePushSegment(segment)) return true;
+  }
   return false;
 }
 
@@ -157,6 +164,58 @@ function isGitForcePushSegment(segment: string[]): boolean {
   return false;
 }
 
+function getSegmentCommandIndex(segment: string[]): number {
+  let idx = 0;
+  while (idx < segment.length && segment[idx].includes('=') && !segment[idx].startsWith('-')) {
+    idx++;
+  }
+  return idx;
+}
+
+function getExecutableName(token: string): string {
+  const normalized = token.toLowerCase();
+  const slash = normalized.lastIndexOf('/');
+  return slash >= 0 ? normalized.slice(slash + 1) : normalized;
+}
+
+function classifyOpaqueScriptExecution(command: string): RiskClassification | null {
+  const hasHeredoc = command.includes('<<');
+  const segments = getCommandSegments(command);
+  const interpreters = new Set([
+    'python', 'python3', 'python3.11', 'python3.12',
+    'node', 'deno', 'bun',
+    'perl', 'ruby', 'php', 'lua',
+    'bash', 'sh', 'zsh', 'fish',
+    'pwsh', 'powershell',
+  ]);
+
+  for (const segment of segments) {
+    const cmdIdx = getSegmentCommandIndex(segment);
+    if (cmdIdx >= segment.length) continue;
+    const cmd = getExecutableName(segment[cmdIdx]);
+    if (!interpreters.has(cmd)) continue;
+
+    const args = segment.slice(cmdIdx + 1);
+    if (hasHeredoc && (args.includes('-') || args.some(a => a.startsWith('<<')))) {
+      return { tier: 3, reason: 'Inline heredoc script execution' };
+    }
+
+    // Inline eval-style flags for common interpreters/shells.
+    const hasInlineEval =
+      args.includes('-c') ||
+      args.includes('-e') ||
+      args.includes('-r') ||
+      args.includes('--eval') ||
+      args.includes('--execute') ||
+      args.includes('-Command');
+    if (hasInlineEval) {
+      return { tier: 3, reason: 'Inline interpreter code execution' };
+    }
+  }
+
+  return null;
+}
+
 const DANGEROUS_PATTERNS: DangerousPattern[] = [
   // Tier 3: catastrophic / irreversible
   { pattern: /rm\s+-rf/i, tier: 3, reason: 'Recursive force delete' },
@@ -194,6 +253,11 @@ export function classifyCommandRisk(command: string): RiskClassification {
     if (entry.pattern.test(command) && entry.tier > highest.tier) {
       highest = { tier: entry.tier as RiskTier, reason: entry.reason };
     }
+  }
+
+  const opaqueScript = classifyOpaqueScriptExecution(command);
+  if (opaqueScript && opaqueScript.tier > highest.tier) {
+    highest = opaqueScript;
   }
 
   return highest;

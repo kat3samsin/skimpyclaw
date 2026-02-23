@@ -3,6 +3,7 @@
 import type { Config, ChatMessage, ChatOptions, ToolConfig } from '../types.js';
 import type { ExecuteToolContext } from '../tools/execute-context.js';
 import type { ToolChatResult, ProviderChatParams, ProviderToolChatParams } from './types.js';
+import { calculateUsageCost, isLangfuseEnabled } from '../langfuse.js';
 
 // Re-export types
 export type { ToolChatResult, ProviderChatParams, ProviderToolChatParams } from './types.js';
@@ -35,6 +36,7 @@ export {
   toUsageDetails,
   toNumericUsageDetails,
 } from './observability.js';
+import { setLangfuseHelpers } from './observability.js';
 
 // Import provider functions directly to avoid circular deps
 import {
@@ -80,6 +82,9 @@ interface NormalizedChatRoute {
   chatOpts: ChatOptions;
   useCodexAliasProvider: boolean;
 }
+
+// Wire provider observability helpers to runtime cost calculator.
+setLangfuseHelpers(calculateUsageCost, isLangfuseEnabled);
 
 function normalizeChatRoute(options: ChatOptions, config: Config): NormalizedChatRoute {
   const route = resolveProviderRoute(options.model, config);

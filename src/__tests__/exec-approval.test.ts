@@ -114,6 +114,28 @@ describe('classifyCommandRisk', () => {
     expect(result.tier).toBe(2);
   });
 
+  it('returns tier 3 for python heredoc execution', () => {
+    const result = classifyCommandRisk("python - <<'PY'\nprint('hi')\nPY");
+    expect(result.tier).toBe(3);
+    expect(result.reason).toContain('Inline');
+  });
+
+  it('returns tier 3 for node inline eval', () => {
+    const result = classifyCommandRisk("node -e \"console.log('hi')\"");
+    expect(result.tier).toBe(3);
+    expect(result.reason).toContain('Inline');
+  });
+
+  it('returns tier 3 for bash -c inline script', () => {
+    const result = classifyCommandRisk("bash -c \"echo hi\"");
+    expect(result.tier).toBe(3);
+  });
+
+  it('keeps python script file execution at tier 0', () => {
+    const result = classifyCommandRisk('python scripts/task.py');
+    expect(result.tier).toBe(0);
+  });
+
   it('returns tier 2 for chained command containing force push', () => {
     const result = classifyCommandRisk('cd /tmp && git push origin trunk --force');
     expect(result.tier).toBe(2);

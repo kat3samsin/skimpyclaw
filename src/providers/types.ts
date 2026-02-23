@@ -6,6 +6,8 @@ import type { ExecuteToolContext } from '../tools/execute-context.js';
 export interface ToolChatResult {
   response: string;
   toolCalls: string[];
+  usage?: UsageDetails;
+  cost?: CostDetails;
 }
 
 export interface ProviderChatParams {
