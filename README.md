@@ -18,7 +18,7 @@ Use SkimpyClaw if you live in Telegram or Discord, want to read and own every li
 
 ## Features
 
-- **Chat interface** — Telegram and Discord bots with conversation history (last 5 message pairs)
+- **Chat interface** — Telegram and Discord bots with persistent conversation history
 - **Tool-enabled agent** — file read/write, bash, browser (Playwright), MCP tools via mcporter
 - **Multi-modal support** — voice messages (STT/TTS), image analysis
 - **Subagents** — model autonomously spawns coding/research subagents with retry + concurrency control
@@ -127,8 +127,12 @@ Bearer token is shown in startup logs.
 src/
   index.ts              # App entrypoint with logging setup
   gateway.ts            # Fastify server + top-level routes
-  agent.ts              # Prompt assembly, model calls, tool loop, memory writes
-  tools.ts              # Tool registry, MCP auto-discovery, code agents
+  agent.ts              # Prompt assembly, model routing, tool loop, memory writes
+  tools.ts              # Tool registry + dispatch
+  tools/                # Tool executors (bash, browser, file tools, path utils, execute context)
+  providers/            # Provider routing + provider implementations (anthropic/openai/codex)
+  code-agents/          # Background coding-agent runtime (executor/parser/orchestrator/registry)
+  channels/             # Channel adapters/utilities (telegram/discord)
   subagent.ts           # Background task dispatch: retry, concurrency, disk registry
   file-lock.ts          # In-memory file lock for concurrent subagent writes
   audit.ts              # Append-only audit log (trace/event model, JSONL storage)
@@ -191,6 +195,7 @@ dist/                   # Compiled output + built dashboard assets
 | [docs/tools.md](docs/tools.md)                 | Built-in tools, browser tool, MCP integration, code agents       |
 | [docs/subagents.md](docs/subagents.md)         | Subagent types, concurrency, file locking, flow diagram          |
 | [docs/dashboard.md](docs/dashboard.md)         | Web dashboard, all HTTP endpoints + API routes                   |
+| [docs/coding-agents.md](docs/coding-agents.md) | Coding-agent execution model and CLI backends                    |
 | [docs/cli.md](docs/cli.md)                     | CLI commands, service management                                 |
 | [docs/chat-commands.md](docs/chat-commands.md) | Telegram/Discord bot commands                                    |
 | [docs/skills.md](docs/skills.md)               | Skills system, built-in skills, creating custom skills           |

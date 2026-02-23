@@ -1704,7 +1704,7 @@ textarea::placeholder {
   margin-top: 4px;
 }
 .digest-reader {
-  background: var(--surface-alt);
+  background: var(--surface);
   border: 1px solid var(--border-light);
   border-radius: var(--radius);
   padding: 16px 18px;

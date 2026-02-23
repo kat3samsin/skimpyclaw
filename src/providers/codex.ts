@@ -14,6 +14,7 @@ import { buildUsageRecord, recordUsage } from '../usage.js';
 
 const DEFAULT_CODEX_AUTH_PATH = join(homedir(), '.codex', 'auth.json');
 const DEFAULT_CODEX_BASE_URL = 'https://chatgpt.com/backend-api';
+const DEFAULT_CODEX_FETCH_TIMEOUT_MS = 120_000;
 
 let codexAuthPath = DEFAULT_CODEX_AUTH_PATH;
 let codexBaseUrl = DEFAULT_CODEX_BASE_URL;
@@ -144,30 +145,42 @@ async function startGenerationObservation(name: string, attributes: Record<strin
 /**
  * Make a single Codex API call. Returns raw SSE text.
  */
-async function codexFetch(body: any): Promise<string> {
+async function codexFetch(body: any, timeoutMs: number = DEFAULT_CODEX_FETCH_TIMEOUT_MS): Promise<string> {
   if (!codexAuth) {
     throw new Error('Codex auth not initialized. Run "codex" CLI to authenticate.');
   }
 
   const baseUrl = codexBaseUrl || DEFAULT_CODEX_BASE_URL;
-  const response = await fetch(`${baseUrl}/codex/responses`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${codexAuth.accessToken}`,
-      'chatgpt-account-id': codexAuth.accountId,
-      'OpenAI-Beta': 'responses=experimental',
-      'originator': 'codex_cli_rs',
-    },
-    body: JSON.stringify(body),
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), Math.max(1_000, timeoutMs));
+  try {
+    const response = await fetch(`${baseUrl}/codex/responses`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${codexAuth.accessToken}`,
+        'chatgpt-account-id': codexAuth.accountId,
+        'OpenAI-Beta': 'responses=experimental',
+        'originator': 'codex_cli_rs',
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
 
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => 'unknown');
-    throw new Error(`Codex API ${response.status}: ${errorText}`);
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'unknown');
+      throw new Error(`Codex API ${response.status}: ${errorText}`);
+    }
+
+    return response.text();
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`Codex request timed out after ${Math.round(timeoutMs / 1000)}s`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
   }
-
-  return response.text();
 }
 
 /**

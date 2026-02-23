@@ -193,13 +193,32 @@ async function sendLongText(message: Message, text: string): Promise<void> {
 }
 
 function startTypingIndicator(message: Message): () => void {
+  const maxDurationMs = 90_000;
+  let stopped = false;
+
+  const stop = () => {
+    if (stopped) return;
+    stopped = true;
+    clearInterval(interval);
+    clearTimeout(watchdog);
+  };
+
+  const channel = message.channel as { sendTyping?: () => Promise<unknown> };
+  if (typeof channel.sendTyping === 'function') {
+    void channel.sendTyping().catch(() => {});
+  }
+
   const interval = setInterval(() => {
-    const channel = message.channel as { sendTyping?: () => Promise<unknown> };
+    if (stopped) return;
     if (typeof channel.sendTyping === 'function') {
       void channel.sendTyping().catch(() => {});
     }
   }, 4000);
-  return () => clearInterval(interval);
+  const watchdog = setTimeout(() => {
+    console.warn('[discord] Typing indicator watchdog reached; auto-stopping.');
+    stop();
+  }, maxDurationMs);
+  return stop;
 }
 
 async function handleCommand(message: Message, command: string, args: string[]): Promise<void> {

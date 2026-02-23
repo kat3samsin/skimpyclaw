@@ -102,6 +102,7 @@ src/
   agent.ts              # Prompt assembly, model calls, tool loop, memory writes, Langfuse tracing
   tools.ts              # Tool registry, MCP auto-discovery, code agents (code_with_agent, code_with_team)
   subagent.ts           # Background task dispatch: retry, concurrency, disk registry
+  model-selection.ts    # Shared model-selection contract (alias/provider-model/bare-id resolution)
   file-lock.ts          # In-memory file lock for concurrent subagent writes
   audit.ts              # Append-only audit log (trace/event model, JSONL storage)
   cron.ts               # Job scheduling + execution + cron logging
@@ -126,6 +127,8 @@ src/
   cli.ts                # CLI command definitions
   cache.ts              # TTL cache utility
   sessions.ts           # Session persistence for chat history
+  model-selection.ts    # Shared model-selection contract for API/CLI/chat commands
+  digests.ts            # Digest storage and management for cron job article outputs
   doctor/               # Health check system
     index.ts            # Doctor entry point
     checks.ts           # Individual health checks
@@ -143,6 +146,13 @@ templates/              # Default template markdown files copied during setup
   MEMORY.md             # Memory management guidelines
   AGENTS.md             # Multi-agent coordination
   BOOTSTRAP.md          # Bootstrap instructions
+
+web/dashboard/          # Preact/Vite dashboard frontend
+  src/
+    App.tsx             # Main app component with routing
+    api/client.ts       # API client for backend communication
+    components/         # Shared UI components
+    pages/              # Page components (Overview, Cron, Audit, Memory, Config, Skills, Digests, etc.)
 
 dist/                   # Compiled output + built dashboard assets
 ```

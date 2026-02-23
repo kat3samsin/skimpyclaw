@@ -11,10 +11,27 @@ import * as sessions from '../../sessions.js';
 
 /** Keep sending "typing..." every 4s until the returned stop function is called. */
 export function startTypingIndicator(ctx: Context): () => void {
+  const maxDurationMs = 90_000;
+  let stopped = false;
+
+  const stop = () => {
+    if (stopped) return;
+    stopped = true;
+    clearInterval(interval);
+    clearTimeout(watchdog);
+  };
+
+  // Send one action immediately, then keep alive every 4s while work is in progress.
+  void ctx.replyWithChatAction('typing').catch(() => {});
   const interval = setInterval(() => {
+    if (stopped) return;
     ctx.replyWithChatAction('typing').catch(() => {});
   }, 4000);
-  return () => clearInterval(interval);
+  const watchdog = setTimeout(() => {
+    console.warn('[telegram] Typing indicator watchdog reached; auto-stopping.');
+    stop();
+  }, maxDurationMs);
+  return stop;
 }
 
 /** Build the help text from BOT_COMMANDS. */

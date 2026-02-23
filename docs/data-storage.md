@@ -23,7 +23,11 @@ All runtime data lives under `~/.skimpyclaw/`.
 │   └── general/                        # General subagent (auto-created)
 ├── sessions/
 │   └── *.json                          # Session records (dashboard-readable)
+│   └── *.jsonl                         # Conversation history (Telegram/Discord)
 ├── browser-profile/                    # Persistent browser profile
+├── skills/                             # Custom skills directory
+│   └── <skill-name>/
+│       └── SKILL.md                    # Skill definition
 └── logs/
     ├── stdout.log                      # Application stdout
     ├── cron/
@@ -31,7 +35,10 @@ All runtime data lives under `~/.skimpyclaw/`.
     ├── audit/
     │   └── YYYY-MM-DD.jsonl            # Audit traces (one JSON line per trace)
     ├── subagent-runs.jsonl             # Subagent task lifecycle events
-    └── code-agent-status.json          # Coding agent live status
+    ├── code-agent-status.json          # Coding agent live status
+    └── digests/                        # Digest storage for cron outputs
+        └── <job-id>/
+            └── YYYY-MM-DD-<digest-id>.json
 ```
 
 ## Audit log format
@@ -49,6 +56,31 @@ Each line in `logs/audit/YYYY-MM-DD.jsonl` is a completed trace:
     { "type": "tool_call", "summary": "Read ~/.skimpyclaw/agents/main/TOOLS.md", "durationMs": 12 },
     { "type": "model_call", "summary": "anthropic/claude-sonnet-4-5", "durationMs": 3200 }
   ]
+}
+```
+
+## Digest format
+
+Digests are stored in `logs/digests/<job-id>/YYYY-MM-DD-<digest-id>.json`:
+
+```json
+{
+  "id": "morning-a1b2c3d4",
+  "jobId": "morning",
+  "jobName": "Morning Briefing",
+  "createdAt": "2026-02-17T08:00:00.000Z",
+  "articles": [
+    {
+      "id": "abc123def456",
+      "title": "Article Title",
+      "source": "Hacker News",
+      "url": "https://example.com/article",
+      "score": 123,
+      "comments": 45,
+      "read": false
+    }
+  ],
+  "summary": "Raw digest content from agent"
 }
 ```
 
