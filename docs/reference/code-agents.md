@@ -1,0 +1,62 @@
+# Coding Agent Execution
+
+`code_with_agent` and `code_with_team` run external CLIs via `buildCodeAgentArgs()` in `src/code-agents/utils.ts`.
+
+## Worker Commands
+
+- Claude: `claude -p --verbose --output-format stream-json --dangerously-skip-permissions ... <task>`
+- Codex: `codex exec --full-auto --json --color never ... <task>`
+- Kimi: `kimi --yolo -p <task> ...`
+
+## Execution Flow
+
+- Tool schemas: `src/tools/definitions.ts` (`code_with_agent`, `code_with_team`)
+- Orchestration: `src/code-agents/index.ts`
+- Command construction: `src/code-agents/utils.ts`
+
+Normal tool calling (`Read/Write/Bash/Browser`) is separate from coding-agent CLI execution.
+
+## Exec Approval
+
+`src/exec-approval.ts` classifies Bash commands before execution:
+- **Tier 0** — safe, auto-approved
+- **Tier 1** — low risk, auto-approved
+- **Tier 2** — medium risk (sudo, chmod 777, gh pr review), prompts user
+- **Tier 3** — catastrophic/irreversible (rm -rf, mkfs, dd, DROP TABLE), always requires approval
+
+Pending approvals are held in an EventEmitter registry. The active channel sends the request; user replies inline to approve or deny.
+
+## Skills System
+
+Skills are loaded from `~/.skimpyclaw/skills/<name>/SKILL.md`. Each `SKILL.md` has YAML frontmatter:
+
+```markdown
+---
+name: my-skill
+description: What this skill does
+triggers: ["keyword1", "keyword2"]
+priority: 100
+---
+```
+
+`src/skills.ts` scans the directory, loads valid skills, and injects relevant ones into the system prompt based on triggers and token budget (`maxPromptTokens`, default 4000 chars ≈ 1000 tokens).
+
+## Dashboard Architecture
+
+The dashboard is framework-only (Preact/Vite).
+
+| Concern | Location |
+|---------|---------|
+| Frontend source | `web/dashboard/` |
+| Built assets | `dist/dashboard/` |
+| Route | `GET /dashboard` via `registerDashboard()` in `src/dashboard-frontend.ts` |
+| Backend API | `src/api.ts` — all endpoints under `/api/dashboard/*` |
+| Auth | Bearer token from `config.dashboard.token` |
+
+If `dist/dashboard/index.html` is missing, `GET /dashboard` returns `503` with a build hint.
+
+### Dashboard Tests
+
+- `src/__tests__/dashboard.test.ts` — framework route contract tests
+- `src/__tests__/dashboard-mode.test.ts` — framework static serving and safety checks
+- `src/__tests__/api.test.ts` — backend API contract tests
