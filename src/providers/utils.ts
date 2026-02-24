@@ -202,6 +202,12 @@ export function stripProvider(model: string, openaiClients?: Map<string, unknown
   return model;
 }
 
+/** Truncate tool result to maxBytes. Appends truncation notice. */
+export function truncateToolResult(result: string, maxBytes: number = 10_240): string {
+  if (result.length <= maxBytes) return result;
+  return result.slice(0, maxBytes) + `\n\n[Truncated: ${result.length} chars total]`;
+}
+
 /**
  * Build thinking config based on thinking level.
  */
