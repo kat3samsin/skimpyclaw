@@ -88,7 +88,7 @@ function maskInput(input: string): string {
   return input.slice(0, 4) + '****' + input.slice(-4);
 }
 
-function renderGatewayPlist(workspaceDir: string): string {
+function renderGatewayPlist(): string {
   if (!existsSync(GATEWAY_PLIST_TEMPLATE)) {
     throw new Error(`Gateway launchd template not found: ${GATEWAY_PLIST_TEMPLATE}`);
   }
@@ -98,13 +98,19 @@ function renderGatewayPlist(workspaceDir: string): string {
   const homeDir = homedir();
   const pnpmBinDir = process.env.PNPM_HOME || join(homeDir, 'Library', 'pnpm');
   const systemPath = process.env.PATH || '/usr/local/bin:/usr/bin:/bin';
+  const packageRoot = join(__dirname, '..');
+  const entrypoint = join(packageRoot, 'dist', 'index.js');
+  if (!existsSync(entrypoint)) {
+    throw new Error(`Gateway entrypoint not found: ${entrypoint}`);
+  }
 
   return readFileSync(GATEWAY_PLIST_TEMPLATE, 'utf-8')
     .replaceAll('__NODE_BIN__', nodeBin)
+    .replaceAll('__ENTRYPOINT__', entrypoint)
     .replaceAll('__NODE_BIN_DIR__', nodeBinDir)
     .replaceAll('__PNPM_BIN_DIR__', pnpmBinDir)
     .replaceAll('__SYSTEM_PATH__', systemPath)
-    .replaceAll('__REPO_DIR__', workspaceDir)
+    .replaceAll('__REPO_DIR__', packageRoot)
     .replaceAll('__HOME_DIR__', homeDir);
 }
 
@@ -601,7 +607,7 @@ async function validateProviderAuth(providers: Set<ProviderChoice>, secrets: Pro
 export async function runSetup(options: SetupOptions = {}): Promise<void> {
   const dryRun = options.dryRun ?? false;
   if (dryRun) {
-    const workspaceDir = process.cwd();
+    console.log(`\n${c.bold('👙🦞✨ SkimpyClaw Setup')} ${c.dim('(dry run)')}\n`);
     if (!existsSync(TEMPLATES_DIR)) {
       throw new Error(`Templates directory not found: ${TEMPLATES_DIR}`);
     }
@@ -609,8 +615,8 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
     if (templates.length === 0) {
       throw new Error(`No markdown templates found in ${TEMPLATES_DIR}`);
     }
-    // Validate launchd template rendering with current environment and workspace.
-    renderGatewayPlist(workspaceDir);
+    // Validate launchd template rendering with current environment and install root.
+    renderGatewayPlist();
 
     console.log('✅ Onboarding dry run successful.');
     console.log(`Would create config under: ${CONFIG_DIR}`);
@@ -628,9 +634,9 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
     const isReconfigure = existing.config !== null;
 
     if (isReconfigure) {
-      console.log(`\n${c.bold('👙🦞 SkimpyClaw Setup')} ${c.dim('(reconfigure — press Enter to keep current values)')}\n`);
+      console.log(`\n${c.bold('👙🦞✨ SkimpyClaw Setup')} ${c.dim('(reconfigure — press Enter to keep current values)')}\n`);
     } else {
-      console.log(`\n${c.bold('👙🦞 SkimpyClaw Setup')}\n`);
+      console.log(`\n${c.bold('👙🦞✨ SkimpyClaw Setup')}\n`);
     }
 
     // 1. Telegram Bot Token
@@ -756,10 +762,8 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
       mcp: enableMcp,
     };
 
-    const workspaceDir = process.cwd();
-
     const { configJson: rawConfigJson, envContent, config: generatedConfig } = buildSetupArtifacts({
-      workspaceDir,
+      workspaceDir: process.cwd(),
       telegramId,
       telegramToken,
       discordToken: useDiscord ? discordToken : undefined,
@@ -854,7 +858,7 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
 
     // Create launchd plist from template
     const plistPath = join(homedir(), 'Library', 'LaunchAgents', `${GATEWAY_PLIST_LABEL}.plist`);
-    const plistContent = renderGatewayPlist(workspaceDir);
+    const plistContent = renderGatewayPlist();
 
     mkdirSync(dirname(plistPath), { recursive: true });
     writeFileSync(plistPath, plistContent);
