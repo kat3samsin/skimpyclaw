@@ -13,12 +13,13 @@ describe('setup config generation', () => {
       providerSecrets: { anthropicKey: 'sk-ant-test' },
     }) as any;
 
-    expect(config.agents.list.main.model).toBe('anthropic/claude-opus-4');
+    expect(config.agents.list.main.model).toBe('claude-opus');
     expect(config.models.providers.anthropic.apiKey).toBe('${ANTHROPIC_API_KEY}');
     expect(config.models.providers.codex.authPath).toBe('${HOME}/.codex/auth.json');
     expect(config.channels.telegram.allowFrom).toEqual([12345]);
     expect(config.channels.telegram.defaultAllowedPaths).toContain('/tmp/workspace');
-    expect(config.models.aliases['claude-think']).toBe('anthropic/claude-sonnet-4-5');
+    expect(config.models.aliases['claude-think']).toBe('anthropic/claude-sonnet-4-6');
+    expect(config.models.aliases['claude-opus']).toBe('anthropic/claude-opus-4-6');
     expect(config.models.aliases.codex).toBe('codex/gpt-5.3-codex');
     expect(config.models.aliases['codex5.1']).toBe('codex/gpt-5.1-codex');
     expect(config.models.aliases['codex5.2']).toBe('codex/gpt-5.2-codex');

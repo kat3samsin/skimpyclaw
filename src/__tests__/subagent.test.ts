@@ -52,7 +52,7 @@ function createMockConfig(): Config {
       providers: {},
       aliases: {
         'claude-think': 'anthropic/claude-sonnet-4-5',
-        'claude-opus': 'anthropic/claude-opus-4',
+        'claude-opus': 'anthropic/claude-opus-4-6',
       },
     },
     channels: {
@@ -104,7 +104,7 @@ describe('subagent', () => {
       expect(task.type).toBe('coding');
       expect(task.prompt).toBe('list TODOs');
       expect(task.chatId).toBe(123);
-      expect(task.model).toBe('anthropic/claude-opus-4');
+      expect(task.model).toBe('anthropic/claude-opus-4-6');
       expect(task.createdAt).toBeInstanceOf(Date);
     });
 
@@ -117,7 +117,7 @@ describe('subagent', () => {
 
     it('uses model override when provided', () => {
       const task = dispatchSubagent('coding', 'test', 123, mockConfig, 'anthropic/claude-opus-4');
-      expect(task.model).toBe('anthropic/claude-opus-4');
+      expect(task.model).toBe('anthropic/claude-opus-4-6');
     });
 
     it('resolves model override aliases to canonical model ids', () => {

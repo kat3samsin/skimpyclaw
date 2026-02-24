@@ -56,6 +56,12 @@ describe('provider utils', () => {
     expect(resolveModel('claude-3.5-haiku', cfg)).toBe('claude-haiku-4-5');
   });
 
+  it('migrates deprecated claude opus 4 model ids', () => {
+    const cfg: any = { models: { aliases: {} } };
+    expect(resolveModel('claude-opus-4', cfg)).toBe('claude-opus-4-6');
+    expect(resolveModel('anthropic/claude-opus-4', cfg)).toBe('anthropic/claude-opus-4-6');
+  });
+
   it('normalizes provider route fields after deprecated model migration', () => {
     const cfg: any = { models: { aliases: {} } };
     const route = resolveProviderRoute('anthropic/claude-3-5-sonnet-20241022', cfg);

@@ -189,7 +189,7 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
   bot.command('approvals', (ctx) => commandHandlers.approvals(ctx, cfg));
   bot.command('approve', (ctx) => commandHandlers.approve(ctx, cfg));
   bot.command('deny', (ctx) => commandHandlers.deny(ctx, cfg));
-  bot.command('new', (ctx) => commandHandlers.new(ctx, cfg));
+  bot.command('clear', (ctx) => commandHandlers.clear(ctx, cfg));
   bot.command('compact', (ctx) => commandHandlers.compact(ctx, cfg));
   bot.command('silence', (ctx) => commandHandlers.silence(ctx, cfg));
   bot.command('memory', (ctx) => commandHandlers.memory(ctx, cfg));

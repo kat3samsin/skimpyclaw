@@ -119,6 +119,8 @@ function migrateDeprecatedModelSpec(modelSpec: string): string {
     migratedBare = 'claude-sonnet-4-6';
   } else if (/^claude[-.]3[-.]5[-.]haiku(?:[-_.].*)?$/i.test(bare)) {
     migratedBare = 'claude-haiku-4-5';
+  } else if (/^claude[-.]opus[-.]4(?:[-_.].*)?$/i.test(bare)) {
+    migratedBare = 'claude-opus-4-6';
   }
 
   if (migratedBare === bare) return modelSpec;

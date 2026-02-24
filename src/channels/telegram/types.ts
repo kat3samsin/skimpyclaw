@@ -9,7 +9,7 @@ export const BOT_COMMANDS: { command: string; description: string }[] = [
   { command: 'model', description: 'Switch model (fast/smart/opus)' },
   { command: 'status', description: 'Show bot status' },
   { command: 'memory', description: 'View recent memory entries' },
-  { command: 'new', description: 'Clear conversation history' },
+  { command: 'clear', description: 'Clear conversation history' },
   { command: 'compact', description: 'Compress conversation history' },
   { command: 'silence', description: 'Pause proactive messages' },
   { command: 'cron', description: 'List or run scheduled jobs' },

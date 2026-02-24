@@ -165,7 +165,7 @@ export async function replaceWithSummary(
 }
 
 /**
- * Delete the session file. Used by /new.
+ * Delete the session file. Used by /clear.
  */
 export async function clearHistory(
   platform: string,

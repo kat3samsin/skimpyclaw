@@ -418,7 +418,7 @@ export async function handleDeny(ctx: Context, cfg: Config): Promise<void> {
   }
 }
 
-export async function handleNew(ctx: Context, cfg: Config): Promise<void> {
+export async function handleClear(ctx: Context, cfg: Config): Promise<void> {
   const chatId = ctx.chat?.id;
   if (chatId) await clearHistory(chatId);
   await ctx.reply('Conversation cleared. Starting fresh.');
@@ -524,7 +524,7 @@ export const commandHandlers = {
   approvals: handleApprovals,
   approve: handleApprove,
   deny: handleDeny,
-  new: handleNew,
+  clear: handleClear,
   compact: handleCompact,
   silence: handleSilence,
   memory: handleMemory,

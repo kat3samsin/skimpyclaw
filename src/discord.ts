@@ -49,7 +49,7 @@ const BOT_COMMANDS: { command: string; description: string }[] = [
   { command: 'help', description: 'Show available commands' },
   { command: 'model', description: 'Switch model (fast/smart/opus)' },
   { command: 'status', description: 'Show bot status' },
-  { command: 'new', description: 'Clear conversation history' },
+  { command: 'clear', description: 'Clear conversation history' },
   { command: 'compact', description: 'Compress conversation history' },
   { command: 'silence', description: 'Pause proactive messages' },
   { command: 'cron', description: 'List or run scheduled jobs' },
@@ -468,7 +468,7 @@ async function handleCommand(message: Message, command: string, args: string[]):
     return;
   }
 
-  if (command === 'new') {
+  if (command === 'clear') {
     await clearHistory(conversationKey(message));
     await message.reply('Conversation cleared. Starting fresh.');
     return;

@@ -337,7 +337,7 @@ function buildProviders(providers: Set<ProviderChoice>): Record<string, Record<s
 
 function buildDefaultModel(providers: Set<ProviderChoice>): string {
   const hasAnthropic = providers.has('anthropic-api') || providers.has('anthropic-oauth');
-  if (hasAnthropic) return 'anthropic/claude-opus-4';
+  if (hasAnthropic) return 'claude-opus';
   if (providers.has('codex-oauth')) return 'codex/gpt-5.3-codex';
   if (providers.has('kimi-api')) return 'kimi/kimi-for-coding';
   if (providers.has('minimax-api')) return 'minimax/MiniMax-M2.1';
@@ -348,8 +348,8 @@ function buildAliases(providers: Set<ProviderChoice>): Record<string, string> {
   // Always include well-known aliases so users can switch models easily
   const aliases: Record<string, string> = {
     'claude-fast': 'anthropic/claude-haiku-4-5',
-    'claude-think': 'anthropic/claude-sonnet-4-5',
-    'claude-opus': 'anthropic/claude-opus-4',
+    'claude-think': 'anthropic/claude-sonnet-4-6',
+    'claude-opus': 'anthropic/claude-opus-4-6',
     'codex5.1': 'codex/gpt-5.1-codex',
     'codex5.2': 'codex/gpt-5.2-codex',
     'codex5.3': 'codex/gpt-5.3-codex',
@@ -895,7 +895,9 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
     console.log('\nNext steps:');
     console.log('1. Review templates in ~/.skimpyclaw/agents/main/');
     console.log('2. Start the daemon:');
-    console.log(`   launchctl load ~/Library/LaunchAgents/${GATEWAY_PLIST_LABEL}.plist`);
+    console.log(`   launchctl bootout gui/$(id -u)/${GATEWAY_PLIST_LABEL} 2>/dev/null || true`);
+    console.log(`   launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/${GATEWAY_PLIST_LABEL}.plist`);
+    console.log(`   launchctl kickstart -k gui/$(id -u)/${GATEWAY_PLIST_LABEL}`);
     console.log('3. Check health:');
     console.log('   curl http://localhost:18790/health');
     console.log(`4. Send /help in your ${useDiscord ? 'Discord bot DM/server' : 'Telegram bot'}`);
