@@ -1,12 +1,12 @@
 # SkimpyClaw 👙🦞
 
-Lightweight personal AI assistant (~20k LOC). Runs locally. Telegram/Discord chat, scheduled routines, a web dashboard, and a tool-enabled agent — all in one tiny service.
+Lightweight personal AI assistant (~23k LOC). Runs locally. Telegram/Discord chat, scheduled routines, a web dashboard, and a tool-enabled agent — all in one tiny service.
 
 ## Why SkimpyClaw vs OpenClaw
 
 Both are personal AI assistants you run yourself. The difference is scope.
 
-|                     | SkimpyClaw (~20k LOC)                   | OpenClaw (~700k LOC)                                     |
+|                     | SkimpyClaw (~23k LOC)                   | OpenClaw (~700k LOC)                                     |
 | ------------------- | --------------------------------------- | -------------------------------------------------------- |
 | **Channels**        | Telegram, Discord                       | WhatsApp, Signal, iMessage, Slack, Teams, Matrix, + more |
 | **Setup**           | `skimpyclaw onboard` → done             | Daemon + wizard + per-channel pairing                    |

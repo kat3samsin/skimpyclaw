@@ -9,7 +9,7 @@ Welcome to SkimpyClaw! This guide will help you get up and running with your per
 
 ## What is SkimpyClaw?
 
-SkimpyClaw is a lightweight (~20k LOC) personal AI assistant that runs locally on your machine. It provides:
+SkimpyClaw is a lightweight (~23k LOC) personal AI assistant that runs locally on your machine. It provides:
 
 - **Multi-channel chat** — Telegram and Discord bots with persistent conversation history
 - **Tool-enabled agent** — File read/write, bash, browser (Playwright), MCP tools
