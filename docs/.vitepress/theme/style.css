@@ -138,6 +138,20 @@
   border-bottom: none;
 }
 
+.VPNavBar.has-sidebar .content-body,
+.VPNavBar .content-body,
+.VPNavScreen,
+.VPNavScreen .content {
+  background: var(--vp-c-bg-soft) !important;
+}
+
+.VPNavBar::before,
+.VPNavBar::after,
+.VPNav::before,
+.VPNav::after {
+  background: var(--vp-c-bg-soft) !important;
+}
+
 .VPNavBar .container {
   background: var(--vp-c-bg-soft) !important;
 }

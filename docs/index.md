@@ -1,44 +1,14 @@
 ---
-title: Getting Started
-outline: deep
+layout: doc
+title: Redirecting
 ---
 
-# Getting Started
+<script setup>
+if (typeof window !== 'undefined') {
+  window.location.replace('/guide/')
+}
+</script>
 
-Welcome to SkimpyClaw. This guide helps you get up and running quickly.
+# Redirecting to Guide
 
-## What is SkimpyClaw?
-
-SkimpyClaw is a lightweight personal AI assistant that runs locally on your machine. It provides:
-
-- **Multi-channel chat** - Telegram and Discord bots with persistent conversation history
-- **Tool-enabled agent** - File read/write, bash, browser (Playwright), MCP tools
-- **Cron scheduler** - Run prompts or scripts on a schedule
-- **Web dashboard** - Manage everything through a web interface
-- **Subagents** - Autonomous task delegation with retry and concurrency control
-
-## Quick Start
-
-```bash
-# Install dependencies
-pnpm install
-
-# Run setup wizard
-pnpm run onboard
-
-# Start the service
-pnpm dev
-```
-
-## Next Steps
-
-- Read the [Architecture](/guide/architecture) overview
-- Learn about [Configuration](/guide/configuration)
-- Explore available [Tools](/guide/tools)
-- Set up [Subagents](/guide/subagents) for complex tasks
-
-## Getting Help
-
-- Check the [Troubleshooting](/guide/troubleshooting) guide
-- Browse the [API Reference](/api/)
-- Open an issue on [GitHub](https://github.com/kat3samsin/skimpyclaw)
+If you are not redirected automatically, open [the guide](/guide/).
