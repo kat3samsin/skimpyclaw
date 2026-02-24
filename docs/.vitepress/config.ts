@@ -143,7 +143,7 @@ export default withMermaid({
     
     // Edit link
     editLink: {
-      pattern: 'https://github.com/kat3samsin/skimpyclaw/edit/main/docs/:path'
+      pattern: 'https://github.com/kat3samsin/skimpyclaw/edit/trunk/docs/:path'
     },
   },
   

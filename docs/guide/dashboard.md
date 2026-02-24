@@ -31,7 +31,7 @@ Current pages include:
 | POST   | `/message`      | Send a message `{ message, model? }`       |
 | POST   | `/model`        | Switch model `{ model }` (alias/provider/model/model-id) |
 | POST   | `/cron/:id/run` | Trigger a cron job                         |
-| POST   | `/reload`       | Reload config without restart              |
+| POST   | `/reload`       | Placeholder response (restart required)    |
 | GET    | `/dashboard`    | Dashboard UI                               |
 
 ## Dashboard API routes

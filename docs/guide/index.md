@@ -20,6 +20,10 @@ SkimpyClaw is a lightweight (~20k LOC) personal AI assistant that runs locally o
 ## Quick Start
 
 ```bash
+# Clone the repository
+git clone https://github.com/kat3samsin/skimpyclaw.git
+cd skimpyclaw
+
 # Install dependencies
 pnpm install
 
