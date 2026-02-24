@@ -2,6 +2,7 @@ import '../styles/sidebar.css';
 import type { IconType } from 'react-icons';
 import {
   LuBadgeCheck,
+  LuBookOpen,
   LuChevronLeft,
   LuClock3,
   LuCode,
@@ -143,6 +144,16 @@ export function Sidebar({
             </button>
           );
         })}
+        <a
+          class="sidebar-footer-item"
+          href="https://docs.skimpyclaw.xyz/guide/"
+          target="_blank"
+          rel="noreferrer"
+          title="Open SkimpyClaw documentation"
+        >
+          <span class="sidebar-item-icon"><LuBookOpen size={16} /></span>
+          <span class="sidebar-item-label">Help Docs</span>
+        </a>
       </div>
     </nav>
   );
