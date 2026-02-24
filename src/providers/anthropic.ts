@@ -3,7 +3,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { startObservation } from '@langfuse/tracing';
 import type { ProviderChatParams, ProviderToolChatParams, ToolChatResult } from './types.js';
-import { buildSystemParam, addToolCacheBreakpoint, contentToText, stripProvider, buildThinkingConfig } from './utils.js';
+import { buildSystemParam, addToolCacheBreakpoint, contentToText, stripProvider, buildThinkingConfig, truncateToolResult } from './utils.js';
 import { toAnthropicUsageDetails, toCostDetails } from './observability.js';
 import { getToolDefinitions, executeTool, type ExecuteToolContext } from '../tools.js';
 import { startTrace, addEvent, endTrace } from '../audit.js';
@@ -278,6 +278,7 @@ export async function chatWithToolsAnthropic(params: ProviderToolChatParams): Pr
       const toolStart = Date.now();
       try {
         const result = await executeTool(block.name, block.input as Record<string, any>, toolConfig, toolContext);
+        const truncatedResult = truncateToolResult(result);
         const resultPreview = result.slice(0, 200) + (result.length > 200 ? '...' : '');
         console.log(`[agent:tools] <- ${resultPreview}`);
         toolLog.push(`${block.name}(${inputStr}) → ${resultPreview}`);
@@ -297,7 +298,7 @@ export async function chatWithToolsAnthropic(params: ProviderToolChatParams): Pr
         toolResults.push({
           type: 'tool_result',
           tool_use_id: block.id,
-          content: result,
+          content: truncatedResult,
         });
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err);

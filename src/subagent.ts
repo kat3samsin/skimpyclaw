@@ -419,8 +419,9 @@ async function executeTask(
         );
       }
 
-      // Modify prompt to include error context for retry
-      const retryPrompt = `${task.prompt}\n\n---\nPrevious attempt failed with error: ${errorMsg}\nPlease try a different approach.`;
+      // Modify prompt to include error context for retry (compressed to save tokens)
+      const taskSummary = task.prompt.length > 500 ? task.prompt.slice(0, 500) + '...' : task.prompt;
+      const retryPrompt = `Retry task (attempt ${(task.retryCount ?? 0) + 1}).\n\nTask: ${taskSummary}\n\nPrevious error: ${errorMsg}\n\nTry a different approach.`;
       task.prompt = retryPrompt;
       task.startedAt = new Date();
 

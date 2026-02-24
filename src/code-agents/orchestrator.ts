@@ -61,15 +61,7 @@ export async function decomposeTask(
   config: Config,
 ): Promise<DecomposedSubtask[]> {
   try {
-    const prompt = `You are a task decomposition assistant. Break the following task into exactly ${teamSize} subtasks for separate coding agents. Each subtask should be specific and self-contained.
-
-If some subtasks depend on others (e.g. "write queries" depends on "create schema"), specify dependencies using the dependsOn array with 0-based indices. Independent subtasks should have an empty dependsOn array. Tasks within the same wave (no mutual dependencies) will run in parallel.
-
-Return ONLY a JSON object in this exact format, no other text:
-{"subtasks": [{"description": "subtask 1", "dependsOn": []}, {"description": "subtask 2", "dependsOn": [0]}, ...]}
-
-Task to decompose:
-${task}`;
+    const prompt = `Split into exactly ${teamSize} subtasks. Return JSON only: {"subtasks":[{"description":"...","dependsOn":[]},...]}. Use 0-based indices for dependsOn.\n\nTask: ${task}`;
 
     const result = await runAgentTurn('main', prompt, config);
     const match = result.match(/\{[\s\S]*"subtasks"[\s\S]*\}/);
