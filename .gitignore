@@ -10,3 +10,6 @@ config/
 .env.*
 auth.json
 com.skimpyclaw.gateway.plist
+docs/node_modules/
+docs/.vitepress/cache/
+docs/.vitepress/dist/

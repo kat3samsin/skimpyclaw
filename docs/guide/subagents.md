@@ -4,11 +4,11 @@ The model calls `spawn_subagent` autonomously when it needs to delegate work —
 
 ## Subagent types
 
-| Type | Default Model | Allowed Paths | Description |
-|------|---------------|---------------|-------------|
-| `coding` | claude-opus | `~/.skimpyclaw`, `~/Sites` | Code tasks with broad file + bash access |
-| `research` | claude-think | `~/.skimpyclaw`, Obsidian vault | Research with vault access for notes |
-| `general` | current model | `~/.skimpyclaw` | General tasks with config access |
+| Type       | Default Model | Allowed Paths                 | Description                              |
+| ---------- | ------------- | ----------------------------- | ---------------------------------------- |
+| `coding`   | claude-opus   | `~/.skimpyclaw`, `~/Projects` | Code tasks with broad file + bash access |
+| `research` | claude-think  | `~/.skimpyclaw`, ~/Obsidian   | Research with vault access for notes     |
+| `general`  | current model | `~/.skimpyclaw`               | General tasks with config access         |
 
 On first dispatch, the agent directory is auto-created with starter `IDENTITY.md` and `TOOLS.md` templates at `~/.skimpyclaw/agents/<type>/`. Edit these to customize the subagent's behavior.
 
@@ -22,6 +22,7 @@ On first dispatch, the agent directory is auto-created with starter `IDENTITY.md
 ## File locking
 
 When multiple subagents write files concurrently, `src/file-lock.ts` provides in-memory locks:
+
 - 30-second acquisition timeout
 - 60-second stale lock detection
 - Write tool acquires lock automatically when `lockTaskId` is present in context

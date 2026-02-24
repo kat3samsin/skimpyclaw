@@ -133,7 +133,7 @@ launchctl list | grep skimpyclaw
 cat /tmp/com.skimpyclaw.gateway.err
 
 # Common fix: rebuild
-cd ~/Sites/skimpyclaw && pnpm build
+cd /path/to/skimpyclaw && pnpm build
 
 # Regenerate plist with correct paths
 pnpm run onboard
