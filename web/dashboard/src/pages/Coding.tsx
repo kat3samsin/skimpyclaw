@@ -225,7 +225,13 @@ export function Coding() {
                       <span>•</span>
                       <span><LuClock3 size={13} /> {formatElapsed(task)}</span>
                       <span>•</span>
-                      <span class="coding-pill">$0.00 · -- tok</span>
+                      <span class="coding-pill">
+                        {task.totalCost != null ? `$${task.totalCost.toFixed(2)}` : '$--'}
+                        {' · '}
+                        {task.inputTokens != null || task.outputTokens != null
+                          ? `${((task.inputTokens ?? 0) + (task.outputTokens ?? 0)).toLocaleString()} tok`
+                          : '-- tok'}
+                      </span>
                       <span>{formatShortTime(task.startedAt)}</span>
                     </div>
                   </div>
@@ -251,7 +257,7 @@ export function Coding() {
                           <span class={`coding-subagent-icon ${statusClass(child.status)}`}>{statusIcon(child.status)}</span>
                           <span class="audit-id">{child.id}</span>
                           <span class={`ca-status-badge ${child.status}`}>{child.status}</span>
-                          <span class="coding-pill">$0.00</span>
+                          <span class="coding-pill">{child.totalCost != null ? `$${child.totalCost.toFixed(2)}` : '$--'}</span>
                           <span class="coding-subagent-task">{child.subtask || child.task}</span>
                           <span class="coding-subagent-time">{formatElapsed(child)}</span>
                         </div>

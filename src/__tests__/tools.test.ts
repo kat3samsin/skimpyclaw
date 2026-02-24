@@ -359,7 +359,7 @@ describe('code_with_agent', () => {
       expect(args).toContain('stream-json');
       expect(args).toContain('--dangerously-skip-permissions');
       expect(args).toContain('--max-turns');
-      expect(args).toContain('30');
+      expect(args).toContain('50');
       expect(args[args.length - 1]).toBe('fix the bug');
     });
 

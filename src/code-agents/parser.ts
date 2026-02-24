@@ -116,10 +116,22 @@ export function parseStreamJsonForLive(raw: string, maxChars = 5000): string {
 /**
  * Parse Claude's stream-json output to extract the final result.
  */
-export function parseClaudeOutput(stdout: string): { text: string; metadata?: Record<string, unknown> } {
+export interface ClaudeOutputResult {
+  text: string;
+  metadata?: Record<string, unknown>;
+  totalCost?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+}
+
+export function parseClaudeOutput(stdout: string): ClaudeOutputResult {
   const lines = stdout.trim().split('\n');
   let resultText = '';
   let lastResult: Record<string, unknown> | null = null;
+  // Accumulate token counts from turn.completed events (newer CLI format)
+  let accumInputTokens = 0;
+  let accumOutputTokens = 0;
+  let hasTurnUsage = false;
 
   for (const line of lines) {
     if (!line.trim()) continue;
@@ -129,25 +141,58 @@ export function parseClaudeOutput(stdout: string): { text: string; metadata?: Re
       if (extracted.length > 0) {
         resultText += extracted.join('\n') + '\n';
       }
-      // The final "result" event may include metadata
+      // The final "result" event may include metadata (legacy format)
       if (event.type === 'result') {
         lastResult = event;
+      }
+      // Newer Claude CLI emits turn.completed with per-turn usage
+      if (event.type === 'turn.completed') {
+        const usage = event.usage as Record<string, unknown> | undefined;
+        if (usage) {
+          if (typeof usage.input_tokens === 'number') { accumInputTokens += usage.input_tokens; hasTurnUsage = true; }
+          if (typeof usage.output_tokens === 'number') { accumOutputTokens += usage.output_tokens; hasTurnUsage = true; }
+        }
       }
     } catch { /* skip non-JSON lines */ }
   }
 
+  // Extract cost/token data — try multiple formats:
+  // 1. Legacy: result.total_cost_usd, result.total_input_tokens, result.total_output_tokens
+  // 2. Legacy nested: result.usage.input_tokens, result.usage.output_tokens
+  // 3. Newer: accumulated from turn.completed events
+  const costData: Pick<ClaudeOutputResult, 'totalCost' | 'inputTokens' | 'outputTokens'> = {};
+  if (lastResult) {
+    if (typeof lastResult.total_cost_usd === 'number') costData.totalCost = lastResult.total_cost_usd;
+    // Try top-level fields first
+    if (typeof lastResult.total_input_tokens === 'number') costData.inputTokens = lastResult.total_input_tokens;
+    if (typeof lastResult.total_output_tokens === 'number') costData.outputTokens = lastResult.total_output_tokens;
+    // Fall back to nested usage object
+    if (costData.inputTokens == null || costData.outputTokens == null) {
+      const usage = lastResult.usage as Record<string, unknown> | undefined;
+      if (usage) {
+        if (costData.inputTokens == null && typeof usage.input_tokens === 'number') costData.inputTokens = usage.input_tokens;
+        if (costData.outputTokens == null && typeof usage.output_tokens === 'number') costData.outputTokens = usage.output_tokens;
+      }
+    }
+  }
+  // Fall back to accumulated turn.completed data (newest format — no result event)
+  if (hasTurnUsage) {
+    if (costData.inputTokens == null) costData.inputTokens = accumInputTokens;
+    if (costData.outputTokens == null) costData.outputTokens = accumOutputTokens;
+  }
+
   if (resultText.trim()) {
-    return { text: resultText.trim(), metadata: lastResult || undefined };
+    return { text: resultText.trim(), metadata: lastResult || undefined, ...costData };
   } else if (lastResult) {
     // No text output — build summary from result metadata
     const turns = lastResult.num_turns || '?';
     const cost = lastResult.total_cost_usd != null ? `$${(lastResult.total_cost_usd as number).toFixed(2)}` : '';
     const duration = lastResult.duration_ms ? `${Math.round((lastResult.duration_ms as number) / 1000)}s` : '';
     const parts = [`Completed in ${turns} turns`, duration, cost].filter(Boolean);
-    return { text: parts.join(', '), metadata: lastResult };
+    return { text: parts.join(', '), metadata: lastResult, ...costData };
   }
 
-  return { text: stdout.slice(0, 500) || '(no output)' };
+  return { text: stdout.slice(0, 500) || '(no output)', ...costData };
 }
 
 /**

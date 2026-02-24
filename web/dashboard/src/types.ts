@@ -182,6 +182,9 @@ export interface CodeAgent {
   synthesisResult?: string;
   validationPassed?: boolean;
   workdir?: string;
+  totalCost?: number;
+  inputTokens?: number;
+  outputTokens?: number;
 }
 
 export interface CodeAgentsResponse {

@@ -80,6 +80,7 @@ export {
 
 // Re-export parser functions
 export { parseStreamJsonForLive, parseClaudeOutput, parseCodexOutput } from './parser.js';
+export type { ClaudeOutputResult } from './parser.js';
 
 // SKIMPYCLAW_ROOT for workdir default
 const SKIMPYCLAW_ROOT = resolve(import.meta.dirname || process.cwd(), '..', '..');
@@ -141,9 +142,17 @@ export async function executeCodeWithAgent(
   const task = input.task as string;
   if (!task) return 'Error: task is required';
 
-  // Resolve model alias first so agent auto-selection can inspect it
+  // Resolve model alias first so agent auto-selection can inspect it.
+  // Fall back to current session model so codex/kimi models auto-select the right CLI.
+  let rawModel = input.model as string | undefined;
+  if (!rawModel) {
+    try {
+      const { getCurrentModel } = await import('../gateway.js');
+      rawModel = getCurrentModel();
+    } catch { /* gateway not running */ }
+  }
   const resolvedModel = resolveModelAlias(
-    input.model as string | undefined,
+    rawModel,
     context?.fullConfig?.models?.aliases
   );
 
@@ -217,9 +226,17 @@ export async function executeCodeWithTeam(
   const task = input.task as string;
   if (!task) return 'Error: task is required';
 
-  // Resolve model alias first so agent auto-selection can inspect it
+  // Resolve model alias first so agent auto-selection can inspect it.
+  // Fall back to current session model so codex/kimi models auto-select the right CLI.
+  let rawTeamModel = input.model as string | undefined;
+  if (!rawTeamModel) {
+    try {
+      const { getCurrentModel } = await import('../gateway.js');
+      rawTeamModel = getCurrentModel();
+    } catch { /* gateway not running */ }
+  }
   const resolvedModel = resolveModelAlias(
-    input.model as string | undefined,
+    rawTeamModel,
     context?.fullConfig?.models?.aliases
   );
 

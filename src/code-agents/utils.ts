@@ -70,7 +70,7 @@ export function getCodeAgentConfig(): Config | null {
 /** Build CLI args for code_with_agent. Exported for testing. */
 export function buildCodeAgentArgs(input: BuildCodeAgentArgsInput): { cmd: string; args: string[] } {
   const agent = input.agent || 'claude';
-  const maxTurns = String(input.max_turns || 30);
+  const maxTurns = String(input.max_turns || 50);
 
   if (agent === 'codex') {
     const args = [
@@ -97,7 +97,9 @@ export function buildCodeAgentArgs(input: BuildCodeAgentArgsInput): { cmd: strin
 
   // Default: claude
   // Each --allowedTools flag takes one tool name — repeat the flag per tool
-  const allowedTools = ['Edit', 'Read', 'Write', 'Bash', 'Glob', 'Grep'];
+  // --allowedTools restricts which tools are available (not just permissions).
+  // Include Playwright MCP tools so the agent can use the browser.
+  const allowedTools = ['Edit', 'Read', 'Write', 'Bash', 'Glob', 'Grep', 'mcp__playwright__*'];
   const toolArgs = allowedTools.flatMap(t => ['--allowedTools', t]);
 
   // Pass Playwright MCP server so coding agents share SkimpyClaw's browser profile
@@ -123,7 +125,11 @@ export function buildCodeAgentArgs(input: BuildCodeAgentArgsInput): { cmd: strin
     '--max-turns', maxTurns,
     '--append-system-prompt', 'Output text only. Never use say or TTS. Focus on the coding task. Run pnpm build && pnpm test to verify changes.',
   ];
-  if (input.model) args.push('--model', input.model);
+  // Only pass model to Claude CLI if it's not a known non-Claude model.
+  // GPT/Codex/Kimi/o-series models would be rejected by the Claude CLI.
+  if (input.model && !/^(gpt|codex|kimi|o[134]|openai\/)/i.test(input.model)) {
+    args.push('--model', input.model);
+  }
   args.push(input.task);
   return { cmd: CLAUDE_CLI_PATH, args };
 }
@@ -141,7 +147,7 @@ export function buildTeamNotification(
 ): string {
   const dur = formatDuration(task.durationSeconds);
   const taskPreview = task.task.length > 100 ? task.task.slice(0, 100) + '...' : task.task;
-  const statusIcon = task.status === 'completed' ? '[OK]' : task.status === 'timeout' ? '[TIMEOUT]' : '[FAIL]';
+  const statusIcon = task.status === 'completed' ? '✅' : task.status === 'timeout' ? '⏰' : '❌';
   const validation = task.validationPassed ? ' Tests pass.' : '';
 
   const lines: string[] = [];
@@ -155,7 +161,7 @@ export function buildTeamNotification(
     for (const childId of childIds) {
       const child = getChildTask(childId);
       if (!child) continue;
-      const childIcon = child.status === 'completed' ? '[OK]' : child.status === 'failed' ? '[FAIL]' : child.status === 'timeout' ? '[TIMEOUT]' : '?';
+      const childIcon = child.status === 'completed' ? '✅' : child.status === 'failed' ? '❌' : child.status === 'timeout' ? '⏰' : '❓';
       const childDur = formatDuration(child.durationSeconds);
       const subtask = (child.subtask || child.task || '').slice(0, 80);
       lines.push(`  ${childIcon} ${child.id} (${childDur}): ${subtask}`);
@@ -180,17 +186,17 @@ export function buildSoloNotification(task: CodeAgentTask): string {
 
   if (task.status === 'completed') {
     const validation = task.validationPassed ? ' Build/tests pass.' : '';
-    let message = `[OK] Coding agent ${task.id} completed (${dur}).${validation}\n\nTask: ${taskPreview}`;
+    let message = `✅ Coding agent ${task.id} completed (${dur}).${validation}\n\nTask: ${taskPreview}`;
     if (task.outputPreview) {
       const preview = task.outputPreview.slice(0, 300);
       message += `\n\nResult: ${preview}`;
     }
     return message;
   } else if (task.status === 'timeout') {
-    return `[TIMEOUT] Coding agent ${task.id} timed out after ${dur}.\n\nTask: ${taskPreview}`;
+    return `⏰ Coding agent ${task.id} timed out after ${dur}.\n\nTask: ${taskPreview}`;
   } else {
     const retryNote = task.retryCount ? ` (retried ${task.retryCount}x)` : '';
-    let message = `[FAIL] Coding agent ${task.id} failed (${dur})${retryNote}.\n\nTask: ${taskPreview}`;
+    let message = `❌ Coding agent ${task.id} failed (${dur})${retryNote}.\n\nTask: ${taskPreview}`;
     if (task.error) message += `\n\nError: ${task.error}`;
     if (task.validationOutput) {
       message += `\n\nBuild/test output:\n${task.validationOutput.slice(0, 1_500)}`;

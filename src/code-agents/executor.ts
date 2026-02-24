@@ -21,6 +21,7 @@ import {
 import { buildCodeAgentArgs, notifyCodeAgentResult, resolveModelAlias } from './utils.js';
 import { parseStreamJsonForLive, parseClaudeOutput, parseCodexOutput } from './parser.js';
 import { startTrace, addEvent, endTrace } from '../audit.js';
+import { buildUsageRecord, recordUsage } from '../usage.js';
 
 const CANCELLED_MESSAGE = 'Cancelled by user';
 
@@ -87,7 +88,7 @@ export async function runCodeAgentBackground(
   });
 
   // Per-invocation timeout (configurable defaults for team vs solo)
-  const defaultTimeout = options?.defaultTimeoutMinutes ?? 10;
+  const defaultTimeout = options?.defaultTimeoutMinutes ?? 30;
   const maxTimeout = options?.maxTimeoutMinutes ?? 30;
   const timeoutMinutes = Math.min(input.timeout_minutes || defaultTimeout, maxTimeout);
   const timeoutMs = timeoutMinutes * 60 * 1000;
@@ -205,6 +206,24 @@ export async function runCodeAgentBackground(
     if (agent === 'claude') {
       const parsed = parseClaudeOutput(stdout);
       agentOutput = parsed.text;
+      // Store cost/token data from CLI result event
+      if (parsed.totalCost != null) caTask.totalCost = (caTask.totalCost ?? 0) + parsed.totalCost;
+      if (parsed.inputTokens != null) caTask.inputTokens = (caTask.inputTokens ?? 0) + parsed.inputTokens;
+      if (parsed.outputTokens != null) caTask.outputTokens = (caTask.outputTokens ?? 0) + parsed.outputTokens;
+      // Record in usage tracking
+      if (parsed.totalCost != null || parsed.inputTokens != null) {
+        recordUsage(buildUsageRecord({
+          model: input.model || 'claude',
+          provider: 'anthropic',
+          inputTokens: parsed.inputTokens ?? 0,
+          outputTokens: parsed.outputTokens ?? 0,
+          inputCost: 0, // CLI doesn't break down input/output cost
+          outputCost: 0,
+          totalCost: parsed.totalCost ?? 0,
+          trigger: 'code_agent',
+          agentId: id,
+        }));
+      }
     } else {
       agentOutput = parseCodexOutput(stdout);
     }
@@ -346,7 +365,25 @@ export async function runCodeAgentBackground(
 
         if (retryExitCode === 0) {
           if (agent === 'claude') {
-            try { agentOutput = JSON.parse(stdout).result || stdout; } catch { agentOutput = stdout || stderr || '(no output)'; }
+            const retryParsed = parseClaudeOutput(stdout);
+            agentOutput = retryParsed.text;
+            // Accumulate cost/tokens from retry run
+            if (retryParsed.totalCost != null) caTask.totalCost = (caTask.totalCost ?? 0) + retryParsed.totalCost;
+            if (retryParsed.inputTokens != null) caTask.inputTokens = (caTask.inputTokens ?? 0) + retryParsed.inputTokens;
+            if (retryParsed.outputTokens != null) caTask.outputTokens = (caTask.outputTokens ?? 0) + retryParsed.outputTokens;
+            if (retryParsed.totalCost != null || retryParsed.inputTokens != null) {
+              recordUsage(buildUsageRecord({
+                model: input.model || 'claude',
+                provider: 'anthropic',
+                inputTokens: retryParsed.inputTokens ?? 0,
+                outputTokens: retryParsed.outputTokens ?? 0,
+                inputCost: 0,
+                outputCost: 0,
+                totalCost: retryParsed.totalCost ?? 0,
+                trigger: 'code_agent',
+                agentId: id,
+              }));
+            }
           } else {
             agentOutput = stdout || '(no output)';
           }

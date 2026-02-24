@@ -20,6 +20,10 @@ export interface CodeAgentTask {
   workdir: string;
   model?: string;
   retryCount?: number;           // how many internal validation retries have run
+  // Cost / token tracking (from Claude CLI result event)
+  totalCost?: number;
+  inputTokens?: number;
+  outputTokens?: number;
   // Team coordination fields
   parentTaskId?: string;         // child points to parent
   childTaskIds?: string[];       // parent tracks children

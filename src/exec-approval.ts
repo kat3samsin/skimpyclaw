@@ -231,6 +231,7 @@ const DANGEROUS_PATTERNS: DangerousPattern[] = [
   { pattern: /kubectl\s+delete/i, tier: 2, reason: 'Kubernetes resource deletion' },
   { pattern: /docker\s+system\s+prune/i, tier: 2, reason: 'Docker system prune' },
   { pattern: /docker\s+volume\s+prune/i, tier: 2, reason: 'Docker volume prune' },
+  { pattern: /gh\s+pr\s+review/i, tier: 2, reason: 'GitHub PR review (visible to others)' },
 
   // Tier 1: mildly risky (informational only, no approval needed by default)
   { pattern: /git\s+reset/i, tier: 1, reason: 'Git reset' },
