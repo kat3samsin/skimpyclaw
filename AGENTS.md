@@ -69,6 +69,21 @@ Both Anthropic and Codex share `ExecuteToolContext` for spawn_subagent and file 
 
 Provider determined by model prefix: `anthropic/claude-opus-4-6`, `openai/gpt-5.3-codex`
 
+### MCP Support
+
+MCP tools (via mcporter) are **only available on the Anthropic path**. Codex and OpenAI-compatible providers do not support MCP tools. mcporter spawns MCP servers as child processes and communicates over stdio JSON-RPC. Config at `~/.mcporter/mcporter.json`.
+
+### Browser Tool
+
+Two separate Playwright implementations:
+
+| Context | Implementation | How it works |
+|---------|---------------|--------------|
+| Main agent | `src/tools/browser-tool.ts` | Direct Playwright API, in-process, not MCP |
+| Coding agent (Claude CLI) | `@playwright/mcp` | MCP server passed via `--mcp-config` |
+
+Both share the same persistent browser profile at `~/.skimpyclaw/browser-profile` (cookies, sessions).
+
 ### Model Selection Contract
 
 `src/model-selection.ts` is the single source of truth for model input parsing:
