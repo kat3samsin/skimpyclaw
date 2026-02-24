@@ -151,6 +151,7 @@ export interface ToolConfig {
   allowedPaths: string[];
   maxIterations?: number;  // Max tool use rounds (default: 20)
   bashTimeout?: number;    // Bash command timeout in ms (default: 30000)
+  maxTurnTokens?: number;  // Max tokens per agent turn (default: 200000)
   browser?: {
     enabled?: boolean;
     type?: 'chromium' | 'firefox' | 'webkit';

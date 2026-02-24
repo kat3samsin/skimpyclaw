@@ -6,6 +6,7 @@ import type { ProviderChatParams, ProviderToolChatParams, ToolChatResult } from 
 import { buildSystemParam, addToolCacheBreakpoint, contentToText, stripProvider, buildThinkingConfig } from './utils.js';
 import { toAnthropicUsageDetails, toCostDetails } from './observability.js';
 import { getToolDefinitions, executeTool, type ExecuteToolContext } from '../tools.js';
+import { ToolCallGuard } from './tool-guard.js';
 import { startTrace, addEvent, endTrace } from '../audit.js';
 import { buildUsageRecord, recordUsage } from '../usage.js';
 
@@ -168,6 +169,9 @@ export async function chatWithToolsAnthropic(params: ProviderToolChatParams): Pr
   // Track tool calls for logging
   const toolLog: string[] = [];
 
+  // Guard: spin detection, no-progress detection, token budget
+  const guard = new ToolCallGuard(toolConfig.maxTurnTokens);
+
   // Start audit trace
   const auditTraceId = toolContext?.auditTraceId || startTrace((toolContext?.trigger || 'api') as any);
 
@@ -229,6 +233,19 @@ export async function chatWithToolsAnthropic(params: ProviderToolChatParams): Pr
         costDetails: toCostDetails(modelId, usage),
       });
       genObs?.end();
+
+      // Guard: track token usage
+      const tokenResult = guard.recordTokens(
+        (response as any).usage?.input_tokens ?? 0,
+        (response as any).usage?.output_tokens ?? 0,
+      );
+      if (tokenResult.warning) console.warn(`[agent:tools:guard] ${tokenResult.warning}`);
+      if (tokenResult.exceeded) {
+        return {
+          response: `[Stopped: ${tokenResult.warning}]`,
+          toolCalls: toolLog,
+        };
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       genObs?.update({ level: 'ERROR', statusMessage: errorMessage, output: { error: errorMessage } });
@@ -275,6 +292,20 @@ export async function chatWithToolsAnthropic(params: ProviderToolChatParams): Pr
         ? startObservation(`tool:${block.name}`, { input: block.input, metadata: { app: LANGFUSE_APP_NAME, tool: block.name } }, { asType: 'tool' })
         : null;
 
+      // Guard: spin detection
+      const guardResult = guard.recordCall(block.name, block.input as Record<string, any>);
+      if (guardResult.warning) console.warn(`[agent:tools:guard] ${guardResult.warning}`);
+      if (guardResult.blocked) {
+        toolResults.push({
+          type: 'tool_result',
+          tool_use_id: block.id,
+          content: guardResult.warning || 'Blocked: repeated identical call',
+          is_error: true,
+        });
+        toolLog.push(`${block.name} [BLOCKED: spin detected]`);
+        continue;
+      }
+
       const toolStart = Date.now();
       try {
         const result = await executeTool(block.name, block.input as Record<string, any>, toolConfig, toolContext);
@@ -299,6 +330,13 @@ export async function chatWithToolsAnthropic(params: ProviderToolChatParams): Pr
           tool_use_id: block.id,
           content: result,
         });
+
+        // Guard: no-progress detection
+        const progressResult = guard.recordResult(result);
+        if (progressResult.nudge) {
+          console.warn(`[agent:tools:guard] ${progressResult.nudge}`);
+          toolResults[toolResults.length - 1].content += `\n\n[System: ${progressResult.nudge}]`;
+        }
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err);
         toolObs?.update({ level: 'ERROR', statusMessage: errorMessage, output: { error: errorMessage } });
