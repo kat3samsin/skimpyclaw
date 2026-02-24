@@ -160,6 +160,10 @@ export async function runCodeAgentBackground(
       const timer = setTimeout(() => {
         timedOut = true;
         proc.kill('SIGTERM');
+        // SIGKILL fallback after 5s
+        setTimeout(() => {
+          try { proc.kill('SIGKILL'); } catch { /* already dead */ }
+        }, 5000);
       }, timeoutMs);
       activeTimer = timer;
       setActiveCanceller(() => {
@@ -262,7 +266,7 @@ export async function runCodeAgentBackground(
         addEvent(traceId, { type: 'validation', summary: 'Validation failed, retrying with error context', durationMs: Date.now() - startedAt.getTime() });
 
         // Re-run agent with the validation errors appended to the prompt
-        const retryTask = `${task}\n\n---\nPrevious attempt failed validation. Fix the following build/test errors before finishing:\n\n${validateResult.slice(0, 4_000)}`;
+        const retryTask = `Fix build/test errors in the ${agent} codebase (workdir: ${workdir}).\n\nOriginal task summary: ${task.slice(0, 300)}\n\nErrors to fix:\n${validateResult.slice(0, 4_000)}`;
         stdout = '';
         stderr = '';
 
@@ -308,7 +312,13 @@ export async function runCodeAgentBackground(
             }
           });
 
-          const retryTimer = setTimeout(() => retryProc.kill('SIGTERM'), timeoutMs);
+          const retryTimer = setTimeout(() => {
+            retryProc.kill('SIGTERM');
+            // SIGKILL fallback after 5s
+            setTimeout(() => {
+              try { retryProc.kill('SIGKILL'); } catch { /* already dead */ }
+            }, 5000);
+          }, timeoutMs);
           activeTimer = retryTimer;
           setActiveCanceller(() => {
             if (activeTimer) clearTimeout(activeTimer);

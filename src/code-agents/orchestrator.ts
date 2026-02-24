@@ -97,7 +97,7 @@ ${task}`;
           }
           // Pad or trim to match teamSize
           while (normalized.length < teamSize) {
-            normalized.push({ description: normalized[normalized.length - 1].description, dependsOn: [] });
+            normalized.push({ description: `Additional part of: ${task.slice(0, 200)}`, dependsOn: [] });
           }
           return normalized.slice(0, teamSize);
         }
@@ -124,7 +124,7 @@ export async function synthesizeResults(
 ): Promise<string> {
   try {
     const resultSummary = results.map((r, i) =>
-      `### Subtask ${i + 1}: ${r.subtask}\nStatus: ${r.status}\n${r.output ? `Output: ${r.output.slice(0, 1000)}` : ''}${r.error ? `Error: ${r.error}` : ''}`
+      `### Subtask ${i + 1}: ${r.subtask}\nStatus: ${r.status}\n${r.output ? `Output: ${r.output.slice(0, 300)}` : ''}${r.error ? `Error: ${r.error}` : ''}`
     ).join('\n\n');
 
     const prompt = `You are a results synthesizer. Summarize the results of a multi-agent coding task.
@@ -249,6 +249,7 @@ export async function runTeamOrchestrator(
     const POLL_INTERVAL = 3000;
     const totalTimeoutMs = timeoutMinutes * 60 * 1000;
 
+    let lastLiveOutput = '';
     for (let waveIdx = 0; waveIdx < totalWaves; waveIdx++) {
       if (getCodeAgent(parentId)?.status === 'cancelled') throw new Error(CANCELLED_MESSAGE);
       const waveIndices = waves[waveIdx];
@@ -280,12 +281,37 @@ export async function runTeamOrchestrator(
           new Date(),
           { skipNotification: true, defaultTimeoutMinutes: perChildTimeout, maxTimeoutMinutes: perChildTimeout },
         ).catch((err) => {
+          const child = getCodeAgent(childId);
+          if (child && child.status === 'running') {
+            Object.assign(child, {
+              status: 'failed',
+              endedAt: new Date().toISOString(),
+              error: err instanceof Error ? err.message : String(err),
+            });
+            writeCodeAgentTask(child);
+          }
           console.error(`[code-team] Child ${childId} background error:`, err);
         });
       }
 
       // Poll until all tasks in this wave complete
       const waveChildIds = waveIndices.map(i => childIdByIndex[i]);
+
+      // Check cancellation after spawning
+      if (getCodeAgent(parentId)?.status === 'cancelled') {
+        for (const childId of waveChildIds) {
+          const child = getCodeAgent(childId);
+          if (child && (child.status === 'running' || child.status === 'pending')) {
+            Object.assign(child, {
+              status: 'cancelled',
+              endedAt: new Date().toISOString(),
+              error: CANCELLED_MESSAGE,
+            });
+            writeCodeAgentTask(child);
+          }
+        }
+        throw new Error(CANCELLED_MESSAGE);
+      }
 
       while (true) {
         await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL));
@@ -317,8 +343,12 @@ export async function runTeamOrchestrator(
         }
 
         const completedWaves = waves.filter((_, w) => w < waveIdx).length;
-        parentTask.liveOutput = `Phase: Running Wave ${waveIdx + 1}/${totalWaves} (${completedWaves}/${totalWaves} complete)\n${waveStatusLines.join('\n')}`;
-        writeCodeAgentTask(parentTask);
+        const newLiveOutput = `Phase: Running Wave ${waveIdx + 1}/${totalWaves} (${completedWaves}/${totalWaves} complete)\n${waveStatusLines.join('\n')}`;
+        if (newLiveOutput !== lastLiveOutput) {
+          parentTask.liveOutput = newLiveOutput;
+          writeCodeAgentTask(parentTask);
+          lastLiveOutput = newLiveOutput;
+        }
 
         if (waveDone === waveChildren.length) break;
 
