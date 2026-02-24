@@ -8,6 +8,7 @@ import { stripProvider } from './utils.js';
 import { toCodexContent, toCodexToolDefinitions } from './content.js';
 import { toNumericUsageDetails, toCostDetails } from './observability.js';
 import { executeTool } from '../tools.js';
+import { ToolCallGuard } from './tool-guard.js';
 import { startTrace, addEvent, endTrace } from '../audit.js';
 import { startObservation } from '@langfuse/tracing';
 import { buildUsageRecord, recordUsage } from '../usage.js';
@@ -331,7 +332,18 @@ export async function chatWithToolsCodex(params: ProviderToolChatParams): Promis
   const toolLog: string[] = [];
   const auditTraceId = toolContext?.auditTraceId || startTrace((toolContext?.trigger || 'api') as any);
 
+  // Guard: spin detection, no-progress detection, token budget
+  const guard = new ToolCallGuard(toolConfig.maxTurnTokens);
+
   for (let i = 0; i < maxIterations; i++) {
+    // Check abort signal before each iteration
+    if (toolContext?.abortSignal?.aborted) {
+      return {
+        response: `[Cancelled after ${toolLog.length} tool calls]`,
+        toolCalls: toolLog,
+      };
+    }
+
     const body: any = {
       model: modelId,
       instructions,
@@ -368,6 +380,19 @@ export async function chatWithToolsCodex(params: ProviderToolChatParams): Promis
         costDetails: toCostDetails(modelId, parsed.response?.usage),
       });
       genObs?.end();
+
+      // Guard: track token usage
+      const tokenResult = guard.recordTokens(
+        parsed.response?.usage?.input_tokens ?? 0,
+        parsed.response?.usage?.output_tokens ?? 0,
+      );
+      if (tokenResult.warning) console.warn(`[codex:tools:guard] ${tokenResult.warning}`);
+      if (tokenResult.exceeded) {
+        return {
+          response: `[Stopped: ${tokenResult.warning}]`,
+          toolCalls: toolLog,
+        };
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       genObs?.update({ level: 'ERROR', statusMessage: errorMessage, output: { error: errorMessage } });
@@ -458,6 +483,19 @@ export async function chatWithToolsCodex(params: ProviderToolChatParams): Promis
       const inputStr = argsStr.slice(0, 200);
       console.log(`[codex:tools] -> ${fc.name}(${inputStr})`);
 
+      // Guard: spin detection
+      const guardResult = guard.recordCall(fc.name, args);
+      if (guardResult.warning) console.warn(`[codex:tools:guard] ${guardResult.warning}`);
+      if (guardResult.blocked) {
+        input.push({
+          type: 'function_call_output',
+          call_id: fc.callId,
+          output: guardResult.warning || 'Blocked: repeated identical call',
+        });
+        toolLog.push(`${fc.name} [BLOCKED: spin detected]`);
+        continue;
+      }
+
       const { isLangfuseEnabled } = await import('../langfuse.js');
       const toolObs = isLangfuseEnabled()
         ? startObservation(`tool:${fc.name}`, { input: args, metadata: { app: LANGFUSE_APP_NAME, tool: fc.name } }, { asType: 'tool' })
@@ -486,6 +524,13 @@ export async function chatWithToolsCodex(params: ProviderToolChatParams): Promis
           call_id: fc.callId,
           output: result,
         });
+
+        // Guard: no-progress detection
+        const progressResult = guard.recordResult(result);
+        if (progressResult.nudge) {
+          console.warn(`[codex:tools:guard] ${progressResult.nudge}`);
+          input[input.length - 1].output += `\n\n[System: ${progressResult.nudge}]`;
+        }
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err);
         toolObs?.update({ level: 'ERROR', statusMessage: errorMessage, output: { error: errorMessage } });

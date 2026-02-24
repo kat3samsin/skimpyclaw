@@ -7,6 +7,7 @@ import { stripProvider, toOpenAITools } from './utils.js';
 import { toOpenAIContent } from './content.js';
 import { toUsageDetails, toCostDetails } from './observability.js';
 import { getToolDefinitions, executeTool } from '../tools.js';
+import { ToolCallGuard } from './tool-guard.js';
 import { addEvent } from '../audit.js';
 import { buildUsageRecord, recordUsage } from '../usage.js';
 
@@ -160,6 +161,9 @@ export async function chatWithToolsOpenAI(params: ProviderToolChatParams, provid
 
   const toolLog: string[] = [];
 
+  // Guard: spin detection, no-progress detection, token budget
+  const guard = new ToolCallGuard(toolConfig.maxTurnTokens);
+
   for (let i = 0; i < maxIterations; i++) {
     // Check abort signal
     if (toolContext?.abortSignal?.aborted) {
@@ -203,6 +207,19 @@ export async function chatWithToolsOpenAI(params: ProviderToolChatParams, provid
         costDetails: toCostDetails(modelId, completion.usage),
       });
       genObs?.end();
+
+      // Guard: track token usage
+      const tokenResult = guard.recordTokens(
+        completion.usage?.prompt_tokens ?? 0,
+        completion.usage?.completion_tokens ?? 0,
+      );
+      if (tokenResult.warning) console.warn(`[agent:openai-tools:guard] ${tokenResult.warning}`);
+      if (tokenResult.exceeded) {
+        return {
+          response: `[Stopped: ${tokenResult.warning}]`,
+          toolCalls: toolLog,
+        };
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       genObs?.update({ level: 'ERROR', statusMessage: errorMessage, output: { error: errorMessage } });
@@ -260,6 +277,19 @@ export async function chatWithToolsOpenAI(params: ProviderToolChatParams, provid
       const inputStr = JSON.stringify(args).slice(0, 200);
       console.log(`[agent:openai-tools] -> ${fnName}(${inputStr})`);
 
+      // Guard: spin detection
+      const guardResult = guard.recordCall(fnName, args);
+      if (guardResult.warning) console.warn(`[agent:openai-tools:guard] ${guardResult.warning}`);
+      if (guardResult.blocked) {
+        apiMessages.push({
+          role: 'tool',
+          tool_call_id: toolCall.id,
+          content: guardResult.warning || 'Blocked: repeated identical call',
+        });
+        toolLog.push(`${fnName} [BLOCKED: spin detected]`);
+        continue;
+      }
+
       const { isLangfuseEnabled } = await import('../langfuse.js');
       const toolObs = isLangfuseEnabled()
         ? startObservation(`tool:${fnName}`, { input: args, metadata: { app: LANGFUSE_APP_NAME, tool: fnName } }, { asType: 'tool' })
@@ -289,6 +319,13 @@ export async function chatWithToolsOpenAI(params: ProviderToolChatParams, provid
           tool_call_id: toolCall.id,
           content: result,
         });
+
+        // Guard: no-progress detection
+        const progressResult = guard.recordResult(result);
+        if (progressResult.nudge) {
+          console.warn(`[agent:openai-tools:guard] ${progressResult.nudge}`);
+          apiMessages[apiMessages.length - 1].content += `\n\n[System: ${progressResult.nudge}]`;
+        }
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err);
         toolObs?.update({ level: 'ERROR', statusMessage: errorMessage, output: { error: errorMessage } });

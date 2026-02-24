@@ -36,7 +36,7 @@ const PRESETS: Record<SubagentType, SubagentPreset> = {
     toolConfig: {
       enabled: true,
       allowedPaths: [join(homedir(), '.skimpyclaw')],
-      maxIterations: 100,
+      maxIterations: 50,
       bashTimeout: 30000
     },
     description: 'Code tasks with broad file + bash access'
@@ -47,7 +47,7 @@ const PRESETS: Record<SubagentType, SubagentPreset> = {
     toolConfig: {
       enabled: true,
       allowedPaths: [join(homedir(), '.skimpyclaw')],
-      maxIterations: 50,
+      maxIterations: 30,
       bashTimeout: 15000
     },
     description: 'Research tasks with configurable file access'
