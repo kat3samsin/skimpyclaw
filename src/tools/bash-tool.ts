@@ -13,6 +13,24 @@ import type { ExecuteToolContext } from './execute-context.js';
 import { isPathAllowed } from './path-utils.js';
 import { validateBashPaths } from './bash-path-validation.js';
 
+/** Env var name patterns that should never be exposed to model-executed commands. */
+const SENSITIVE_ENV_PATTERNS = [
+  /api.?key/i, /token/i, /secret/i, /password/i, /credential/i,
+  /^ANTHROPIC_/i, /^OPENAI_/i, /^CLAUDE/i, /^CODEX_/i, /^MINIMAX_/i,
+  /^KIMI_/i, /^TOGETHER_/i, /^GROQ_/i, /^OPENROUTER_/i,
+];
+
+/** Create a sanitized copy of process.env with secrets stripped. */
+function sanitizeEnv(): Record<string, string | undefined> {
+  const env = { ...process.env };
+  for (const key of Object.keys(env)) {
+    if (SENSITIVE_ENV_PATTERNS.some(p => p.test(key))) {
+      delete env[key];
+    }
+  }
+  return env;
+}
+
 export async function executeBash(command: string, cwd: string | undefined, config: ToolConfig, context?: ExecuteToolContext): Promise<string> {
   // Hard block: existing safety filter (always enforced)
   if (!isBashCommandSafe(command)) {
@@ -66,7 +84,7 @@ export async function executeBash(command: string, cwd: string | undefined, conf
     exec(command, {
       cwd: cwd || undefined,
       timeout,
-      env: { ...process.env },
+      env: sanitizeEnv(),
       maxBuffer: 5 * 1024 * 1024,
     }, (error, stdout, stderr) => {
       if (error) {

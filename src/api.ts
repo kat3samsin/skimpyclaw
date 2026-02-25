@@ -2,6 +2,7 @@
 
 import { FastifyInstance } from 'fastify';
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync, mkdirSync, rmSync } from 'fs';
+import { timingSafeEqual } from 'crypto';
 import { join, basename, resolve } from 'path';
 import { homedir } from 'os';
 import type { Config } from './types.js';
@@ -150,7 +151,10 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
     }
 
     const providedToken = authHeader.slice(7);
-    if (providedToken !== token) {
+    // Timing-safe comparison to prevent token extraction via timing attacks
+    const tokenBuf = Buffer.from(token, 'utf8');
+    const providedBuf = Buffer.from(providedToken, 'utf8');
+    if (tokenBuf.length !== providedBuf.length || !timingSafeEqual(tokenBuf, providedBuf)) {
       return reply.code(401).send({ error: 'Unauthorized: Invalid token' });
     }
   });

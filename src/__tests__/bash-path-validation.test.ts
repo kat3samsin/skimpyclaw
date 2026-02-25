@@ -159,11 +159,12 @@ describe('extractPathsFromCommand', () => {
 });
 
 describe('validateBashPaths', () => {
-  const allowedPaths = ['/home/user/project', '/tmp'];
+  // Use /home/user paths to avoid macOS /tmp → /private/tmp symlink issues
+  const allowedPaths = ['/home/user/project', '/home/user/data'];
 
   it('returns null when all paths are allowed', () => {
     expect(validateBashPaths('cat /home/user/project/file.txt', undefined, allowedPaths)).toBeNull();
-    expect(validateBashPaths('ls /tmp/data', undefined, allowedPaths)).toBeNull();
+    expect(validateBashPaths('ls /home/user/data/stuff', undefined, allowedPaths)).toBeNull();
   });
 
   it('returns error when path is outside allowed dirs', () => {
@@ -187,7 +188,7 @@ describe('validateBashPaths', () => {
   });
 
   it('blocks paths in chained commands', () => {
-    const result = validateBashPaths('ls /tmp && cat /etc/shadow', undefined, allowedPaths);
+    const result = validateBashPaths('ls /home/user/data && cat /etc/shadow', undefined, allowedPaths);
     expect(result).toContain('Error');
     expect(result).toContain('/etc/shadow');
   });

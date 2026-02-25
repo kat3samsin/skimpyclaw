@@ -138,8 +138,8 @@ export function getDefaultTelegramToolConfig(cfg: Config): ToolConfig | undefine
 
   return {
     enabled: true,
-    allowedPaths: [join(homedir(), '.skimpyclaw'), process.cwd()],
-    maxIterations: 100,
+    allowedPaths: [join(homedir(), '.skimpyclaw')],
+    maxIterations: 30,
     bashTimeout: 15000,
   };
 }

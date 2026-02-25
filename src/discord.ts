@@ -70,8 +70,8 @@ const loadedFromDisk = new Set<string>();
 
 const DEFAULT_DISCORD_TOOLS: ToolConfig = {
   enabled: true,
-  allowedPaths: [join(homedir(), '.skimpyclaw'), process.cwd()],
-  maxIterations: 100,
+  allowedPaths: [join(homedir(), '.skimpyclaw')],
+  maxIterations: 30,
   bashTimeout: 15000,
 };
 

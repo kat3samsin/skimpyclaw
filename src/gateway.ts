@@ -4,6 +4,7 @@ import Fastify, { FastifyInstance } from 'fastify';
 import { existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { join } from 'path';
+import { timingSafeEqual } from 'crypto';
 import type { Config, GatewayStatus } from './types.js';
 import { runAgentTurn } from './agent.js';
 import { getCronJobs, runCronJob } from './cron.js';
@@ -39,6 +40,16 @@ export async function createGateway(cfg: Config): Promise<FastifyInstance> {
     logger: {
       level: 'info',
     },
+  });
+
+  // Block cross-origin requests — deny all CORS preflight and tag responses
+  fastify.addHook('onRequest', async (request, reply) => {
+    if (request.method === 'OPTIONS') {
+      return reply.code(403).send({ error: 'CORS not allowed' });
+    }
+  });
+  fastify.addHook('onSend', async (_request, reply) => {
+    reply.header('Access-Control-Allow-Origin', 'null'); // deny all origins
   });
 
   // Health check
@@ -126,10 +137,31 @@ export async function createGateway(cfg: Config): Promise<FastifyInstance> {
     return { status: 'ok', note: 'Restart required for config changes' };
   });
 
-  // Ensure dashboard token exists and print it
+  // Ensure dashboard token exists
   const dashboardToken = ensureDashboardToken(config);
-  console.log(`[dashboard] Access token: ${dashboardToken}`);
   console.log(`[dashboard] URL: http://localhost:${config.gateway.port}/dashboard`);
+
+  // Auth guard for gateway write endpoints (same token as dashboard)
+  const PROTECTED_ROUTES = new Set(['/message', '/model', '/reload']);
+  fastify.addHook('onRequest', async (request, reply) => {
+    const url = request.url;
+    // Protect write endpoints + cron trigger
+    if (!PROTECTED_ROUTES.has(url) && !url.startsWith('/cron/')) return;
+    if (request.method === 'GET') return; // GET /health, GET /status are fine
+
+    if (!dashboardToken) return; // No token configured, allow access
+
+    const authHeader = request.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return reply.code(401).send({ error: 'Unauthorized: Bearer token required' });
+    }
+    const provided = authHeader.slice(7);
+    const tokenBuf = Buffer.from(dashboardToken, 'utf8');
+    const providedBuf = Buffer.from(provided, 'utf8');
+    if (tokenBuf.length !== providedBuf.length || !timingSafeEqual(tokenBuf, providedBuf)) {
+      return reply.code(401).send({ error: 'Unauthorized: Invalid token' });
+    }
+  });
 
   // Register dashboard API routes (includes auth hook)
   registerDashboardAPI(fastify, config);

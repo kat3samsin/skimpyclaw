@@ -387,7 +387,8 @@ async function executeSpawnSubagent(input: Record<string, any>, context?: Execut
   const type = input.type as string;
   const model = input.model as string | undefined;
   const label = input.label as string | undefined;
-  const allowedPaths = input.allowedPaths as string[] | undefined;
+  // NOTE: allowedPaths deliberately NOT accepted from model input (security — prevents path escalation).
+  // Subagents inherit their preset's allowedPaths from config.
 
   if (!task || !type) {
     return 'Error: task and type are required';
@@ -404,7 +405,7 @@ async function executeSpawnSubagent(input: Record<string, any>, context?: Execut
       context.fullConfig,
       model,
       context.history,
-      { label, allowedPaths }
+      { label }
     );
 
     const labelStr = label ? ` "${label}"` : '';

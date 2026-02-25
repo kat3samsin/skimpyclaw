@@ -135,11 +135,6 @@ export const SPAWN_SUBAGENT_TOOL = {
       },
       model: { type: 'string', description: 'Optional model override (e.g. claude-opus, claude-think)' },
       label: { type: 'string', description: 'Short label for status display (e.g. "write tests", "check logs")' },
-      allowedPaths: {
-        type: 'array',
-        items: { type: 'string' },
-        description: 'Additional file paths the subagent can access beyond defaults',
-      },
     },
     required: ['task', 'type'],
   },
