@@ -51,7 +51,7 @@ function recordOpenAIUsage(params: {
   let inputTokens = typeof usage?.prompt_tokens === 'number'
     ? usage.prompt_tokens
     : (typeof usage?.input_tokens === 'number' ? usage.input_tokens : 0);
-  let outputTokens = typeof usage?.completion_tokens === 'number'
+  const outputTokens = typeof usage?.completion_tokens === 'number'
     ? usage.completion_tokens
     : (typeof usage?.output_tokens === 'number' ? usage.output_tokens : 0);
 
