@@ -5,12 +5,13 @@ import { exec } from 'child_process';
 import { existsSync, mkdirSync, appendFileSync, readFileSync, watch, type FSWatcher } from 'fs';
 import { join } from 'path';
 import { getLogsDir, getConfigPath, loadConfig } from './config.js';
-import type { Config, CronJob } from './types.js';
+import type { Config, CronJob, SandboxConfig } from './types.js';
 import { runAgentTurn } from './agent.js';
 import { startTrace, addEvent, endTrace } from './audit.js';
 import { sendActiveChannelProactiveMessage, sendActiveChannelProactiveVoice, getActiveChannelId } from './channels.js';
 import { parseAndSaveDigest } from './digests.js';
 import { synthesizeSpeech } from './voice.js';
+import { ensureContainer, SANDBOX_DEFAULTS, sandboxBash } from './sandbox/index.js';
 
 interface ScheduledJob {
   id: string;
@@ -240,7 +241,7 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
       });
       appendCronLogLine(jobDef.id, `Script started: ${(jobDef.payload.script || '').slice(0, 100)}`);
       try {
-        const output = await executeScript(jobDef);
+        const output = await executeScript(jobDef, config);
         logEntry.output = output.slice(0, 50000);
         appendCronLogLine(jobDef.id, `Script completed (${output.length} chars)`);
         addEvent(scriptTraceId, {
@@ -298,7 +299,7 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
   }
 }
 
-async function executeScript(jobDef: CronJob): Promise<string> {
+async function executeScript(jobDef: CronJob, config: Config): Promise<string> {
   const script = expandVariables(jobDef.payload.script || '');
   if (!script) {
     throw new Error(`Script payload is empty for job: ${jobDef.id}`);
@@ -310,6 +311,19 @@ async function executeScript(jobDef: CronJob): Promise<string> {
   }
 
   const timeoutMs = jobDef.payload.timeoutMs || 600000; // 10 min default
+
+  // Sandbox routing for script payloads
+  const sandboxCfg = config.sandbox;
+  if (sandboxCfg?.enabled) {
+    const merged: SandboxConfig = { ...SANDBOX_DEFAULTS, ...sandboxCfg };
+    const containerName = await ensureContainer(`cron-${jobDef.id}`, merged, jobDef.payload.tools?.allowedPaths || []);
+    console.log(`[cron:script] Running in sandbox container: ${containerName}`);
+    console.log(`[cron:script] Running: ${script.slice(0, 100)}${script.length > 100 ? '...' : ''}`);
+    if (cwd) console.log(`[cron:script] cwd: ${cwd}`);
+    const output = await sandboxBash(containerName, script, cwd, timeoutMs);
+    console.log(`[cron:script] Sandbox completed (${output.length} chars)`);
+    return output;
+  }
 
   return new Promise((resolve, reject) => {
     const startTime = Date.now();

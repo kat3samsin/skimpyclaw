@@ -443,6 +443,58 @@ export async function checkSkimpyclawDirWritable(): Promise<DoctorCheckResult> {
   }
 }
 
+export async function checkSandboxAvailable(config: Config): Promise<DoctorCheckResult> {
+  const name = 'sandbox_available';
+  const category = 'runtime';
+
+  if (!config.sandbox?.enabled) {
+    return ok(name, category, 'Sandbox disabled');
+  }
+
+  // Determine which runtime to check
+  const explicit = config.sandbox.runtime;
+  let rt: string | null = null;
+
+  if (explicit) {
+    const check = spawnSync(explicit, ['--version'], { encoding: 'utf-8' });
+    if (check.status !== 0) {
+      return fail(name, category, `${explicit} CLI not found`, `Install ${explicit} or change sandbox.runtime in config.`);
+    }
+    rt = explicit;
+  } else {
+    // Auto-detect: prefer container, fall back to docker
+    const containerCheck = spawnSync('container', ['--version'], { encoding: 'utf-8' });
+    if (containerCheck.status === 0) {
+      rt = 'container';
+    } else {
+      const dockerCheck = spawnSync('docker', ['--version'], { encoding: 'utf-8' });
+      if (dockerCheck.status === 0) {
+        rt = 'docker';
+      }
+    }
+    if (!rt) {
+      return fail(name, category, 'No container runtime found', 'Install Apple Containers or Docker, or disable sandbox in config.');
+    }
+  }
+
+  // For Apple Containers, check system is running
+  if (rt === 'container') {
+    const systemCheck = spawnSync('container', ['system', 'status'], { encoding: 'utf-8' });
+    if (systemCheck.status !== 0) {
+      return fail(name, category, 'Container system not running', 'Run "container system start" to start the container runtime.');
+    }
+  }
+
+  // Check if sandbox image exists
+  const image = config.sandbox.image || 'skimpyclaw-sandbox';
+  const imageCheck = spawnSync(rt, ['image', 'inspect', image], { encoding: 'utf-8' });
+  if (imageCheck.status !== 0) {
+    return fail(name, category, `Sandbox image "${image}" not found`, `Build it: ${rt} build -t ${image} sandbox/`);
+  }
+
+  return ok(name, category, `Runtime: ${rt}, image "${image}" available`);
+}
+
 export async function checkPortAvailability(port: number): Promise<DoctorCheckResult> {
   const name = 'gateway_port_available';
   const category = 'runtime';

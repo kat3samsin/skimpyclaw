@@ -80,6 +80,7 @@ export interface Config {
   /** Named project paths. Keys are short names (e.g. "skimpyclaw"), values are absolute paths.
    *  Project paths are automatically added to tool allowedPaths and available to code_with_agent by name. */
   projects?: Record<string, string>;
+  sandbox?: SandboxConfig;
 }
 
 export interface AgentConfig {
@@ -144,6 +145,16 @@ export interface CronPayload {
   timeoutMs?: number;
   tools?: ToolConfig;
   sendAsVoice?: boolean;
+}
+
+export interface SandboxConfig {
+  enabled: boolean;
+  runtime?: 'container' | 'docker';  // default: auto-detect
+  image?: string;           // default 'skimpyclaw-sandbox'
+  cpus?: number;            // default 2
+  memory?: string;          // default '2G'
+  network?: string;         // default 'none'
+  idleTimeoutMs?: number;   // default 3600000 (1h)
 }
 
 export interface ToolConfig {

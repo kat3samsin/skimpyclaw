@@ -20,6 +20,9 @@ import type { ExecuteToolContext } from './tools/execute-context.js';
 import { executeReadFile, executeWriteFileLocked, executeListDirectory } from './tools/file-tools.js';
 import { executeBash } from './tools/bash-tool.js';
 import { executeBrowser, cleanupBrowser } from './tools/browser-tool.js';
+import type { SandboxConfig } from './types.js';
+import { ensureContainer, SANDBOX_DEFAULTS, translatePath, validateMountPaths } from './sandbox/index.js';
+import { sandboxBash, sandboxReadFile, sandboxWriteFile, sandboxListDir, sandboxGlob } from './sandbox/index.js';
 
 // Re-export from code-agents module for backward compatibility
 export {
@@ -364,6 +367,34 @@ export async function executeTool(
 
     // Map Claude Code names to internal names for built-in tools
     const normalized = fromClaudeCodeName(name).toLowerCase().replace(/-/g, '_');
+
+    // --- Sandbox routing ---
+    const sandboxCfg = context?.sandboxConfig;
+    if (sandboxCfg?.enabled) {
+      const SANDBOXED_TOOLS = new Set(['bash', 'read_file', 'write_file', 'list_directory', 'glob']);
+      if (SANDBOXED_TOOLS.has(normalized)) {
+        const sessionId = context?.sessionId || context?.chatId?.toString() || 'default';
+        const merged = { ...SANDBOX_DEFAULTS, ...sandboxCfg };
+        const containerName = await ensureContainer(sessionId, merged, config.allowedPaths);
+        const mounts = validateMountPaths(config.allowedPaths);
+        const tp = (p: string) => translatePath(p, mounts);
+        switch (normalized) {
+          case 'bash':
+            return await sandboxBash(containerName, input.command, input.cwd ? tp(input.cwd) : undefined, config.bashTimeout);
+          case 'read_file':
+            return await sandboxReadFile(containerName, tp(input.file_path || input.path));
+          case 'write_file':
+            return await sandboxWriteFile(containerName, tp(input.file_path || input.path), input.content);
+          case 'list_directory':
+            return await sandboxListDir(containerName, tp(input.path));
+          case 'glob':
+            return await sandboxGlob(containerName, tp(input.base || input.path || '/workspace'), input.pattern || '*');
+          default:
+            break; // fall through
+        }
+      }
+    }
+
     switch (normalized) {
       case '$web_search':
       case 'web_search':

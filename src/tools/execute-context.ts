@@ -23,4 +23,8 @@ export interface ExecuteToolContext {
   trigger?: string;
   /** Agent ID for usage tracking */
   agentId?: string;
+  /** Sandbox configuration for containerized tool execution */
+  sandboxConfig?: import('../types.js').SandboxConfig;
+  /** Session ID for sandbox container mapping */
+  sessionId?: string;
 }

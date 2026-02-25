@@ -17,6 +17,7 @@ import {
   checkGatewayHostBindable,
   checkSkimpyclawDirWritable,
   checkPortAvailability,
+  checkSandboxAvailable,
 } from './checks.js';
 import type { DoctorCheckResult, DoctorRunResult, DoctorReport } from './types.js';
 
@@ -143,6 +144,7 @@ export async function runDoctor(): Promise<DoctorRunResult> {
   checks.push(await runSafe('gateway_host_bindable', 'runtime', () => checkGatewayHostBindable(config.gateway.host ?? '127.0.0.1')));
   checks.push(await runSafe('skimpyclaw_dirs_writable', 'runtime', () => checkSkimpyclawDirWritable()));
   checks.push(await runSafe('gateway_port_available', 'runtime', () => checkPortAvailability(config.gateway.port)));
+  checks.push(await runSafe('sandbox_available', 'runtime', () => checkSandboxAvailable(config)));
 
   const report = buildReport(startedAt, checks);
   return { report, exitCode: report.exitCode };

@@ -7,6 +7,7 @@ import { initActiveChannel, startActiveChannel, stopActiveChannel } from './chan
 import { initProviders } from './agent.js';
 import { initLangfuse, shutdownLangfuse } from './langfuse.js';
 import { restoreCodeAgentTasks, setCodeAgentConfig } from './tools.js';
+import { releaseAll, cleanupOrphans, setRuntime } from './sandbox/index.js';
 
 export interface SkimpyClawRuntime {
   config: Config;
@@ -21,6 +22,14 @@ export async function startRuntime(config: Config): Promise<SkimpyClawRuntime> {
   initProviders(config);
   restoreCodeAgentTasks();
   setCodeAgentConfig(config);
+
+  // Initialize sandbox runtime if configured
+  if (config.sandbox?.runtime) {
+    setRuntime(config.sandbox.runtime);
+  }
+
+  // Clean up orphaned sandbox containers from previous runs
+  cleanupOrphans().catch(() => {});
 
   const port = smokeTest ? (parseInt(process.env.SKIMPYCLAW_SMOKE_PORT || '19999', 10)) : config.gateway.port;
   const gateway = await createGateway(config);
@@ -40,6 +49,7 @@ export async function startRuntime(config: Config): Promise<SkimpyClawRuntime> {
     config,
     gateway,
     stop: async () => {
+      await releaseAll();
       stopCron();
       stopHeartbeat();
       await stopActiveChannel();

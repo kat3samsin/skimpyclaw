@@ -22,6 +22,8 @@ import { buildCodeAgentArgs, notifyCodeAgentResult, resolveModelAlias } from './
 import { parseStreamJsonForLive, parseClaudeOutput, parseCodexOutput } from './parser.js';
 import { startTrace, addEvent, endTrace } from '../audit.js';
 import { buildUsageRecord, recordUsage } from '../usage.js';
+import type { SandboxConfig } from '../types.js';
+import { ensureContainer, SANDBOX_DEFAULTS, getRuntime } from '../sandbox/index.js';
 
 const CANCELLED_MESSAGE = 'Cancelled by user';
 
@@ -115,14 +117,27 @@ export async function runCodeAgentBackground(
   logStream.write(`Workdir: ${workdir}\n\n`);
 
   try {
+    // Resolve sandbox container name if enabled (used for spawn wrapping)
+    let sandboxContainer: string | undefined;
+    if (options?.sandboxConfig?.enabled) {
+      const merged = { ...SANDBOX_DEFAULTS, ...options.sandboxConfig };
+      sandboxContainer = await ensureContainer(`code-${id}`, merged, options.allowedPaths || [workdir]);
+      console.log(`[code-agent] Running in sandbox container: ${sandboxContainer}`);
+    }
+
     ensureNotCancelled();
     const exitCode = await new Promise<number | null>((resolvePromise, reject) => {
       const spawnEnv = { ...process.env };
       delete spawnEnv.CLAUDECODE;
       // Apply extra env vars (e.g. team mode feature flag)
       if (options?.env) Object.assign(spawnEnv, options.env);
-      const proc = spawn(cmd, args, {
-        cwd: workdir,
+
+      // When sandbox is enabled, wrap the spawn: container exec <name> <cmd> <args>
+      const spawnCmd = sandboxContainer ? getRuntime() : cmd;
+      const spawnArgs = sandboxContainer ? ['exec', sandboxContainer, cmd, ...args] : args;
+
+      const proc = spawn(spawnCmd, spawnArgs, {
+        cwd: sandboxContainer ? undefined : workdir, // container has its own cwd
         stdio: ['ignore', 'pipe', 'pipe'],
         env: spawnEnv,
       });
@@ -300,8 +315,10 @@ export async function runCodeAgentBackground(
         const retryExitCode = await new Promise<number | null>((resolveRetry, rejectRetry) => {
           const spawnEnv = { ...process.env };
           delete spawnEnv.CLAUDECODE;
-          const retryProc = spawn(retryCmd, retryArgs, {
-            cwd: workdir,
+          const retrySpawnCmd = sandboxContainer ? getRuntime() : retryCmd;
+          const retrySpawnArgs = sandboxContainer ? ['exec', sandboxContainer, retryCmd, ...retryArgs] : retryArgs;
+          const retryProc = spawn(retrySpawnCmd, retrySpawnArgs, {
+            cwd: sandboxContainer ? undefined : workdir,
             stdio: ['ignore', 'pipe', 'pipe'],
             env: spawnEnv,
           });
