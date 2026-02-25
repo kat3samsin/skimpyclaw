@@ -340,7 +340,7 @@ function buildDefaultModel(providers: Set<ProviderChoice>): string {
   if (hasAnthropic) return 'claude-opus';
   if (providers.has('codex-oauth')) return 'codex/gpt-5.3-codex';
   if (providers.has('kimi-api')) return 'kimi/kimi-for-coding';
-  if (providers.has('minimax-api')) return 'minimax/MiniMax-M2.1';
+  if (providers.has('minimax-api')) return 'minimax/MiniMax-M2.5';
   return 'openai/gpt-4o';
 }
 
@@ -367,7 +367,7 @@ function buildAliases(providers: Set<ProviderChoice>): Record<string, string> {
   }
 
   if (providers.has('minimax-api')) {
-    aliases.minimax = 'minimax/MiniMax-M2.1';
+    aliases.minimax = 'minimax/MiniMax-M2.5';
   }
 
   if (providers.has('kimi-api')) {
@@ -588,7 +588,7 @@ async function validateProviderAuth(providers: Set<ProviderChoice>, secrets: Pro
           'content-type': 'application/json',
           'anthropic-version': '2023-06-01',
         },
-        body: JSON.stringify({ model: 'MiniMax-M2.1', max_tokens: 8, messages: [{ role: 'user', content: 'ping' }] }),
+        body: JSON.stringify({ model: 'MiniMax-M2.5', max_tokens: 8, messages: [{ role: 'user', content: 'ping' }] }),
       });
       checks.push({ name: 'MiniMax API', ok: res.ok, detail: res.ok ? 'auth ok' : `HTTP ${res.status}` });
     } catch (err) {

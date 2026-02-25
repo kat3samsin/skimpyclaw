@@ -186,7 +186,14 @@ export async function initProviders(config: Config): Promise<void> {
     if (!apiKey) continue;
 
     const opts: Record<string, any> = { apiKey };
-    if (providerConfig.baseURL) opts.baseURL = providerConfig.baseURL;
+    if (providerConfig.baseURL) {
+      let normalizedBaseURL = providerConfig.baseURL;
+      if (name === 'minimax') {
+        const trimmed = normalizedBaseURL.replace(/\/+$/, '');
+        normalizedBaseURL = trimmed.endsWith('/v1') ? trimmed : `${trimmed}/v1`;
+      }
+      opts.baseURL = normalizedBaseURL;
+    }
     // Kimi Code API requires a coding-agent User-Agent with version string
     if (providerConfig.baseURL?.includes('kimi.com')) {
       opts.defaultHeaders = { 'User-Agent': 'claude-code/2.1.42' };
