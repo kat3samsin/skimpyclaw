@@ -64,27 +64,12 @@ describe('ToolCallGuard', () => {
     });
   });
 
-  describe('token budget', () => {
-    it('does not exceed with small usage', () => {
-      const guard = new ToolCallGuard(100_000);
-      const r = guard.recordTokens(1000, 500);
-      expect(r.exceeded).toBe(false);
-      expect(r.warning).toBeUndefined();
-    });
-
-    it('warns at 80% usage', () => {
-      const guard = new ToolCallGuard(10_000);
-      const r = guard.recordTokens(4000, 4100);
-      expect(r.exceeded).toBe(false);
-      expect(r.warning).toBeDefined();
-      expect(r.warning).toContain('warning');
-    });
-
-    it('exceeds at 100% usage', () => {
-      const guard = new ToolCallGuard(10_000);
-      const r = guard.recordTokens(5000, 5000);
-      expect(r.exceeded).toBe(true);
-      expect(r.warning).toContain('exceeded');
+  describe('token tracking', () => {
+    it('tracks tokens without enforcement', () => {
+      const guard = new ToolCallGuard();
+      guard.recordTokens(5000, 5000);
+      const stats = guard.getStats();
+      expect(stats.totalTokens).toBe(10000);
     });
   });
 

@@ -1,11 +1,10 @@
-// ToolCallGuard — Spin detection, no-progress detection, token budget
+// ToolCallGuard — Spin detection, no-progress detection
 
 import { createHash } from 'crypto';
 
 const SPIN_WARN_THRESHOLD = 3;
 const SPIN_BLOCK_THRESHOLD = 5;
 const NO_PROGRESS_THRESHOLD = 5;
-const DEFAULT_MAX_TURN_TOKENS = 200_000;
 
 interface CallRecord {
   name: string;
@@ -17,10 +16,11 @@ export class ToolCallGuard {
   private resultHashes: string[] = [];
   private totalInputTokens = 0;
   private totalOutputTokens = 0;
-  private maxTurnTokens: number;
+  // Kept for future use — not currently enforced
+  private maxTurnTokens: number | undefined;
 
   constructor(maxTurnTokens?: number) {
-    this.maxTurnTokens = maxTurnTokens ?? DEFAULT_MAX_TURN_TOKENS;
+    this.maxTurnTokens = maxTurnTokens;
   }
 
   private hash(data: string): string {
@@ -67,26 +67,10 @@ export class ToolCallGuard {
     return {};
   }
 
-  /** Record token usage. Returns exceeded flag if over budget. */
-  recordTokens(inputTokens: number, outputTokens: number): { exceeded: boolean; warning?: string } {
+  /** Record token usage for stats tracking. */
+  recordTokens(inputTokens: number, outputTokens: number): void {
     this.totalInputTokens += inputTokens;
     this.totalOutputTokens += outputTokens;
-    const total = this.totalInputTokens + this.totalOutputTokens;
-
-    if (total >= this.maxTurnTokens) {
-      return {
-        exceeded: true,
-        warning: `Token budget exceeded: ${total} tokens used (limit: ${this.maxTurnTokens})`
-      };
-    }
-    // Warn at 80%
-    if (total >= this.maxTurnTokens * 0.8) {
-      return {
-        exceeded: false,
-        warning: `Token budget warning: ${total}/${this.maxTurnTokens} tokens used (${Math.round(total / this.maxTurnTokens * 100)}%)`
-      };
-    }
-    return { exceeded: false };
   }
 
   /** Reset guard state (for testing or between turns). */

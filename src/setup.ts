@@ -472,7 +472,7 @@ export function buildSetupConfig(input: SetupBuildInput): Record<string, unknown
     },
     heartbeat: {
       intervalMs: 1800000,
-      prompt: 'Read HEARTBEAT.md. Follow it strictly. If nothing needs attention, reply HEARTBEAT_OK.',
+      prompt: 'Read ~/.skimpyclaw/agents/main/HEARTBEAT.md. Follow it strictly. If nothing needs attention, reply HEARTBEAT_OK.',
       tools: {
         enabled: true,
         allowedPaths: [

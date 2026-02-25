@@ -381,18 +381,11 @@ export async function chatWithToolsCodex(params: ProviderToolChatParams): Promis
       });
       genObs?.end();
 
-      // Guard: track token usage
-      const tokenResult = guard.recordTokens(
+      // Guard: track token usage (stats only, no enforcement)
+      guard.recordTokens(
         parsed.response?.usage?.input_tokens ?? 0,
         parsed.response?.usage?.output_tokens ?? 0,
       );
-      if (tokenResult.warning) console.warn(`[codex:tools:guard] ${tokenResult.warning}`);
-      if (tokenResult.exceeded) {
-        return {
-          response: `[Stopped: ${tokenResult.warning}]`,
-          toolCalls: toolLog,
-        };
-      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       genObs?.update({ level: 'ERROR', statusMessage: errorMessage, output: { error: errorMessage } });

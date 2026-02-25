@@ -221,11 +221,23 @@ function getSTTProvider(config: VoiceConfig): { name: string; provider: VoicePro
     return null;
   }
 
-  const providerName = config.defaultProvider || Object.keys(providers)[0];
-  const provider = providers[providerName];
-  if (!provider) return null;
+  const isApiBackedSttProvider = (provider: VoiceProviderConfig | undefined): provider is VoiceProviderConfig =>
+    Boolean(provider && (provider.stt || provider.apiKey));
 
-  return { name: providerName, provider };
+  if (config.defaultProvider) {
+    const preferred = providers[config.defaultProvider];
+    if (isApiBackedSttProvider(preferred)) {
+      return { name: config.defaultProvider, provider: preferred };
+    }
+  }
+
+  for (const [name, provider] of Object.entries(providers)) {
+    if (isApiBackedSttProvider(provider)) {
+      return { name, provider };
+    }
+  }
+
+  return null;
 }
 
 /**

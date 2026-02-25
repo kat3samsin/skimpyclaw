@@ -234,18 +234,11 @@ export async function chatWithToolsAnthropic(params: ProviderToolChatParams): Pr
       });
       genObs?.end();
 
-      // Guard: track token usage
-      const tokenResult = guard.recordTokens(
+      // Guard: track token usage (stats only, no enforcement)
+      guard.recordTokens(
         (response as any).usage?.input_tokens ?? 0,
         (response as any).usage?.output_tokens ?? 0,
       );
-      if (tokenResult.warning) console.warn(`[agent:tools:guard] ${tokenResult.warning}`);
-      if (tokenResult.exceeded) {
-        return {
-          response: `[Stopped: ${tokenResult.warning}]`,
-          toolCalls: toolLog,
-        };
-      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       genObs?.update({ level: 'ERROR', statusMessage: errorMessage, output: { error: errorMessage } });

@@ -227,18 +227,11 @@ export async function chatWithToolsOpenAI(params: ProviderToolChatParams, provid
       });
       genObs?.end();
 
-      // Guard: track token usage
-      const tokenResult = guard.recordTokens(
+      // Guard: track token usage (stats only, no enforcement)
+      guard.recordTokens(
         completion.usage?.prompt_tokens ?? 0,
         completion.usage?.completion_tokens ?? 0,
       );
-      if (tokenResult.warning) console.warn(`[agent:openai-tools:guard] ${tokenResult.warning}`);
-      if (tokenResult.exceeded) {
-        return {
-          response: `[Stopped: ${tokenResult.warning}]`,
-          toolCalls: toolLog,
-        };
-      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       genObs?.update({ level: 'ERROR', statusMessage: errorMessage, output: { error: errorMessage } });
