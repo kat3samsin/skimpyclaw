@@ -11,6 +11,7 @@ import {
 import type { ToolConfig } from '../types.js';
 import type { ExecuteToolContext } from './execute-context.js';
 import { isPathAllowed } from './path-utils.js';
+import { validateBashPaths } from './bash-path-validation.js';
 
 export async function executeBash(command: string, cwd: string | undefined, config: ToolConfig, context?: ExecuteToolContext): Promise<string> {
   // Hard block: existing safety filter (always enforced)
@@ -19,6 +20,12 @@ export async function executeBash(command: string, cwd: string | undefined, conf
   }
   if (cwd && !isPathAllowed(cwd, config.allowedPaths)) {
     return Promise.resolve('Error: Working directory not in allowed paths.');
+  }
+
+  // Validate file paths referenced in command arguments
+  const pathError = validateBashPaths(command, cwd, config.allowedPaths);
+  if (pathError) {
+    return Promise.resolve(pathError);
   }
 
   // Exec approval gate: classify risk and check if approval is needed

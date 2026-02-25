@@ -18,7 +18,7 @@ interface DangerousPattern {
   reason: string;
 }
 
-function tokenizeShellCommand(command: string): string[] {
+export function tokenizeShellCommand(command: string): string[] {
   const tokens: string[] = [];
   let current = '';
   let quote: '"' | "'" | null = null;
@@ -95,7 +95,7 @@ function isCommandSeparator(token: string): boolean {
   return token === '&&' || token === '||' || token === '|' || token === ';';
 }
 
-function getCommandSegments(command: string): string[][] {
+export function getCommandSegments(command: string): string[][] {
   const tokens = tokenizeShellCommand(command);
   const segments: string[][] = [];
   let start = 0;
@@ -164,7 +164,7 @@ function isGitForcePushSegment(segment: string[]): boolean {
   return false;
 }
 
-function getSegmentCommandIndex(segment: string[]): number {
+export function getSegmentCommandIndex(segment: string[]): number {
   let idx = 0;
   while (idx < segment.length && segment[idx].includes('=') && !segment[idx].startsWith('-')) {
     idx++;
@@ -172,7 +172,7 @@ function getSegmentCommandIndex(segment: string[]): number {
   return idx;
 }
 
-function getExecutableName(token: string): string {
+export function getExecutableName(token: string): string {
   const normalized = token.toLowerCase();
   const slash = normalized.lastIndexOf('/');
   return slash >= 0 ? normalized.slice(slash + 1) : normalized;

@@ -217,8 +217,14 @@ describe('bash', () => {
   });
 
   it('returns stderr on failure', async () => {
-    const result = await executeTool('Bash', { command: 'cat /nonexistent_file_xyz' }, toolConfig);
+    const nonexistent = join(TEST_DIR, 'nonexistent_file_xyz');
+    const result = await executeTool('Bash', { command: `cat "${nonexistent}"` }, toolConfig);
     expect(result).toContain('No such file');
+  });
+
+  it('blocks commands referencing paths outside allowed dirs', async () => {
+    const result = await executeTool('Bash', { command: 'cat /etc/passwd' }, toolConfig);
+    expect(result).toContain('Error: Command references paths outside allowed directories');
   });
 
   it('handles unknown tools', async () => {
