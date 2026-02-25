@@ -319,7 +319,23 @@ export async function executeTool(
 ): Promise<string> {
   try {
     // Route MCP tools BEFORE normalization to preserve server/tool name casing
+    // NOTE: MCP servers run as external processes with full host access.
+    // We validate path-like arguments as a best-effort check, but MCP servers
+    // are a trusted boundary — only configure servers you trust.
     if (name.startsWith('mcp__')) {
+      if (config.allowedPaths?.length) {
+        const { isPathAllowed } = await import('./tools/path-utils.js');
+        for (const [key, value] of Object.entries(input)) {
+          if (typeof value === 'string' && (value.startsWith('/') || value.startsWith('~/') || value.startsWith('./'))) {
+            const { resolve } = await import('path');
+            const { homedir } = await import('os');
+            const resolved = value.startsWith('~/') ? resolve(homedir(), value.slice(2)) : resolve(value);
+            if (!isPathAllowed(resolved, config.allowedPaths)) {
+              return `Error: MCP tool argument "${key}" references path outside allowed directories: ${value}`;
+            }
+          }
+        }
+      }
       return await executeMcpToolGeneric(name, input);
     }
 

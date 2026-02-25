@@ -199,6 +199,7 @@ interface SetupFeatures {
 
 interface SetupBuildInput {
   workspaceDir: string;
+  extraAllowedPaths?: string[];
   telegramId: string;
   telegramToken: string;
   discordToken?: string;
@@ -421,6 +422,8 @@ function buildEnvContent(
 export function buildSetupConfig(input: SetupBuildInput): Record<string, unknown> {
   const useDiscord = Boolean(input.discordToken);
   const features = input.features ?? { browser: false, voice: false, mcp: false };
+  const basePaths = ['${HOME}/.skimpyclaw'];
+  const allPaths = [...basePaths, ...(input.extraAllowedPaths || [])];
   return {
     gateway: {
       port: 18790,
@@ -451,13 +454,13 @@ export function buildSetupConfig(input: SetupBuildInput): Record<string, unknown
         token: '${TELEGRAM_BOT_TOKEN}',
         allowFrom: [parseInt(input.telegramId, 10) || input.telegramId],
         dailyNotesDir: '${HOME}/.skimpyclaw/Daily Notes',
-        defaultAllowedPaths: ['${HOME}/.skimpyclaw'],
+        defaultAllowedPaths: allPaths,
       },
       discord: {
         enabled: useDiscord,
         token: useDiscord ? '${DISCORD_BOT_TOKEN}' : '',
         allowFrom: useDiscord ? [input.discordUserId || ''] : [],
-        defaultAllowedPaths: ['${HOME}/.skimpyclaw'],
+        defaultAllowedPaths: allPaths,
         ...(input.discordDefaultChannelId ? { defaultChannelId: input.discordDefaultChannelId } : {}),
       },
     },
@@ -469,7 +472,7 @@ export function buildSetupConfig(input: SetupBuildInput): Record<string, unknown
       prompt: 'Read ~/.skimpyclaw/agents/main/HEARTBEAT.md. Follow it strictly. If nothing needs attention, reply HEARTBEAT_OK.',
       tools: {
         enabled: true,
-        allowedPaths: ['${HOME}/.skimpyclaw'],
+        allowedPaths: allPaths,
         maxIterations: 10,
         bashTimeout: 15000,
         ...(features.browser ? { browser: { enabled: true } } : { browser: { enabled: false } }),
@@ -698,7 +701,42 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
     const userName = (await ask(rl, '   What should I call you? ')) || 'User';
     statusOk(userName);
 
-    // 6. Optional Features
+    // 6. Workspace Directory
+    sectionHeader('6. Workspace Directory');
+    console.log('   The agent can read/write files in allowed directories.');
+    console.log('   ~/.skimpyclaw is always included. Add project directories here.');
+    const existingExtraPaths = existing.config?.channels?.telegram?.defaultAllowedPaths
+      ?.filter((p: string) => p !== '${HOME}/.skimpyclaw') || [];
+    const existingExtra = existingExtraPaths.join(', ');
+    const workspaceDirInput = await ask(rl, `   Additional directory to allow (or Enter to skip)${existingExtra ? ` [${existingExtra}]` : ''}: `);
+    const extraAllowedPaths: string[] = [];
+    if (workspaceDirInput) {
+      extraAllowedPaths.push(workspaceDirInput);
+      statusOk(`Added: ${workspaceDirInput}`);
+    } else if (existingExtra) {
+      extraAllowedPaths.push(...existingExtraPaths);
+      statusOk(`Keeping: ${existingExtra}`);
+    } else {
+      statusOk('Only ~/.skimpyclaw (default)');
+    }
+
+    // 7. Tool Safety Consent
+    sectionHeader('7. Safety Notice');
+    console.log('   ⚠ This agent can:');
+    console.log('     • Read and write files in allowed directories');
+    console.log('     • Run terminal commands (with safety filters and approval gates)');
+    console.log('     • Send messages via configured channels (Telegram, Discord)');
+    console.log('     • Access MCP tools if configured');
+    console.log('');
+    const consent = /^y(es)?$/i.test(await ask(rl, '   Do you understand and accept these capabilities? [y/N]: '));
+    if (!consent) {
+      console.log(`\n${c.red('Setup cancelled.')} Re-run when ready.`);
+      rl.close();
+      return;
+    }
+    statusOk('Acknowledged');
+
+    // 8. Optional Features
     const existingBrowser = existing.config?.heartbeat?.tools?.browser?.enabled === true
       || existing.config?.channels?.telegram?.tools?.browser?.enabled === true;
     const existingVoice = existing.config?.voice?.enabled === true;
@@ -754,7 +792,8 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
     };
 
     const { configJson: rawConfigJson, envContent, config: generatedConfig } = buildSetupArtifacts({
-      workspaceDir: process.cwd(),
+      workspaceDir: extraAllowedPaths[0] || join(homedir(), '.skimpyclaw'),
+      extraAllowedPaths,
       telegramId,
       telegramToken,
       discordToken: useDiscord ? discordToken : undefined,
