@@ -19,7 +19,7 @@ import {
   Templates,
   Usage,
 } from './pages/index.js';
-import { getToken, setToken } from './api/client.js';
+import { getToken, onUnauthorized, setToken } from './api/client.js';
 import './styles/base.css';
 
 const PAGE_IDS: PageId[] = [
@@ -157,6 +157,12 @@ export function App() {
   });
   const [pendingApprovals, setPendingApprovals] = useState(0);
   const { toasts, showToast } = useToast();
+
+  useEffect(() => {
+    return onUnauthorized(() => {
+      setAuthed(false);
+    });
+  }, []);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);

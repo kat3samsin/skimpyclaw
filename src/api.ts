@@ -40,6 +40,17 @@ import { initActiveChannel, stopActiveChannel, startActiveChannel } from './chan
 import { setCodeAgentConfig } from './tools.js';
 import { resolveModelSelection } from './model-selection.js';
 
+const DEFAULT_MODEL_ALIASES: Record<string, string> = {
+  'claude-fast': 'anthropic/claude-haiku-4-5',
+  'claude-think': 'anthropic/claude-sonnet-4-6',
+  'claude-opus': 'anthropic/claude-opus-4-6',
+  'codex5.1': 'codex/gpt-5.1-codex',
+  'codex5.2': 'codex/gpt-5.2-codex',
+  'codex5.3': 'codex/gpt-5.3-codex',
+  minimax: 'minimax/MiniMax-M2.5',
+  kimi: 'kimi/kimi-for-coding',
+};
+
 function validateFilename(filename: string): boolean {
   return !filename.includes('..') && filename === basename(filename);
 }
@@ -498,9 +509,17 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
 
   // --- Model ---
   fastify.get('/api/dashboard/model', async () => {
+    const aliases = runtimeConfig.models?.aliases || {};
+    const mergedAliases = Object.keys(aliases).length > 0
+      ? aliases
+      : DEFAULT_MODEL_ALIASES;
+    const currentModel = getCurrentModel()
+      || runtimeConfig.agents?.list?.[runtimeConfig.agents?.default]?.model
+      || 'claude-opus';
+
     return {
-      current: getCurrentModel(),
-      aliases: runtimeConfig.models.aliases,
+      current: currentModel,
+      aliases: mergedAliases,
       agents: Object.fromEntries(
         Object.entries(runtimeConfig.agents.list).map(([id, agent]) => [id, agent.model])
       ),

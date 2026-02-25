@@ -27,6 +27,7 @@ import type {
 } from '../types.js';
 
 const TOKEN_KEY = 'dashboard_token';
+const UNAUTHORIZED_EVENT = 'skimpy-dashboard-unauthorized';
 
 export function getToken(): string {
   return localStorage.getItem(TOKEN_KEY) ?? '';
@@ -38,6 +39,12 @@ export function setToken(token: string): void {
 
 export function clearToken(): void {
   localStorage.removeItem(TOKEN_KEY);
+}
+
+export function onUnauthorized(callback: () => void): () => void {
+  const listener = () => callback();
+  window.addEventListener(UNAUTHORIZED_EVENT, listener);
+  return () => window.removeEventListener(UNAUTHORIZED_EVENT, listener);
 }
 
 class ApiError extends Error {
@@ -70,6 +77,10 @@ async function request<T>(
   });
 
   if (!res.ok) {
+    if (res.status === 401) {
+      clearToken();
+      window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
+    }
     const text = await res.text().catch(() => res.statusText);
     throw new ApiError(res.status, text);
   }

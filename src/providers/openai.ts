@@ -148,6 +148,7 @@ export async function chatWithToolsOpenAI(params: ProviderToolChatParams, provid
 
   // Inject Kimi $web_search builtin tool when using Moonshot/Kimi provider
   const providerBaseURL = config.models.providers[provider]?.baseURL || '';
+  const requiresReasoningContent = providerBaseURL.includes('kimi.com') || providerBaseURL.includes('moonshot.ai');
   if (providerBaseURL.includes('kimi.com') || providerBaseURL.includes('moonshot.ai')) {
     openaiTools.push({ type: 'builtin_function', function: { name: '$web_search' } });
     console.log('[agent:openai-tools] Injected Kimi $web_search builtin tool');
@@ -261,8 +262,19 @@ export async function chatWithToolsOpenAI(params: ProviderToolChatParams, provid
       };
     }
 
-    // Append assistant message with tool_calls to conversation
-    apiMessages.push(message);
+    // Append assistant message with tool_calls to conversation.
+    // Kimi requires reasoning_content when thinking mode is enabled.
+    const assistantToolCallMessage: Record<string, any> = {
+      role: 'assistant',
+      content: message.content ?? '',
+      tool_calls: message.tool_calls,
+    };
+    if ((message as any).reasoning_content !== undefined) {
+      assistantToolCallMessage.reasoning_content = (message as any).reasoning_content;
+    } else if (requiresReasoningContent) {
+      assistantToolCallMessage.reasoning_content = '';
+    }
+    apiMessages.push(assistantToolCallMessage);
 
     // Execute each tool call
     for (const toolCall of message.tool_calls) {

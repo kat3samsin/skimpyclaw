@@ -97,22 +97,36 @@ export function Overview({ onNavigate, showToast }: OverviewProps) {
   }, []);
 
   async function loadData() {
-    try {
-      const [s, audit, approvals, usage] = await Promise.all([
-        getStatus(),
-        getAudit({ limit: 8, offset: 0 }),
-        getApprovals(),
-        getUsageSummary().catch(() => null),
-      ]);
-      setStatus(s);
-      setTraces(audit.traces ?? []);
-      setPendingApprovals(approvals.pending ?? []);
-      if (usage) setUsageSummary(usage);
-    } catch (e) {
-      console.error('[overview] load failed', e);
-    } finally {
-      setLoading(false);
+    const [statusRes, auditRes, approvalsRes, usageRes] = await Promise.allSettled([
+      getStatus(),
+      getAudit({ limit: 8, offset: 0 }),
+      getApprovals(),
+      getUsageSummary(),
+    ]);
+
+    if (statusRes.status === 'fulfilled') {
+      setStatus(statusRes.value);
+    } else {
+      console.error('[overview] status load failed', statusRes.reason);
     }
+
+    if (auditRes.status === 'fulfilled') {
+      setTraces(auditRes.value.traces ?? []);
+    } else {
+      console.error('[overview] audit load failed', auditRes.reason);
+    }
+
+    if (approvalsRes.status === 'fulfilled') {
+      setPendingApprovals(approvalsRes.value.pending ?? []);
+    } else {
+      console.error('[overview] approvals load failed', approvalsRes.reason);
+    }
+
+    if (usageRes.status === 'fulfilled') {
+      setUsageSummary(usageRes.value);
+    }
+
+    setLoading(false);
   }
 
   async function handleApproval(id: string, approve: boolean) {
