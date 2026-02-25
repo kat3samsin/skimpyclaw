@@ -227,7 +227,8 @@ function getSTTProvider(config: VoiceConfig): { name: string; provider: VoicePro
   ): provider is VoiceProviderConfig => {
     if (!provider) return false;
     // macOS voice provider is TTS-only and must never be used for transcription.
-    if (name === 'macos') return false;
+    const normalizedName = name.trim().toLowerCase();
+    if (normalizedName === 'macos') return false;
     return Boolean(provider.stt || provider.apiKey);
   };
 
@@ -331,6 +332,9 @@ export async function transcribeAudio(
   // No local whisper — try API provider directly
   const sttProvider = getSTTProvider(config);
   if (!sttProvider) {
+    if (config.providers?.macos) {
+      throw new Error('No voice transcription provider configured. "macos" is TTS-only. Install local whisper or configure an API STT provider (e.g. openai.stt).');
+    }
     throw new Error('No voice transcription available. Install whisper (pip install openai-whisper) or configure an API provider.');
   }
 

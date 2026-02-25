@@ -288,3 +288,19 @@ describe('checkVoiceDependencies', () => {
     expect(result.missing[0]).toContain('No local whisper CLI and no API providers configured');
   });
 });
+
+describe('transcription provider messaging', () => {
+  it('explains that macos is TTS-only when no STT provider exists', async () => {
+    const { transcribeAudio } = await import('../voice.js');
+    const config: VoiceConfig = {
+      ...baseVoiceConfig,
+      providers: {
+        macos: { tts: { voice: 'Samantha' } },
+      },
+    };
+
+    await expect(transcribeAudio('/tmp/fake-audio.ogg', config)).rejects.toThrow(
+      'macos" is TTS-only'
+    );
+  });
+});

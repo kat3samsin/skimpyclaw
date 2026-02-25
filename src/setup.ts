@@ -450,20 +450,14 @@ export function buildSetupConfig(input: SetupBuildInput): Record<string, unknown
         enabled: true,
         token: '${TELEGRAM_BOT_TOKEN}',
         allowFrom: [parseInt(input.telegramId, 10) || input.telegramId],
-        dailyNotesDir: '${HOME}/Daily Notes',
-        defaultAllowedPaths: [
-          '${HOME}/.skimpyclaw',
-          input.workspaceDir,
-        ],
+        dailyNotesDir: '${HOME}/.skimpyclaw/Daily Notes',
+        defaultAllowedPaths: ['${HOME}/.skimpyclaw'],
       },
       discord: {
         enabled: useDiscord,
         token: useDiscord ? '${DISCORD_BOT_TOKEN}' : '',
         allowFrom: useDiscord ? [input.discordUserId || ''] : [],
-        defaultAllowedPaths: [
-          '${HOME}/.skimpyclaw',
-          input.workspaceDir,
-        ],
+        defaultAllowedPaths: ['${HOME}/.skimpyclaw'],
         ...(input.discordDefaultChannelId ? { defaultChannelId: input.discordDefaultChannelId } : {}),
       },
     },
@@ -475,10 +469,7 @@ export function buildSetupConfig(input: SetupBuildInput): Record<string, unknown
       prompt: 'Read ~/.skimpyclaw/agents/main/HEARTBEAT.md. Follow it strictly. If nothing needs attention, reply HEARTBEAT_OK.',
       tools: {
         enabled: true,
-        allowedPaths: [
-          '${HOME}/.skimpyclaw',
-          input.workspaceDir,
-        ],
+        allowedPaths: ['${HOME}/.skimpyclaw'],
         maxIterations: 10,
         bashTimeout: 15000,
         ...(features.browser ? { browser: { enabled: true } } : { browser: { enabled: false } }),

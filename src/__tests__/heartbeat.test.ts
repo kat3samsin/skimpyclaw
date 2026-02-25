@@ -57,4 +57,34 @@ describe('heartbeat prompt path normalization', () => {
       expect.any(Object)
     );
   });
+
+  it('normalizes /workspace heartbeat path to agents/main/HEARTBEAT.md', async () => {
+    const config = {
+      agents: { default: 'main' },
+      heartbeat: {
+        intervalMs: 60000,
+        prompt: 'Read /workspace/HEARTBEAT.md only. Reply HEARTBEAT_OK.',
+        model: 'claude-fast',
+        tools: {
+          enabled: true,
+          allowedPaths: ['/Users/katre/.skimpyclaw'],
+          maxIterations: 10,
+          bashTimeout: 15000,
+        },
+      },
+      channels: {
+        active: 'telegram',
+        telegram: {
+          defaultAllowedPaths: ['/Users/katre/.skimpyclaw'],
+        },
+      },
+    } as any;
+
+    await runHeartbeatCheck(config);
+
+    expect(mockRunAgentTurn).toHaveBeenCalledTimes(1);
+    const promptArg = mockRunAgentTurn.mock.calls[0][1];
+    expect(promptArg).toContain('/.skimpyclaw/agents/main/HEARTBEAT.md');
+    expect(promptArg).not.toContain('/workspace/HEARTBEAT.md');
+  });
 });

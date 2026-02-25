@@ -19,7 +19,7 @@ let running = false;
 
 const DEFAULT_HEARTBEAT_TOOLS: ToolConfig = {
   enabled: true,
-  allowedPaths: [join(homedir(), '.skimpyclaw'), process.cwd()],
+  allowedPaths: [join(homedir(), '.skimpyclaw')],
   maxIterations: 100,
   bashTimeout: 15000,
 };
@@ -51,11 +51,9 @@ function getHeartbeatPrompt(config: Config): string {
   const heartbeatPath = getHeartbeatFilePath(config);
   const basePrompt = config.heartbeat.prompt || '';
 
-  // Normalize legacy/wrong heartbeat locations to the agent template path.
-  const normalized = basePrompt.replace(
-    /(~\/(?:\.skimpyclaw\/)?HEARTBEAT\.md|\/Users\/[^/\s]+\/(?:\.skimpyclaw\/)?HEARTBEAT\.md|\/HEARTBEAT\.md)/g,
-    heartbeatPath
-  );
+  // Normalize any explicit HEARTBEAT.md path token (legacy /workspace, /Users/*, ~/...)
+  // to the active agent heartbeat template path.
+  const normalized = basePrompt.replace(/(?:~|\/)\S*HEARTBEAT\.md/g, heartbeatPath);
 
   if (normalized.includes('HEARTBEAT.md')) {
     return normalized;
