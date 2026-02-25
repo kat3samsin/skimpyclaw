@@ -895,12 +895,11 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
     console.log('\nNext steps:');
     console.log('1. Review templates in ~/.skimpyclaw/agents/main/');
     console.log('2. Start the daemon:');
-    console.log(`   launchctl bootout gui/$(id -u)/${GATEWAY_PLIST_LABEL} 2>/dev/null || true`);
-    console.log(`   launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/${GATEWAY_PLIST_LABEL}.plist`);
-    console.log(`   launchctl kickstart -k gui/$(id -u)/${GATEWAY_PLIST_LABEL}`);
+    console.log('   skimpyclaw start --daemon');
     console.log('3. Check health:');
-    console.log('   curl http://localhost:18790/health');
-    console.log(`4. Send /help in your ${useDiscord ? 'Discord bot DM/server' : 'Telegram bot'}`);
+    console.log('   skimpyclaw status');
+    console.log(`4. Optional daemon controls: skimpyclaw stop | skimpyclaw restart`);
+    console.log(`5. Send /help in your ${useDiscord ? 'Discord bot DM/server' : 'Telegram bot'}`);
     console.log('\n👙🦞 Enjoy!');
   } finally {
     rl.close();
