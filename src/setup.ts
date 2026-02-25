@@ -52,6 +52,8 @@ interface ExistingSetup {
   env: Record<string, string>;
 }
 
+type SandboxRuntime = 'container' | 'docker';
+
 function loadExistingSetup(): ExistingSetup {
   let config: Record<string, any> | null = null;
   const env: Record<string, string> = {};
@@ -73,6 +75,84 @@ function loadExistingSetup(): ExistingSetup {
   }
 
   return { config, env };
+}
+
+function detectSandboxRuntime(preferred?: SandboxRuntime | null): SandboxRuntime | null {
+  if (preferred) {
+    const check = spawnSync(preferred, ['--version'], { encoding: 'utf-8' });
+    return check.status === 0 ? preferred : null;
+  }
+
+  const containerCheck = spawnSync('container', ['--version'], { encoding: 'utf-8' });
+  if (containerCheck.status === 0) return 'container';
+
+  const dockerCheck = spawnSync('docker', ['--version'], { encoding: 'utf-8' });
+  if (dockerCheck.status === 0) return 'docker';
+
+  return null;
+}
+
+function sandboxRuntimeRunning(runtime: SandboxRuntime): boolean {
+  if (runtime === 'container') {
+    return spawnSync('container', ['system', 'status'], { encoding: 'utf-8' }).status === 0;
+  }
+  return spawnSync('docker', ['info'], { encoding: 'utf-8' }).status === 0;
+}
+
+function sandboxNetworkExists(runtime: SandboxRuntime, network: string): boolean {
+  if (runtime === 'container') {
+    const result = spawnSync('container', ['network', 'ls'], { encoding: 'utf-8' });
+    if (result.status !== 0) return false;
+    return result.stdout
+      .split('\n')
+      .some((line) => line.trim().split(/\s+/)[0] === network);
+  }
+  return spawnSync('docker', ['network', 'inspect', network], { encoding: 'utf-8' }).status === 0;
+}
+
+function defaultSandboxNetwork(runtime: SandboxRuntime): string {
+  return runtime === 'container' ? 'default' : 'bridge';
+}
+
+function bootstrapSandbox(runtime: SandboxRuntime, image: string, network: string): { ok: boolean; message: string } {
+  const sandboxDir = join(__dirname, '..', 'sandbox');
+  const dockerfile = join(sandboxDir, 'Dockerfile');
+  if (!existsSync(dockerfile)) {
+    return { ok: false, message: `Sandbox Dockerfile not found: ${dockerfile}` };
+  }
+
+  if (!sandboxRuntimeRunning(runtime)) {
+    const hint = runtime === 'container'
+      ? 'Run `container system start` and rerun onboarding.'
+      : 'Start Docker Desktop and rerun onboarding.';
+    return { ok: false, message: `Runtime "${runtime}" is not running. ${hint}` };
+  }
+
+  if (!sandboxNetworkExists(runtime, network)) {
+    return { ok: false, message: `Network "${network}" not found for ${runtime}. Update sandbox.network and run \`skimpyclaw sandbox init\`.` };
+  }
+
+  const build = spawnSync(
+    runtime,
+    ['build', '--build-arg', 'SKIMPY_PROFILE=minimal', '-t', image, sandboxDir],
+    { encoding: 'utf-8' }
+  );
+  if (build.status !== 0) {
+    const detail = `${build.stderr || ''}\n${build.stdout || ''}`.trim();
+    return { ok: false, message: `Image build failed: ${detail.slice(-800)}` };
+  }
+
+  const smoke = spawnSync(
+    runtime,
+    ['run', '--rm', '--network', network, image, 'sh', '-lc', 'hostname && command -v gh >/dev/null && command -v rg >/dev/null && echo sandbox-ok'],
+    { encoding: 'utf-8' }
+  );
+  if (smoke.status !== 0) {
+    const detail = `${smoke.stderr || ''}\n${smoke.stdout || ''}`.trim();
+    return { ok: false, message: `Sandbox smoke test failed: ${detail.slice(-800)}` };
+  }
+
+  return { ok: true, message: (smoke.stdout || '').trim().split('\n').join(' | ') };
 }
 
 function ask(rl: readline.Interface, question: string): Promise<string> {
@@ -195,6 +275,7 @@ interface SetupFeatures {
   browser: boolean;
   voice: boolean;
   mcp: boolean;
+  sandbox: boolean;
 }
 
 interface SetupStarters {
@@ -467,7 +548,7 @@ function buildEnvContent(
 
 export function buildSetupConfig(input: SetupBuildInput): Record<string, unknown> {
   const useDiscord = Boolean(input.discordToken);
-  const features = input.features ?? { browser: false, voice: false, mcp: false };
+  const features = input.features ?? { browser: false, voice: false, mcp: false, sandbox: false };
   const starters = input.starters ?? {
     cronTechNews: false,
     cronWeather: false,
@@ -547,6 +628,16 @@ export function buildSetupConfig(input: SetupBuildInput): Record<string, unknown
           telegram: { enabled: true, acceptVoice: true, sendVoice: true },
           discord: { enabled: true, acceptVoice: true, sendVoice: true },
         },
+      },
+    } : {}),
+    ...(features.sandbox ? {
+      sandbox: {
+        enabled: true,
+        image: 'skimpyclaw-sandbox',
+        cpus: 2,
+        memory: '2G',
+        network: 'bridge',
+        idleTimeoutMs: 3600000,
       },
     } : {}),
     ...(Object.keys(starterSkillEntries).length > 0 ? {
@@ -900,10 +991,32 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
       statusOk('MCP tools disabled');
     }
 
+    // 6d. Sandbox (container isolation)
+    const existingSandbox = existing.config?.sandbox?.enabled === true;
+    const sandboxDefault = existingSandbox ? 'Y' : 'N';
+    const enableSandbox = /^y(es)?$/i.test(await ask(rl, `   Enable sandbox? (requires Docker or Apple Containers) [${existingSandbox ? 'Y/n' : 'y/N'}]: `) || sandboxDefault);
+    let detectedSandboxRuntime: SandboxRuntime | null = null;
+    if (enableSandbox) {
+      const containerCli = spawnSync('which', ['container'], { encoding: 'utf-8' });
+      const docker = spawnSync('which', ['docker'], { encoding: 'utf-8' });
+      if (containerCli.status === 0) {
+        detectedSandboxRuntime = 'container';
+        statusOk('Apple Containers detected');
+      } else if (docker.status === 0) {
+        detectedSandboxRuntime = 'docker';
+        statusOk('Docker detected');
+      } else {
+        statusWarn('No container runtime found — sandbox features won\'t work until Docker or Apple Containers is installed');
+      }
+    } else {
+      statusOk('sandbox disabled');
+    }
+
     const features: SetupFeatures = {
       browser: enableBrowser,
       voice: enableVoice,
       mcp: enableMcp,
+      sandbox: enableSandbox,
     };
 
     sectionHeader('Starter Packs (optional)');
@@ -974,6 +1087,9 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
       if (existing.config.langfuse) {
         (generatedConfig as any).langfuse = existing.config.langfuse;
       }
+      if (existing.config.sandbox) {
+        (generatedConfig as any).sandbox = existing.config.sandbox;
+      }
       // Preserve voice provider config if voice was already configured
       if (existing.config.voice?.providers && Object.keys(existing.config.voice.providers).length > 0) {
         (generatedConfig as any).voice = existing.config.voice;
@@ -990,7 +1106,17 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
         };
       }
     }
-    const configJson = JSON.stringify(generatedConfig, null, 2);
+
+    if (enableSandbox && (generatedConfig as any).sandbox) {
+      const runtime = detectSandboxRuntime(detectedSandboxRuntime) || detectSandboxRuntime();
+      if (runtime) {
+        (generatedConfig as any).sandbox.runtime = runtime;
+        (generatedConfig as any).sandbox.network = defaultSandboxNetwork(runtime);
+      }
+      if (!(generatedConfig as any).sandbox.image) {
+        (generatedConfig as any).sandbox.image = 'skimpyclaw-sandbox:latest';
+      }
+    }
 
     // Create directories
     console.log('Creating directories...');
@@ -1001,6 +1127,7 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
     mkdirSync(AGENTS_DIR, { recursive: true });
     mkdirSync(join(AGENTS_DIR, 'memory'), { recursive: true });
     const configPath = join(CONFIG_DIR, 'config.json');
+    const configJson = JSON.stringify(generatedConfig, null, 2);
     writeFileSync(configPath, configJson);
     console.log(`✓ Config written to ${configPath}`);
 
@@ -1049,6 +1176,26 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
     } else {
       writeFileSync(envPath, envContent);
       console.log(`✓ Secrets written to ${envPath}`);
+    }
+
+    if (enableSandbox) {
+      sectionHeader('Sandbox Bootstrap');
+      const sandboxCfg = (generatedConfig as any).sandbox || {};
+      const runtime = detectSandboxRuntime(sandboxCfg.runtime as SandboxRuntime | undefined);
+      const image = String(sandboxCfg.image || 'skimpyclaw-sandbox:latest');
+      const network = String(sandboxCfg.network || (runtime ? defaultSandboxNetwork(runtime) : 'bridge'));
+      if (!runtime) {
+        statusWarn('Sandbox enabled, but no runtime detected. Run `skimpyclaw sandbox init` later.');
+      } else {
+        console.log(`   Building sandbox image (${runtime}, network=${network})...`);
+        const bootstrap = bootstrapSandbox(runtime, image, network);
+        if (bootstrap.ok) {
+          statusOk(`sandbox ready (${bootstrap.message})`);
+        } else {
+          statusWarn(bootstrap.message);
+          console.log(`   ${c.dim('You can retry later with: skimpyclaw sandbox init')}`);
+        }
+      }
     }
 
     // Update USER.md with name
