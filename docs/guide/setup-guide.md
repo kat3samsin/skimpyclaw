@@ -1,6 +1,6 @@
 # SkimpyClaw Setup Guide
 
-Step-by-step guide for getting SkimpyClaw running on macOS. Works for both humans and Claude Code.
+Step-by-step guide for getting SkimpyClaw running on macOS. Works for both humans and Agents.
 
 ## Prerequisites
 
@@ -35,6 +35,7 @@ pnpm run doctor
 The `pnpm run onboard` command walks you through:
 
 ### Required
+
 1. **Telegram Bot Token** — paste the token from BotFather
 2. **Your Telegram ID** — must be numeric (send `/start` to @userinfobot)
 3. **Model Providers** — pick at least one (Anthropic, OpenAI, Codex, MiniMax)
@@ -42,11 +43,15 @@ The `pnpm run onboard` command walks you through:
 5. **Your Name** — what the bot calls you
 
 ### Optional Features
-6. **Browser tool** — requires Chrome/Chromium. Default: No. Enable if you need web scraping.
-7. **Voice/TTS** — requires ffmpeg and whisper-cli. Default: No. Enable for voice messages.
-8. **MCP tools** — requires mcporter at `~/.mcporter/`. Default: No. Enable for Automattic internal integrations.
+
+6. **Allowed paths** — `~/.skimpyclaw` is always included; add extra project paths only if needed.
+7. **Browser tool** — requires Chrome/Chromium. Default: No. Enable if you need web scraping.
+8. **Voice/TTS** — requires ffmpeg and whisper-cli. Default: No. Enable for voice messages.
+9. **MCP tools** — requires mcporter at `~/.mcporter/`. Default: No. Enable for Automattic internal integrations.
+10. **Starter packs** — optional starter cron jobs (HN + weather) and starter skills (code-review + daily-notes).
 
 ### Post-Setup
+
 The wizard automatically runs doctor checks after writing config. Green = good, yellow = warnings to fix later.
 
 ## What Gets Created
@@ -84,16 +89,19 @@ curl http://localhost:18790/health
 ## Feature Opt-In Guide
 
 ### When to Enable Browser
+
 - You want the agent to visit URLs, take screenshots, or scrape web pages
 - Requires Chrome or Chromium installed
 - Enable in config: set `tools.browser.enabled: true` in any channel's tools config
 
 ### When to Enable Voice
+
 - You want to send/receive voice messages in Telegram
 - Requires: ffmpeg (audio conversion) and whisper-cli or whisper (transcription)
 - Install: `brew install ffmpeg` then [whisper.cpp](https://github.com/ggerganov/whisper.cpp)
 
 ### When to Enable MCP Tools
+
 - You're an Automattician wanting Slack/Linear/GitHub context
 - Requires mcporter configured at `~/.mcporter/mcporter.json`
 - See internal docs for mcporter setup

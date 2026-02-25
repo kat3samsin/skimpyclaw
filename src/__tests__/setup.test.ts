@@ -129,4 +129,32 @@ describe('setup config generation', () => {
     // parseInt('not-a-number') is NaN, so || falls through to string
     expect(config.channels.telegram.allowFrom).toEqual(['not-a-number']);
   });
+
+  it('includes starter cron jobs and skills when requested', () => {
+    const config = buildSetupConfig({
+      workspaceDir: '/tmp/workspace',
+      telegramId: '12345',
+      telegramToken: 'tg-token',
+      agentName: 'Claw',
+      selectedProviders: new Set(['anthropic-api'] as const),
+      providerSecrets: { anthropicKey: 'sk-ant-test' },
+      starters: {
+        cronTechNews: true,
+        cronWeather: true,
+        timezone: 'America/New_York',
+        weatherLocation: 'Austin, TX',
+        skillCodeReview: true,
+        skillDailyNotes: true,
+      },
+    }) as any;
+
+    expect(config.cron.jobs).toHaveLength(2);
+    expect(config.cron.jobs[0].id).toBe('starter-tech-news-hn');
+    expect(config.cron.jobs[1].id).toBe('starter-weather-7am');
+    expect(config.cron.jobs[1].schedule.tz).toBe('America/New_York');
+    expect(config.cron.jobs[1].payload.message).toContain('Austin, TX');
+    expect(config.skills.enabled).toBe(true);
+    expect(config.skills.entries['code-review']).toBe(true);
+    expect(config.skills.entries['daily-notes']).toBe(true);
+  });
 });

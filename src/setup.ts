@@ -197,6 +197,15 @@ interface SetupFeatures {
   mcp: boolean;
 }
 
+interface SetupStarters {
+  cronTechNews: boolean;
+  cronWeather: boolean;
+  timezone: string;
+  weatherLocation: string;
+  skillCodeReview: boolean;
+  skillDailyNotes: boolean;
+}
+
 interface SetupBuildInput {
   workspaceDir: string;
   extraAllowedPaths?: string[];
@@ -209,6 +218,43 @@ interface SetupBuildInput {
   selectedProviders: Set<ProviderChoice>;
   providerSecrets: ProviderSecrets;
   features?: SetupFeatures;
+  starters?: SetupStarters;
+}
+
+function buildStarterCronJobs(starters: SetupStarters): Array<Record<string, unknown>> {
+  const jobs: Array<Record<string, unknown>> = [];
+  if (starters.cronTechNews) {
+    jobs.push({
+      id: 'starter-tech-news-hn',
+      name: 'Tech News — Top 10 HN',
+      schedule: {
+        kind: 'cron',
+        expr: '0 8 * * *',
+        tz: starters.timezone,
+      },
+      payload: {
+        kind: 'agentTurn',
+        message: 'Use WebSearch to fetch today\'s top 10 Hacker News stories. Reply with title, URL, and 1-line summary for each item.',
+      },
+    });
+  }
+
+  if (starters.cronWeather) {
+    jobs.push({
+      id: 'starter-weather-7am',
+      name: 'Weather Check — 7:00 AM',
+      schedule: {
+        kind: 'cron',
+        expr: '0 7 * * *',
+        tz: starters.timezone,
+      },
+      payload: {
+        kind: 'agentTurn',
+        message: `Check current weather and today forecast for ${starters.weatherLocation}. Keep it concise: current temp/conditions, highs/lows, precipitation chance, and 1 recommendation.`,
+      },
+    });
+  }
+  return jobs;
 }
 
 async function collectProviderSecrets(
@@ -422,8 +468,20 @@ function buildEnvContent(
 export function buildSetupConfig(input: SetupBuildInput): Record<string, unknown> {
   const useDiscord = Boolean(input.discordToken);
   const features = input.features ?? { browser: false, voice: false, mcp: false };
+  const starters = input.starters ?? {
+    cronTechNews: false,
+    cronWeather: false,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+    weatherLocation: 'New York, NY',
+    skillCodeReview: false,
+    skillDailyNotes: false,
+  };
   const basePaths = ['${HOME}/.skimpyclaw'];
   const allPaths = [...basePaths, ...(input.extraAllowedPaths || [])];
+  const starterCronJobs = buildStarterCronJobs(starters);
+  const starterSkillEntries: Record<string, boolean> = {};
+  if (starters.skillCodeReview) starterSkillEntries['code-review'] = true;
+  if (starters.skillDailyNotes) starterSkillEntries['daily-notes'] = true;
   return {
     gateway: {
       port: 18790,
@@ -465,7 +523,7 @@ export function buildSetupConfig(input: SetupBuildInput): Record<string, unknown
       },
     },
     cron: {
-      jobs: [],
+      jobs: starterCronJobs,
     },
     heartbeat: {
       intervalMs: 1800000,
@@ -491,6 +549,12 @@ export function buildSetupConfig(input: SetupBuildInput): Record<string, unknown
         },
       },
     } : {}),
+    ...(Object.keys(starterSkillEntries).length > 0 ? {
+      skills: {
+        enabled: true,
+        entries: starterSkillEntries,
+      },
+    } : {}),
     dashboard: {
       token: randomUUID(),
     },
@@ -513,6 +577,35 @@ const REQUIRED_TEMPLATE_DEFAULTS: Record<string, string> = {
   'HEARTBEAT.md': '# HEARTBEAT\n\nIf nothing needs attention, reply HEARTBEAT_OK.\n',
 };
 
+const STARTER_SKILL_TEMPLATES: Record<string, string> = {
+  'code-review': `---
+name: code-review
+description: Structured code review checklist for bugs, regressions, and missing tests.
+triggers: ["review", "pr", "regression", "tests"]
+priority: 80
+---
+
+When asked to review code:
+1. Focus on correctness and regressions first.
+2. Call out missing or weak test coverage.
+3. Prefer concrete file-level findings.
+4. End with risk summary and recommended fixes.
+`,
+  'daily-notes': `---
+name: daily-notes
+description: Keep daily notes organized under the configured daily notes directory.
+triggers: ["daily note", "standup", "plan day", "journal"]
+priority: 90
+---
+
+When writing daily notes:
+1. Use today's date in the file name if missing.
+2. Include sections: Priorities, Schedule, Notes, Follow-ups.
+3. Keep entries concise and actionable.
+4. Avoid creating files outside the configured daily notes directory.
+`,
+};
+
 function ensureCoreTemplates(agentDir: string): string[] {
   const created: string[] = [];
   for (const [file, content] of Object.entries(REQUIRED_TEMPLATE_DEFAULTS)) {
@@ -522,6 +615,28 @@ function ensureCoreTemplates(agentDir: string): string[] {
       created.push(file);
     }
   }
+  return created;
+}
+
+function ensureStarterSkills(starters: SetupStarters): string[] {
+  const created: string[] = [];
+  const skillsDir = join(CONFIG_DIR, 'skills');
+  mkdirSync(skillsDir, { recursive: true });
+
+  const requested: string[] = [];
+  if (starters.skillCodeReview) requested.push('code-review');
+  if (starters.skillDailyNotes) requested.push('daily-notes');
+
+  for (const skillName of requested) {
+    const dir = join(skillsDir, skillName);
+    const skillPath = join(dir, 'SKILL.md');
+    if (!existsSync(skillPath)) {
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(skillPath, STARTER_SKILL_TEMPLATES[skillName], 'utf-8');
+      created.push(skillName);
+    }
+  }
+
   return created;
 }
 
@@ -791,7 +906,33 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
       mcp: enableMcp,
     };
 
-    const { configJson: rawConfigJson, envContent, config: generatedConfig } = buildSetupArtifacts({
+    sectionHeader('Starter Packs (optional)');
+    const localTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    const addTechNewsCron = /^y(es)?$/i.test(await ask(rl, '   Add starter cron: top 10 Hacker News daily? [y/N]: '));
+    const addWeatherCron = /^y(es)?$/i.test(await ask(rl, '   Add starter cron: weather check daily at 7:00am? [y/N]: '));
+    let cronTimezone = localTz;
+    let weatherLocation = 'New York, NY';
+    if (addTechNewsCron || addWeatherCron) {
+      const tzInput = await ask(rl, `   Timezone for starter cron jobs [${localTz}]: `);
+      cronTimezone = tzInput || localTz;
+    }
+    if (addWeatherCron) {
+      const locationInput = await ask(rl, '   Weather location (city, state/country) [New York, NY]: ');
+      weatherLocation = locationInput || 'New York, NY';
+    }
+    const addCodeReviewSkill = /^y(es)?$/i.test(await ask(rl, '   Add starter skill: code-review? [y/N]: '));
+    const addDailyNotesSkill = /^y(es)?$/i.test(await ask(rl, '   Add starter skill: daily-notes? [y/N]: '));
+
+    const starters: SetupStarters = {
+      cronTechNews: addTechNewsCron,
+      cronWeather: addWeatherCron,
+      timezone: cronTimezone,
+      weatherLocation,
+      skillCodeReview: addCodeReviewSkill,
+      skillDailyNotes: addDailyNotesSkill,
+    };
+
+    const { envContent, config: generatedConfig } = buildSetupArtifacts({
       workspaceDir: extraAllowedPaths[0] || join(homedir(), '.skimpyclaw'),
       extraAllowedPaths,
       telegramId,
@@ -803,6 +944,7 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
       selectedProviders,
       providerSecrets,
       features,
+      starters,
     });
 
     // On reconfigure, preserve dashboard token, cron jobs, subagents, security, langfuse
@@ -810,8 +952,18 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
       if (existing.config.dashboard?.token) {
         (generatedConfig as any).dashboard = existing.config.dashboard;
       }
-      if (Array.isArray(existing.config.cron?.jobs) && existing.config.cron.jobs.length > 0) {
-        (generatedConfig as any).cron = existing.config.cron;
+      if (Array.isArray(existing.config.cron?.jobs)) {
+        const existingCronJobs = existing.config.cron.jobs;
+        const starterCronJobs = ((generatedConfig as any).cron?.jobs || []) as Array<Record<string, unknown>>;
+        const mergedCronJobs = [...existingCronJobs];
+        for (const starter of starterCronJobs) {
+          const id = String((starter as any).id || '');
+          if (!id) continue;
+          if (!mergedCronJobs.some((job: any) => String(job.id) === id)) {
+            mergedCronJobs.push(starter as any);
+          }
+        }
+        (generatedConfig as any).cron = { ...(existing.config.cron || {}), jobs: mergedCronJobs };
       }
       if (existing.config.subagents) {
         (generatedConfig as any).subagents = existing.config.subagents;
@@ -825,6 +977,17 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
       // Preserve voice provider config if voice was already configured
       if (existing.config.voice?.providers && Object.keys(existing.config.voice.providers).length > 0) {
         (generatedConfig as any).voice = existing.config.voice;
+      }
+      if (existing.config.skills) {
+        const generatedSkills = ((generatedConfig as any).skills || {}) as any;
+        (generatedConfig as any).skills = {
+          ...existing.config.skills,
+          ...generatedSkills,
+          entries: {
+            ...(existing.config.skills.entries || {}),
+            ...(generatedSkills.entries || {}),
+          },
+        };
       }
     }
     const configJson = JSON.stringify(generatedConfig, null, 2);
@@ -859,6 +1022,11 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
     const createdFallbackTemplates = ensureCoreTemplates(AGENTS_DIR);
     if (createdFallbackTemplates.length > 0) {
       console.log(`✓ Added missing core templates: ${createdFallbackTemplates.join(', ')}`);
+    }
+
+    const createdSkills = ensureStarterSkills(starters);
+    if (createdSkills.length > 0) {
+      console.log(`✓ Starter skills created: ${createdSkills.join(', ')}`);
     }
 
     // Merge secrets into .env (preserve existing keys not in new content)
