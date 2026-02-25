@@ -7,12 +7,26 @@ const {
   mockSaveConfig,
   mockRunSetup,
   mockRunDoctor,
+  mockExistsSync,
+  mockMkdirSync,
+  mockReadFileSync,
+  mockWriteFileSync,
+  mockRmSync,
+  mockSpawn,
+  mockSpawnSync,
 } = vi.hoisted(() => ({
   mockLoadConfig: vi.fn(),
   mockLoadRawConfig: vi.fn(),
   mockSaveConfig: vi.fn(),
   mockRunSetup: vi.fn(),
   mockRunDoctor: vi.fn(),
+  mockExistsSync: vi.fn(),
+  mockMkdirSync: vi.fn(),
+  mockReadFileSync: vi.fn(),
+  mockWriteFileSync: vi.fn(),
+  mockRmSync: vi.fn(),
+  mockSpawn: vi.fn(),
+  mockSpawnSync: vi.fn(),
 }));
 
 vi.mock('../config.js', () => ({
@@ -32,6 +46,23 @@ vi.mock('../service.js', () => ({
 
 vi.mock('../doctor/index.js', () => ({
   runDoctor: mockRunDoctor,
+}));
+
+vi.mock('os', () => ({
+  homedir: () => '/tmp/skimpyclaw-test-home',
+}));
+
+vi.mock('fs', () => ({
+  existsSync: mockExistsSync,
+  mkdirSync: mockMkdirSync,
+  readFileSync: mockReadFileSync,
+  writeFileSync: mockWriteFileSync,
+  rmSync: mockRmSync,
+}));
+
+vi.mock('child_process', () => ({
+  spawn: mockSpawn,
+  spawnSync: mockSpawnSync,
 }));
 
 import { parseConfigValue, setDeepValue, getDeepValue, runCli } from '../cli.js';
@@ -91,6 +122,13 @@ describe('runCli', () => {
     mockSaveConfig.mockReset();
     mockRunSetup.mockReset();
     mockRunDoctor.mockReset();
+    mockExistsSync.mockReset();
+    mockMkdirSync.mockReset();
+    mockReadFileSync.mockReset();
+    mockWriteFileSync.mockReset();
+    mockRmSync.mockReset();
+    mockSpawn.mockReset();
+    mockSpawnSync.mockReset();
 
     mockLoadConfig.mockReturnValue({
       gateway: { port: 18790 },
@@ -100,6 +138,9 @@ describe('runCli', () => {
       gateway: { port: 18790 },
       channels: { telegram: { enabled: false } },
     });
+    mockExistsSync.mockReturnValue(false);
+    mockSpawnSync.mockReturnValue({ status: 1, stdout: '', stderr: '' });
+    mockReadFileSync.mockReturnValue('{}');
 
     vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -124,6 +165,41 @@ describe('runCli', () => {
     expect(code).toBe(0);
     expect(mockRunSetup).toHaveBeenCalledTimes(1);
     expect(mockRunSetup).toHaveBeenCalledWith({ dryRun: true });
+  });
+
+  it('uninstall removes launch agent and keeps data by default', async () => {
+    mockExistsSync.mockImplementation((path: unknown) => typeof path === 'string'
+      && path.includes('/Library/LaunchAgents/com.skimpyclaw.gateway.plist'));
+
+    const code = await runCli(['uninstall']);
+    expect(code).toBe(0);
+    expect(mockRmSync).toHaveBeenCalledWith(
+      '/tmp/skimpyclaw-test-home/Library/LaunchAgents/com.skimpyclaw.gateway.plist',
+      { force: true }
+    );
+    expect(mockRmSync).not.toHaveBeenCalledWith(
+      '/tmp/skimpyclaw-test-home/.skimpyclaw',
+      expect.anything()
+    );
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('Kept data directory'));
+  });
+
+  it('uninstall purges data when --purge is provided', async () => {
+    mockExistsSync.mockReturnValue(true);
+
+    const code = await runCli(['uninstall', '--purge']);
+    expect(code).toBe(0);
+    expect(mockRmSync).toHaveBeenCalledWith('/tmp/skimpyclaw-test-home/.skimpyclaw', {
+      recursive: true,
+      force: true,
+    });
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('Purged data directory'));
+  });
+
+  it('uninstall rejects conflicting flags', async () => {
+    const code = await runCli(['uninstall', '--purge', '--keep-data']);
+    expect(code).toBe(1);
+    expect(console.error).toHaveBeenCalledWith('Usage: skimpyclaw uninstall [--keep-data|--purge]');
   });
 
   it('supports config path/get/set operations', async () => {

@@ -41,7 +41,7 @@ const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
 // Import after mocks are set up
-const { synthesizeSpeech, checkTTSDependencies } = await import('../voice.js');
+const { synthesizeSpeech, checkTTSDependencies, checkVoiceDependencies } = await import('../voice.js');
 
 // --- Config helpers ---
 
@@ -254,5 +254,37 @@ describe('checkTTSDependencies', () => {
     } finally {
       Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
     }
+  });
+});
+
+describe('checkVoiceDependencies', () => {
+  it('ignores macos provider for STT and uses API-backed provider', () => {
+    const config: VoiceConfig = {
+      ...baseVoiceConfig,
+      defaultProvider: 'macos',
+      providers: {
+        macos: { tts: { voice: 'Samantha' } },
+        openai: { apiKey: 'openai-key', stt: { model: 'whisper-1' } },
+      },
+    };
+
+    const result = checkVoiceDependencies(config);
+    expect(result.ok).toBe(true);
+    expect(result.localWhisper).toBe(false);
+    expect(result.missing).toHaveLength(0);
+  });
+
+  it('reports missing STT provider when only macos provider is configured', () => {
+    const config: VoiceConfig = {
+      ...baseVoiceConfig,
+      defaultProvider: 'macos',
+      providers: {
+        macos: { tts: { voice: 'Samantha' } },
+      },
+    };
+
+    const result = checkVoiceDependencies(config);
+    expect(result.ok).toBe(false);
+    expect(result.missing[0]).toContain('No local whisper CLI and no API providers configured');
   });
 });

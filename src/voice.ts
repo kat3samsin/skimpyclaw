@@ -221,18 +221,26 @@ function getSTTProvider(config: VoiceConfig): { name: string; provider: VoicePro
     return null;
   }
 
-  const isApiBackedSttProvider = (provider: VoiceProviderConfig | undefined): provider is VoiceProviderConfig =>
-    Boolean(provider && (provider.stt || provider.apiKey));
+  const isApiBackedSttProvider = (
+    name: string,
+    provider: VoiceProviderConfig | undefined
+  ): provider is VoiceProviderConfig => {
+    if (!provider) return false;
+    // macOS voice provider is TTS-only and must never be used for transcription.
+    if (name === 'macos') return false;
+    return Boolean(provider.stt || provider.apiKey);
+  };
 
   if (config.defaultProvider) {
-    const preferred = providers[config.defaultProvider];
-    if (isApiBackedSttProvider(preferred)) {
+    const preferredName = config.defaultProvider;
+    const preferred = providers[preferredName];
+    if (isApiBackedSttProvider(preferredName, preferred)) {
       return { name: config.defaultProvider, provider: preferred };
     }
   }
 
   for (const [name, provider] of Object.entries(providers)) {
-    if (isApiBackedSttProvider(provider)) {
+    if (isApiBackedSttProvider(name, provider)) {
       return { name, provider };
     }
   }

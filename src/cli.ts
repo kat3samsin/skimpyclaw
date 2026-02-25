@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { spawn, spawnSync } from 'child_process';
@@ -25,6 +25,8 @@ Commands:
   start [--daemon]        Start service (foreground by default)
   stop                    Stop launchd daemon (macOS)
   restart                 Restart launchd daemon (macOS)
+  uninstall [--keep-data|--purge]
+                          Remove launch agent and optionally purge ~/.skimpyclaw
   status                  Show daemon and gateway status
   logs [--file name]      Show logs (stdout|stderr|app), default stdout
        [--lines N]
@@ -168,6 +170,42 @@ function stopDaemon(): number {
   }
 
   console.log(`Daemon stopped: ${LAUNCHD_LABEL}`);
+  return 0;
+}
+
+function commandUninstall(args: string[]): number {
+  const hasPurge = args.includes('--purge');
+  const hasKeepData = args.includes('--keep-data');
+  const unknownFlags = args.filter((arg) => arg.startsWith('--') && arg !== '--purge' && arg !== '--keep-data');
+
+  if (unknownFlags.length > 0 || (hasPurge && hasKeepData)) {
+    console.error('Usage: skimpyclaw uninstall [--keep-data|--purge]');
+    return 1;
+  }
+
+  if (existsSync(LAUNCHD_PLIST) && launchctlAvailable()) {
+    const stopResult = runLaunchctl(['unload', LAUNCHD_PLIST]);
+    if (!stopResult.ok && !stopResult.output.includes('Could not find specified service')) {
+      console.error(`Warning: failed to unload daemon: ${stopResult.output || 'unknown error'}`);
+    }
+  }
+
+  if (existsSync(LAUNCHD_PLIST)) {
+    rmSync(LAUNCHD_PLIST, { force: true });
+    console.log(`Removed launch agent: ${LAUNCHD_PLIST}`);
+  } else {
+    console.log('No launch agent found.');
+  }
+
+  const dataDir = join(homedir(), '.skimpyclaw');
+  if (hasPurge) {
+    rmSync(dataDir, { recursive: true, force: true });
+    console.log(`Purged data directory: ${dataDir}`);
+  } else {
+    console.log(`Kept data directory: ${dataDir}`);
+  }
+
+  console.log('To remove the global package, run: pnpm remove -g skimpyclaw');
   return 0;
 }
 
@@ -781,6 +819,10 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<nu
         return stopCode;
       }
       return startDaemon();
+    }
+
+    if (command === 'uninstall') {
+      return commandUninstall(args);
     }
 
     if (command === 'status') {

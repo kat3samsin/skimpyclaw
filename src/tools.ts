@@ -261,6 +261,54 @@ export async function cleanupMcp(): Promise<void> {
   }
 }
 
+async function executeWebSearch(query: string): Promise<string> {
+  const q = query.trim();
+  if (!q) return 'Error: $web_search requires a non-empty query';
+
+  const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(q)}&format=json&no_redirect=1&no_html=1&skip_disambig=1`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+  if (!res.ok) {
+    return `Error: web search failed (${res.status} ${res.statusText})`;
+  }
+
+  const data = await res.json() as {
+    AbstractText?: string;
+    AbstractURL?: string;
+    RelatedTopics?: Array<{ Text?: string; FirstURL?: string } | { Topics?: Array<{ Text?: string; FirstURL?: string }> }>;
+  };
+
+  const lines: string[] = [];
+  if (data.AbstractText) {
+    lines.push(`Summary: ${data.AbstractText}`);
+    if (data.AbstractURL) {
+      lines.push(`Source: ${data.AbstractURL}`);
+    }
+  }
+
+  const related: Array<{ Text?: string; FirstURL?: string }> = [];
+  for (const item of data.RelatedTopics || []) {
+    if ('Topics' in item && Array.isArray(item.Topics)) {
+      related.push(...item.Topics);
+    } else {
+      related.push(item as { Text?: string; FirstURL?: string });
+    }
+  }
+
+  const top = related.filter((item) => item.Text && item.FirstURL).slice(0, 5);
+  if (top.length > 0) {
+    lines.push('Top results:');
+    for (const item of top) {
+      lines.push(`- ${item.Text}\n  ${item.FirstURL}`);
+    }
+  }
+
+  if (lines.length === 0) {
+    return `No web results found for: ${q}`;
+  }
+
+  return lines.join('\n');
+}
+
 // --- Tool Executor ---
 
 export async function executeTool(
@@ -301,6 +349,10 @@ export async function executeTool(
     // Map Claude Code names to internal names for built-in tools
     const normalized = fromClaudeCodeName(name).toLowerCase().replace(/-/g, '_');
     switch (normalized) {
+      case '$web_search':
+      case 'web_search':
+      case 'websearch':
+        return await executeWebSearch(input.query || input.q || input.text || '');
       case 'read_file':
         return executeReadFile(input.file_path || input.path, config);
       case 'write_file':

@@ -43,6 +43,31 @@ function getHeartbeatTools(config: Config): ToolConfig {
   return DEFAULT_HEARTBEAT_TOOLS;
 }
 
+function getHeartbeatFilePath(config: Config): string {
+  return join(homedir(), '.skimpyclaw', 'agents', config.agents.default, 'HEARTBEAT.md');
+}
+
+function getHeartbeatPrompt(config: Config): string {
+  const heartbeatPath = getHeartbeatFilePath(config);
+  const basePrompt = config.heartbeat.prompt || '';
+
+  // Normalize legacy/wrong heartbeat locations to the agent template path.
+  const normalized = basePrompt.replace(
+    /(~\/(?:\.skimpyclaw\/)?HEARTBEAT\.md|\/Users\/[^/\s]+\/(?:\.skimpyclaw\/)?HEARTBEAT\.md|\/HEARTBEAT\.md)/g,
+    heartbeatPath
+  );
+
+  if (normalized.includes('HEARTBEAT.md')) {
+    return normalized;
+  }
+
+  if (normalized.trim().length === 0) {
+    return `Read ${heartbeatPath}. Follow it strictly. If nothing needs attention, reply HEARTBEAT_OK.`;
+  }
+
+  return `Read ${heartbeatPath}. Follow it strictly.\n\n${normalized}`;
+}
+
 export function initHeartbeat(config: Config): void {
   const { heartbeat } = config;
   if (!heartbeat?.prompt || !heartbeat?.intervalMs) {
@@ -89,7 +114,7 @@ export async function runHeartbeatCheck(config: Config): Promise<string> {
     console.log('[heartbeat] Running check...');
     const response = await runAgentTurn(
       config.agents.default,
-      config.heartbeat.prompt,
+      getHeartbeatPrompt(config),
       config,
       config.heartbeat.model,
       getHeartbeatTools(config),

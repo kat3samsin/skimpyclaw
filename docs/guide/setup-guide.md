@@ -75,7 +75,7 @@ The wizard automatically runs doctor checks after writing config. Green = good, 
 pnpm dev
 
 # Option 2: As a macOS daemon
-launchctl load ~/Library/LaunchAgents/com.skimpyclaw.gateway.plist
+skimpyclaw start --daemon
 
 # Check it's running
 curl http://localhost:18790/health
@@ -123,8 +123,7 @@ Edit `~/.skimpyclaw/config.json` directly, then restart the service:
 
 ```bash
 # If running as daemon
-launchctl unload ~/Library/LaunchAgents/com.skimpyclaw.gateway.plist
-launchctl load ~/Library/LaunchAgents/com.skimpyclaw.gateway.plist
+skimpyclaw restart
 
 # If running with pnpm dev, just save — tsx watch will restart
 ```

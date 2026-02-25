@@ -7,10 +7,16 @@ After install, `skimpyclaw` is available globally. During development use `pnpm 
 ```bash
 skimpyclaw onboard          # Interactive setup wizard
 skimpyclaw start            # Start in foreground
-skimpyclaw dev              # Start with hot reload (tsx watch)
+skimpyclaw start --daemon   # Start macOS launchd daemon
+skimpyclaw stop             # Stop macOS launchd daemon
+skimpyclaw restart          # Restart macOS launchd daemon
 skimpyclaw status           # Show service + gateway status
 skimpyclaw logs --file stdout --lines 200 --follow
+skimpyclaw uninstall        # Remove launch agent, keep ~/.skimpyclaw data
+skimpyclaw uninstall --purge # Remove launch agent and ~/.skimpyclaw data
 ```
+
+For local development with hot reload, use `pnpm dev`.
 
 ## Config
 

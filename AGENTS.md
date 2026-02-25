@@ -39,6 +39,7 @@ Always run `pnpm build && pnpm test` after making changes. Do not submit work wi
 | `src/skills.ts` | Skills system — loads from `~/.skimpyclaw/skills/` |
 | `src/usage.ts` | Cost & token usage tracking (JSONL) |
 | `src/model-selection.ts` | Model alias/provider resolution (single source of truth) |
+| `src/cli.ts` | CLI entrypoint (start/stop/restart/status/logs/onboard/config/model/cron/tools/uninstall) |
 | `src/types.ts` | All TypeScript interfaces and types |
 
 ## Critical Rules

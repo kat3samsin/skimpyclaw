@@ -95,6 +95,23 @@ Onboarding validates your Telegram token, provider auth, and creates:
 
 ```bash
 skimpyclaw start
+# or run as launchd daemon on macOS:
+skimpyclaw start --daemon
+```
+
+**Stop/Restart daemon (macOS):**
+
+```bash
+skimpyclaw stop
+skimpyclaw restart
+```
+
+**Uninstall helper:**
+
+```bash
+skimpyclaw uninstall          # removes launch agent, keeps ~/.skimpyclaw
+skimpyclaw uninstall --purge  # removes launch agent and ~/.skimpyclaw
+pnpm remove -g skimpyclaw     # removes global package
 ```
 
 **Verify:**

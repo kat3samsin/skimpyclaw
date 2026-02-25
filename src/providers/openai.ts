@@ -160,16 +160,12 @@ export async function chatWithToolsOpenAI(params: ProviderToolChatParams, provid
   });
   const openaiTools: any[] = toOpenAITools(toolDefs);
 
-  // Inject Kimi $web_search builtin tool when using Moonshot/Kimi provider
+  // Kimi requires interleaved reasoning content when replaying tool calls.
   const providerBaseURL = config.models.providers[provider]?.baseURL || '';
   const requiresReasoningContent = providerBaseURL.includes('kimi.com') || providerBaseURL.includes('moonshot.ai');
   const kimiRequestExtras = requiresReasoningContent
     ? { extra_body: { interleaved: { field: 'reasoning_content' } } }
     : {};
-  if (providerBaseURL.includes('kimi.com') || providerBaseURL.includes('moonshot.ai')) {
-    openaiTools.push({ type: 'builtin_function', function: { name: '$web_search' } });
-    console.log('[agent:openai-tools] Injected Kimi $web_search builtin tool');
-  }
 
   // Build messages for OpenAI format — preserve images for vision models
   const apiMessages: any[] = messages.map(m => ({
@@ -297,6 +293,17 @@ export async function chatWithToolsOpenAI(params: ProviderToolChatParams, provid
     // Execute each tool call
     for (const toolCall of message.tool_calls) {
       const fnName = toolCall.function.name;
+      if (fnName.startsWith('$') && fnName !== '$web_search') {
+        const unsupported = `Provider-native tool "${fnName}" is not supported in this runtime.`;
+        console.warn(`[agent:openai-tools] ${unsupported}`);
+        apiMessages.push({
+          role: 'tool',
+          tool_call_id: toolCall.id,
+          content: unsupported,
+        });
+        toolLog.push(`${fnName} [SKIPPED: provider-native tool unsupported]`);
+        continue;
+      }
       let args: Record<string, any>;
       try {
         args = JSON.parse(toolCall.function.arguments || '{}');
