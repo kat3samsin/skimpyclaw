@@ -815,8 +815,11 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
     if (templates.length === 0) {
       throw new Error(`No markdown templates found in ${TEMPLATES_DIR}`);
     }
-    // Validate launchd template rendering with current environment and install root.
-    renderGatewayPlist();
+    // Validate launchd template exists. Full render validation requires built dist/
+    // which may not be present in dry-run contexts (e.g. CI test-only jobs).
+    if (!existsSync(GATEWAY_PLIST_TEMPLATE)) {
+      throw new Error(`Gateway launchd template not found: ${GATEWAY_PLIST_TEMPLATE}`);
+    }
 
     console.log('✅ Onboarding dry run successful.');
     console.log(`Would create config under: ${CONFIG_DIR}`);
