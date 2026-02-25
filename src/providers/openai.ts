@@ -48,9 +48,17 @@ function recordOpenAIUsage(params: {
   agentId?: string;
 }): void {
   const usage = params.usage;
-  const inputTokens = typeof usage?.prompt_tokens === 'number' ? usage.prompt_tokens : 0;
-  const outputTokens = typeof usage?.completion_tokens === 'number' ? usage.completion_tokens : 0;
-  if (inputTokens === 0 && outputTokens === 0) return;
+  let inputTokens = typeof usage?.prompt_tokens === 'number'
+    ? usage.prompt_tokens
+    : (typeof usage?.input_tokens === 'number' ? usage.input_tokens : 0);
+  let outputTokens = typeof usage?.completion_tokens === 'number'
+    ? usage.completion_tokens
+    : (typeof usage?.output_tokens === 'number' ? usage.output_tokens : 0);
+
+  // Some OpenAI-compatible providers only return total_tokens.
+  if (inputTokens === 0 && outputTokens === 0 && typeof usage?.total_tokens === 'number') {
+    inputTokens = usage.total_tokens;
+  }
 
   const cost = toCostDetails(params.model, usage);
   recordUsage(buildUsageRecord({
@@ -81,6 +89,11 @@ export async function chatOpenAI(params: ProviderChatParams, provider: string): 
 
   const { messages, options, config } = params;
   const modelId = stripProvider(options.model, openaiClients);
+  const providerBaseURL = config.models.providers[provider]?.baseURL || '';
+  const isKimiLike = providerBaseURL.includes('kimi.com') || providerBaseURL.includes('moonshot.ai');
+  const kimiRequestExtras = isKimiLike
+    ? { extra_body: { interleaved: { field: 'reasoning_content' } } }
+    : {};
 
   const openaiMessages: any[] = messages.map(m => ({
     role: m.role,
@@ -103,6 +116,7 @@ export async function chatOpenAI(params: ProviderChatParams, provider: string): 
       messages: openaiMessages,
       max_tokens: options.maxTokens || 4096,
       temperature: options.temperature,
+      ...kimiRequestExtras,
     });
 
     let content = response.choices[0]?.message?.content || '';
@@ -149,6 +163,9 @@ export async function chatWithToolsOpenAI(params: ProviderToolChatParams, provid
   // Inject Kimi $web_search builtin tool when using Moonshot/Kimi provider
   const providerBaseURL = config.models.providers[provider]?.baseURL || '';
   const requiresReasoningContent = providerBaseURL.includes('kimi.com') || providerBaseURL.includes('moonshot.ai');
+  const kimiRequestExtras = requiresReasoningContent
+    ? { extra_body: { interleaved: { field: 'reasoning_content' } } }
+    : {};
   if (providerBaseURL.includes('kimi.com') || providerBaseURL.includes('moonshot.ai')) {
     openaiTools.push({ type: 'builtin_function', function: { name: '$web_search' } });
     console.log('[agent:openai-tools] Injected Kimi $web_search builtin tool');
@@ -194,6 +211,7 @@ export async function chatWithToolsOpenAI(params: ProviderToolChatParams, provid
         tools: openaiTools,
         max_tokens: options.maxTokens || 4096,
         temperature: options.temperature,
+        ...kimiRequestExtras,
       });
       recordOpenAIUsage({
         model: modelId,
@@ -266,13 +284,20 @@ export async function chatWithToolsOpenAI(params: ProviderToolChatParams, provid
     // Kimi requires reasoning_content when thinking mode is enabled.
     const assistantToolCallMessage: Record<string, any> = {
       role: 'assistant',
-      content: message.content ?? '',
+      content: message.content ?? null,
       tool_calls: message.tool_calls,
     };
-    if ((message as any).reasoning_content !== undefined) {
-      assistantToolCallMessage.reasoning_content = (message as any).reasoning_content;
+    const rawReasoning = (message as any).reasoning_content
+      ?? (message as any).additional_kwargs?.reasoning_content
+      ?? (message as any).reasoning?.content;
+    if (rawReasoning !== undefined && rawReasoning !== null) {
+      assistantToolCallMessage.reasoning_content = Array.isArray(rawReasoning)
+        ? rawReasoning.join('\n')
+        : String(rawReasoning);
     } else if (requiresReasoningContent) {
-      assistantToolCallMessage.reasoning_content = '';
+      // Some Kimi responses omit reasoning_content despite thinking mode.
+      // Send a placeholder to satisfy strict tool-call replay validation.
+      assistantToolCallMessage.reasoning_content = ' ';
     }
     apiMessages.push(assistantToolCallMessage);
 
