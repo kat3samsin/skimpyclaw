@@ -38,6 +38,20 @@ export async function ensureContainer(
     activeContainers.delete(sessionId);
   }
 
+  // Process restarts clear in-memory state; adopt or clean an existing named
+  // container so a duplicate-name create does not fail.
+  const alreadyRunning = await isContainerRunning(name);
+  if (alreadyRunning) {
+    activeContainers.set(sessionId, {
+      name,
+      sessionId,
+      lastUsed: Date.now(),
+    });
+    return name;
+  }
+  // Best effort cleanup for stopped or half-created containers with same name.
+  await removeContainer(name);
+
   const mounts = validateMountPaths(allowedPaths);
   const uid = process.getuid?.() ?? 501;
   const gid = process.getgid?.() ?? 20;

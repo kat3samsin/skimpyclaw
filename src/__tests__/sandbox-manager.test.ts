@@ -53,7 +53,9 @@ describe('sandbox/manager', () => {
     });
 
     it('reuses on second call if running', async () => {
-      mockIsContainerRunning.mockResolvedValue(true);
+      mockIsContainerRunning
+        .mockResolvedValueOnce(false)
+        .mockResolvedValueOnce(true);
       await ensureContainer('sess1', testConfig, ['/p']);
       const name = await ensureContainer('sess1', testConfig, ['/p']);
       expect(name).toBe('skimpyclaw-sbx-sess1');
@@ -66,6 +68,22 @@ describe('sandbox/manager', () => {
       // Second call — container exists in map but isContainerRunning returns false
       await ensureContainer('sess1', testConfig, ['/p']);
       expect(mockCreateContainer).toHaveBeenCalledTimes(2);
+    });
+
+    it('adopts existing running container after process restart', async () => {
+      mockIsContainerRunning.mockResolvedValue(true);
+      const name = await ensureContainer('default', testConfig, ['/p']);
+      expect(name).toBe('skimpyclaw-sbx-default');
+      expect(mockCreateContainer).not.toHaveBeenCalled();
+      expect(mockRemoveContainer).not.toHaveBeenCalled();
+    });
+
+    it('removes stale named container before creating', async () => {
+      mockIsContainerRunning.mockResolvedValue(false);
+      const name = await ensureContainer('default', testConfig, ['/p']);
+      expect(name).toBe('skimpyclaw-sbx-default');
+      expect(mockRemoveContainer).toHaveBeenCalledWith('skimpyclaw-sbx-default');
+      expect(mockCreateContainer).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -110,6 +128,7 @@ describe('sandbox/manager', () => {
 
   describe('releaseAll', () => {
     it('removes all containers', async () => {
+      mockIsContainerRunning.mockResolvedValue(true);
       await ensureContainer('a', testConfig, ['/p']);
       await ensureContainer('b', testConfig, ['/p']);
       await releaseAll();
@@ -119,6 +138,7 @@ describe('sandbox/manager', () => {
 
   describe('resetForTesting', () => {
     it('clears state without removing containers', async () => {
+      mockIsContainerRunning.mockResolvedValue(false);
       await ensureContainer('x', testConfig, ['/p']);
       resetForTesting();
       // Next call should create fresh (map is empty)
