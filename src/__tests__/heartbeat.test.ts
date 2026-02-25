@@ -27,11 +27,11 @@ describe('heartbeat prompt path normalization', () => {
       agents: { default: 'main' },
       heartbeat: {
         intervalMs: 60000,
-        prompt: 'Read /Users/katre/HEARTBEAT.md only. Reply HEARTBEAT_OK.',
+        prompt: 'Read /Users/example/HEARTBEAT.md only. Reply HEARTBEAT_OK.',
         model: 'claude-fast',
         tools: {
           enabled: true,
-          allowedPaths: ['/Users/katre/.skimpyclaw'],
+          allowedPaths: ['/Users/example/.skimpyclaw'],
           maxIterations: 10,
           bashTimeout: 15000,
         },
@@ -39,7 +39,7 @@ describe('heartbeat prompt path normalization', () => {
       channels: {
         active: 'telegram',
         telegram: {
-          defaultAllowedPaths: ['/Users/katre/.skimpyclaw'],
+          defaultAllowedPaths: ['/Users/example/.skimpyclaw'],
         },
       },
     } as any;
@@ -67,7 +67,7 @@ describe('heartbeat prompt path normalization', () => {
         model: 'claude-fast',
         tools: {
           enabled: true,
-          allowedPaths: ['/Users/katre/.skimpyclaw'],
+          allowedPaths: ['/Users/example/.skimpyclaw'],
           maxIterations: 10,
           bashTimeout: 15000,
         },
@@ -75,7 +75,7 @@ describe('heartbeat prompt path normalization', () => {
       channels: {
         active: 'telegram',
         telegram: {
-          defaultAllowedPaths: ['/Users/katre/.skimpyclaw'],
+          defaultAllowedPaths: ['/Users/example/.skimpyclaw'],
         },
       },
     } as any;
