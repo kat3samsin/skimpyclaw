@@ -375,22 +375,12 @@ describe('formatSkillsPrompt', () => {
     expect(result).toContain('### b');
   });
 
-  it('respects token budget', () => {
-    // With maxTokens=10 (40 chars), only header + maybe first tiny skill fits
-    const result = formatSkillsPrompt([
-      makeSkill('big', 'x'.repeat(200)),
-    ], 10);
-    // The header alone is ~18 chars, the skill section would be ~210 chars
-    // Total exceeds 40 chars budget, so skill gets skipped
-    expect(result).toBe('');
-  });
-
-  it('includes skills that fit within budget', () => {
+  it('does not skip skills based on prompt budget argument', () => {
     const result = formatSkillsPrompt([
       makeSkill('small', 'tiny'),
       makeSkill('big', 'x'.repeat(50000)),
     ], 100);
     expect(result).toContain('### small');
-    expect(result).not.toContain('### big');
+    expect(result).toContain('### big');
   });
 });

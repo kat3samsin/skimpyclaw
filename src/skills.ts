@@ -11,9 +11,6 @@ import { TTLCache } from './cache.js';
 
 const DEFAULT_SKILLS_DIR = join(homedir(), '.skimpyclaw', 'skills');
 const DEFAULT_PRIORITY = 100;
-const DEFAULT_MAX_PROMPT_TOKENS = 4000;
-// Rough chars-per-token estimate for prompt budgeting
-const CHARS_PER_TOKEN = 4;
 
 /**
  * Check if a binary exists on PATH.
@@ -264,30 +261,19 @@ export function getSkillsForContext(
 
 /**
  * Format eligible, context-filtered skills into a markdown prompt section.
- * Respects maxPromptTokens budget (approximate).
  */
-export function formatSkillsPrompt(skills: LoadedSkill[], maxTokens?: number): string {
+export function formatSkillsPrompt(skills: LoadedSkill[], _maxTokens?: number): string {
   if (skills.length === 0) return '';
-
-  const budget = (maxTokens ?? DEFAULT_MAX_PROMPT_TOKENS) * CHARS_PER_TOKEN;
   const sections: string[] = [];
-  let totalChars = 0;
 
   // Header
   const header = '## Active Skills\n';
-  totalChars += header.length;
 
   for (const skill of skills) {
     const emoji = skill.frontmatter.emoji ? `${skill.frontmatter.emoji} ` : '';
     const section = `### ${emoji}${skill.name}\n\n${skill.body}`;
 
-    if (totalChars + section.length > budget) {
-      console.warn(`[skills] Token budget exceeded, skipping remaining skills (included ${sections.length}/${skills.length})`);
-      break;
-    }
-
     sections.push(section);
-    totalChars += section.length;
   }
 
   if (sections.length === 0) return '';
