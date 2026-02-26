@@ -175,14 +175,27 @@ export async function execInContainer(
 }
 
 export async function removeContainer(name: string): Promise<void> {
-  // Best-effort stop then rm
-  await runCommand(getRuntime(), ['stop', name]).catch(() => {});
-  await runCommand(getRuntime(), ['rm', name]).catch(() => {});
+  const runtime = getRuntime();
+  // Best-effort stop then force rm to clear stopped/dead containers
+  await runCommand(runtime, ['stop', name]).catch(() => {});
+  await runCommand(runtime, ['rm', '-f', name]).catch(() => {});
 }
 
 export async function isContainerRunning(name: string): Promise<boolean> {
-  const result = await runCommand(getRuntime(), ['inspect', name]);
-  return result.exitCode === 0;
+  const runtime = getRuntime();
+
+  // Docker: use --format to check the running state directly
+  if (runtime === 'docker') {
+    const result = await runCommand(runtime, ['inspect', '--format', '{{.State.Running}}', name]);
+    return result.exitCode === 0 && result.stdout.trim() === 'true';
+  }
+
+  // Apple Containers: inspect succeeds for any state; check ps output
+  const result = await runCommand(runtime, ['inspect', name]);
+  if (result.exitCode !== 0) return false;
+  // If stdout contains "running" state indicator, it's running
+  const output = result.stdout.toLowerCase();
+  return output.includes('"running"') || output.includes('status: running') || output.includes('state: running');
 }
 
 export async function cleanupOrphans(): Promise<number> {

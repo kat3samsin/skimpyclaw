@@ -29,7 +29,14 @@ export async function startRuntime(config: Config): Promise<SkimpyClawRuntime> {
   }
 
   // Clean up orphaned sandbox containers from previous runs
-  cleanupOrphans().catch(() => {});
+  if (config.sandbox?.enabled) {
+    try {
+      const count = await cleanupOrphans();
+      if (count > 0) console.log(`[sandbox] Cleaned up ${count} orphaned container(s)`);
+    } catch (err) {
+      console.warn('[sandbox] Failed to clean up orphaned containers:', err instanceof Error ? err.message : err);
+    }
+  }
 
   const port = smokeTest ? (parseInt(process.env.SKIMPYCLAW_SMOKE_PORT || '19999', 10)) : config.gateway.port;
   const gateway = await createGateway(config);

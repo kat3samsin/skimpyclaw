@@ -130,8 +130,8 @@ describe('sandbox/runtime', () => {
   });
 
   describe('isContainerRunning', () => {
-    it('returns true on exit 0', async () => {
-      mockSpawn.mockReturnValue(fakeChild(0));
+    it('returns true when inspect shows running state', async () => {
+      mockSpawn.mockReturnValue(fakeChild(0, '{"State": {"Status": "running"}}'));
       expect(await isContainerRunning('ctr')).toBe(true);
     });
 

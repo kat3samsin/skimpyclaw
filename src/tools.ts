@@ -372,19 +372,56 @@ export async function executeTool(
     const sandboxCfg = context?.sandboxConfig;
     if (sandboxCfg?.enabled) {
       const SANDBOXED_TOOLS = new Set(['bash', 'read_file', 'write_file', 'list_directory', 'glob']);
-      if (SANDBOXED_TOOLS.has(normalized)) {
+      // macOS-only commands that must run on the host (not available in Linux containers)
+      const MACOS_HOST_COMMANDS = new Set([
+        'osascript', 'open', 'say', 'pbcopy', 'pbpaste', 'defaults',
+        'icalBuddy', 'shortcuts', 'caffeinate', 'networksetup', 'launchctl',
+        'security', 'xattr', 'ditto', 'hdiutil', 'diskutil', 'sw_vers',
+      ]);
+      const needsHost = normalized === 'bash' && input.command &&
+        MACOS_HOST_COMMANDS.has(input.command.trim().split(/[\s;|&]/)[0]);
+      if (SANDBOXED_TOOLS.has(normalized) && !needsHost) {
         const sessionId = context?.sessionId || context?.chatId?.toString() || 'default';
         const merged = { ...SANDBOX_DEFAULTS, ...sandboxCfg };
         const containerName = await ensureContainer(sessionId, merged, config.allowedPaths);
         const mounts = validateMountPaths(config.allowedPaths);
         const tp = (p: string) => translatePath(p, mounts);
+        // Translate host paths in bash commands so they resolve inside the container
+        const translateBashPaths = (cmd: string): string => {
+          let translated = cmd;
+          // Sort mounts by host path length descending to match most specific first
+          const sorted = [...mounts].sort((a, b) => b.host.length - a.host.length);
+          for (const mount of sorted) {
+            translated = translated.replaceAll(mount.host, mount.container);
+          }
+          // Also translate ~ and $HOME references to /workspace/config
+          const home = homedir();
+          const homeMounts = sorted.filter(m => m.host.startsWith(home));
+          for (const mount of homeMounts) {
+            const tildeForm = '~' + mount.host.slice(home.length);
+            translated = translated.replaceAll(tildeForm, mount.container);
+            const envForm = '$HOME' + mount.host.slice(home.length);
+            translated = translated.replaceAll(envForm, mount.container);
+          }
+          return translated;
+        };
+        // Reverse-translate container paths back to host paths in file content.
+        // Prevents the agent from writing /workspace/... paths into config files.
+        const reverseTranslatePaths = (content: string): string => {
+          let reversed = content;
+          const sorted = [...mounts].sort((a, b) => b.container.length - a.container.length);
+          for (const mount of sorted) {
+            reversed = reversed.replaceAll(mount.container, mount.host);
+          }
+          return reversed;
+        };
         switch (normalized) {
           case 'bash':
-            return await sandboxBash(containerName, input.command, input.cwd ? tp(input.cwd) : undefined, config.bashTimeout);
+            return await sandboxBash(containerName, translateBashPaths(input.command), input.cwd ? tp(input.cwd) : undefined, config.bashTimeout);
           case 'read_file':
             return await sandboxReadFile(containerName, tp(input.file_path || input.path));
           case 'write_file':
-            return await sandboxWriteFile(containerName, tp(input.file_path || input.path), input.content);
+            return await sandboxWriteFile(containerName, tp(input.file_path || input.path), reverseTranslatePaths(input.content));
           case 'list_directory':
             return await sandboxListDir(containerName, tp(input.path));
           case 'glob':
