@@ -99,13 +99,39 @@ export function validateMountPaths(allowedPaths: string[]): MountSpec[] {
  * Returns the original path if no mount matches (will likely fail inside container).
  */
 export function translatePath(hostPath: string, mounts: MountSpec[]): string {
+  const candidates = getPathCandidates(hostPath);
+
   // Sort by host path length descending so we match the most specific mount first
   const sorted = [...mounts].sort((a, b) => b.host.length - a.host.length);
-  for (const mount of sorted) {
-    if (hostPath === mount.host || hostPath.startsWith(mount.host + '/')) {
-      const relative = hostPath.slice(mount.host.length);
-      return mount.container + relative;
+  for (const candidate of candidates) {
+    for (const mount of sorted) {
+      if (candidate === mount.host || candidate.startsWith(mount.host + '/')) {
+        const relative = candidate.slice(mount.host.length);
+        return mount.container + relative;
+      }
     }
   }
   return hostPath;
+}
+
+function getPathCandidates(hostPath: string): string[] {
+  const set = new Set<string>();
+  const resolved = resolve(hostPath);
+  set.add(resolved);
+
+  try {
+    set.add(realpathSync(resolved));
+  } catch {
+    // Path may not exist yet (e.g. write targets); keep resolved form.
+  }
+
+  for (const p of Array.from(set)) {
+    if (p.startsWith('/Users/')) {
+      set.add(`/System/Volumes/Data${p}`);
+    } else if (p.startsWith('/System/Volumes/Data/Users/')) {
+      set.add(p.replace('/System/Volumes/Data', ''));
+    }
+  }
+
+  return Array.from(set);
 }

@@ -133,6 +133,14 @@ describe('sandbox/mount-security', () => {
         .toBe('/workspace/config/config.json');
     });
 
+    it('translates /Users path to /System/Volumes/Data mount on macOS', () => {
+      const macMounts = [
+        { host: '/System/Volumes/Data/Users/katre/.skimpyclaw', container: '/workspace/config', readOnly: false },
+      ];
+      expect(translatePath('/Users/katre/.skimpyclaw/state/japan-flight-watch.json', macMounts))
+        .toBe('/workspace/config/state/japan-flight-watch.json');
+    });
+
     it('returns original path if no mount matches', () => {
       expect(translatePath('/tmp/random/file', mounts)).toBe('/tmp/random/file');
     });
