@@ -315,7 +315,14 @@ function buildStarterCronJobs(starters: SetupStarters): Array<Record<string, unk
       },
       payload: {
         kind: 'agentTurn',
-        message: 'Use WebSearch to fetch today\'s top 10 Hacker News stories. Reply with title, URL, and 1-line summary for each item.',
+        message: 'Fetch today\'s top 10 Hacker News stories. Reply with title, URL, and 1-line summary for each item.',
+        tools: {
+          enabled: true,
+          allowedPaths: [`${homedir()}/.skimpyclaw`],
+          maxIterations: 30,
+          bashTimeout: 30000,
+          browser: { enabled: true, headless: true },
+        },
       },
     });
   }
@@ -332,6 +339,13 @@ function buildStarterCronJobs(starters: SetupStarters): Array<Record<string, unk
       payload: {
         kind: 'agentTurn',
         message: `Check current weather and today forecast for ${starters.weatherLocation}. Keep it concise: current temp/conditions, highs/lows, precipitation chance, and 1 recommendation.`,
+        tools: {
+          enabled: true,
+          allowedPaths: [`${homedir()}/.skimpyclaw`],
+          maxIterations: 30,
+          bashTimeout: 30000,
+          browser: { enabled: true, headless: true },
+        },
       },
     });
   }
@@ -594,6 +608,13 @@ export function buildSetupConfig(input: SetupBuildInput): Record<string, unknown
         allowFrom: [parseInt(input.telegramId, 10) || input.telegramId],
         dailyNotesDir: '${HOME}/.skimpyclaw/Daily Notes',
         defaultAllowedPaths: allPaths,
+        tools: {
+          enabled: true,
+          allowedPaths: allPaths,
+          maxIterations: 100,
+          bashTimeout: 15000,
+          ...(features.browser ? { browser: { type: 'chromium', enabled: true, headless: true } } : {}),
+        },
       },
       discord: {
         enabled: useDiscord,
@@ -601,6 +622,13 @@ export function buildSetupConfig(input: SetupBuildInput): Record<string, unknown
         allowFrom: useDiscord ? [input.discordUserId || ''] : [],
         defaultAllowedPaths: allPaths,
         ...(input.discordDefaultChannelId ? { defaultChannelId: input.discordDefaultChannelId } : {}),
+        tools: {
+          enabled: true,
+          allowedPaths: allPaths,
+          maxIterations: 100,
+          bashTimeout: 15000,
+          ...(features.browser ? { browser: { type: 'chromium', enabled: true, headless: false } } : {}),
+        },
       },
     },
     cron: {
@@ -623,6 +651,13 @@ export function buildSetupConfig(input: SetupBuildInput): Record<string, unknown
         defaultProvider: 'macos',
         providers: {
           macos: { tts: { voice: 'Samantha' } },
+          ...(input.selectedProviders.has('openai-api') ? {
+            openai: {
+              apiKey: '${OPENAI_API_KEY}',
+              baseURL: 'https://api.openai.com/v1',
+              stt: { model: 'whisper-1' },
+            },
+          } : {}),
         },
         channels: {
           telegram: { enabled: true, acceptVoice: true, sendVoice: true },
