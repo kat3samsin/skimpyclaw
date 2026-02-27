@@ -152,7 +152,7 @@ export async function chatWithToolsOpenAI(params: ProviderToolChatParams, provid
   const maxIterations = toolConfig.maxIterations || 20;
 
   // Resolve tools once at start
-  const includeSpawn = !!(toolContext?.chatId && toolContext?.fullConfig);
+  const includeSpawn = !!(toolContext?.fullConfig && (toolContext?.chatId || toolContext?.isCronJob));
   const toolDefs = await getToolDefinitions(toolConfig, { 
     includeSpawnSubagent: includeSpawn, 
     includeMcp: false, 

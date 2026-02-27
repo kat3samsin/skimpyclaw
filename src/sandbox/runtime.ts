@@ -48,6 +48,28 @@ export function getRuntime(): string {
   return runtimeBinary;
 }
 
+/**
+ * Check if a usable container runtime is available.
+ * Returns the runtime name if found, null otherwise. Never throws.
+ */
+export function probeRuntime(preferred?: string): string | null {
+  // If a preferred runtime is specified, check that one first
+  if (preferred) {
+    const result = spawnSync(preferred, ['--version'], { stdio: 'ignore' });
+    if (result.status === 0) return preferred;
+  }
+
+  // Auto-detect: prefer Apple Containers, fall back to Docker
+  if (spawnSync('container', ['--version'], { stdio: 'ignore' }).status === 0) {
+    return 'container';
+  }
+  if (spawnSync('docker', ['--version'], { stdio: 'ignore' }).status === 0) {
+    return 'docker';
+  }
+
+  return null;
+}
+
 /** Reset runtime detection (for testing). */
 export function resetRuntime(): void {
   runtimeBinary = null;

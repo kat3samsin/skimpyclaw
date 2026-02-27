@@ -150,7 +150,7 @@ export async function chatWithToolsAnthropic(params: ProviderToolChatParams): Pr
   const maxIterations = toolConfig.maxIterations || 20;
 
   // Resolve tools once at start of agent loop
-  const includeSpawn = !!(toolContext?.chatId && toolContext?.fullConfig);
+  const includeSpawn = !!(toolContext?.fullConfig && (toolContext?.chatId || toolContext?.isCronJob));
   const toolDefs = await getToolDefinitions(toolConfig, { includeSpawnSubagent: includeSpawn, projects: toolContext?.fullConfig?.projects });
 
   // Enable prompt caching for system + tools

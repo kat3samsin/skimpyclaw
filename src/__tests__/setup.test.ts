@@ -149,8 +149,8 @@ describe('setup config generation', () => {
     }) as any;
 
     expect(config.cron.jobs).toHaveLength(2);
-    expect(config.cron.jobs[0].id).toBe('starter-tech-news-hn');
-    expect(config.cron.jobs[1].id).toBe('starter-weather-7am');
+    expect(config.cron.jobs[0].id).toBe('tech-digest');
+    expect(config.cron.jobs[1].id).toBe('weather');
     expect(config.cron.jobs[1].schedule.tz).toBe('America/New_York');
     expect(config.cron.jobs[1].payload.message).toContain('Austin, TX');
     expect(config.skills.enabled).toBe(true);

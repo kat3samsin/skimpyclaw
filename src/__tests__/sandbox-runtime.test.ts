@@ -14,6 +14,7 @@ import {
   cleanupOrphans,
   setRuntime,
   resetRuntime,
+  probeRuntime,
 } from '../sandbox/runtime.js';
 
 function fakeChild(
@@ -138,6 +139,44 @@ describe('sandbox/runtime', () => {
     it('returns false otherwise', async () => {
       mockSpawn.mockReturnValue(fakeChild(1));
       expect(await isContainerRunning('ctr')).toBe(false);
+    });
+  });
+
+  describe('probeRuntime', () => {
+    it('returns preferred runtime when available', () => {
+      mockSpawnSync.mockReturnValue({ status: 0 });
+      expect(probeRuntime('docker')).toBe('docker');
+      expect(mockSpawnSync).toHaveBeenCalledWith('docker', ['--version'], { stdio: 'ignore' });
+    });
+
+    it('falls back to auto-detect when preferred is unavailable', () => {
+      mockSpawnSync.mockImplementation((cmd: string) => {
+        // preferred 'docker' fails, but 'container' succeeds
+        if (cmd === 'docker') return { status: 1 };
+        if (cmd === 'container') return { status: 0 };
+        return { status: 1 };
+      });
+      expect(probeRuntime('docker')).toBe('container');
+    });
+
+    it('returns null when no runtime is available', () => {
+      mockSpawnSync.mockReturnValue({ status: 1 });
+      expect(probeRuntime('docker')).toBeNull();
+    });
+
+    it('auto-detects without preferred runtime', () => {
+      mockSpawnSync.mockImplementation((cmd: string) => {
+        if (cmd === 'container') return { status: 0 };
+        return { status: 1 };
+      });
+      expect(probeRuntime()).toBe('container');
+    });
+
+    it('prefers container over docker in auto-detect', () => {
+      mockSpawnSync.mockReturnValue({ status: 0 });
+      expect(probeRuntime()).toBe('container');
+      // First call should be to 'container'
+      expect(mockSpawnSync.mock.calls[0][0]).toBe('container');
     });
   });
 

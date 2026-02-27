@@ -226,6 +226,7 @@ export async function runAgentTurn(
     approverUsername: (context?.metadata as any)?.username,
     sandboxConfig: config.sandbox,
     sessionId: context?.sessionId || String(chatIdNum ?? 'default'),
+    isCronJob: (context?.metadata as any)?.isCronJob === true,
   };
 
   const runTurn = async (): Promise<string> => {

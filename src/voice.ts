@@ -226,10 +226,15 @@ function getSTTProvider(config: VoiceConfig): { name: string; provider: VoicePro
     provider: VoiceProviderConfig | undefined
   ): provider is VoiceProviderConfig => {
     if (!provider) return false;
-    // macOS voice provider is TTS-only and must never be used for transcription.
     const normalizedName = name.trim().toLowerCase();
+    // macOS is TTS-only
     if (normalizedName === 'macos') return false;
-    return Boolean(provider.stt || provider.apiKey);
+    // Explicit stt config — always good
+    if (provider.stt) return true;
+    // Only OpenAI has a Whisper-compatible transcription endpoint by default.
+    // Other providers (elevenlabs, etc.) need explicit stt config to be used for STT.
+    if (normalizedName === 'openai' && provider.apiKey) return true;
+    return false;
   };
 
   if (config.defaultProvider) {

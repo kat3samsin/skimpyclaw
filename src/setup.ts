@@ -306,8 +306,8 @@ function buildStarterCronJobs(starters: SetupStarters): Array<Record<string, unk
   const jobs: Array<Record<string, unknown>> = [];
   if (starters.cronTechNews) {
     jobs.push({
-      id: 'starter-tech-news-hn',
-      name: 'Tech News — Top 10 HN',
+      id: 'tech-digest',
+      name: 'Tech News',
       schedule: {
         kind: 'cron',
         expr: '0 8 * * *',
@@ -322,8 +322,8 @@ function buildStarterCronJobs(starters: SetupStarters): Array<Record<string, unk
 
   if (starters.cronWeather) {
     jobs.push({
-      id: 'starter-weather-7am',
-      name: 'Weather Check — 7:00 AM',
+      id: 'weather',
+      name: 'Weather',
       schedule: {
         kind: 'cron',
         expr: '0 7 * * *',
