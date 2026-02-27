@@ -315,7 +315,7 @@ function buildStarterCronJobs(starters: SetupStarters): Array<Record<string, unk
       },
       payload: {
         kind: 'agentTurn',
-        message: 'Fetch today\'s top 10 Hacker News stories. Reply with title, URL, and 1-line summary for each item.',
+        message: 'Use the Browser tool to visit https://news.ycombinator.com and fetch today\'s top 10 stories. Reply with title, URL, and 1-line summary for each item.',
         tools: {
           enabled: true,
           allowedPaths: [`${homedir()}/.skimpyclaw`],
@@ -338,7 +338,7 @@ function buildStarterCronJobs(starters: SetupStarters): Array<Record<string, unk
       },
       payload: {
         kind: 'agentTurn',
-        message: `Check current weather and today forecast for ${starters.weatherLocation}. Keep it concise: current temp/conditions, highs/lows, precipitation chance, and 1 recommendation.`,
+        message: `Use the Browser tool to check current weather and today's forecast for ${starters.weatherLocation}. Keep it concise: current temp/conditions, highs/lows, precipitation chance, and 1 recommendation.`,
         tools: {
           enabled: true,
           allowedPaths: [`${homedir()}/.skimpyclaw`],
