@@ -168,6 +168,11 @@ export function buildTeamNotification(
     }
   }
 
+  // Synthesis result
+  if (task.outputPreview) {
+    lines.push(`\nResult: ${task.outputPreview}`);
+  }
+
   // Errors
   if (task.error && task.error !== 'Validation failed') {
     lines.push(`\nError: ${task.error}`);
@@ -188,8 +193,7 @@ export function buildSoloNotification(task: CodeAgentTask): string {
     const validation = task.validationPassed ? ' Build/tests pass.' : '';
     let message = `✅ Coding agent ${task.id} completed (${dur}).${validation}\n\nTask: ${taskPreview}`;
     if (task.outputPreview) {
-      const preview = task.outputPreview.slice(0, 300);
-      message += `\n\nResult: ${preview}`;
+      message += `\n\nResult: ${task.outputPreview}`;
     }
     return message;
   } else if (task.status === 'timeout') {
