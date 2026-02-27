@@ -1,6 +1,6 @@
 {
   "name": "skimpyclaw",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Lightweight personal AI assistant with Telegram and Discord integration",
   "type": "module",
   "main": "dist/index.js",
