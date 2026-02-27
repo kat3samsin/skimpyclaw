@@ -8,7 +8,7 @@ import { fileURLToPath } from 'url';
 import { loadConfig, loadRawConfig, getConfigPath, saveConfig } from './config.js';
 import type { Config, ToolConfig } from './types.js';
 import { startRuntime } from './service.js';
-import { runSetup } from './setup.js';
+import { runSetup, renderGatewayPlist } from './setup.js';
 import { runDoctor as runDoctorCommand } from './doctor/index.js';
 import { executeTool, getToolDefinitions, BUILTIN_TOOL_DEFINITIONS, BROWSER_TOOL_DEFINITION } from './tools.js';
 import { formatModelSelectionError, getModelSelectionUsage, resolveModelSelection } from './model-selection.js';
@@ -142,10 +142,21 @@ function startDaemon(): number {
     console.error('Daemon control is only supported on macOS with launchctl.');
     return 1;
   }
-  if (!existsSync(LAUNCHD_PLIST)) {
-    console.error(`Launchd plist not found: ${LAUNCHD_PLIST}`);
-    console.error('Run `skimpyclaw onboard` first.');
-    return 1;
+
+  // Regenerate plist to point at the current binary (pnpm changes path on upgrade)
+  try {
+    const plistContent = renderGatewayPlist();
+    const plistDir = join(homedir(), 'Library', 'LaunchAgents');
+    if (!existsSync(plistDir)) mkdirSync(plistDir, { recursive: true });
+    writeFileSync(LAUNCHD_PLIST, plistContent);
+  } catch (err) {
+    // If template is missing (e.g. corrupted install), fall back to existing plist
+    if (!existsSync(LAUNCHD_PLIST)) {
+      console.error(`Launchd plist not found: ${LAUNCHD_PLIST}`);
+      console.error('Run `skimpyclaw onboard` first.');
+      return 1;
+    }
+    console.warn(`Warning: could not regenerate plist (${err instanceof Error ? err.message : err}), using existing`);
   }
 
   const result = runLaunchctl(['load', LAUNCHD_PLIST]);

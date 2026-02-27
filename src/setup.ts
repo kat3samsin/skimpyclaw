@@ -168,7 +168,7 @@ function maskInput(input: string): string {
   return input.slice(0, 4) + '****' + input.slice(-4);
 }
 
-function renderGatewayPlist(): string {
+export function renderGatewayPlist(): string {
   if (!existsSync(GATEWAY_PLIST_TEMPLATE)) {
     throw new Error(`Gateway launchd template not found: ${GATEWAY_PLIST_TEMPLATE}`);
   }
