@@ -9,16 +9,6 @@ Skills are reusable, domain-specific capabilities stored in `~/.skimpyclaw/skill
 - Skills are modular — add or remove them without changing core code
 - No rebuild needed; skill changes take effect immediately
 
-## Built-in skills
-
-| Skill               | Description                                                                        |
-| ------------------- | ---------------------------------------------------------------------------------- |
-| `a8c-search`        | Search Automattic internal sources (FieldGuide, P2s, Slack, Linear)                |
-| `a8c-second-brain`  | Personalized productivity system using Obsidian + Claude Code + A8C tools          |
-| `dev-team`          | Spawn a 5-person dev team (PM, coder, reviewer, tester, docs) for complex features |
-| `ical-sync`         | Sync macOS Calendar events using icalBuddy                                         |
-| `qmd-vault-search`  | Search Obsidian vault for notes, context, or references                            |
-
 ## Creating a skill
 
 1. Create a directory: `~/.skimpyclaw/skills/my-skill/`

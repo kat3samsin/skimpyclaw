@@ -74,30 +74,16 @@ See [docs/architecture.md](docs/architecture.md) for runtime flow and startup se
 
 ## Quick Start
 
-**Install:**
-
 ```bash
-npm install -g skimpyclaw
-```
-
-**Run onboarding:**
-
-```bash
+pnpm add -g skimpyclaw
 skimpyclaw onboard
+skimpyclaw start --daemon
 ```
 
 Onboarding validates your Telegram token, provider auth, and creates:
 
 - `~/.skimpyclaw/config.json`
 - `~/.skimpyclaw/agents/main/*.md` (from templates)
-
-**Start:**
-
-```bash
-skimpyclaw start
-# or run as launchd daemon on macOS:
-skimpyclaw start --daemon
-```
 
 **Stop/Restart daemon (macOS):**
 
@@ -217,7 +203,7 @@ dist/                   # Compiled output + built dashboard assets
 | [docs/chat-commands.md](docs/chat-commands.md) | Telegram/Discord bot commands                                    |
 | [docs/skills.md](docs/skills.md)               | Skills system, built-in skills, creating custom skills           |
 | [docs/data-storage.md](docs/data-storage.md)   | File layout, audit log format, security notes                    |
-| [docs/setup-guide.md](docs/setup-guide.md)     | Step-by-step installation and setup guide                        |
+| [Setup Guide](https://docs.skimpyclaw.xyz/guide/setup-guide.html) | Step-by-step installation and setup guide                        |
 | [docs/troubleshooting.md](docs/troubleshooting.md) | Common issues and solutions                                  |
 
 ## Development

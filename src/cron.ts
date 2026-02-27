@@ -5,7 +5,8 @@ import { exec } from 'child_process';
 import { existsSync, mkdirSync, appendFileSync, readFileSync, watch, type FSWatcher } from 'fs';
 import { join } from 'path';
 import { getLogsDir, getConfigPath, loadConfig } from './config.js';
-import type { Config, CronJob, SandboxConfig } from './types.js';
+import type { Config, CronJob, SandboxConfig, ToolConfig } from './types.js';
+import { homedir } from 'node:os';
 import { runAgentTurn } from './agent.js';
 import { startTrace, addEvent, endTrace } from './audit.js';
 import { sendActiveChannelProactiveMessage, sendActiveChannelProactiveVoice, getActiveChannelId } from './channels.js';
@@ -178,12 +179,18 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
     if (jobDef.payload.kind === 'agentTurn') {
       const message = expandVariables(resolveMessageSource(jobDef.payload.message || ''));
       appendCronLogLine(jobDef.id, `Agent turn started (prompt: ${message.slice(0, 100)}...)`);
+      const defaultTools: ToolConfig = {
+        enabled: true,
+        allowedPaths: [`${homedir()}/.skimpyclaw`],
+        maxIterations: 30,
+        bashTimeout: 15000,
+      };
       const response = await runAgentTurn(
         config.agents.default,
         message,
         config,
         jobDef.model,
-        jobDef.payload.tools,
+        jobDef.payload.tools || defaultTools,
         undefined,
         {
           channel: getActiveChannelId() || 'telegram',

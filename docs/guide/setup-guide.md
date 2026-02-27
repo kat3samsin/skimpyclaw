@@ -13,26 +13,14 @@ Step-by-step guide for getting SkimpyClaw running on macOS. Works for both human
 ## Installation
 
 ```bash
-# 1. Clone the repository
-git clone https://github.com/kat3samsin/skimpyclaw.git
-cd skimpyclaw
-
-# 2. Install dependencies
-pnpm install
-
-# 3. Build
-pnpm build
-
-# 4. Run the setup wizard
-pnpm run onboard
-
-# 5. Verify installation
-pnpm run doctor
+pnpm add -g skimpyclaw
+skimpyclaw onboard
+skimpyclaw start --daemon
 ```
 
 ## Setup Wizard Walkthrough
 
-The `pnpm run onboard` command walks you through:
+The `skimpyclaw onboard` command walks you through:
 
 ### Required
 
@@ -110,7 +98,7 @@ curl http://localhost:18790/health
 
 ```bash
 # Run all checks
-pnpm run doctor
+skimpyclaw doctor
 
 # Or check via dashboard
 open http://localhost:18790/dashboard
@@ -122,7 +110,7 @@ open http://localhost:18790/dashboard
 To preview what the wizard will create without writing anything:
 
 ```bash
-pnpm run onboard -- --dry-run
+skimpyclaw onboard -- --dry-run
 ```
 
 ## Updating Config
