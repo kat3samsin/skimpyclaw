@@ -71,6 +71,49 @@ describe('getToolDefinitions', () => {
     const tools = await getToolDefinitions();
     expect(tools.map(t => t.name)).not.toContain('Browser');
   });
+
+  describe('tool profiles', () => {
+    it('minimal returns exactly 4 built-in tools', async () => {
+      const config: ToolConfig = { ...toolConfig, toolProfile: 'minimal' };
+      const tools = await getToolDefinitions(config, { includeSpawnSubagent: true, includeMcp: true });
+      expect(tools).toHaveLength(4);
+      expect(tools.map(t => t.name)).toEqual(['Read', 'Write', 'Glob', 'Bash']);
+    });
+
+    it('minimal excludes Browser even when browser.enabled is true', async () => {
+      const config: ToolConfig = { ...toolConfig, toolProfile: 'minimal', browser: { enabled: true } };
+      const tools = await getToolDefinitions(config);
+      expect(tools.map(t => t.name)).not.toContain('Browser');
+    });
+
+    it('minimal excludes MCP tools', async () => {
+      const config: ToolConfig = { ...toolConfig, toolProfile: 'minimal' };
+      const tools = await getToolDefinitions(config, { includeMcp: true });
+      expect(tools.every(t => !t.name.startsWith('mcp__'))).toBe(true);
+    });
+
+    it('coding includes code_with_agent and check_code_agent but not spawn_subagent or code_with_team', async () => {
+      const config: ToolConfig = { ...toolConfig, toolProfile: 'coding' };
+      const tools = await getToolDefinitions(config, { includeSpawnSubagent: true });
+      const names = tools.map(t => t.name);
+      expect(names).toContain('code_with_agent');
+      expect(names).toContain('check_code_agent');
+      expect(names).not.toContain('spawn_subagent');
+      expect(names).not.toContain('code_with_team');
+    });
+
+    it('coding excludes MCP tools', async () => {
+      const config: ToolConfig = { ...toolConfig, toolProfile: 'coding' };
+      const tools = await getToolDefinitions(config, { includeMcp: true });
+      expect(tools.every(t => !t.name.startsWith('mcp__'))).toBe(true);
+    });
+
+    it('full profile behaves like default (no profile set)', async () => {
+      const defaultTools = await getToolDefinitions(toolConfig);
+      const fullTools = await getToolDefinitions({ ...toolConfig, toolProfile: 'full' });
+      expect(fullTools.map(t => t.name)).toEqual(defaultTools.map(t => t.name));
+    }, 15000);
+  });
 });
 
 describe('tool name mapping', () => {

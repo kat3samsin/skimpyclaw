@@ -163,6 +163,7 @@ export interface ToolConfig {
   maxIterations?: number;  // Max tool use rounds (default: 20)
   bashTimeout?: number;    // Bash command timeout in ms (default: 30000)
   maxTurnTokens?: number;  // Max tokens per agent turn (default: 200000)
+  toolProfile?: 'minimal' | 'coding' | 'full';  // Tool set to expose (default: 'full')
   browser?: {
     enabled?: boolean;
     type?: 'chromium' | 'firefox' | 'webkit';

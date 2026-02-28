@@ -6,6 +6,7 @@ import type { CodeAgentTask, DecomposedSubtask, ChildResult } from './types.js';
 import { getNextCodeAgentId, storeCodeAgentTask, writeCodeAgentTask, getCodeAgent } from './registry.js';
 import { runCodeAgentBackground, runValidation } from './executor.js';
 import { notifyCodeAgentResult, resolveModelAlias } from './utils.js';
+import { parseAgentOutput, formatStructuredContext } from './structured-context.js';
 import { runAgentTurn } from '../agent.js';
 import { startTrace, addEvent, endTrace } from '../audit.js';
 
@@ -115,9 +116,12 @@ export async function synthesizeResults(
   config: Config,
 ): Promise<string> {
   try {
-    const resultSummary = results.map((r, i) =>
-      `### Subtask ${i + 1}: ${r.subtask}\nStatus: ${r.status}\n${r.output ? `Output: ${r.output.slice(0, 300)}` : ''}${r.error ? `Error: ${r.error}` : ''}`
-    ).join('\n\n');
+    const resultSummary = results.map((r, i) => {
+      const context = r.output
+        ? formatStructuredContext(parseAgentOutput(r.output))
+        : '';
+      return `### Subtask ${i + 1}: ${r.subtask}\nStatus: ${r.status}\n${context}${r.error ? `\nError: ${r.error}` : ''}`;
+    }).join('\n\n');
 
     const prompt = `You are a results synthesizer. Summarize the results of a multi-agent coding task.
 
@@ -229,7 +233,8 @@ export async function runTeamOrchestrator(
       for (const depIdx of sub.dependsOn) {
         const depChild = getCodeAgent(childIdByIndex[depIdx]);
         if (depChild && depChild.outputPreview) {
-          contextParts.push(`- Task "${subtasks[depIdx].description}": ${depChild.outputPreview.slice(0, 1000)}`);
+          const structured = formatStructuredContext(parseAgentOutput(depChild.outputPreview));
+          contextParts.push(`- Task "${subtasks[depIdx].description}":\n${structured}`);
         }
       }
       if (contextParts.length === 0) return sub.description;

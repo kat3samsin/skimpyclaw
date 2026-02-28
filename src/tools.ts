@@ -143,11 +143,13 @@ const toolDefsCache = new TTLCache<any[]>(60_000);
  */
 export async function getToolDefinitions(config?: ToolConfig, options?: { includeSpawnSubagent?: boolean; includeMcp?: boolean; projects?: Record<string, string> }): Promise<any[]> {
   const includeMcp = options?.includeMcp !== false; // default true for backwards compat
+  const profile = config?.toolProfile ?? 'full';
   const cacheKey = JSON.stringify({
     browser: config?.browser?.enabled,
     spawn: options?.includeSpawnSubagent,
     mcp: includeMcp,
     projects: options?.projects,
+    profile,
   });
 
   const cached = toolDefsCache.get(cacheKey);
@@ -155,10 +157,50 @@ export async function getToolDefinitions(config?: ToolConfig, options?: { includ
 
   const tools: any[] = [...BUILTIN_TOOL_DEFINITIONS];
 
+  // Minimal profile: only the 4 built-in tools (Read, Write, Glob, Bash).
+  // Used by subagents and orchestrator decompose/synthesize calls.
+  if (profile === 'minimal') {
+    toolDefsCache.set(cacheKey, tools);
+    return tools;
+  }
+
   // Include browser tool only when explicitly enabled
   if (config?.browser?.enabled) {
     tools.push(BROWSER_TOOL_DEFINITION);
   }
+
+  // Coding profile: built-ins + browser + code_with_agent + check_code_agent.
+  // Skips MCP discovery and spawn_subagent/code_with_team.
+  if (profile === 'coding') {
+    if (options?.includeSpawnSubagent) {
+      const projects = options.projects;
+      if (projects && Object.keys(projects).length > 0) {
+        const projectList = Object.entries(projects)
+          .map(([name, path]) => `"${name}" → ${path}`)
+          .join(', ');
+        tools.push({
+          ...CODE_WITH_AGENT_TOOL,
+          input_schema: {
+            ...CODE_WITH_AGENT_TOOL.input_schema,
+            properties: {
+              ...CODE_WITH_AGENT_TOOL.input_schema.properties,
+              workdir: {
+                type: 'string',
+                description: `Working directory or project name. Named projects: ${projectList}. Default: SkimpyClaw repo root.`,
+              },
+            },
+          },
+        });
+      } else {
+        tools.push(CODE_WITH_AGENT_TOOL);
+      }
+      tools.push(CHECK_CODE_AGENT_TOOL);
+    }
+    toolDefsCache.set(cacheKey, tools);
+    return tools;
+  }
+
+  // Full profile (default): everything including MCP, spawn_subagent, code_with_team.
 
   // Auto-discover MCP tools from mcporter config (only for Anthropic models)
   if (includeMcp) {

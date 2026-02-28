@@ -118,7 +118,7 @@ describe('decomposeTask', () => {
 });
 
 describe('synthesizeResults', () => {
-  it('truncates child output to 300 chars', async () => {
+  it('uses structured context (summary capped at 500 chars, not raw 1000)', async () => {
     const longOutput = 'x'.repeat(1000);
     mockRunAgentTurn.mockResolvedValueOnce('Synthesis complete');
 
@@ -127,12 +127,13 @@ describe('synthesizeResults', () => {
       { subtask: 'sub1', status: 'completed', output: longOutput },
     ], config);
 
-    // The prompt sent to runAgentTurn should contain truncated output
     const call = mockRunAgentTurn.mock.calls[mockRunAgentTurn.mock.calls.length - 1];
     const prompt = call[1] as string;
-    // Output should be sliced to 300, not 1000
-    expect(prompt).toContain('Output: ' + 'x'.repeat(300));
-    expect(prompt).not.toContain('x'.repeat(301));
+    // Summary should be capped at 500 chars, not the full 1000
+    expect(prompt).toContain('x'.repeat(500));
+    expect(prompt).not.toContain('x'.repeat(501));
+    // Should use the structured format (Summary: prefix)
+    expect(prompt).toContain('Summary:');
   });
 });
 
