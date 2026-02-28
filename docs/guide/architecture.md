@@ -75,9 +75,9 @@ flowchart LR
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                                 CORE                                        │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐    │
-│  │ Agent        │──│ Subagent     │──│ Code Agents  │──│ Cron         │    │
-│  │ Runtime      │  │ Pool         │  │ (Claude/     │  │ Scheduler    │    │
-│  └──────┬───────┘  └──────────────┘  │  Codex/Kimi) │  └──────────────┘    │
+│  │ Agent        │──│ Code Agents  │──│ Cron         │                    │
+│  │ Runtime      │  │ (Claude/     │  │ Scheduler    │                    │
+│  └──────┬───────┘  │  Codex/Kimi) │  └──────────────┘                    │
 │         │                             └──────────────┘         │            │
 │         │                                                      │            │
 │         │    ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
@@ -258,8 +258,9 @@ src/
   cron.ts               # Job scheduling + execution + cron logging
   heartbeat.ts          # Periodic health/attention checks
   channels.ts           # Active channel selection + proactive routing
-  telegram.ts           # Telegram bot commands and message handling ( Grammy )
-  discord.ts            # Discord bot commands and message handling ( discord.js )
+  channels/
+    telegram/           # Telegram bot commands and message handling (Grammy)
+  discord.ts            # Discord bot commands and message handling (discord.js)
   voice.ts              # Voice input/output (TTS/STT via multiple providers)
   digests.ts            # Daily digest generation for cron job article outputs
   skills.ts             # Skill loading, eligibility checks, and prompt injection
@@ -277,8 +278,6 @@ src/
   cli.ts                # CLI command definitions
   cache.ts              # TTL cache utility
   sessions.ts           # Session persistence for chat history
-  model-selection.ts    # Shared model-selection contract for API/CLI/chat commands
-  digests.ts            # Digest storage and management for cron job article outputs
   doctor/               # Health check system
     index.ts            # Doctor entry point
     checks.ts           # Individual health checks

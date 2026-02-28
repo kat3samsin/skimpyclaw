@@ -13,7 +13,7 @@ Main config file: `~/.skimpyclaw/config.json`
 | `cron.jobs` | Scheduled tasks (agentTurn or script) |
 | `heartbeat` | Interval, prompt, optional model + tools |
 | `dashboard` | Token for `/api/dashboard/*` auth |
-| `subagents` | Concurrency, retry limits, default code agent |
+| `codeAgents` | Concurrency and default code agent |
 | `langfuse` | Optional observability tracing |
 | `voice` | Optional TTS/STT configuration |
 | `skills` | Skills system configuration |
@@ -205,25 +205,23 @@ The `message` field can reference a markdown file:
 
 Files are resolved relative to `~/.skimpyclaw/prompts/` or as absolute paths.
 
-## Subagents
+## Code Agents
 
 ```json
-"subagents": {
+"codeAgents": {
   "maxConcurrent": 5,
-  "maxRetries": 2,
-  "defaultCodeAgent": "claude"
+  "defaultAgent": "claude"
 }
 ```
 
-- `maxConcurrent`: Maximum parallel subagent tasks (default: 5)
-- `maxRetries`: Retry attempts on failure (default: 2)
-- `defaultCodeAgent`: Default CLI for `code_with_agent` (`claude`, `codex`, or `kimi`)
+- `maxConcurrent`: Maximum parallel coding agent tasks (default: 5)
+- `defaultAgent`: Default CLI for `code_with_agent` (`claude`, `codex`, or `kimi`)
 
 ## Heartbeat
 
 ```json
 "heartbeat": {
-  "intervalMs": 300000,
+  "intervalMs": 3600000,
   "prompt": "Check for anything urgent. If nothing needs attention, respond with 'HEARTBEAT_OK'.",
   "model": "claude-fast",
   "tools": {
@@ -395,7 +393,7 @@ Projects are automatically added to tool `allowedPaths` and can be referenced by
     "jobs": []
   },
   "heartbeat": {
-    "intervalMs": 300000,
+    "intervalMs": 3600000,
     "prompt": "Check for anything urgent."
   }
 }

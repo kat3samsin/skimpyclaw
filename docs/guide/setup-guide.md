@@ -7,7 +7,7 @@ Step-by-step guide for getting SkimpyClaw running on macOS. Works for both human
 - **Node.js 18+** — `node --version`
 - **pnpm** — `pnpm --version` (install: `npm install -g pnpm`)
 - **Telegram bot token** — create one via [@BotFather](https://t.me/BotFather)
-- **At least one AI provider** — Anthropic API key, OpenAI key, or Claude Code OAuth
+- **At least one AI provider** — Claude Code Max (OAuth), ChatGPT Plus (Codex), Anthropic API key, or OpenAI key
 - **Your Telegram user ID** — get it from [@userinfobot](https://t.me/userinfobot) (it's a number)
 
 ## Installation
@@ -26,8 +26,8 @@ The `skimpyclaw onboard` command walks you through:
 
 1. **Telegram Bot Token** — paste the token from BotFather
 2. **Your Telegram ID** — must be numeric (send `/start` to @userinfobot)
-3. **Model Providers** — pick at least one (Anthropic, OpenAI, Codex, MiniMax)
-4. **Agent Name** — what the bot calls itself (default: "Claw")
+3. **Model Providers** — pick at least one. Recommended: Claude Code Max (OAuth, no API key needed) or ChatGPT Plus (uses Codex). Also supports Anthropic API, OpenAI API, MiniMax, and any OpenAI-compatible endpoint.
+4. **Agent Name** — what the bot calls itself (default: "SkimpyClaw")
 5. **Your Name** — what the bot calls you
 
 ### Optional Features
