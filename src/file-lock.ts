@@ -1,4 +1,4 @@
-// In-memory file lock manager for concurrent subagent writes
+// In-memory file lock manager for concurrent file writes
 
 const LOCK_TIMEOUT_MS = 30_000;
 const POLL_INTERVAL_MS = 100;

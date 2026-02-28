@@ -31,7 +31,7 @@ function executeWriteFile(path: string, content: string, config: ToolConfig): st
 }
 
 /**
- * Write with file locking when a lockTaskId is provided (subagent context).
+ * Write with file locking when a lockTaskId is provided (concurrent context).
  * Falls back to unlocked write when no lockTaskId.
  */
 export async function executeWriteFileLocked(path: string, content: string, config: ToolConfig, lockTaskId?: string): Promise<string> {

@@ -5,7 +5,7 @@ import { run, RunnerHandle } from '@grammyjs/runner';
 import type { Config, ChatMessage } from '../../types.js';
 import { isAllowed, isRateLimited } from '../../security.js';
 import { runAgentTurn } from '../../agent.js';
-import { initSubagentSystem } from '../../subagent.js';
+
 import { getCurrentModel } from '../../gateway.js';
 import { getApproval, approveRequest, denyRequest } from '../../exec-approval.js';
 import { loadSkills } from '../../skills.js';
@@ -141,15 +141,6 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
 
   const bot = new Bot(cfg.channels.telegram.token);
   activeBot = bot;
-
-  // Initialize subagent system with message delivery callback
-  initSubagentSystem(async (chatId: number, message: string) => {
-    if (!activeBot) return;
-    await sendLongMessage(
-      { reply: (text: string) => activeBot!.api.sendMessage(chatId, text) } as any,
-      message
-    );
-  });
 
   // Register commands with Telegram for the / menu
   bot.api.setMyCommands(BOT_COMMANDS).catch((err) => {

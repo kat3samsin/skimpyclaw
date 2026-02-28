@@ -9,7 +9,7 @@ If the build output is missing, `/dashboard` returns a `503` with build instruct
 
 Current pages include:
 
-- **Overview** — service stats, active model, subagent status, recent activity
+- **Overview** — service stats, active model, coding agent status, recent activity
 - **Cron** — job list, trigger on-demand runs
 - **Audit** — trace log with trigger badges, collapsible events, pagination
 - **Memory** — browse agent memory files
@@ -42,7 +42,7 @@ All routes require `Authorization: Bearer <token>`.
 
 | Method | Path                                       | Description                             |
 | ------ | ------------------------------------------ | --------------------------------------- |
-| GET    | `/api/dashboard/status`                    | Service + model + subagent status       |
+| GET    | `/api/dashboard/status`                    | Service + model + coding agent status   |
 | GET    | `/api/dashboard/health`                    | Doctor checks + feature toggles         |
 | GET    | `/api/dashboard/doctor`                    | Full doctor report                      |
 

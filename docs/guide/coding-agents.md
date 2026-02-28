@@ -50,5 +50,30 @@ kimi --yolo -p <task> \
 ## Selection behavior
 
 - Agent selection supports `claude`, `codex`, `kimi`
-- `subagents.defaultCodeAgent` is used when no explicit `agent` is passed
+- `codeAgents.defaultAgent` is used when no explicit `agent` is passed
 - Legacy-like values (`claude-think`, `codex5.3`, etc.) normalize to supported agent IDs
+
+## Long-running tasks
+
+For tasks that should run on a schedule or without a user present (nightly syncs, daily digests, background refactors), use **cron** instead of a coding agent triggered ad-hoc:
+
+```json
+{
+  "cron": {
+    "jobs": [
+      {
+        "name": "nightly-refactor",
+        "schedule": "0 2 * * *",
+        "payload": {
+          "agentTurn": {
+            "agentId": "main",
+            "prompt": "Run the nightly refactor script in ~/Sites/myproject and commit the results."
+          }
+        }
+      }
+    ]
+  }
+}
+```
+
+Cron jobs run with the full agent loop (tools, coding agents, file access) and their output is logged to `~/.skimpyclaw/logs/cron/`.

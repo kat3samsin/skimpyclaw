@@ -7,7 +7,7 @@
 | Built-in | Read, Write, Glob, Bash | Always (when tools enabled) |
 | Browser | Browser (Playwright) | When `tools.browser.enabled` is true |
 | MCP | Auto-discovered from mcporter | All servers in `~/.mcporter/mcporter.json` |
-| Agent | spawn_subagent, code_with_agent, code_with_team | When chatId + config present |
+| Agent | code_with_agent, code_with_team, check_code_agent | When chatId + config present |
 
 For coding worker details, see `docs/coding-agents.md`.
 
@@ -30,7 +30,7 @@ Related files:
 ## Built-in tools
 
 - **Read** — read a file (restricted to `allowedPaths`)
-- **Write** — write a file (restricted to `allowedPaths`, uses file locking in subagent context)
+- **Write** — write a file (restricted to `allowedPaths`, uses file locking for concurrent writes)
 - **Glob** — find files by pattern (restricted to `allowedPaths`)
 - **Bash** — run shell commands (blocked list via `isBashCommandSafe()`)
 

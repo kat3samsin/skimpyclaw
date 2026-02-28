@@ -168,7 +168,7 @@ export async function runTeamOrchestrator(
     detail: { teamSize, workdir, agent, model, validate },
   });
 
-  const timeoutMinutes = Math.min(context?.fullConfig?.subagents?.maxConcurrent ? 60 : 20, 60);
+  const timeoutMinutes = Math.min(context?.fullConfig?.codeAgents?.maxConcurrent ? 60 : 20, 60);
   const perChildTimeout = Math.max(5, Math.floor(timeoutMinutes / teamSize));
   const CANCELLED_MESSAGE = 'Cancelled by user';
 

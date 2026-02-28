@@ -121,24 +121,6 @@ export const BROWSER_TOOL_DEFINITION = {
 // Legacy export for backward compat — static list (built-ins + browser + no MCP)
 export const TOOL_DEFINITIONS = [...BUILTIN_TOOL_DEFINITIONS, BROWSER_TOOL_DEFINITION];
 
-export const SPAWN_SUBAGENT_TOOL = {
-  name: 'spawn_subagent',
-  description: 'Spawn a background subagent to handle a task independently. Returns immediately with a run ID. Results are announced back to this chat when done. Use for tasks that benefit from parallel work or long-running operations.',
-  input_schema: {
-    type: 'object' as const,
-    properties: {
-      task: { type: 'string', description: 'What the subagent should do — be specific and self-contained' },
-      type: {
-        type: 'string',
-        enum: ['coding', 'research'],
-        description: 'Agent type: coding (code/files/bash), research (investigation/reading)',
-      },
-      model: { type: 'string', description: 'Optional model override (e.g. claude-opus, claude-think)' },
-      label: { type: 'string', description: 'Short label for status display (e.g. "write tests", "check logs")' },
-    },
-    required: ['task', 'type'],
-  },
-};
 
 export const CODE_WITH_AGENT_TOOL = {
   name: 'code_with_agent',

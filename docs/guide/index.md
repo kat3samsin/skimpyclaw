@@ -30,7 +30,7 @@ skimpyclaw start --daemon
 - Read the [Architecture](/guide/architecture) overview
 - Learn about [Configuration](/guide/configuration)
 - Explore available [Tools](/guide/tools)
-- Set up [Subagents](/guide/subagents) for complex tasks
+- Set up [Cron jobs](/guide/configuration#cron) for scheduled and long-running tasks
 
 ## Getting Help
 

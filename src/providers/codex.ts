@@ -324,7 +324,7 @@ export async function chatWithToolsCodex(params: ProviderToolChatParams): Promis
   const { getToolDefinitions } = await import('../tools.js');
   const includeSpawn = !!(toolContext?.fullConfig && (toolContext?.chatId || toolContext?.isCronJob));
   const toolDefs = await getToolDefinitions(toolConfig, { 
-    includeSpawnSubagent: includeSpawn, 
+    includeAgentTools: includeSpawn, 
     includeMcp: false, 
     projects: toolContext?.fullConfig?.projects 
   });

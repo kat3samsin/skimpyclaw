@@ -152,7 +152,7 @@ export async function chatWithToolsAnthropic(params: ProviderToolChatParams): Pr
 
   // Resolve tools once at start of agent loop
   const includeSpawn = !!(toolContext?.fullConfig && (toolContext?.chatId || toolContext?.isCronJob));
-  const toolDefs = await getToolDefinitions(toolConfig, { includeSpawnSubagent: includeSpawn, projects: toolContext?.fullConfig?.projects });
+  const toolDefs = await getToolDefinitions(toolConfig, { includeAgentTools: includeSpawn, projects: toolContext?.fullConfig?.projects });
 
   // Enable prompt caching for system + tools
   const cacheEnabled = config.models?.promptCaching !== false;

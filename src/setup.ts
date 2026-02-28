@@ -1162,7 +1162,7 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
       starters,
     });
 
-    // On reconfigure, preserve dashboard token, cron jobs, subagents, security, langfuse
+    // On reconfigure, preserve dashboard token, cron jobs, codeAgents config, security, langfuse
     if (isReconfigure && existing.config) {
       if (existing.config.dashboard?.token) {
         (generatedConfig as any).dashboard = existing.config.dashboard;
@@ -1180,8 +1180,8 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
         }
         (generatedConfig as any).cron = { ...(existing.config.cron || {}), jobs: mergedCronJobs };
       }
-      if (existing.config.subagents) {
-        (generatedConfig as any).subagents = existing.config.subagents;
+      if ((existing.config as any).codeAgents) {
+        (generatedConfig as any).codeAgents = (existing.config as any).codeAgents;
       }
       if (existing.config.security) {
         (generatedConfig as any).security = existing.config.security;

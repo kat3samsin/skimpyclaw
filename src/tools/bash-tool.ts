@@ -51,7 +51,7 @@ export async function executeBash(command: string, cwd: string | undefined, conf
   if (approvalConfig?.enabled !== false) {
     const classification = classifyCommandRisk(command);
     if (requiresApproval(classification, approvalConfig)) {
-      // Unattended contexts (subagents, cron) have no human available to approve.
+      // Unattended contexts (cron, no approver) have no human available to approve.
       // Fast-deny instead of blocking for the full TTL.
       const isUnattended =
         context?.channel === 'subagent' ||

@@ -21,7 +21,7 @@ Use SkimpyClaw if you live in Telegram or Discord, want to read and own every li
 - **Chat interface** — Telegram and Discord bots with persistent conversation history
 - **Tool-enabled agent** — file read/write, bash, browser (Playwright), MCP tools via mcporter
 - **Multi-modal support** — voice messages (STT/TTS), image analysis
-- **Subagents** — model autonomously spawns coding/research subagents with retry + concurrency control
+- **Coding agents** — delegate to Claude Code / Codex CLI; `code_with_team` for parallel multi-agent work
 - **Code agents** — delegate coding tasks to Claude Code, Codex, or Kimi CLI with `code_with_agent` and `code_with_team`
 - **Cron scheduler** — run agent prompts or shell scripts on a schedule
 - **Web dashboard** — Preact/Vite SPA with status, cron, audit log, memory, templates, config editor, skills, approvals
@@ -49,7 +49,7 @@ flowchart LR
 
   subgraph Core
     agent["Agent Runtime"]
-    subagents["Subagent Pool"]
+    codeAgents["Coding Agents"]
     cron["Cron"]
     hb["Heartbeat"]
     audit["Audit Log"]
@@ -61,7 +61,7 @@ flowchart LR
   browser --> dash --> api --> agent
   cron --> agent
   hb --> agent
-  agent --> subagents
+  agent --> codeAgents
   agent --> audit
   agent --> skills
   agent --> approvals
@@ -136,8 +136,7 @@ src/
   providers/            # Provider routing + provider implementations (anthropic/openai/codex)
   code-agents/          # Background coding-agent runtime (executor/parser/orchestrator/registry)
   channels/             # Channel adapters/utilities (telegram/discord)
-  subagent.ts           # Background task dispatch: retry, concurrency, disk registry
-  file-lock.ts          # In-memory file lock for concurrent subagent writes
+  file-lock.ts          # In-memory file lock for concurrent writes
   audit.ts              # Append-only audit log (trace/event model, JSONL storage)
   cron.ts               # Job scheduling + execution + cron logging
   heartbeat.ts          # Periodic health/attention checks
@@ -196,7 +195,6 @@ dist/                   # Compiled output + built dashboard assets
 | [docs/architecture.md](docs/architecture.md)   | Component diagram, runtime flow, startup sequence, source layout |
 | [docs/configuration.md](docs/configuration.md) | Full config reference, all sections with examples                |
 | [docs/tools.md](docs/tools.md)                 | Built-in tools, browser tool, MCP integration, code agents       |
-| [docs/subagents.md](docs/subagents.md)         | Subagent types, concurrency, file locking, flow diagram          |
 | [docs/dashboard.md](docs/dashboard.md)         | Web dashboard, all HTTP endpoints + API routes                   |
 | [docs/coding-agents.md](docs/coding-agents.md) | Coding-agent execution model and CLI backends                    |
 | [docs/cli.md](docs/cli.md)                     | CLI commands, service management                                 |

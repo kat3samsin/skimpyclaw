@@ -7,7 +7,7 @@ import type { Config } from '../../types.js';
 import { getCurrentModel, setCurrentModel, getLastMessage } from '../../gateway.js';
 import { getCronJobs, runCronJob } from '../../cron.js';
 import { runHeartbeatCheck } from '../../heartbeat.js';
-import { cancelTask, getActiveTasks, getRecentTasks } from '../../subagent.js';
+
 import { getActiveCodeAgents, getRecentCodeAgents } from '../../code-agents/index.js';
 import { listApprovals, approveRequest, denyRequest, getApproval, onApprovalEvent } from '../../exec-approval.js';
 import { loadSkills } from '../../skills.js';
@@ -70,31 +70,8 @@ export async function handleStatus(ctx: Context, cfg: Config): Promise<void> {
   const model = getCurrentModel();
   const last = getLastMessage();
   const jobs = getCronJobs();
-  const activeTasks = getActiveTasks();
-  const recentTasks = getRecentTasks(20);
-
   const jobList = jobs
     .map((j) => `  - ${j.name}: ${j.nextRun?.toLocaleString() || 'unknown'}`)
-    .join('\n');
-
-  const pendingCount = activeTasks.filter((t) => t.status === 'pending').length;
-  const runningCount = activeTasks.filter((t) => t.status === 'running').length;
-  const maxConcurrent = cfg.subagents?.maxConcurrent ?? 5;
-
-  const recentCompleted = recentTasks.filter((t) => t.status === 'completed').length;
-  const recentFailed = recentTasks.filter((t) => t.status === 'failed').length;
-  const recentCancelled = recentTasks.filter((t) => t.status === 'cancelled').length;
-
-  const activePreview = activeTasks
-    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-    .slice(0, 3)
-    .map((task) => {
-      const started = task.startedAt || task.createdAt;
-      const elapsedSeconds = Math.max(0, Math.round((Date.now() - started.getTime()) / 1000));
-      const elapsed = elapsedSeconds < 60 ? `${elapsedSeconds}s` : `${Math.round(elapsedSeconds / 60)}m`;
-      const label = task.label ? ` (${task.label})` : '';
-      return `  - ${task.id} [${task.type}] ${task.status}${label} • ${elapsed}`;
-    })
     .join('\n');
 
   // Coding agents status (multi-agent)
@@ -133,9 +110,6 @@ export async function handleStatus(ctx: Context, cfg: Config): Promise<void> {
     `Last message: ${last?.toLocaleString() || 'never'}\n` +
     `Silence until: ${state.silenceUntil?.toLocaleTimeString() || 'not silenced'}\n\n` +
     `${caLine}\n\n` +
-    `Subagents: ${activeTasks.length}/${maxConcurrent} active (running: ${runningCount}, pending: ${pendingCount})\n` +
-    `Recent (last ${recentTasks.length}): ✅ ${recentCompleted} • ❌ ${recentFailed} • 🚫 ${recentCancelled}\n` +
-    `${activePreview ? `Active now:\n${activePreview}\n\n` : '\n'}` +
     `Scheduled jobs:\n${jobList || '  (none)'}`
   );
 }
@@ -212,50 +186,11 @@ export async function handleRestart(ctx: Context, cfg: Config): Promise<void> {
 }
 
 export async function handleTasks(ctx: Context, cfg: Config): Promise<void> {
-  const active = getActiveTasks();
-  const recent = getRecentTasks(5);
-
-  if (recent.length === 0) {
-    await ctx.reply('No agent tasks yet. Subagents spawn automatically for complex requests.');
-    return;
-  }
-
-  const formatTask = (t: (typeof recent)[0]) => {
-    const elapsed = ((t.completedAt || new Date()).getTime() - t.createdAt.getTime()) / 1000;
-    const elapsedStr = elapsed < 60 ? `${Math.round(elapsed)}s` : `${Math.round(elapsed / 60)}m`;
-    const status: Record<string, string> = {
-      pending: '⏳ Pending',
-      running: `🔄 Running (${elapsedStr})`,
-      completed: `✅ Done (${elapsedStr})`,
-      failed: `❌ Failed (${elapsedStr})`,
-      cancelled: '🚫 Cancelled'
-    };
-    const promptPreview = t.prompt.slice(0, 60) + (t.prompt.length > 60 ? '...' : '');
-    return `${t.id}: ${status[t.status] || t.status} [${t.type}] ${promptPreview}`;
-  };
-
-  const lines = [...active, ...recent].slice(0, 10).map(formatTask).join('\n');
-  await ctx.reply(`Agent tasks:\n\n${lines}`);
+  await ctx.reply('Use /agents to list active coding agents, or /cron to manage scheduled tasks.');
 }
 
 export async function handleCancel(ctx: Context, cfg: Config): Promise<void> {
-  const id = String(ctx.match || '').trim();
-  if (!id) {
-    await ctx.reply('Usage: /cancel <task-id>\nExample: /cancel t1');
-    return;
-  }
-
-  const task = cancelTask(id);
-  if (!task) {
-    await ctx.reply(`No task found: ${id}`);
-    return;
-  }
-
-  if (task.status === 'cancelled') {
-    await ctx.reply(`Cancelled ${id}.`);
-  } else {
-    await ctx.reply(`Task ${id} is already ${task.status}.`);
-  }
+  await ctx.reply('Use the dashboard to cancel coding agents, or /cron to manage scheduled tasks.');
 }
 
 export async function handleSkills(ctx: Context, cfg: Config): Promise<void> {

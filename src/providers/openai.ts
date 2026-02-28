@@ -154,7 +154,7 @@ export async function chatWithToolsOpenAI(params: ProviderToolChatParams, provid
   // Resolve tools once at start
   const includeSpawn = !!(toolContext?.fullConfig && (toolContext?.chatId || toolContext?.isCronJob));
   const toolDefs = await getToolDefinitions(toolConfig, { 
-    includeSpawnSubagent: includeSpawn, 
+    includeAgentTools: includeSpawn, 
     includeMcp: false, 
     projects: toolContext?.fullConfig?.projects 
   });

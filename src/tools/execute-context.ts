@@ -1,13 +1,13 @@
 export interface ExecuteToolContext {
-  /** Task ID for file lock acquisition (subagent writes) */
+  /** Task ID for file lock acquisition (concurrent writes) */
   lockTaskId?: string;
   /** Abort signal for cancelling long-running tool loops */
   abortSignal?: AbortSignal;
-  /** Chat ID for spawn_subagent dispatch */
+  /** Chat ID for channel routing */
   chatId?: number;
-  /** Full config for spawn_subagent */
+  /** Full config for agent tools */
   fullConfig?: import('../types.js').Config;
-  /** Conversation history for spawn_subagent */
+  /** Conversation history */
   history?: import('../types.js').ChatMessage[];
   /** Audit trace ID for recording tool events */
   auditTraceId?: string;

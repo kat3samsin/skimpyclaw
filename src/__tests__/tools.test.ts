@@ -75,7 +75,7 @@ describe('getToolDefinitions', () => {
   describe('tool profiles', () => {
     it('minimal returns exactly 4 built-in tools', async () => {
       const config: ToolConfig = { ...toolConfig, toolProfile: 'minimal' };
-      const tools = await getToolDefinitions(config, { includeSpawnSubagent: true, includeMcp: true });
+      const tools = await getToolDefinitions(config, { includeAgentTools: true, includeMcp: true });
       expect(tools).toHaveLength(4);
       expect(tools.map(t => t.name)).toEqual(['Read', 'Write', 'Glob', 'Bash']);
     });
@@ -92,13 +92,13 @@ describe('getToolDefinitions', () => {
       expect(tools.every(t => !t.name.startsWith('mcp__'))).toBe(true);
     });
 
-    it('coding includes code_with_agent and check_code_agent but not spawn_subagent or code_with_team', async () => {
+    it('coding includes code_with_agent and check_code_agent but not code_with_team', async () => {
       const config: ToolConfig = { ...toolConfig, toolProfile: 'coding' };
-      const tools = await getToolDefinitions(config, { includeSpawnSubagent: true });
+      const tools = await getToolDefinitions(config, { includeAgentTools: true });
       const names = tools.map(t => t.name);
       expect(names).toContain('code_with_agent');
       expect(names).toContain('check_code_agent');
-      expect(names).not.toContain('spawn_subagent');
+
       expect(names).not.toContain('code_with_team');
     });
 
@@ -445,7 +445,7 @@ describe('code_with_agent', () => {
     });
 
     it('is included in getToolDefinitions when includeSpawnSubagent is true', async () => {
-      const tools = await getToolDefinitions(toolConfig, { includeSpawnSubagent: true });
+      const tools = await getToolDefinitions(toolConfig, { includeAgentTools: true });
       expect(tools.map(t => t.name)).toContain('code_with_agent');
     });
 
@@ -581,7 +581,7 @@ describe('code_with_agent', () => {
     });
 
     it('is included in getToolDefinitions when includeSpawnSubagent is true', async () => {
-      const tools = await getToolDefinitions(toolConfig, { includeSpawnSubagent: true });
+      const tools = await getToolDefinitions(toolConfig, { includeAgentTools: true });
       expect(tools.map(t => t.name)).toContain('check_code_agent');
     });
 
@@ -642,7 +642,7 @@ describe('code_with_team', () => {
     });
 
     it('is included in getToolDefinitions when includeSpawnSubagent is true', async () => {
-      const tools = await getToolDefinitions(toolConfig, { includeSpawnSubagent: true });
+      const tools = await getToolDefinitions(toolConfig, { includeAgentTools: true });
       expect(tools.map(t => t.name)).toContain('code_with_team');
     });
 

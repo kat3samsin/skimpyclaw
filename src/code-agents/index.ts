@@ -156,7 +156,7 @@ export async function executeCodeWithAgent(
     context?.fullConfig?.models?.aliases
   );
 
-  const configDefault = context?.fullConfig?.subagents?.defaultCodeAgent || 'claude';
+  const configDefault = context?.fullConfig?.codeAgents?.defaultAgent || 'claude';
   const requestedAgent = input.agent as string | undefined;
   const agent = resolveSelectedCodeAgent(requestedAgent, configDefault, resolvedModel);
   if (!agent) {
@@ -180,11 +180,11 @@ export async function executeCodeWithAgent(
     return `Error: Working directory not allowed. Permitted: ${config.allowedPaths.join(', ')}${projectNames}`;
   }
 
-  // Concurrency check — share limit with subagents
-  const maxConcurrent = context?.fullConfig?.subagents?.maxConcurrent ?? 5;
+  // Concurrency check
+  const maxConcurrent = context?.fullConfig?.codeAgents?.maxConcurrent ?? 5;
   const activeCount = getActiveCodeAgents().length;
   if (activeCount >= maxConcurrent) {
-    return `Error: Concurrency limit reached (${activeCount}/${maxConcurrent} coding agents running). Wait for one to finish or increase subagents.maxConcurrent.`;
+    return `Error: Concurrency limit reached (${activeCount}/${maxConcurrent} coding agents running). Wait for one to finish or increase codeAgents.maxConcurrent.`;
   }
 
   const validate = input.validate !== false; // default true
@@ -240,7 +240,7 @@ export async function executeCodeWithTeam(
     context?.fullConfig?.models?.aliases
   );
 
-  const configDefault = context?.fullConfig?.subagents?.defaultCodeAgent || 'claude';
+  const configDefault = context?.fullConfig?.codeAgents?.defaultAgent || 'claude';
   const requestedAgent = input.agent as string | undefined;
   const agent = resolveSelectedCodeAgent(requestedAgent, configDefault, resolvedModel);
   if (!agent) {
@@ -267,7 +267,7 @@ export async function executeCodeWithTeam(
   }
 
   // Concurrency check — need room for teamSize children
-  const maxConcurrent = context?.fullConfig?.subagents?.maxConcurrent ?? 5;
+  const maxConcurrent = context?.fullConfig?.codeAgents?.maxConcurrent ?? 5;
   const activeCount = getActiveCodeAgents().length;
   if (activeCount + teamSize > maxConcurrent) {
     return `Error: Concurrency limit — need ${teamSize} slots but only ${maxConcurrent - activeCount} available (${activeCount}/${maxConcurrent} running). Wait for agents to finish.`;

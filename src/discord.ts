@@ -20,7 +20,7 @@ import { runAgentTurn } from './agent.js';
 import { runHeartbeatCheck } from './heartbeat.js';
 import { isAllowed, isRateLimited } from './security.js';
 import { getActiveCodeAgents, getRecentCodeAgents } from './tools.js';
-import { getActiveTasks, getRecentTasks, cancelTask } from './subagent.js';
+
 import {
   listApprovals,
   approveRequest,
@@ -420,51 +420,12 @@ async function handleCommand(message: Message, command: string, args: string[]):
   }
 
   if (command === 'tasks') {
-    const active = getActiveTasks();
-    const recent = getRecentTasks(5);
-
-    if (recent.length === 0) {
-      await message.reply('No agent tasks yet. Subagents spawn automatically for complex requests.');
-      return;
-    }
-
-    const formatTask = (t: typeof recent[0]) => {
-      const elapsed = ((t.completedAt || new Date()).getTime() - t.createdAt.getTime()) / 1000;
-      const elapsedStr = elapsed < 60 ? `${Math.round(elapsed)}s` : `${Math.round(elapsed / 60)}m`;
-      const status: Record<string, string> = {
-        pending: '⏳ Pending',
-        running: `🔄 Running (${elapsedStr})`,
-        completed: `✅ Done (${elapsedStr})`,
-        failed: `❌ Failed (${elapsedStr})`,
-        cancelled: '🚫 Cancelled',
-      };
-      const promptPreview = t.prompt.slice(0, 60) + (t.prompt.length > 60 ? '...' : '');
-      return `${t.id}: ${status[t.status] || t.status} [${t.type}] ${promptPreview}`;
-    };
-
-    const lines = recent.map(formatTask).join('\n');
-    await sendLongText(message, `Agent tasks:\n\n${lines}`);
+    await message.reply('Use `/agents` to list active coding agents, or `/cron` to manage scheduled tasks.');
     return;
   }
 
   if (command === 'cancel') {
-    const id = rawArgs;
-    if (!id) {
-      await message.reply('Usage: /cancel <task-id>\nExample: /cancel t1');
-      return;
-    }
-
-    const task = cancelTask(id);
-    if (!task) {
-      await message.reply(`No task found: ${id}`);
-      return;
-    }
-
-    if (task.status === 'cancelled') {
-      await message.reply(`Cancelled ${id}.`);
-    } else {
-      await message.reply(`Task ${id} is already ${task.status}.`);
-    }
+    await message.reply('Use the dashboard to cancel coding agents, or `/cron` to manage scheduled tasks.');
     return;
   }
 

@@ -61,10 +61,9 @@ export interface Config {
     token?: string;
     frontend?: 'framework';
   };
-  subagents?: {
-    maxConcurrent?: number;   // Max parallel subagents (default 5)
-    maxRetries?: number;      // Max retries on failure (default 2)
-    defaultCodeAgent?: string; // Default coding agent CLI: "claude" | "codex" | "kimi" (default: "claude")
+  codeAgents?: {
+    maxConcurrent?: number;   // Max parallel coding agents (default 5)
+    defaultAgent?: string;    // Default coding agent CLI: "claude" | "codex" | "kimi" (default: "claude")
   };
   langfuse?: {
     enabled?: boolean;
@@ -216,26 +215,6 @@ export interface ModelProvider {
   chat(messages: ChatMessage[], options: ChatOptions): Promise<string>;
 }
 
-export type SubagentType = 'coding' | 'research';
-export type SubagentStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
-
-export interface SubagentTask {
-  id: string;               // "t1", "t2", etc.
-  type: SubagentType;
-  prompt: string;
-  status: SubagentStatus;
-  chatId: number;
-  model: string;
-  label?: string;           // Short label for status display
-  createdAt: Date;
-  startedAt?: Date;
-  completedAt?: Date;
-  result?: string;
-  error?: string;
-  retryCount?: number;      // Current retry attempt (0-based)
-  maxRetries?: number;      // Max retries on failure (default 2)
-  abortController: AbortController;
-}
 
 export type ImageContentBlock = {
   type: 'image';

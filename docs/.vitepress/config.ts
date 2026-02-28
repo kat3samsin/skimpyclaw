@@ -82,7 +82,6 @@ export default withMermaid({
           collapsed: false,
           items: [
             { text: 'Tools', link: '/guide/tools.html' },
-            { text: 'Subagents', link: '/guide/subagents.html' },
             { text: 'Coding Agents', link: '/guide/coding-agents.html' },
             { text: 'Skills', link: '/guide/skills.html' },
             { text: 'Dashboard', link: '/guide/dashboard.html' },

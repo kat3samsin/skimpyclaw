@@ -74,7 +74,7 @@ export function checkEligibility(
       if (t === 'browser') {
         if (!toolConfig.browser?.enabled) missing.push(tool);
       }
-      // spawn_subagent and other built-ins are available whenever tools.enabled is true
+      // built-in tools are available whenever tools.enabled is true
     }
     if (missing.length > 0) {
       return { eligible: false, reason: `Tools not enabled (needs: ${missing.join(', ')})` };

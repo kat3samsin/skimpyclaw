@@ -11,7 +11,6 @@ import {
   BUILTIN_TOOL_DEFINITIONS,
   BROWSER_TOOL_DEFINITION,
   TOOL_DEFINITIONS,
-  SPAWN_SUBAGENT_TOOL,
   CODE_WITH_AGENT_TOOL,
   CODE_WITH_TEAM_TOOL,
   CHECK_CODE_AGENT_TOOL,
@@ -58,7 +57,6 @@ export {
   BUILTIN_TOOL_DEFINITIONS,
   BROWSER_TOOL_DEFINITION,
   TOOL_DEFINITIONS,
-  SPAWN_SUBAGENT_TOOL,
   CODE_WITH_AGENT_TOOL,
   CODE_WITH_TEAM_TOOL,
   CHECK_CODE_AGENT_TOOL,
@@ -138,17 +136,17 @@ export function clearMcpToolCache(): void {
 const toolDefsCache = new TTLCache<any[]>(60_000);
 
 /**
- * Get all available tool definitions: built-ins + browser (if enabled) + MCP (auto-discovered) + spawn_subagent.
+ * Get all available tool definitions: built-ins + browser (if enabled) + MCP (auto-discovered) + agent tools.
  * This is the primary way to get tools — replaces the static TOOL_DEFINITIONS export.
- * Pass includeSpawnSubagent: true to include the spawn_subagent tool (e.g. for Telegram conversations).
+ * Pass includeAgentTools: true to include code_with_agent, code_with_team, check_code_agent.
  * Results are cached for 60s to avoid rebuilding the array on every agent turn.
  */
-export async function getToolDefinitions(config?: ToolConfig, options?: { includeSpawnSubagent?: boolean; includeMcp?: boolean; projects?: Record<string, string> }): Promise<any[]> {
+export async function getToolDefinitions(config?: ToolConfig, options?: { includeAgentTools?: boolean; includeMcp?: boolean; projects?: Record<string, string> }): Promise<any[]> {
   const includeMcp = options?.includeMcp !== false; // default true for backwards compat
   const profile = config?.toolProfile ?? 'full';
   const cacheKey = JSON.stringify({
     browser: config?.browser?.enabled,
-    spawn: options?.includeSpawnSubagent,
+    agentTools: options?.includeAgentTools,
     mcp: includeMcp,
     projects: options?.projects,
     profile,
@@ -160,7 +158,7 @@ export async function getToolDefinitions(config?: ToolConfig, options?: { includ
   const tools: any[] = [...BUILTIN_TOOL_DEFINITIONS];
 
   // Minimal profile: only the 4 built-in tools (Read, Write, Glob, Bash).
-  // Used by subagents and orchestrator decompose/synthesize calls.
+  // Used by orchestrator decompose/synthesize calls.
   if (profile === 'minimal') {
     toolDefsCache.set(cacheKey, tools);
     return tools;
@@ -172,9 +170,9 @@ export async function getToolDefinitions(config?: ToolConfig, options?: { includ
   }
 
   // Coding profile: built-ins + browser + code_with_agent + check_code_agent.
-  // Skips MCP discovery and spawn_subagent/code_with_team.
+  // Skips MCP discovery and code_with_team.
   if (profile === 'coding') {
-    if (options?.includeSpawnSubagent) {
+    if (options?.includeAgentTools) {
       const projects = options.projects;
       if (projects && Object.keys(projects).length > 0) {
         const projectList = Object.entries(projects)
@@ -202,7 +200,7 @@ export async function getToolDefinitions(config?: ToolConfig, options?: { includ
     return tools;
   }
 
-  // Full profile (default): everything including MCP, spawn_subagent, code_with_team.
+  // Full profile (default): everything including MCP and code_with_team.
 
   // Auto-discover MCP tools from mcporter config (only for Anthropic models)
   if (includeMcp) {
@@ -210,9 +208,8 @@ export async function getToolDefinitions(config?: ToolConfig, options?: { includ
     tools.push(...mcpTools);
   }
 
-  // Include spawn_subagent, code_with_agent, and check_code_agent tools when requested
-  if (options?.includeSpawnSubagent) {
-    tools.push(SPAWN_SUBAGENT_TOOL);
+  // Include code_with_agent, code_with_team, and check_code_agent when requested
+  if (options?.includeAgentTools) {
 
     // Inject project names into code_with_agent description so the model knows what to use
     const projects = options.projects;
@@ -386,11 +383,6 @@ export async function executeTool(
       return await executeMcpToolGeneric(name, input);
     }
 
-    // Route spawn_subagent
-    if (name === 'spawn_subagent') {
-      return await executeSpawnSubagent(input, context);
-    }
-
     // Route code_with_agent - delegate to code-agents module
     if (name === 'code_with_agent') {
       const { executeCodeWithAgent } = await import('./code-agents/index.js');
@@ -532,50 +524,3 @@ export async function executeTool(
 }
 
 // --- Individual Tool Implementations ---
-
-/**
- * Execute spawn_subagent tool — dispatches a background subagent.
- */
-async function executeSpawnSubagent(input: Record<string, any>, context?: ExecuteToolContext): Promise<string> {
-  if (!context?.fullConfig || !context?.chatId) {
-    return 'Error: spawn_subagent requires a chat context (not available in this mode)';
-  }
-
-  const { dispatchSubagent } = await import('./subagent.js');
-
-  const task = input.task as string;
-  const type = input.type as string;
-  const model = input.model as string | undefined;
-  const label = input.label as string | undefined;
-  // NOTE: allowedPaths deliberately NOT accepted from model input (security — prevents path escalation).
-  // Subagents inherit their preset's allowedPaths from config.
-
-  if (!task || !type) {
-    return 'Error: task and type are required';
-  }
-  if (!['coding', 'research'].includes(type)) {
-    return `Error: Invalid type "${type}". Must be coding or research.`;
-  }
-
-  try {
-    const subagentTask = dispatchSubagent(
-      type as import('./types.js').SubagentType,
-      task,
-      context.chatId,
-      context.fullConfig,
-      model,
-      context.history,
-      { label }
-    );
-
-    const labelStr = label ? ` "${label}"` : '';
-    return JSON.stringify({
-      status: 'accepted',
-      runId: subagentTask.id,
-      label: label || subagentTask.type,
-      message: `Subagent ${subagentTask.id}${labelStr} dispatched (${subagentTask.type}, model: ${subagentTask.model}). Results will be announced when done.`,
-    });
-  } catch (err) {
-    return `Error: ${err instanceof Error ? err.message : String(err)}`;
-  }
-}

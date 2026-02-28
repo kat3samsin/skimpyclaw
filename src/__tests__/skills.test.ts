@@ -255,9 +255,9 @@ describe('checkEligibility', () => {
     expect(result.eligible).toBe(true);
   });
 
-  it('passes on spawn_subagent requirement when tools enabled', () => {
+  it('passes on code_with_agent requirement when tools enabled', () => {
     const result = checkEligibility(
-      { name: 'test', description: 'test', requires: { tools: ['spawn_subagent'] } },
+      { name: 'test', description: 'test', requires: { tools: ['code_with_agent'] } },
       { enabled: true, allowedPaths: ['/tmp'] }
     );
     expect(result.eligible).toBe(true);

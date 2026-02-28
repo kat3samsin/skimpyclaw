@@ -17,7 +17,7 @@ flowchart LR
 
   subgraph Core
     agent["Agent Runtime"]
-    subagents["Subagent Pool"]
+    codeAgents["Coding Agents"]
     codeagents["Code Agents (Claude/Codex/Kimi)"]
     cron["Cron Scheduler"]
     hb["Heartbeat Timer"]
@@ -36,7 +36,7 @@ flowchart LR
   routes --> agent
   cron --> agent
   hb --> agent
-  agent --> subagents
+  agent --> codeAgents
   agent --> codeagents
   agent --> audit
   agent --> skills
@@ -252,9 +252,8 @@ src/
   gateway.ts            # Fastify server + top-level routes
   agent.ts              # Prompt assembly, model calls, tool loop, memory writes, Langfuse tracing
   tools.ts              # Tool registry, MCP auto-discovery, code agents (code_with_agent, code_with_team)
-  subagent.ts           # Background task dispatch: retry, concurrency, disk registry
   model-selection.ts    # Shared model-selection contract (alias/provider-model/bare-id resolution)
-  file-lock.ts          # In-memory file lock for concurrent subagent writes
+  file-lock.ts          # In-memory file lock for concurrent writes
   audit.ts              # Append-only audit log (trace/event model, JSONL storage)
   cron.ts               # Job scheduling + execution + cron logging
   heartbeat.ts          # Periodic health/attention checks
@@ -316,7 +315,7 @@ Three provider paths in `agent.ts`:
 2. **Codex** — `codexChat()` — raw fetch to `chatgpt.com/backend-api/codex/responses` (ChatGPT backend)
 3. **OpenAI-compatible** — `chat()` via OpenAI SDK — includes OpenAI, Kimi, MiniMax, openrouter, groq, etc.
 
-Both Anthropic and Codex share `ExecuteToolContext` for spawn_subagent and file locking.
+Both Anthropic and Codex share `ExecuteToolContext` for tool routing and file locking.
 
 ## Skills System Flow
 
