@@ -73,11 +73,13 @@ export function Health() {
 
   return (
     <div>
-      <div class="page-header" id="healthRecheckBtn">
+      <div class="page-header">
         <div class="page-title">Health</div>
-        <button class="btn btn-sm" id="healthRecheckBtn" onClick={recheck} disabled={rechecking || loading}>
-          {rechecking ? 'Checking…' : 'Recheck'}
-        </button>
+        <div class="header-actions">
+          <button class="btn btn-sm" id="healthRecheckBtn" onClick={recheck} disabled={rechecking || loading}>
+            {rechecking ? 'Checking…' : 'Recheck'}
+          </button>
+        </div>
       </div>
 
       {loading ? (
