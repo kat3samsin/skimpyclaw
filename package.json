@@ -10,6 +10,7 @@
   },
   "files": [
     "dist",
+    "sandbox",
     "templates",
     "com.skimpyclaw.gateway.plist.example",
     "README.md",

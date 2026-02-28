@@ -857,9 +857,17 @@ function sandboxImageExists(runtime: SandboxRuntime, image: string): boolean {
 }
 
 function resolveSandboxDir(): string | null {
+  // 1. Check CWD (user is in repo root)
   const cwdSandbox = join(process.cwd(), 'sandbox');
   if (existsSync(join(cwdSandbox, 'Dockerfile'))) {
     return cwdSandbox;
+  }
+  // 2. Check relative to package root (global/npm install)
+  const thisFile = fileURLToPath(import.meta.url);
+  const pkgRoot = join(thisFile, '..', '..'); // dist/src/cli.js -> repo root
+  const pkgSandbox = join(pkgRoot, 'sandbox');
+  if (existsSync(join(pkgSandbox, 'Dockerfile'))) {
+    return pkgSandbox;
   }
   return null;
 }

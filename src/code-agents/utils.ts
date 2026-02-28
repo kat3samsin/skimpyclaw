@@ -5,6 +5,7 @@ import { resolve, join } from 'path';
 import { homedir } from 'os';
 import type { BuildCodeAgentArgsInput, CodeAgentTask, ChildResult } from './types.js';
 import type { Config } from '../types.js';
+import { buildValidationCommand } from './executor.js';
 
 // Resolve CLI paths once at import time so spawn doesn't get ENOENT
 function resolveCliPath(name: string): string {
@@ -123,7 +124,7 @@ export function buildCodeAgentArgs(input: BuildCodeAgentArgsInput): { cmd: strin
     '--mcp-config', playwrightMcp,
     ...toolArgs,
     '--max-turns', maxTurns,
-    '--append-system-prompt', 'Output text only. Never use say or TTS. Focus on the coding task. Run pnpm build && pnpm test to verify changes.',
+    '--append-system-prompt', `Output text only. Never use say or TTS. Focus on the coding task. Run ${buildValidationCommand(input.workdir || process.cwd())} to verify changes.`,
   ];
   // Only pass model to Claude CLI if it's not a known non-Claude model.
   // GPT/Codex/Kimi/o-series models would be rejected by the Claude CLI.

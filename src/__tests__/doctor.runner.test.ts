@@ -13,6 +13,7 @@ const {
   mockCheckTelegramToken,
   mockCheckDiscordToken,
   mockCheckBrowserBinaryIfEnabled,
+  mockCheckPlaywrightIfBrowserEnabled,
   mockCheckVoiceDependencies,
   mockCheckMcpConfig,
   mockCheckGatewayHostBindable,
@@ -32,6 +33,7 @@ const {
   mockCheckTelegramToken: vi.fn(),
   mockCheckDiscordToken: vi.fn(),
   mockCheckBrowserBinaryIfEnabled: vi.fn(),
+  mockCheckPlaywrightIfBrowserEnabled: vi.fn(),
   mockCheckVoiceDependencies: vi.fn(),
   mockCheckMcpConfig: vi.fn(),
   mockCheckGatewayHostBindable: vi.fn(),
@@ -56,6 +58,7 @@ vi.mock('../doctor/checks.js', () => ({
   checkTelegramToken: mockCheckTelegramToken,
   checkDiscordToken: mockCheckDiscordToken,
   checkBrowserBinaryIfEnabled: mockCheckBrowserBinaryIfEnabled,
+  checkPlaywrightIfBrowserEnabled: mockCheckPlaywrightIfBrowserEnabled,
   checkVoiceDependencies: mockCheckVoiceDependencies,
   checkMcpConfig: mockCheckMcpConfig,
   checkGatewayHostBindable: mockCheckGatewayHostBindable,
@@ -102,6 +105,7 @@ describe('doctor runner', () => {
     mockCheckTelegramToken.mockReset();
     mockCheckDiscordToken.mockReset();
     mockCheckBrowserBinaryIfEnabled.mockReset();
+    mockCheckPlaywrightIfBrowserEnabled.mockReset();
     mockCheckVoiceDependencies.mockReset();
     mockCheckMcpConfig.mockReset();
     mockCheckGatewayHostBindable.mockReset();
@@ -120,6 +124,7 @@ describe('doctor runner', () => {
     mockCheckTelegramToken.mockResolvedValue(okCheck('telegram_token_valid', 'channels'));
     mockCheckDiscordToken.mockResolvedValue(okCheck('discord_token_valid', 'channels'));
     mockCheckBrowserBinaryIfEnabled.mockResolvedValue(okCheck('browser_binary_available', 'runtime'));
+    mockCheckPlaywrightIfBrowserEnabled.mockResolvedValue(okCheck('playwright_installed', 'runtime', 'Browser tools disabled'));
     mockCheckVoiceDependencies.mockResolvedValue(okCheck('voice_dependencies', 'runtime', 'Voice disabled'));
     mockCheckMcpConfig.mockResolvedValue(okCheck('mcp_config', 'runtime', 'MCP tools not configured'));
     mockCheckGatewayHostBindable.mockResolvedValue(okCheck('gateway_host_bindable', 'runtime', '127.0.0.1 (always available)'));

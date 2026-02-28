@@ -16,6 +16,25 @@
 
 Normal tool calling (`Read/Write/Bash/Browser`) is separate from coding-agent CLI execution.
 
+## Validation & Package Manager Detection
+
+When `validate: true` (default), both `code_with_agent` and `code_with_team` run a post-completion validation step. The validation command is **auto-detected** based on the target project's package manager:
+
+Detection order (first match wins):
+1. `package.json` `packageManager` field (e.g. `"yarn@4.1.0"`)
+2. Lockfile: `yarn.lock` → yarn, `pnpm-lock.yaml` → pnpm, `bun.lockb`/`bun.lock` → bun, `package-lock.json` → npm
+3. Fallback: `pnpm` (SkimpyClaw default)
+
+The validation command runs the project's `build` and `test` scripts using the detected manager:
+- **pnpm**: `pnpm build && pnpm test`
+- **yarn**: `yarn build && yarn test`
+- **npm**: `npm run build && npm run test`
+- **bun**: `bun build && bun test`
+
+If only one of `build`/`test` exists in `package.json` scripts, only that command runs. The system prompt given to coding agents also reflects the detected package manager.
+
+Implementation: `detectPackageManager()` and `buildValidationCommand()` in `src/code-agents/executor.ts`.
+
 ## Exec Approval
 
 `src/exec-approval.ts` classifies Bash commands before execution:

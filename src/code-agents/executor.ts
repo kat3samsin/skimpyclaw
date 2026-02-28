@@ -2,7 +2,7 @@
 
 import { spawn, exec } from 'child_process';
 import type { ChildProcess } from 'child_process';
-import { createWriteStream } from 'fs';
+import { createWriteStream, existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 
 // SKIMPYCLAW_ROOT for log paths
@@ -27,10 +27,82 @@ import { ensureContainer, SANDBOX_DEFAULTS, getRuntime } from '../sandbox/index.
 
 const CANCELLED_MESSAGE = 'Cancelled by user';
 
+/** Supported JS package managers. */
+export type PackageManager = 'pnpm' | 'yarn' | 'npm' | 'bun';
+
+/**
+ * Detect the package manager for a project directory.
+ * Detection order (first match wins):
+ * 1. package.json `packageManager` field (e.g. "yarn@4.1.0")
+ * 2. Lockfile presence: yarn.lock → yarn, pnpm-lock.yaml → pnpm, bun.lockb / bun.lock → bun, package-lock.json → npm
+ * 3. Fallback: 'pnpm' (SkimpyClaw default)
+ */
+export function detectPackageManager(workdir: string): PackageManager {
+  // 1. Check package.json packageManager field
+  try {
+    const pkgPath = join(workdir, 'package.json');
+    if (existsSync(pkgPath)) {
+      const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+      if (typeof pkg.packageManager === 'string') {
+        const name = pkg.packageManager.split('@')[0].toLowerCase();
+        if (name === 'yarn') return 'yarn';
+        if (name === 'pnpm') return 'pnpm';
+        if (name === 'npm') return 'npm';
+        if (name === 'bun') return 'bun';
+      }
+    }
+  } catch { /* ignore parse errors, fall through */ }
+
+  // 2. Check lockfiles
+  if (existsSync(join(workdir, 'yarn.lock'))) return 'yarn';
+  if (existsSync(join(workdir, 'pnpm-lock.yaml'))) return 'pnpm';
+  if (existsSync(join(workdir, 'bun.lockb')) || existsSync(join(workdir, 'bun.lock'))) return 'bun';
+  if (existsSync(join(workdir, 'package-lock.json'))) return 'npm';
+
+  // 3. Fallback
+  return 'pnpm';
+}
+
+/**
+ * Build the validation command for a project directory.
+ * Checks for `build` and `test` scripts in package.json, then runs them
+ * with the detected package manager. Falls back to `<pm> build && <pm> test`.
+ */
+export function buildValidationCommand(workdir: string): string {
+  const pm = detectPackageManager(workdir);
+  const run = pm === 'npm' ? 'npm run' : pm;
+
+  // Check which scripts exist in package.json
+  let hasBuild = false;
+  let hasTest = false;
+  try {
+    const pkgPath = join(workdir, 'package.json');
+    if (existsSync(pkgPath)) {
+      const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+      const scripts = pkg.scripts || {};
+      hasBuild = !!scripts.build;
+      hasTest = !!scripts.test;
+    }
+  } catch { /* ignore */ }
+
+  const parts: string[] = [];
+  if (hasBuild) parts.push(`${run} build`);
+  if (hasTest) parts.push(`${run} test`);
+
+  // If neither build nor test scripts exist, still try — the scripts
+  // might be defined in a workspace root or the commands may work anyway
+  if (parts.length === 0) {
+    parts.push(`${run} build`, `${run} test`);
+  }
+
+  return parts.join(' && ');
+}
+
 /** Run build/test validation. Shared by solo agents and team orchestrator. */
 export function runValidation(workdir: string): Promise<ValidationResult> {
+  const cmd = buildValidationCommand(workdir);
   return new Promise((resolve) => {
-    exec('pnpm build && pnpm test', {
+    exec(cmd, {
       cwd: workdir,
       timeout: VALIDATE_TIMEOUT_MS,
       maxBuffer: 5 * 1024 * 1024,
@@ -267,8 +339,9 @@ export async function runCodeAgentBackground(
       caTask.liveOutput = undefined;
       writeCodeAgentTask(caTask);
 
+      const validationCmd = buildValidationCommand(workdir);
       const runValidationPromise = (): Promise<string> => new Promise((res) => {
-        const validationProc = exec('pnpm build && pnpm test', {
+        const validationProc = exec(validationCmd, {
           cwd: workdir,
           timeout: VALIDATE_TIMEOUT_MS,
           maxBuffer: 5 * 1024 * 1024,

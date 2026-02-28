@@ -362,18 +362,42 @@ export async function checkVoiceDependencies(config: Config): Promise<DoctorChec
     issues.push('ffmpeg not found');
   }
 
-  // Check for whisper-cli (C++) or whisper (Python)
+  // Check for STT: local whisper OR API provider
   const whisperCli = spawnSync('which', ['whisper-cli'], { encoding: 'utf-8' });
   const whisperPy = spawnSync('which', ['whisper'], { encoding: 'utf-8' });
-  if (whisperCli.status !== 0 && whisperPy.status !== 0) {
-    issues.push('whisper not found (neither whisper-cli nor whisper)');
+  const hasLocalWhisper = whisperCli.status === 0 || whisperPy.status === 0;
+
+  // Check if any API STT provider is configured
+  const hasApiStt = Object.values(config.voice?.providers || {}).some(
+    (p) => p && typeof p === 'object' && 'stt' in p,
+  );
+
+  if (!hasLocalWhisper && !hasApiStt) {
+    issues.push('No STT available — install whisper-cli (brew install whisper-cpp) or configure an API STT provider (e.g. openai.stt)');
   }
 
   if (issues.length > 0) {
-    return fail(name, category, issues.join('; '), 'Install ffmpeg and whisper-cli (or whisper) for voice features.');
+    return fail(name, category, issues.join('; '), 'Install ffmpeg, and either whisper-cli (brew install whisper-cpp) or add openai.stt to voice providers.');
   }
 
-  return ok(name, category, 'ffmpeg and whisper available');
+  const sttMethod = hasLocalWhisper ? (whisperCli.status === 0 ? 'whisper-cli' : 'whisper') : 'API STT';
+  return ok(name, category, `ffmpeg and ${sttMethod} available`);
+}
+
+export async function checkPlaywrightIfBrowserEnabled(config: Config): Promise<DoctorCheckResult> {
+  const name = 'playwright_installed';
+  const category = 'runtime';
+
+  if (!isAnyBrowserEnabled(config)) {
+    return ok(name, category, 'Browser tools disabled');
+  }
+
+  const pw = spawnSync('npx', ['playwright', '--version'], { encoding: 'utf-8', timeout: 10000 });
+  if (pw.status === 0) {
+    return ok(name, category, `Playwright ${(pw.stdout || '').trim()}`);
+  }
+
+  return fail(name, category, 'Playwright not installed', 'Run: npx playwright install chromium');
 }
 
 export async function checkMcpConfig(config: Config): Promise<DoctorCheckResult> {

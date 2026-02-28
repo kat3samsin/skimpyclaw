@@ -997,6 +997,22 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
       } else {
         statusWarn('Chrome not found — browser tool may not work until Chrome is installed');
       }
+
+      // Check for Playwright
+      const pw = spawnSync('npx', ['playwright', '--version'], { encoding: 'utf-8', timeout: 10000 });
+      if (pw.status === 0) {
+        statusOk('Playwright detected');
+      } else {
+        console.log('');
+        console.log('   ┌─────────────────────────────────────────────────────────┐');
+        console.log('   │  Browser tool requires Playwright. Install it:          │');
+        console.log('   │                                                         │');
+        console.log('   │    npx playwright install chromium                      │');
+        console.log('   │                                                         │');
+        console.log('   │  Without this, the browser tool will fail at runtime.   │');
+        console.log('   └─────────────────────────────────────────────────────────┘');
+        console.log('');
+      }
     } else {
       statusOk('browser disabled');
     }
@@ -1010,6 +1026,31 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
         statusOk('ffmpeg detected');
       } else {
         statusWarn('ffmpeg not found — voice features may not work until ffmpeg is installed');
+      }
+
+      // Check for STT (speech-to-text) capability
+      const whisperCli = spawnSync('which', ['whisper-cli'], { encoding: 'utf-8' });
+      const whisperPy = spawnSync('which', ['whisper'], { encoding: 'utf-8' });
+      if (whisperCli.status === 0) {
+        statusOk('whisper-cli detected (whisper.cpp)');
+      } else if (whisperPy.status === 0) {
+        statusOk('whisper detected (Python)');
+      } else {
+        console.log('');
+        console.log('   ┌─────────────────────────────────────────────────────────┐');
+        console.log('   │  Voice transcription (STT) requires one of:             │');
+        console.log('   │                                                         │');
+        console.log('   │  Option A: Local whisper.cpp (free, recommended)        │');
+        console.log('   │    brew install whisper-cpp                             │');
+        console.log('   │    whisper-cpp-download-ggml-model small                │');
+        console.log('   │                                                         │');
+        console.log('   │  Option B: OpenAI Whisper API ($0.006/min)              │');
+        console.log('   │    Add OPENAI_API_KEY to ~/.skimpyclaw/.env             │');
+        console.log('   │    Config auto-includes openai.stt if provider selected │');
+        console.log('   │                                                         │');
+        console.log('   │  Without either, voice messages cannot be transcribed.  │');
+        console.log('   └─────────────────────────────────────────────────────────┘');
+        console.log('');
       }
     } else {
       statusOk('voice disabled');
