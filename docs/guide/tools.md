@@ -130,6 +130,6 @@ skimpyclaw tools remove my-server
 
 `tools install` and `tools remove` modify `~/.mcporter/mcporter.json`. Restart SkimpyClaw after changes.
 
-## Exec approval
+## Exec Approval
 
-Sensitive tool calls (configurable) can require human-in-the-loop approval before execution. When triggered, the agent pauses and sends an approval request to the active channel. The user can approve or deny from Telegram/Discord.
+The `Bash` tool has a built-in safety gate that pauses and asks for human approval before running dangerous commands (risk tiers 2-3). See the dedicated [Exec Approval](./exec-approval.md) page for full details on risk tiers, configuration, and channel behavior.

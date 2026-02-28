@@ -84,6 +84,7 @@ export default withMermaid({
             { text: 'Tools', link: '/guide/tools.html' },
             { text: 'Coding Agents', link: '/guide/coding-agents.html' },
             { text: 'Sandbox', link: '/guide/sandbox.html' },
+            { text: 'Exec Approval', link: '/guide/exec-approval.html' },
             { text: 'Skills', link: '/guide/skills.html' },
             { text: 'Dashboard', link: '/guide/dashboard.html' },
           ]

@@ -103,6 +103,18 @@ skimpyclaw sandbox prune        # Remove orphaned containers
 skimpyclaw sandbox doctor       # Run targeted sandbox diagnostics
 ```
 
+## What Runs in Sandbox (and What Doesn't)
+
+| Component | Sandboxed? | Notes |
+|-----------|-----------|-------|
+| `Bash` tool | ✅ Yes | All Bash commands route through the container |
+| `Read` / `Write` / `Glob` | ❌ No | File tools run on host (path-validated) |
+| `Browser` tool | ❌ No | Playwright runs on host |
+| `code_with_agent` / `code_with_team` | ❌ No | Coding agents spawn CLI processes on host |
+| Cron `script` payloads | ❌ No | Scripts run on host |
+
+Coding agents (`claude`, `codex`, `kimi`) manage their own execution environment. See [Coding Agents](./coding-agents.md#sandbox) for details.
+
 ## Per-Job Sandbox
 
 Cron jobs and coding agents can have independent sandbox settings. Each coding agent spawned via `code_with_agent` gets its own container instance.
