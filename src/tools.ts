@@ -23,6 +23,8 @@ import { executeBrowser, cleanupBrowser } from './tools/browser-tool.js';
 import type { SandboxConfig } from './types.js';
 import { ensureContainer, SANDBOX_DEFAULTS, translatePath, validateMountPaths } from './sandbox/index.js';
 import { sandboxBash, sandboxReadFile, sandboxWriteFile, sandboxListDir, sandboxGlob } from './sandbox/index.js';
+import { isBashCommandSafe } from './security.js';
+import { classifyCommandRisk, requiresApproval } from './exec-approval.js';
 
 // Re-export from code-agents module for backward compatibility
 export {
@@ -458,8 +460,28 @@ export async function executeTool(
           return reversed;
         };
         switch (normalized) {
-          case 'bash':
-            return await sandboxBash(containerName, translateBashPaths(input.command), input.cwd ? tp(input.cwd) : undefined, config.bashTimeout);
+          case 'bash': {
+            const translatedCmd = translateBashPaths(input.command);
+            // Apply hard safety blocks and exec-approval even inside sandbox.
+            // The sandbox provides filesystem isolation but not command-level policy.
+            if (!isBashCommandSafe(translatedCmd)) {
+              return 'Error: Command blocked by safety filter.';
+            }
+            const classification = classifyCommandRisk(translatedCmd);
+            const approvalConfig = config.execApproval;
+            if (requiresApproval(classification, approvalConfig)) {
+              const isUnattended =
+                context?.channel === 'subagent' ||
+                context?.isCronJob === true ||
+                (!context?.approverUserId && !context?.channelTargetId && !context?.chatId);
+              if (isUnattended) {
+                return `⛔ Command blocked — tier ${classification.tier} commands require approval but no approver is available in this context (${classification.reason}). Use safer alternatives or request approval via an interactive channel.`;
+              }
+              // Has an approver — fall through to sandboxBash (approval handled by executeBash on non-sandbox path;
+              // for sandbox we block unattended and allow attended through, letting the outer approval gate handle it)
+            }
+            return await sandboxBash(containerName, translatedCmd, input.cwd ? tp(input.cwd) : undefined, config.bashTimeout);
+          }
           case 'read_file':
             return await sandboxReadFile(containerName, tp(input.file_path || input.path));
           case 'write_file':

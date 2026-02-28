@@ -51,6 +51,17 @@ export async function executeBash(command: string, cwd: string | undefined, conf
   if (approvalConfig?.enabled !== false) {
     const classification = classifyCommandRisk(command);
     if (requiresApproval(classification, approvalConfig)) {
+      // Unattended contexts (subagents, cron) have no human available to approve.
+      // Fast-deny instead of blocking for the full TTL.
+      const isUnattended =
+        context?.channel === 'subagent' ||
+        context?.isCronJob === true ||
+        (!context?.approverUserId && !context?.channelTargetId && !context?.chatId);
+
+      if (isUnattended) {
+        return `⛔ Command blocked — tier ${classification.tier} commands require approval but no approver is available in this context (${classification.reason}). Use safer alternatives or request approval via an interactive channel.`;
+      }
+
       // Build channel metadata from context for notification routing
       const channelMeta: ApprovalChannelMeta | undefined = context?.channel
         ? {

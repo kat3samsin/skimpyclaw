@@ -274,6 +274,62 @@ describe('bash', () => {
     const result = await executeTool('delete_everything', {}, toolConfig);
     expect(result).toContain('Error: Unknown tool');
   });
+
+  describe('exec approval in unattended contexts', () => {
+    it('fast-denies tier 3 inline interpreter scripts in subagent context', async () => {
+      const result = await executeTool(
+        'Bash',
+        { command: 'node -e "console.log(1)"' },
+        toolConfig,
+        { channel: 'subagent' },
+      );
+      expect(result).toContain('⛔');
+      expect(result).toContain('tier 3');
+      expect(result).not.toContain('approved');
+    });
+
+    it('fast-denies tier 2 commands in subagent context', async () => {
+      const result = await executeTool(
+        'Bash',
+        { command: 'gh pr review --approve' },
+        toolConfig,
+        { channel: 'subagent' },
+      );
+      expect(result).toContain('⛔');
+      expect(result).toContain('tier 2');
+    });
+
+    it('fast-denies tier 3 commands in cron context', async () => {
+      const result = await executeTool(
+        'Bash',
+        { command: 'node -e "console.log(1)"' },
+        toolConfig,
+        { isCronJob: true },
+      );
+      expect(result).toContain('⛔');
+      expect(result).toContain('tier 3');
+    });
+
+    it('fast-denies when no approver and no chatId', async () => {
+      const result = await executeTool(
+        'Bash',
+        { command: 'kubectl delete pods --all' },
+        toolConfig,
+        {},
+      );
+      expect(result).toContain('⛔');
+    });
+
+    it('allows safe tier 0 commands in subagent context', async () => {
+      const result = await executeTool(
+        'Bash',
+        { command: 'echo hello' },
+        toolConfig,
+        { channel: 'subagent' },
+      );
+      expect(result.trim()).toBe('hello');
+    });
+  });
 });
 
 describe('browser', () => {
