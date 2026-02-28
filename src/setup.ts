@@ -662,7 +662,7 @@ export function buildSetupConfig(input: SetupBuildInput): Record<string, unknown
       jobs: starterCronJobs,
     },
     heartbeat: {
-      intervalMs: 1800000,
+      intervalMs: 3600000,
       prompt: 'Read ~/.skimpyclaw/agents/main/HEARTBEAT.md. Follow it strictly. If nothing needs attention, reply HEARTBEAT_OK.',
       tools: {
         enabled: true,
