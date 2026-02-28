@@ -48,7 +48,7 @@ function resolveChannelPreference(config: Config): ChannelId | null {
 
 async function loadAdapter(channel: ChannelId): Promise<ChannelAdapter> {
   if (channel === 'telegram') {
-    const telegram = await import('./telegram.js');
+    const telegram = await import('./channels/telegram/index.js');
     return {
       init: async (config) => (await telegram.initTelegram(config)) !== null,
       start: telegram.startTelegram,

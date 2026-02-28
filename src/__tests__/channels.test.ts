@@ -20,7 +20,7 @@ const discordMock = vi.hoisted(() => ({
   getDiscordDefaultTarget: vi.fn(() => '999'),
 }));
 
-vi.mock('../telegram.js', () => telegramMock);
+vi.mock('../channels/telegram/index.js', () => telegramMock);
 vi.mock('../discord.js', () => discordMock);
 
 import {

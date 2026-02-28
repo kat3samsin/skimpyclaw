@@ -135,6 +135,27 @@ export function clearMcpToolCache(): void {
 
 const toolDefsCache = new TTLCache<any[]>(60_000);
 
+/** Inject project names into a tool's workdir description, or return the tool unchanged. */
+function injectProjects(tool: any, projects?: Record<string, string>): any {
+  if (!projects || Object.keys(projects).length === 0) return tool;
+  const projectList = Object.entries(projects)
+    .map(([name, path]) => `"${name}" → ${path}`)
+    .join(', ');
+  return {
+    ...tool,
+    input_schema: {
+      ...tool.input_schema,
+      properties: {
+        ...tool.input_schema.properties,
+        workdir: {
+          type: 'string',
+          description: `Working directory or project name. Named projects: ${projectList}. Default: SkimpyClaw repo root.`,
+        },
+      },
+    },
+  };
+}
+
 /**
  * Get all available tool definitions: built-ins + browser (if enabled) + MCP (auto-discovered) + agent tools.
  * This is the primary way to get tools — replaces the static TOOL_DEFINITIONS export.
@@ -173,27 +194,7 @@ export async function getToolDefinitions(config?: ToolConfig, options?: { includ
   // Skips MCP discovery and code_with_team.
   if (profile === 'coding') {
     if (options?.includeAgentTools) {
-      const projects = options.projects;
-      if (projects && Object.keys(projects).length > 0) {
-        const projectList = Object.entries(projects)
-          .map(([name, path]) => `"${name}" → ${path}`)
-          .join(', ');
-        tools.push({
-          ...CODE_WITH_AGENT_TOOL,
-          input_schema: {
-            ...CODE_WITH_AGENT_TOOL.input_schema,
-            properties: {
-              ...CODE_WITH_AGENT_TOOL.input_schema.properties,
-              workdir: {
-                type: 'string',
-                description: `Working directory or project name. Named projects: ${projectList}. Default: SkimpyClaw repo root.`,
-              },
-            },
-          },
-        });
-      } else {
-        tools.push(CODE_WITH_AGENT_TOOL);
-      }
+      tools.push(injectProjects(CODE_WITH_AGENT_TOOL, options.projects));
       tools.push(CHECK_CODE_AGENT_TOOL);
     }
     toolDefsCache.set(cacheKey, tools);
@@ -210,54 +211,9 @@ export async function getToolDefinitions(config?: ToolConfig, options?: { includ
 
   // Include code_with_agent, code_with_team, and check_code_agent when requested
   if (options?.includeAgentTools) {
-
-    // Inject project names into code_with_agent description so the model knows what to use
     const projects = options.projects;
-    if (projects && Object.keys(projects).length > 0) {
-      const projectList = Object.entries(projects)
-        .map(([name, path]) => `"${name}" → ${path}`)
-        .join(', ');
-      const codeAgentWithProjects = {
-        ...CODE_WITH_AGENT_TOOL,
-        input_schema: {
-          ...CODE_WITH_AGENT_TOOL.input_schema,
-          properties: {
-            ...CODE_WITH_AGENT_TOOL.input_schema.properties,
-            workdir: {
-              type: 'string',
-              description: `Working directory or project name. Named projects: ${projectList}. Default: SkimpyClaw repo root.`,
-            },
-          },
-        },
-      };
-      tools.push(codeAgentWithProjects);
-    } else {
-      tools.push(CODE_WITH_AGENT_TOOL);
-    }
-
-    // Inject project names into code_with_team description too
-    if (projects && Object.keys(projects).length > 0) {
-      const projectList = Object.entries(projects)
-        .map(([name, path]) => `"${name}" → ${path}`)
-        .join(', ');
-      const codeTeamWithProjects = {
-        ...CODE_WITH_TEAM_TOOL,
-        input_schema: {
-          ...CODE_WITH_TEAM_TOOL.input_schema,
-          properties: {
-            ...CODE_WITH_TEAM_TOOL.input_schema.properties,
-            workdir: {
-              type: 'string',
-              description: `Working directory or project name. Named projects: ${projectList}. Default: SkimpyClaw repo root.`,
-            },
-          },
-        },
-      };
-      tools.push(codeTeamWithProjects);
-    } else {
-      tools.push(CODE_WITH_TEAM_TOOL);
-    }
-
+    tools.push(injectProjects(CODE_WITH_AGENT_TOOL, projects));
+    tools.push(injectProjects(CODE_WITH_TEAM_TOOL, projects));
     tools.push(CHECK_CODE_AGENT_TOOL);
   }
 
