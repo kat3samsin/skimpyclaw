@@ -774,6 +774,62 @@ When asked to search the web:
 
 Do NOT fabricate results. If the search returns nothing useful, say so.
 `,
+  'duckduckgo-html-search': `---
+name: duckduckgo-html-search
+description: Search the web via DuckDuckGo HTML results using the Browser tool
+emoji: 🦆
+tags: [search, web, browser]
+priority: 45
+enabled: true
+---
+
+# DuckDuckGo HTML Search Skill
+
+Use this skill when the user asks for web search, source gathering, or lightweight browsing.
+
+## Priority rule
+DuckDuckGo HTML via Browser is the default search path.
+- Prefer DuckDuckGo first, even if \\\`$web_search\\\` is available.
+- Use \\\`$web_search\\\` only when the user explicitly asks for it, DuckDuckGo is blocked, or Browser is unavailable.
+
+## Default workflow
+1. Build query URL: \\\`https://duckduckgo.com/html/?q=<urlencoded query>\\\`
+2. Open the URL with Browser.
+3. Wait for result anchors (\\\`a.result__a\\\`) or fallback body text.
+4. Extract results using one Browser \\\`evaluate\\\` call when possible.
+5. Return only actually extracted items (never pad count).
+
+## Extraction requirements
+For each result, capture when available:
+- title
+- url
+- snippet
+
+If a field is missing, set it to \\\`UNAVAILABLE\\\`.
+
+## Integrity rules
+- Never fabricate results.
+- If the page blocks, fails, or no results render, return \\\`UNAVAILABLE\\\` and state why.
+- Never mix real and invented entries.
+- Include source URLs in output.
+
+## Browser strategy
+- Prefer one-page extraction via \\\`evaluate\\\`:
+  - Collect \\\`a.result__a\\\` for title + href
+  - Collect nearby snippet nodes (\\\`.result__snippet\\\`) when present
+- Use minimal actions: open → waitFor → evaluate → optional screenshot.
+- If selectors change, fallback to visible text extraction and clearly mark reduced confidence.
+
+## Output format (concise)
+- Query used
+- Result count actually extracted
+- Bulleted results with title + URL + snippet
+- Notes section for failures/limits
+
+## Safe defaults
+- Default top results target: 5 (or user-specified)
+- If user asks for deep research, gather multiple queries but keep each query's extraction explicit and separated.
+`,
 };
 
 function ensureCoreTemplates(agentDir: string): string[] {
@@ -793,7 +849,7 @@ function ensureStarterSkills(starters: SetupStarters): string[] {
   const skillsDir = join(CONFIG_DIR, 'skills');
   mkdirSync(skillsDir, { recursive: true });
 
-  const requested: string[] = [];
+  const requested: string[] = ['duckduckgo-html-search']; // always installed
   if (starters.skillDailyNotes) requested.push('daily-notes');
   if (starters.skillWeather) requested.push('weather');
   if (starters.skillWebSearch) requested.push('web-search');
