@@ -283,8 +283,9 @@ interface SetupStarters {
   cronWeather: boolean;
   timezone: string;
   weatherLocation: string;
-  skillCodeReview: boolean;
   skillDailyNotes: boolean;
+  skillWeather: boolean;
+  skillWebSearch: boolean;
 }
 
 interface SetupBuildInput {
@@ -568,15 +569,17 @@ export function buildSetupConfig(input: SetupBuildInput): Record<string, unknown
     cronWeather: false,
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
     weatherLocation: 'New York, NY',
-    skillCodeReview: false,
     skillDailyNotes: false,
+    skillWeather: false,
+    skillWebSearch: false,
   };
   const basePaths = ['${HOME}/.skimpyclaw'];
   const allPaths = [...basePaths, ...(input.extraAllowedPaths || [])];
   const starterCronJobs = buildStarterCronJobs(starters);
   const starterSkillEntries: Record<string, boolean> = {};
-  if (starters.skillCodeReview) starterSkillEntries['code-review'] = true;
   if (starters.skillDailyNotes) starterSkillEntries['daily-notes'] = true;
+  if (starters.skillWeather) starterSkillEntries['weather'] = true;
+  if (starters.skillWebSearch) starterSkillEntries['web-search'] = true;
   return {
     gateway: {
       port: 18790,
@@ -704,19 +707,6 @@ const REQUIRED_TEMPLATE_DEFAULTS: Record<string, string> = {
 };
 
 const STARTER_SKILL_TEMPLATES: Record<string, string> = {
-  'code-review': `---
-name: code-review
-description: Structured code review checklist for bugs, regressions, and missing tests.
-triggers: ["review", "pr", "regression", "tests"]
-priority: 80
----
-
-When asked to review code:
-1. Focus on correctness and regressions first.
-2. Call out missing or weak test coverage.
-3. Prefer concrete file-level findings.
-4. End with risk summary and recommended fixes.
-`,
   'daily-notes': `---
 name: daily-notes
 description: Keep daily notes organized under the configured daily notes directory.
@@ -729,6 +719,36 @@ When writing daily notes:
 2. Include sections: Priorities, Schedule, Notes, Follow-ups.
 3. Keep entries concise and actionable.
 4. Avoid creating files outside the configured daily notes directory.
+`,
+  'weather': `---
+name: weather
+description: Fetch and format weather data for daily briefings and quick checks.
+triggers: ["weather", "forecast", "temperature", "rain"]
+priority: 45
+---
+
+When asked about weather or generating a daily briefing:
+1. Use web search to find current weather for the user's location.
+2. Format as: conditions, high/low temps, precipitation chance.
+3. Keep it to 2-3 sentences max.
+4. Include any weather alerts if present.
+5. For daily briefings: mention if rain is expected (affects outdoor plans).
+`,
+  'web-search': `---
+name: web-search
+description: Search the web using the Browser tool. Opens DuckDuckGo, reads results, and returns findings.
+triggers: ["search", "look up", "google", "find online", "web search"]
+priority: 50
+---
+
+When asked to search the web:
+1. Use the Browser tool to open https://html.duckduckgo.com/html/?q=<URL-encoded query>
+2. Use getText to read the search results page.
+3. If a specific result looks promising, open that URL and extract the relevant content.
+4. Summarize findings concisely — include source URLs.
+5. Close the browser when done.
+
+Do NOT fabricate results. If the search returns nothing useful, say so.
 `,
 };
 
@@ -750,8 +770,9 @@ function ensureStarterSkills(starters: SetupStarters): string[] {
   mkdirSync(skillsDir, { recursive: true });
 
   const requested: string[] = [];
-  if (starters.skillCodeReview) requested.push('code-review');
   if (starters.skillDailyNotes) requested.push('daily-notes');
+  if (starters.skillWeather) requested.push('weather');
+  if (starters.skillWebSearch) requested.push('web-search');
 
   for (const skillName of requested) {
     const dir = join(skillsDir, skillName);
@@ -1112,16 +1133,18 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
       const locationInput = await ask(rl, '   Weather location (city, state/country) [New York, NY]: ');
       weatherLocation = locationInput || 'New York, NY';
     }
-    const addCodeReviewSkill = /^y(es)?$/i.test(await ask(rl, '   Add starter skill: code-review? [y/N]: '));
     const addDailyNotesSkill = /^y(es)?$/i.test(await ask(rl, '   Add starter skill: daily-notes? [y/N]: '));
+    const addWeatherSkill = /^y(es)?$/i.test(await ask(rl, '   Add starter skill: weather? [y/N]: '));
+    const addWebSearchSkill = /^y(es)?$/i.test(await ask(rl, '   Add starter skill: web-search (uses Browser tool)? [y/N]: '));
 
     const starters: SetupStarters = {
       cronTechNews: addTechNewsCron,
       cronWeather: addWeatherCron,
       timezone: cronTimezone,
       weatherLocation,
-      skillCodeReview: addCodeReviewSkill,
       skillDailyNotes: addDailyNotesSkill,
+      skillWeather: addWeatherSkill,
+      skillWebSearch: addWebSearchSkill,
     };
 
     const { envContent, config: generatedConfig } = buildSetupArtifacts({

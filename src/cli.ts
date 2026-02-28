@@ -1050,7 +1050,30 @@ async function commandSandbox(args: string[]): Promise<number> {
     return failed ? 1 : 0;
   }
 
-  console.log('Usage: skimpyclaw sandbox <status|prune|init|doctor>');
+  console.log(`Usage: skimpyclaw sandbox <command>
+
+Commands:
+  init     Build sandbox image and enable in config
+  status   List active sandbox containers
+  prune    Remove orphaned sandbox containers
+  doctor   Run targeted sandbox diagnostics
+
+Init options:
+  --runtime <container|docker>   Container runtime (default: auto-detect)
+  --profile <minimal|dev|full>   Package set (default: minimal)
+  --image <name>                 Image name (default: skimpyclaw-sandbox:latest)
+  --network <name>               Network name (default: auto per runtime)
+
+Profiles:
+  minimal   bash, curl, git, gh, jq, python3, ripgrep, pnpm
+  dev       minimal + gcc, g++, make
+  full      dev + pip3, sqlite3, unzip, less
+
+Which runtime?
+  Apple Containers (macOS 26+) — lighter, faster startup, no daemon.
+  Docker — cross-platform, use if you already run Docker.
+  Auto-detect prefers Apple Containers, falls back to Docker.
+`);
   return 1;
 }
 
@@ -1059,6 +1082,17 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<nu
 
   if (!command || command === 'help' || command === '--help' || command === '-h') {
     printHelp();
+    return 0;
+  }
+
+  if (command === '--version' || command === '-v' || command === 'version') {
+    const pkgPath = join(fileURLToPath(import.meta.url), '..', '..', 'package.json');
+    try {
+      const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+      console.log(`skimpyclaw v${pkg.version}`);
+    } catch {
+      console.log('skimpyclaw (version unknown)');
+    }
     return 0;
   }
 

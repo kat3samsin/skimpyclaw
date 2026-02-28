@@ -104,7 +104,7 @@ async function ensureBrowser(config: ToolConfig, overrides?: Record<string, any>
         '--no-first-run',
         '--no-default-browser-check',
       ],
-      ignoreDefaultArgs: ['--enable-automation'],
+      ignoreDefaultArgs: ['--enable-automation', '--no-sandbox'],
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

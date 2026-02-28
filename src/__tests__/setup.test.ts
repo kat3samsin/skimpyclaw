@@ -143,8 +143,9 @@ describe('setup config generation', () => {
         cronWeather: true,
         timezone: 'America/New_York',
         weatherLocation: 'Austin, TX',
-        skillCodeReview: true,
         skillDailyNotes: true,
+        skillWeather: true,
+        skillWebSearch: false,
       },
     }) as any;
 
@@ -154,7 +155,7 @@ describe('setup config generation', () => {
     expect(config.cron.jobs[1].schedule.tz).toBe('America/New_York');
     expect(config.cron.jobs[1].payload.message).toContain('Austin, TX');
     expect(config.skills.enabled).toBe(true);
-    expect(config.skills.entries['code-review']).toBe(true);
     expect(config.skills.entries['daily-notes']).toBe(true);
+    expect(config.skills.entries['weather']).toBe(true);
   });
 });
