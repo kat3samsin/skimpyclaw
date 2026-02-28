@@ -164,6 +164,10 @@ export interface ToolConfig {
   bashTimeout?: number;    // Bash command timeout in ms (default: 30000)
   maxTurnTokens?: number;  // Max tokens per agent turn (default: 200000)
   toolProfile?: 'minimal' | 'coding' | 'full';  // Tool set to expose (default: 'full')
+  contextManagement?: {
+    enabled?: boolean;          // default true
+    maxContextTokens?: number;  // token threshold before compaction triggers (default: 100000)
+  };
   browser?: {
     enabled?: boolean;
     type?: 'chromium' | 'firefox' | 'webkit';

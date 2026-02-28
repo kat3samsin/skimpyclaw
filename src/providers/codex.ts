@@ -5,6 +5,7 @@ import { join } from 'path';
 import { homedir } from 'os';
 import type { ProviderChatParams, ProviderToolChatParams, ToolChatResult } from './types.js';
 import { stripProvider, truncateToolResult } from './utils.js';
+import { compactCodexMessages } from './context-manager.js';
 import { toCodexContent, toCodexToolDefinitions } from './content.js';
 import { toNumericUsageDetails, toCostDetails } from './observability.js';
 import { executeTool } from '../tools.js';
@@ -344,10 +345,13 @@ export async function chatWithToolsCodex(params: ProviderToolChatParams): Promis
       };
     }
 
+    // Compact old tool results if context is growing large
+    const inputForApi = compactCodexMessages(input, toolConfig.contextManagement, i + 1);
+
     const body: any = {
       model: modelId,
       instructions,
-      input,
+      input: inputForApi,
       store: false,
       stream: true,
       reasoning: { effort: 'medium', summary: 'auto' },

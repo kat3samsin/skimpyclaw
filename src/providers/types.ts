@@ -3,6 +3,8 @@
 import type { Config, ChatMessage, ChatOptions, ToolConfig, ContentBlock } from '../types.js';
 import type { ExecuteToolContext } from '../tools/execute-context.js';
 
+export type ContextManagementConfig = NonNullable<ToolConfig['contextManagement']>;
+
 export interface ToolChatResult {
   response: string;
   toolCalls: string[];

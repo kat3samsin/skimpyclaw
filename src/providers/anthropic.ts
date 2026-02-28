@@ -4,6 +4,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { startObservation } from '@langfuse/tracing';
 import type { ProviderChatParams, ProviderToolChatParams, ToolChatResult } from './types.js';
 import { buildSystemParam, addToolCacheBreakpoint, contentToText, stripProvider, buildThinkingConfig, truncateToolResult } from './utils.js';
+import { compactAnthropicMessages } from './context-manager.js';
 import { toAnthropicUsageDetails, toCostDetails } from './observability.js';
 import { getToolDefinitions, executeTool, type ExecuteToolContext } from '../tools.js';
 import { ToolCallGuard } from './tool-guard.js';
@@ -184,10 +185,13 @@ export async function chatWithToolsAnthropic(params: ProviderToolChatParams): Pr
       };
     }
 
+    // Compact old tool results if context is growing large
+    const messagesForApi = compactAnthropicMessages(apiMessages, toolConfig.contextManagement, i + 1);
+
     const anthropicParams: any = {
       model: modelId,
       max_tokens: options.maxTokens || 16384,
-      messages: apiMessages,
+      messages: messagesForApi,
       tools: toolDefs,
     };
 
