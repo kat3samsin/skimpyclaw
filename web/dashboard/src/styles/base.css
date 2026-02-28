@@ -2396,6 +2396,7 @@ textarea::placeholder {
     z-index: 210;
   }
   .shell.shell-narrow.sidebar-open .sidebar { transform: translateX(0); }
+  .shell.shell-narrow.sidebar-open .global-sidebar-toggle { display: none; }
   .global-sidebar-toggle {
     position: fixed;
     top: 20px;
