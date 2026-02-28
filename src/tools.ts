@@ -462,7 +462,7 @@ export async function executeTool(
         switch (normalized) {
           case 'bash': {
             const translatedCmd = translateBashPaths(input.command);
-            // Apply hard safety blocks and exec-approval even inside sandbox.
+            // Apply hard safety blocks and exec-approval inside sandbox.
             // The sandbox provides filesystem isolation but not command-level policy.
             if (!isBashCommandSafe(translatedCmd)) {
               return 'Error: Command blocked by safety filter.';
@@ -477,8 +477,20 @@ export async function executeTool(
               if (isUnattended) {
                 return `⛔ Command blocked — tier ${classification.tier} commands require approval but no approver is available in this context (${classification.reason}). Use safer alternatives or request approval via an interactive channel.`;
               }
-              // Has an approver — fall through to sandboxBash (approval handled by executeBash on non-sandbox path;
-              // for sandbox we block unattended and allow attended through, letting the outer approval gate handle it)
+              // Attended context — run full approval flow before executing in sandbox
+              const { createApprovalRequest: sbxCreate, waitForApproval: sbxWait } = await import('./exec-approval.js');
+              const ttlMs = approvalConfig?.ttlMs ?? 5 * 60 * 1000;
+              const channelMeta = context?.channel ? {
+                channel: context.channel,
+                chatId: context.channelTargetId ?? context.chatId,
+                userId: context.approverUserId,
+                username: context.approverUsername,
+              } : context?.chatId ? { channel: 'telegram', chatId: context.chatId } : undefined;
+              const sbxReq = sbxCreate(translatedCmd, input.cwd, classification, approvalConfig, channelMeta);
+              const sbxResolved = await sbxWait(sbxReq.id, ttlMs);
+              if (sbxResolved.status !== 'approved') {
+                return `⛔ Command not executed — approval ${sbxResolved.status} (tier ${classification.tier}: ${classification.reason}).`;
+              }
             }
             return await sandboxBash(containerName, translatedCmd, input.cwd ? tp(input.cwd) : undefined, config.bashTimeout);
           }
