@@ -60,6 +60,38 @@ export function compactAnthropicMessages(
 }
 
 /**
+ * Compact OpenAI-format apiMessages when over threshold.
+ * Truncates content of old `role: 'tool'` messages; leaves last KEEP_TAIL messages intact.
+ * Does NOT mutate the input array — returns a new array.
+ */
+export function compactOpenAIMessages(
+  messages: any[],
+  config?: ContextManagementConfig,
+  iteration: number = 0,
+): any[] {
+  if (config?.enabled === false) return messages;
+  const maxTokens = config?.maxContextTokens ?? DEFAULT_MAX_CONTEXT_TOKENS;
+  const estimated = estimateTokens(messages);
+  if (estimated <= maxTokens) return messages;
+
+  console.log(
+    `[context-manager] Compacting OpenAI messages at iteration ${iteration} (~${Math.round(estimated / 1000)}k tokens > ${Math.round(maxTokens / 1000)}k threshold)`,
+  );
+
+  const tail = messages.slice(-KEEP_TAIL);
+  const head = messages.slice(0, -KEEP_TAIL);
+
+  const compacted = head.map(msg => {
+    if (msg.role !== 'tool') return msg;
+    if (typeof msg.content !== 'string') return msg;
+    if (msg.content.length <= RESULT_MAX_CHARS) return msg;
+    return { ...msg, content: msg.content.slice(0, RESULT_MAX_CHARS) + ' [truncated]' };
+  });
+
+  return [...compacted, ...tail];
+}
+
+/**
  * Compact Codex-format input items when over threshold.
  * Truncates output of old function_call_output items; leaves last KEEP_TAIL items intact.
  * Does NOT mutate the input array — returns a new array.

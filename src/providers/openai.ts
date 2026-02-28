@@ -4,6 +4,7 @@ import OpenAI from 'openai';
 import { startObservation } from '@langfuse/tracing';
 import type { ProviderChatParams, ProviderToolChatParams, ToolChatResult } from './types.js';
 import { stripProvider, toOpenAITools, truncateToolResult } from './utils.js';
+import { compactOpenAIMessages } from './context-manager.js';
 import { toOpenAIContent } from './content.js';
 import { toUsageDetails, toCostDetails } from './observability.js';
 import { getToolDefinitions, executeTool } from '../tools.js';
@@ -187,6 +188,9 @@ export async function chatWithToolsOpenAI(params: ProviderToolChatParams, provid
       };
     }
 
+    // Compact old tool results if context is growing large
+    const messagesForApi = compactOpenAIMessages(apiMessages, toolConfig.contextManagement, i + 1);
+
     console.log(`[agent:openai-tools] Iteration ${i + 1}/${maxIterations} (provider: ${provider}, model: ${modelId})`);
 
     const genObs = await startGenerationObservation(`${provider}:${modelId}`, {
@@ -203,7 +207,7 @@ export async function chatWithToolsOpenAI(params: ProviderToolChatParams, provid
     try {
       completion = await client.chat.completions.create({
         model: modelId,
-        messages: apiMessages,
+        messages: messagesForApi,
         tools: openaiTools,
         max_tokens: options.maxTokens || 4096,
         temperature: options.temperature,

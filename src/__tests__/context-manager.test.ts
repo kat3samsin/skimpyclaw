@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   estimateTokens,
   compactAnthropicMessages,
+  compactOpenAIMessages,
   compactCodexMessages,
 } from '../providers/context-manager.js';
 
@@ -135,6 +136,75 @@ describe('compactAnthropicMessages', () => {
     }
 
     const result = compactAnthropicMessages(messages, { enabled: false, maxContextTokens: 1 });
+    expect(result).toBe(messages);
+  });
+});
+
+// Helper: build an OpenAI-style tool exchange (assistant + tool result)
+function openaiExchange(toolResult: string) {
+  return [
+    {
+      role: 'assistant',
+      content: null,
+      tool_calls: [{ id: 'tc_1', type: 'function', function: { name: 'Bash', arguments: '{}' } }],
+    },
+    { role: 'tool', tool_call_id: 'tc_1', content: toolResult },
+  ];
+}
+
+describe('compactOpenAIMessages', () => {
+  it('passes through unchanged when under threshold', () => {
+    const messages = openaiExchange('short result');
+    const result = compactOpenAIMessages(messages, { maxContextTokens: 100_000 });
+    expect(result).toBe(messages);
+  });
+
+  it('truncates old tool content when over threshold', () => {
+    const longResult = 'x'.repeat(10_000);
+    const messages: any[] = [];
+    for (let i = 0; i < 30; i++) {
+      messages.push(...openaiExchange(longResult));
+    }
+
+    const result = compactOpenAIMessages(messages, { maxContextTokens: 1_000 });
+
+    const headItems = result.slice(0, -8);
+    const toolMessages = headItems.filter((m: any) => m.role === 'tool');
+    for (const msg of toolMessages) {
+      expect(msg.content).toContain('[truncated]');
+      expect(msg.content.length).toBeLessThan(longResult.length);
+    }
+  });
+
+  it('keeps last 8 messages intact', () => {
+    const longResult = 'x'.repeat(10_000);
+    const messages: any[] = [];
+    for (let i = 0; i < 30; i++) {
+      messages.push(...openaiExchange(longResult));
+    }
+
+    const result = compactOpenAIMessages(messages, { maxContextTokens: 1_000 });
+    expect(result.slice(-8)).toEqual(messages.slice(-8));
+  });
+
+  it('does not mutate the input array', () => {
+    const longResult = 'x'.repeat(10_000);
+    const messages: any[] = [];
+    for (let i = 0; i < 30; i++) {
+      messages.push(...openaiExchange(longResult));
+    }
+    const original = JSON.stringify(messages);
+    compactOpenAIMessages(messages, { maxContextTokens: 1_000 });
+    expect(JSON.stringify(messages)).toBe(original);
+  });
+
+  it('passes through unchanged when disabled', () => {
+    const longResult = 'x'.repeat(10_000);
+    const messages: any[] = [];
+    for (let i = 0; i < 30; i++) {
+      messages.push(...openaiExchange(longResult));
+    }
+    const result = compactOpenAIMessages(messages, { enabled: false, maxContextTokens: 1 });
     expect(result).toBe(messages);
   });
 });
