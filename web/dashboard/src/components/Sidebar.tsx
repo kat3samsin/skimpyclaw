@@ -18,9 +18,11 @@ import {
   LuSearch,
   LuSettings2,
   LuZap,
+  LuBuilding2,
 } from 'react-icons/lu';
 
 export type PageId =
+  | 'office'
   | 'overview'
   | 'history'
   | 'cron'
@@ -46,6 +48,7 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
+  { id: 'office', label: 'The Office', icon: LuBuilding2, section: 'dashboard' },
   { id: 'overview', label: 'Overview', icon: LuLayoutDashboard, section: 'dashboard' },
   { id: 'history', label: 'Messages', icon: LuMessageSquare, section: 'dashboard' },
   { id: 'approvals', label: 'Approvals', icon: LuBadgeCheck, section: 'dashboard' },
