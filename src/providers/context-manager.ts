@@ -10,7 +10,7 @@ import type { ContextManagementConfig } from './types.js';
 
 export type { ContextManagementConfig };
 
-const DEFAULT_MAX_CONTEXT_TOKENS = 100_000;
+const DEFAULT_MAX_CONTEXT_TOKENS = 200_000;
 const KEEP_TAIL = 8;         // always keep last N messages/items untouched
 const RESULT_MAX_CHARS = 500; // compact old results to this length
 
