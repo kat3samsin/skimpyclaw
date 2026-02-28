@@ -15,12 +15,12 @@ All runtime data lives under `~/.skimpyclaw/`.
 │   │   ├── HEARTBEAT.md
 │   │   └── memory/
 │   │       └── YYYY-MM-DD.md           # Daily conversation memory
-│   ├── coding/                         # Coding subagent (auto-created)
+│   ├── coding/                         # Coding agent (auto-created)
 │   │   ├── IDENTITY.md
 │   │   ├── TOOLS.md
 │   │   └── memory/
-│   ├── research/                       # Research subagent (auto-created)
-│   └── general/                        # General subagent (auto-created)
+│   ├── research/                       # Research agent (auto-created)
+│   └── general/                        # General agent (auto-created)
 ├── sessions/
 │   └── *.json                          # Session records (dashboard-readable)
 │   └── *.jsonl                         # Conversation history (Telegram/Discord)
@@ -34,7 +34,7 @@ All runtime data lives under `~/.skimpyclaw/`.
     │   └── <job>-YYYY-MM-DD.log        # Cron execution logs
     ├── audit/
     │   └── YYYY-MM-DD.jsonl            # Audit traces (one JSON line per trace)
-    ├── subagent-runs.jsonl             # Subagent task lifecycle events
+    ├── usage/                           # Token usage tracking (JSONL)
     ├── code-agent-status.json          # Coding agent live status
     └── digests/                        # Digest storage for cron outputs
         └── <job-id>/

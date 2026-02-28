@@ -305,6 +305,30 @@ interface SetupBuildInput {
 
 function buildStarterCronJobs(starters: SetupStarters): Array<Record<string, unknown>> {
   const jobs: Array<Record<string, unknown>> = [];
+
+  // Memory trim is always included — runs 2x/day on a cheap model
+  jobs.push({
+    id: 'memory-trim',
+    name: 'Memory Trim',
+    model: 'claude-haiku',
+    schedule: {
+      kind: 'cron',
+      expr: '0 0,12 * * *',
+      tz: starters.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
+    },
+    payload: {
+      kind: 'agentTurn',
+      message: '~/.skimpyclaw/prompts/memory-trim.md',
+      tools: {
+        enabled: true,
+        allowedPaths: [`${homedir()}/.skimpyclaw`],
+        maxIterations: 30,
+        bashTimeout: 10000,
+        toolProfile: 'minimal',
+      },
+    },
+  });
+
   if (starters.cronTechNews) {
     jobs.push({
       id: 'tech-digest',
