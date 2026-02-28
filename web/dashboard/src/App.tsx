@@ -19,12 +19,10 @@ import {
   Templates,
   Usage,
 } from './pages/index.js';
-import { Office } from './pages/Office.js';
 import { getToken, onUnauthorized, setToken } from './api/client.js';
 import './styles/base.css';
 
 const PAGE_IDS: PageId[] = [
-  'office',
   'overview',
   'history',
   'cron',
@@ -238,8 +236,6 @@ export function App() {
         return <History />;
       case 'cron':
         return <Cron showToast={showToast} />;
-      case 'office':
-        return <Office />;
       case 'usage':
         return <Usage />;
       case 'coding':
