@@ -1,5 +1,8 @@
 // Code Agent Orchestrator - Team coordination logic
 
+import { execSync } from 'child_process';
+import { existsSync, readFileSync } from 'fs';
+import { join } from 'path';
 import type { Config } from '../types.js';
 import type { ExecuteToolContext } from '../tools/execute-context.js';
 import type { CodeAgentTask, DecomposedSubtask, ChildResult } from './types.js';
@@ -52,6 +55,43 @@ export function computeWaves(subtasks: DecomposedSubtask[]): number[][] {
 }
 
 /**
+ * Gather lightweight codebase context to improve task decomposition.
+ * Returns a short summary of the project structure (file tree, package.json scripts).
+ * Capped at ~2000 chars to keep the decomposition prompt small.
+ */
+export function gatherCodebaseContext(workdir: string): string {
+  const parts: string[] = [];
+
+  // Package.json scripts
+  try {
+    const pkgPath = join(workdir, 'package.json');
+    if (existsSync(pkgPath)) {
+      const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+      if (pkg.scripts) {
+        const scriptNames = Object.keys(pkg.scripts).slice(0, 15).join(', ');
+        parts.push(`Scripts: ${scriptNames}`);
+      }
+      if (pkg.dependencies || pkg.devDependencies) {
+        const deps = Object.keys({ ...pkg.dependencies, ...pkg.devDependencies }).slice(0, 20).join(', ');
+        parts.push(`Key deps: ${deps}`);
+      }
+    }
+  } catch { /* ignore */ }
+
+  // Source file tree (top-level structure)
+  try {
+    const tree = execSync(
+      'find . -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*.jsx" | grep -v node_modules | grep -v dist | grep -v .test. | sort | head -60',
+      { cwd: workdir, timeout: 5000, encoding: 'utf-8' },
+    ).trim();
+    if (tree) parts.push(`Source files:\n${tree}`);
+  } catch { /* ignore */ }
+
+  const context = parts.join('\n\n');
+  return context.slice(0, 2000);
+}
+
+/**
  * Use a quick model call to decompose a complex task into N subtasks with optional dependency info.
  * Falls back to numbered subtask splitting on parse error.
  * Falls back to all-independent if dependency info is missing or invalid.
@@ -60,9 +100,26 @@ export async function decomposeTask(
   task: string,
   teamSize: number,
   config: Config,
+  workdir?: string,
 ): Promise<DecomposedSubtask[]> {
   try {
-    const prompt = `Split into exactly ${teamSize} subtasks. Return JSON only: {"subtasks":[{"description":"...","dependsOn":[]},...]}. Use 0-based indices for dependsOn.\n\nTask: ${task}`;
+    // Gather codebase context for smarter decomposition
+    const codebaseContext = workdir ? gatherCodebaseContext(workdir) : '';
+    const contextBlock = codebaseContext
+      ? `\n\nProject structure:\n${codebaseContext}\n`
+      : '';
+
+    const prompt = `You are a task decomposition expert. Split the following coding task into exactly ${teamSize} independent or dependent subtasks that can be assigned to separate coding agents.
+
+Rules:
+- Each subtask should be self-contained with clear file scope
+- Minimize file overlap between subtasks (agents work on the same worktree)
+- Use dependsOn to order subtasks that must run sequentially (e.g. create interface before implementation)
+- Be specific: mention exact files, functions, and expected changes
+- Return JSON only: {"subtasks":[{"description":"...","dependsOn":[]},...]}
+- Use 0-based indices for dependsOn
+${contextBlock}
+Task: ${task}`;
 
     const result = await runAgentTurn('main', prompt, config);
     const match = result.match(/\{[\s\S]*"subtasks"[\s\S]*\}/);
@@ -114,6 +171,7 @@ export async function synthesizeResults(
   originalTask: string,
   results: ChildResult[],
   config: Config,
+  workdir?: string,
 ): Promise<string> {
   try {
     const resultSummary = results.map((r, i) => {
@@ -123,12 +181,28 @@ export async function synthesizeResults(
       return `### Subtask ${i + 1}: ${r.subtask}\nStatus: ${r.status}\n${context}${r.error ? `\nError: ${r.error}` : ''}`;
     }).join('\n\n');
 
+    // Include actual file changes from git for accuracy
+    let diffBlock = '';
+    if (workdir) {
+      try {
+        const diffStat = execSync('git diff --stat HEAD 2>/dev/null || git diff --stat 2>/dev/null', {
+          cwd: workdir,
+          timeout: 5000,
+          encoding: 'utf-8',
+        }).trim();
+        if (diffStat) diffBlock = `\n\nActual file changes (git diff --stat):\n${diffStat.slice(0, 2000)}`;
+      } catch { /* not a git repo or no changes */ }
+    }
+
+    const succeeded = results.filter(r => r.status === 'completed').length;
+    const failed = results.filter(r => r.status !== 'completed').length;
+
     const prompt = `You are a results synthesizer. Summarize the results of a multi-agent coding task.
 
 Original task: ${originalTask}
 
-Results from each agent:
-${resultSummary}
+Results from each agent (${succeeded} succeeded, ${failed} failed):
+${resultSummary}${diffBlock}
 
 Provide a concise markdown summary of what was accomplished, what succeeded, and what failed (if anything). Be specific about files changed and outcomes.`;
 
@@ -169,7 +243,9 @@ export async function runTeamOrchestrator(
   });
 
   const timeoutMinutes = Math.min(context?.fullConfig?.codeAgents?.maxConcurrent ? 60 : 20, 60);
-  const perChildTimeout = Math.max(5, Math.floor(timeoutMinutes / teamSize));
+  // Reserve budget for overhead (decompose, synthesize, validation) and distribute rest across waves
+  const overheadMinutes = 5;
+  const availableForChildren = Math.max(timeoutMinutes - overheadMinutes, timeoutMinutes * 0.7);
   const CANCELLED_MESSAGE = 'Cancelled by user';
 
   try {
@@ -181,8 +257,10 @@ export async function runTeamOrchestrator(
     const fullConfig = context?.fullConfig;
     if (!fullConfig) throw new Error('No config available for task decomposition');
 
-    const subtasks = await decomposeTask(task, teamSize, fullConfig);
+    const subtasks = await decomposeTask(task, teamSize, fullConfig, workdir);
     const waves = computeWaves(subtasks);
+    // Distribute timeout across waves (not team size) for better budgeting
+    const perChildTimeout = Math.max(5, Math.floor(availableForChildren / waves.length));
     addEvent(traceId, {
       type: 'decompose',
       summary: `Decomposed into ${subtasks.length} subtasks in ${waves.length} wave(s)`,
@@ -224,6 +302,20 @@ export async function runTeamOrchestrator(
     parentTask.childTaskIds = childIds;
     writeCodeAgentTask(parentTask);
 
+    // Helper: get git diff summary for context passing between waves
+    function getGitDiffSummary(): string {
+      try {
+        const diff = execSync('git diff --stat HEAD 2>/dev/null || git diff --stat 2>/dev/null', {
+          cwd: workdir,
+          timeout: 5000,
+          encoding: 'utf-8',
+        }).trim();
+        return diff ? diff.slice(0, 1500) : '';
+      } catch {
+        return '';
+      }
+    }
+
     // Helper: build task prompt with predecessor context for dependent subtasks
     function buildChildPrompt(subtaskIdx: number): string {
       const sub = subtasks[subtaskIdx];
@@ -233,13 +325,19 @@ export async function runTeamOrchestrator(
       for (const depIdx of sub.dependsOn) {
         const depChild = getCodeAgent(childIdByIndex[depIdx]);
         if (depChild && depChild.outputPreview) {
+          // Use the full outputPreview (up to 5000 chars) not just the 500-char summary
           const structured = formatStructuredContext(parseAgentOutput(depChild.outputPreview));
-          contextParts.push(`- Task "${subtasks[depIdx].description}":\n${structured}`);
+          contextParts.push(`- Task "${subtasks[depIdx].description}" [${depChild.status}]:\n${structured}`);
         }
       }
-      if (contextParts.length === 0) return sub.description;
 
-      return `Context from completed prerequisite tasks:\n${contextParts.join('\n')}\n\nYour task: ${sub.description}`;
+      // Include git diff to show what predecessor waves actually changed on disk
+      const diffSummary = getGitDiffSummary();
+      const diffBlock = diffSummary ? `\nFiles changed so far:\n${diffSummary}\n` : '';
+
+      if (contextParts.length === 0 && !diffBlock) return sub.description;
+
+      return `Context from completed prerequisite tasks:\n${contextParts.join('\n')}${diffBlock}\nYour task: ${sub.description}`;
     }
 
     // Phase 3: Execute waves sequentially, tasks within each wave in parallel
@@ -257,23 +355,14 @@ export async function runTeamOrchestrator(
         durationMs: Date.now() - startedAt.getTime(),
       });
 
-      // Spawn all tasks in this wave
-      for (const subtaskIdx of waveIndices) {
-        const childId = childIdByIndex[subtaskIdx];
-        const child = getCodeAgent(childId)!;
-        const prompt = buildChildPrompt(subtaskIdx);
-
-        child.status = 'running';
-        child.task = prompt;
-        child.startedAt = new Date().toISOString();
-        writeCodeAgentTask(child);
-
+      // Helper: spawn a single child task
+      function spawnChild(childId: string, prompt: string) {
         runCodeAgentBackground(
           childId,
           agent,
           prompt,
           workdir,
-          false, // children don't validate individually
+          false, // per-child validation is handled by the orchestrator below
           { task: prompt, model, timeout_minutes: perChildTimeout },
           new Date(),
           { skipNotification: true, defaultTimeoutMinutes: perChildTimeout, maxTimeoutMinutes: perChildTimeout },
@@ -289,6 +378,20 @@ export async function runTeamOrchestrator(
           }
           console.error(`[code-team] Child ${childId} background error:`, err);
         });
+      }
+
+      // Spawn all tasks in this wave
+      for (const subtaskIdx of waveIndices) {
+        const childId = childIdByIndex[subtaskIdx];
+        const child = getCodeAgent(childId)!;
+        const prompt = buildChildPrompt(subtaskIdx);
+
+        child.status = 'running';
+        child.task = prompt;
+        child.startedAt = new Date().toISOString();
+        writeCodeAgentTask(child);
+
+        spawnChild(childId, prompt);
       }
 
       // Poll until all tasks in this wave complete
@@ -368,6 +471,73 @@ export async function runTeamOrchestrator(
         }
       }
 
+      // Per-wave validation: run build after each wave to catch breakage early
+      if (validate && Date.now() - startedAt.getTime() < totalTimeoutMs) {
+        const waveCompleted = waveChildIds.every(id => getCodeAgent(id)?.status === 'completed');
+        if (waveCompleted) {
+          parentTask.liveOutput = `Phase: Validating wave ${waveIdx + 1}/${totalWaves}...`;
+          writeCodeAgentTask(parentTask);
+
+          const { passed, output: valOutput } = await runValidation(workdir);
+          if (!passed) {
+            addEvent(traceId, {
+              type: 'wave_validation',
+              summary: `Wave ${waveIdx + 1} validation failed — retrying failed children`,
+              durationMs: Date.now() - startedAt.getTime(),
+            });
+
+            // Retry each child in this wave once with the validation error context
+            const retryChildIds: string[] = [];
+            for (const subtaskIdx of waveIndices) {
+              const childId = childIdByIndex[subtaskIdx];
+              const child = getCodeAgent(childId)!;
+              if (child.retryCount) continue; // already retried
+
+              child.retryCount = 1;
+              child.status = 'running';
+              child.validationOutput = valOutput.slice(0, 4000);
+              child.startedAt = new Date().toISOString();
+              writeCodeAgentTask(child);
+
+              const retryPrompt = `Fix build/test errors. Your original task: ${subtasks[subtaskIdx].description}\n\nValidation errors:\n${valOutput.slice(0, 4000)}`;
+              child.task = retryPrompt;
+              writeCodeAgentTask(child);
+
+              spawnChild(childId, retryPrompt);
+              retryChildIds.push(childId);
+            }
+
+            // Poll until retries complete
+            if (retryChildIds.length > 0) {
+              while (true) {
+                await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL));
+                if (getCodeAgent(parentId)?.status === 'cancelled') throw new Error(CANCELLED_MESSAGE);
+
+                const retryDone = retryChildIds.every(id => {
+                  const c = getCodeAgent(id)!;
+                  return c.status !== 'running' && c.status !== 'validating';
+                });
+                if (retryDone) break;
+
+                if (Date.now() - startedAt.getTime() > totalTimeoutMs) break;
+              }
+
+              addEvent(traceId, {
+                type: 'wave_retry_complete',
+                summary: `Wave ${waveIdx + 1} retry complete`,
+                durationMs: Date.now() - startedAt.getTime(),
+              });
+            }
+          } else {
+            addEvent(traceId, {
+              type: 'wave_validation',
+              summary: `Wave ${waveIdx + 1} validation passed`,
+              durationMs: Date.now() - startedAt.getTime(),
+            });
+          }
+        }
+      }
+
       // If we timed out, don't start more waves
       if (Date.now() - startedAt.getTime() > totalTimeoutMs) break;
     }
@@ -393,7 +563,7 @@ export async function runTeamOrchestrator(
       durationMs: Date.now() - startedAt.getTime(),
     });
 
-    const synthesis = await synthesizeResults(task, childResults, fullConfig);
+    const synthesis = await synthesizeResults(task, childResults, fullConfig, workdir);
     parentTask.synthesisResult = synthesis;
 
     // Phase 5: Validation (once, on the combined result)

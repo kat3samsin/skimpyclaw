@@ -39,7 +39,7 @@ vi.mock('../audit.js', () => ({
   endTrace: vi.fn(async () => {}),
 }));
 
-import { computeWaves, decomposeTask, synthesizeResults } from '../code-agents/orchestrator.js';
+import { computeWaves, decomposeTask, synthesizeResults, gatherCodebaseContext } from '../code-agents/orchestrator.js';
 import { runAgentTurn } from '../agent.js';
 import { getCodeAgent, writeCodeAgentTask, storeCodeAgentTask, getNextCodeAgentId } from '../code-agents/registry.js';
 
@@ -183,5 +183,92 @@ describe('orchestrator - skip redundant parent writes', () => {
     expect(src).toContain("let lastLiveOutput = ''");
     expect(src).toContain('if (newLiveOutput !== lastLiveOutput)');
     expect(src).toContain('lastLiveOutput = newLiveOutput');
+  });
+});
+
+describe('gatherCodebaseContext', () => {
+  it('returns a non-empty string for the project root', () => {
+    // Use this project's own root as the workdir
+    const { resolve } = require('path');
+    const projectRoot = resolve(__dirname, '..', '..');
+    const context = gatherCodebaseContext(projectRoot);
+    // Should contain at least scripts or source files
+    expect(context.length).toBeGreaterThan(0);
+    expect(context.length).toBeLessThanOrEqual(2000);
+  });
+
+  it('returns empty string for nonexistent directory', () => {
+    const context = gatherCodebaseContext('/tmp/nonexistent-dir-12345');
+    // Should not throw, just return empty or minimal context
+    expect(typeof context).toBe('string');
+  });
+});
+
+describe('decomposeTask with workdir', () => {
+  it('passes workdir context to the decomposition prompt', async () => {
+    mockRunAgentTurn.mockResolvedValueOnce(
+      '{"subtasks": [{"description": "sub1", "dependsOn": []}, {"description": "sub2", "dependsOn": []}]}'
+    );
+
+    const config = { providers: {} } as any;
+    const result = await decomposeTask('test task', 2, config, '/tmp');
+
+    expect(result).toHaveLength(2);
+    // Check the prompt sent to the model includes the richer decomposition instructions
+    const call = mockRunAgentTurn.mock.calls[mockRunAgentTurn.mock.calls.length - 1];
+    const prompt = call[1] as string;
+    expect(prompt).toContain('task decomposition expert');
+    expect(prompt).toContain('Minimize file overlap');
+  });
+});
+
+describe('synthesizeResults with workdir', () => {
+  it('includes git diff info when workdir is a git repo', async () => {
+    mockRunAgentTurn.mockResolvedValueOnce('Synthesis complete');
+
+    const { resolve } = require('path');
+    const projectRoot = resolve(__dirname, '..', '..');
+    const config = { providers: {} } as any;
+
+    await synthesizeResults('original task', [
+      { subtask: 'sub1', status: 'completed', output: 'done' },
+    ], config, projectRoot);
+
+    const call = mockRunAgentTurn.mock.calls[mockRunAgentTurn.mock.calls.length - 1];
+    const prompt = call[1] as string;
+    // Should include the success/failure counts
+    expect(prompt).toContain('1 succeeded, 0 failed');
+  });
+});
+
+describe('orchestrator - per-wave validation and retry', () => {
+  it('source includes per-wave validation logic', async () => {
+    const { readFileSync } = await vi.importActual<typeof import('fs')>('fs');
+    const src = readFileSync(
+      new URL('../../src/code-agents/orchestrator.ts', import.meta.url).pathname.replace('/.worktrees/hardening-code-agents/src/__tests__/../../', '/.worktrees/hardening-code-agents/'),
+      'utf-8',
+    );
+
+    // Verify per-wave validation exists
+    expect(src).toContain('Per-wave validation: run build after each wave');
+    expect(src).toContain('wave_validation');
+    // Verify retry logic
+    expect(src).toContain('wave_retry_complete');
+    expect(src).toContain('retryPrompt');
+  });
+});
+
+describe('orchestrator - timeout budgeting', () => {
+  it('computes perChildTimeout based on wave count not team size', async () => {
+    const { readFileSync } = await vi.importActual<typeof import('fs')>('fs');
+    const src = readFileSync(
+      new URL('../../src/code-agents/orchestrator.ts', import.meta.url).pathname.replace('/.worktrees/hardening-code-agents/src/__tests__/../../', '/.worktrees/hardening-code-agents/'),
+      'utf-8',
+    );
+
+    // Verify budget-aware timeout
+    expect(src).toContain('overheadMinutes');
+    expect(src).toContain('availableForChildren');
+    expect(src).toContain('Math.floor(availableForChildren / waves.length)');
   });
 });

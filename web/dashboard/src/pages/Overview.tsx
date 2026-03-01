@@ -16,8 +16,8 @@ import {
   LuShieldAlert,
 } from 'react-icons/lu';
 
-function formatUptime(ms: number): string {
-  const s = Math.floor(ms / 1000);
+function formatUptime(seconds: number): string {
+  const s = Math.floor(seconds);
   if (s < 60) return `${s}s`;
   const m = Math.floor(s / 60);
   if (m < 60) return `${m}m`;

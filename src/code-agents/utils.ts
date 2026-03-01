@@ -223,12 +223,20 @@ export async function notifyCodeAgentResult(
   // Team coordinator gets a structured notification
   if (task.agent === 'team-coordinator') {
     message = buildTeamNotification(task, getChildTask);
-    await sendActiveChannelProactiveMessage(_codeAgentConfig, message).catch(() => {});
+    const sent = await sendActiveChannelProactiveMessage(_codeAgentConfig, message).catch((err) => {
+      console.error(`[code-agent] Failed to send team notification for ${task.id}:`, err);
+      return false;
+    });
+    if (!sent) console.warn(`[code-agent] Team notification not delivered for ${task.id} (no active channel or target)`);
     return;
   }
 
   message = buildSoloNotification(task);
-  await sendActiveChannelProactiveMessage(_codeAgentConfig, message).catch(() => {});
+  const sent = await sendActiveChannelProactiveMessage(_codeAgentConfig, message).catch((err) => {
+    console.error(`[code-agent] Failed to send notification for ${task.id}:`, err);
+    return false;
+  });
+  if (!sent) console.warn(`[code-agent] Notification not delivered for ${task.id} (no active channel or target)`);
 }
 
 /** Check workdir against allowed paths. */

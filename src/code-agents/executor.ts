@@ -89,10 +89,11 @@ export function buildValidationCommand(workdir: string): string {
   if (hasBuild) parts.push(`${run} build`);
   if (hasTest) parts.push(`${run} test`);
 
-  // If neither build nor test scripts exist, still try — the scripts
-  // might be defined in a workspace root or the commands may work anyway
+  // If neither build nor test scripts exist, skip validation.
+  // Plain HTML/CSS/JS projects and projects without package.json
+  // shouldn't fail validation just because there's no build step.
   if (parts.length === 0) {
-    parts.push(`${run} build`, `${run} test`);
+    return '';
   }
 
   return parts.join(' && ');
@@ -101,6 +102,10 @@ export function buildValidationCommand(workdir: string): string {
 /** Run build/test validation. Shared by solo agents and team orchestrator. */
 export function runValidation(workdir: string): Promise<ValidationResult> {
   const cmd = buildValidationCommand(workdir);
+  if (!cmd) {
+    // No build/test scripts found — nothing to validate, pass by default
+    return Promise.resolve({ passed: true, output: 'PASS (no build/test scripts found)' });
+  }
   return new Promise((resolve) => {
     exec(cmd, {
       cwd: workdir,

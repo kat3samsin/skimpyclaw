@@ -174,18 +174,18 @@ describe('buildValidationCommand', () => {
     expect(buildValidationCommand(tempDir)).toBe('yarn build');
   });
 
-  it('falls back to both commands when no package.json exists', () => {
-    // No package.json, no lockfile → pnpm fallback
-    expect(buildValidationCommand(tempDir)).toBe('pnpm build && pnpm test');
+  it('returns empty when no package.json exists', () => {
+    // No package.json, no lockfile → nothing to validate
+    expect(buildValidationCommand(tempDir)).toBe('');
   });
 
-  it('falls back to both commands when scripts object is empty', () => {
+  it('returns empty when scripts object is empty', () => {
     writeFileSync(join(tempDir, 'package.json'), JSON.stringify({
       name: 'test',
       scripts: {},
     }));
     writeFileSync(join(tempDir, 'yarn.lock'), '');
-    expect(buildValidationCommand(tempDir)).toBe('yarn build && yarn test');
+    expect(buildValidationCommand(tempDir)).toBe('');
   });
 
   // wp-calypso scenario

@@ -65,6 +65,7 @@ export {
   computeWaves,
   decomposeTask,
   synthesizeResults,
+  gatherCodebaseContext,
 } from './orchestrator.js';
 
 // Re-export utility functions
@@ -226,19 +227,13 @@ export async function executeCodeWithTeam(
   const task = input.task as string;
   if (!task) return 'Error: task is required';
 
-  // Resolve model alias first so agent auto-selection can inspect it.
-  // Fall back to current session model so codex/kimi models auto-select the right CLI.
-  let rawTeamModel = input.model as string | undefined;
-  if (!rawTeamModel) {
-    try {
-      const { getCurrentModel } = await import('../gateway.js');
-      rawTeamModel = getCurrentModel();
-    } catch { /* gateway not running */ }
-  }
-  const resolvedModel = resolveModelAlias(
-    rawTeamModel,
-    context?.fullConfig?.models?.aliases
-  );
+  // Resolve model alias. Only fall back to session model when an explicit model
+  // was requested — otherwise the session model (e.g. gpt-5.3-codex) would
+  // override agent selection even when the user wants claude.
+  const rawTeamModel = input.model as string | undefined;
+  const resolvedModel = rawTeamModel
+    ? resolveModelAlias(rawTeamModel, context?.fullConfig?.models?.aliases)
+    : undefined;
 
   const configDefault = context?.fullConfig?.codeAgents?.defaultAgent || 'claude';
   const requestedAgent = input.agent as string | undefined;
@@ -266,14 +261,55 @@ export async function executeCodeWithTeam(
     return `Error: Working directory not allowed. Permitted: ${config.allowedPaths.join(', ')}${projectNames}`;
   }
 
-  // Concurrency check — need room for teamSize children
+  const validate = input.validate !== false;
   const maxConcurrent = context?.fullConfig?.codeAgents?.maxConcurrent ?? 5;
   const activeCount = getActiveCodeAgents().length;
+
+  // Claude-native teams: let Claude Code handle its own subagent orchestration
+  // via CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS. This delegates decomposition,
+  // file ownership, and merging to Claude Code itself — avoids file conflicts.
+  // Falls back to SkimpyClaw's custom orchestrator for codex/kimi.
+  if (agent === 'claude') {
+    // Only need 1 concurrency slot — Claude manages subagents internally
+    if (activeCount >= maxConcurrent) {
+      return `Error: Concurrency limit reached (${activeCount}/${maxConcurrent} coding agents running). Wait for one to finish.`;
+    }
+
+    const id = getNextCodeAgentId();
+    const startedAt = new Date();
+    const teamPrompt = `You have access to agent teams. Use subagents to complete this task efficiently — decide how many to use based on task complexity (typically 2-5). Decompose the work, assign clear file ownership to each subagent to avoid conflicts, and coordinate their results.\n\nTask: ${task}`;
+    const caTask: CodeAgentTask = {
+      id,
+      agent: 'claude',
+      task: teamPrompt,
+      status: 'running',
+      chatId: context?.chatId,
+      startedAt: startedAt.toISOString(),
+      workdir,
+      model: resolvedModel,
+    };
+    storeCodeAgentTask(caTask);
+    writeCodeAgentTask(caTask);
+
+    const timeoutMinutes = Math.min(input.timeout_minutes || 20, 60);
+    const resolvedInput = { ...input, model: resolvedModel, timeout_minutes: timeoutMinutes };
+    runCodeAgentBackground(id, 'claude', teamPrompt, workdir, validate, resolvedInput, startedAt, {
+      env: { CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1' },
+      defaultTimeoutMinutes: timeoutMinutes,
+      maxTimeoutMinutes: 60,
+    }).catch((err) => {
+      console.error(`[code-team] Claude native teams error for ${id}:`, err);
+    });
+
+    const taskPreview = task.length > 100 ? task.slice(0, 100) + '...' : task;
+    return `Started coding agent ${id} (claude with native teams). Task: ${taskPreview}\n\nUse check_code_agent to poll status.`;
+  }
+
+  // Non-Claude agents: use SkimpyClaw's custom orchestrator
+  // Concurrency check — need room for teamSize children
   if (activeCount + teamSize > maxConcurrent) {
     return `Error: Concurrency limit — need ${teamSize} slots but only ${maxConcurrent - activeCount} available (${activeCount}/${maxConcurrent} running). Wait for agents to finish.`;
   }
-
-  const validate = input.validate !== false;
 
   // Create parent task
   const id = getNextCodeAgentId();
