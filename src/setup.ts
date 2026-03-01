@@ -1209,6 +1209,12 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
     if (addTechNewsCron || addWeatherCron) {
       const tzInput = await ask(rl, `   Timezone for starter cron jobs [${localTz}]: `);
       cronTimezone = tzInput || localTz;
+      try {
+        Intl.DateTimeFormat(undefined, { timeZone: cronTimezone });
+      } catch {
+        console.log(`   ⚠ Invalid timezone "${cronTimezone}", using ${localTz}`);
+        cronTimezone = localTz;
+      }
     }
     if (addWeatherCron) {
       const locationInput = await ask(rl, '   Weather location (city, state/country) [New York, NY]: ');

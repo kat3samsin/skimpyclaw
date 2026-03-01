@@ -13,6 +13,18 @@ import { sendActiveChannelProactiveMessage, sendActiveChannelProactiveVoice, get
 import { parseAndSaveDigest } from './digests.js';
 import { synthesizeSpeech } from './voice.js';
 import { toErrorMessage } from './utils.js';
+
+function safeTimezone(tz: string | undefined): string {
+  const fallback = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  if (!tz) return fallback;
+  try {
+    Intl.DateTimeFormat(undefined, { timeZone: tz });
+    return tz;
+  } catch {
+    console.warn(`[cron] Invalid timezone "${tz}", falling back to ${fallback}`);
+    return fallback;
+  }
+}
 import { ensureContainer, SANDBOX_DEFAULTS, sandboxBash } from './sandbox/index.js';
 
 interface ScheduledJob {
@@ -137,7 +149,7 @@ function scheduleJob(jobDef: CronJob, config: Config): void {
   const cronJob = new Cron(
     jobDef.schedule.expr!,
     {
-      timezone: jobDef.schedule.tz || 'America/Chicago',
+      timezone: safeTimezone(jobDef.schedule.tz),
     },
     async () => {
       console.log(`[cron] Running job: ${jobDef.name}`);
