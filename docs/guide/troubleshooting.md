@@ -218,6 +218,80 @@ grep -o '"token":"[^"]*"' ~/.skimpyclaw/config.json
 # Enter the token in the dashboard login prompt
 ```
 
+## 11. Sandbox Not Working
+
+**Symptom:** Bash commands fail with container errors, or sandbox isn't initialized after `skimpyclaw onboard`.
+
+**Causes:**
+
+- Container runtime not started
+- Sandbox not initialized (image not built)
+- Runtime not detected during onboarding
+
+**Fix:**
+
+```bash
+# 1. Start the container runtime
+# Apple Containers (macOS 26+):
+container system start
+
+# Docker:
+open -a Docker
+# or: docker info   (to verify it's running)
+
+# 2. Initialize sandbox (builds image, updates config)
+skimpyclaw sandbox init
+
+# 3. Verify everything works
+skimpyclaw sandbox doctor
+
+# 4. Restart daemon to pick up sandbox config
+skimpyclaw restart
+```
+
+**Switching runtimes:**
+
+```bash
+# Force Docker instead of Apple Containers
+skimpyclaw sandbox init --runtime docker
+
+# Force Apple Containers
+skimpyclaw sandbox init --runtime container
+```
+
+**Image build fails:**
+
+```bash
+# Check if Dockerfile exists
+ls $(pnpm root -g)/skimpyclaw/sandbox/Dockerfile
+
+# Rebuild with verbose output
+skimpyclaw sandbox init --profile minimal
+```
+
+## 12. Coding Agent Validation Fails on Monorepos
+
+**Symptom:** `code_with_agent` or `code_with_team` completes but final validation times out or runs the wrong commands.
+
+**Causes:**
+
+- Workdir set to a package subdirectory instead of repo root — package manager detection fails
+- Full monorepo build/test runs instead of scoped to changed packages
+- Validation timeout too short for the project
+
+**Fix:**
+
+```bash
+# Check what validation would run
+skimpyclaw agents <id>   # look at validation output
+
+# Option 1: Set workdir to repo root (let auto-detection scope it)
+# In your prompt, specify the repo root as the working directory
+
+# Option 2: Override validation per project in config
+skimpyclaw config set codeAgents.validationCommands '{"wp-calypso": "yarn workspace @automattic/image-studio build && yarn workspace @automattic/image-studio test"}'
+```
+
 ## General Debugging
 
 ```bash
