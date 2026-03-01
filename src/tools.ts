@@ -4,6 +4,7 @@ import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync } from 
 import { join, resolve } from 'path';
 import { homedir } from 'os';
 import { TTLCache } from './cache.js';
+import { toErrorMessage } from './utils.js';
 import type { ToolConfig } from './types.js';
 import {
   fromClaudeCodeName,
@@ -473,7 +474,7 @@ export async function executeTool(
         return `Error: Unknown tool "${name}"`;
     }
   } catch (err) {
-    return `Error: ${err instanceof Error ? err.message : String(err)}`;
+    return `Error: ${toErrorMessage(err)}`;
   }
 }
 

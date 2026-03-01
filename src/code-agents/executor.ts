@@ -8,6 +8,7 @@ import { join } from 'path';
 // SKIMPYCLAW_ROOT for log paths
 const SKIMPYCLAW_ROOT = join(import.meta.dirname || process.cwd(), '..', '..');
 import type { CodeAgentTask, CodeAgentBackgroundOptions, ValidationResult } from './types.js';
+import { toErrorMessage } from '../utils.js';
 import { CODE_AGENT_TIMEOUT_MS, VALIDATE_TIMEOUT_MS } from './types.js';
 import {
   getCodeAgentsDir,
@@ -542,7 +543,7 @@ export async function runCodeAgentBackground(
     writeCodeAgentTask(caTask);
     if (!options?.skipNotification) await notifyCodeAgentResult(caTask, (id) => getCodeAgent(id) ?? null);
   } catch (err) {
-    const errMsg = err instanceof Error ? err.message : String(err);
+    const errMsg = toErrorMessage(err);
     addEvent(traceId, { type: 'error', summary: errMsg.slice(0, 200), durationMs: Date.now() - startedAt.getTime() });
     await endTrace(traceId, 'error');
     Object.assign(caTask, {

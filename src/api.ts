@@ -2,7 +2,7 @@
 
 import { FastifyInstance } from 'fastify';
 import { readFileSync, writeFileSync, existsSync, readdirSync, statSync, mkdirSync, rmSync } from 'fs';
-import { timingSafeEqual } from 'crypto';
+import { validateBearerToken } from './utils.js';
 import { join, basename, resolve } from 'path';
 import { homedir } from 'os';
 import type { Config } from './types.js';
@@ -143,17 +143,8 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
       return; // No token configured, allow access
     }
 
-    const authHeader = request.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return reply.code(401).send({ error: 'Unauthorized: Bearer token required' });
-    }
-
-    const providedToken = authHeader.slice(7);
-    // Timing-safe comparison to prevent token extraction via timing attacks
-    const tokenBuf = Buffer.from(token, 'utf8');
-    const providedBuf = Buffer.from(providedToken, 'utf8');
-    if (tokenBuf.length !== providedBuf.length || !timingSafeEqual(tokenBuf, providedBuf)) {
-      return reply.code(401).send({ error: 'Unauthorized: Invalid token' });
+    if (!validateBearerToken(token, request.headers.authorization)) {
+      return reply.code(401).send({ error: 'Unauthorized: Invalid or missing token' });
     }
   });
 

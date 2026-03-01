@@ -12,6 +12,7 @@ import { startTrace, addEvent, endTrace } from './audit.js';
 import { sendActiveChannelProactiveMessage, sendActiveChannelProactiveVoice, getActiveChannelId } from './channels.js';
 import { parseAndSaveDigest } from './digests.js';
 import { synthesizeSpeech } from './voice.js';
+import { toErrorMessage } from './utils.js';
 import { ensureContainer, SANDBOX_DEFAULTS, sandboxBash } from './sandbox/index.js';
 
 interface ScheduledJob {
@@ -285,7 +286,7 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
     logEntry.status = 'success';
     appendCronLogLine(jobDef.id, `=== COMPLETED: success ===`);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = toErrorMessage(err);
     logEntry.status = msg.includes('TIMEOUT') || msg.includes('timed out') ? 'timeout' : 'error';
     logEntry.error = msg;
     appendCronLogLine(jobDef.id, `=== FAILED: ${logEntry.status} — ${msg.slice(0, 200)} ===`);

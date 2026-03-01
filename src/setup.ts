@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url';
 import { spawnSync } from 'child_process';
 import { randomUUID } from 'crypto';
 import { runDoctor as runDoctorChecks } from './doctor/runner.js';
+import { toErrorMessage } from './utils.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -880,7 +881,7 @@ async function validateTelegramToken(token: string): Promise<{ ok: boolean; deta
     if (!body.ok) return { ok: false, detail: text.slice(0, 140) };
     return { ok: true, detail: body.result?.username ? `@${body.result.username}` : 'valid token' };
   } catch (err) {
-    return { ok: false, detail: err instanceof Error ? err.message : String(err) };
+    return { ok: false, detail: toErrorMessage(err) };
   }
 }
 
@@ -900,7 +901,7 @@ async function validateProviderAuth(providers: Set<ProviderChoice>, secrets: Pro
       });
       checks.push({ name: 'Anthropic API', ok: res.ok, detail: res.ok ? 'auth ok' : `HTTP ${res.status}` });
     } catch (err) {
-      checks.push({ name: 'Anthropic API', ok: false, detail: err instanceof Error ? err.message : String(err) });
+      checks.push({ name: 'Anthropic API', ok: false, detail: toErrorMessage(err) });
     }
   }
 
@@ -911,7 +912,7 @@ async function validateProviderAuth(providers: Set<ProviderChoice>, secrets: Pro
       });
       checks.push({ name: 'OpenAI API', ok: res.ok, detail: res.ok ? 'auth ok' : `HTTP ${res.status}` });
     } catch (err) {
-      checks.push({ name: 'OpenAI API', ok: false, detail: err instanceof Error ? err.message : String(err) });
+      checks.push({ name: 'OpenAI API', ok: false, detail: toErrorMessage(err) });
     }
   }
 
@@ -928,7 +929,7 @@ async function validateProviderAuth(providers: Set<ProviderChoice>, secrets: Pro
       });
       checks.push({ name: 'MiniMax API', ok: res.ok, detail: res.ok ? 'auth ok' : `HTTP ${res.status}` });
     } catch (err) {
-      checks.push({ name: 'MiniMax API', ok: false, detail: err instanceof Error ? err.message : String(err) });
+      checks.push({ name: 'MiniMax API', ok: false, detail: toErrorMessage(err) });
     }
   }
 

@@ -5,6 +5,7 @@ import { join } from 'path';
 import { homedir } from 'os';
 import { getAgentDir } from './config.js';
 import { buildSafeSystemPrompt, sanitizeUserInput } from './security.js';
+import { toErrorMessage } from './utils.js';
 import type { Config, ChatMessage, ChatOptions, ToolConfig, AgentRunContext, ContentBlock } from './types.js';
 import { getToolDefinitions, type ExecuteToolContext } from './tools.js';
 import { startTrace, endTrace } from './audit.js';
@@ -308,7 +309,7 @@ export async function runAgentTurn(
         await endTrace(auditTraceId, 'ok');
         return result;
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : String(err);
+        const errorMessage = toErrorMessage(err);
         agentObs.update({
           level: 'ERROR',
           statusMessage: errorMessage,

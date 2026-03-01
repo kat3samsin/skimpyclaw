@@ -4,6 +4,7 @@ import { execSync } from 'child_process';
 import { basename, dirname, join } from 'path';
 import { tmpdir } from 'os';
 import type { VoiceConfig, VoiceProviderConfig } from './types.js';
+import { toErrorMessage } from './utils.js';
 
 export interface TranscriptionResult {
   text: string;
@@ -83,7 +84,7 @@ function convertToWav(audioPath: string): { wavPath: string; needsCleanup: boole
       { encoding: 'utf-8', timeout: 30_000, stdio: ['ignore', 'pipe', 'pipe'] }
     );
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = toErrorMessage(err);
     throw new Error(`ffmpeg conversion failed: ${msg}`);
   }
 
@@ -128,7 +129,7 @@ async function transcribeWithWhisperCpp(audioPath: string, cliPath: string): Pro
       { encoding: 'utf-8', timeout: 60_000, stdio: ['ignore', 'pipe', 'pipe'] }
     );
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = toErrorMessage(err);
     console.error(`[voice] whisper-cli failed: ${msg}`);
     throw new Error(`whisper-cli failed: ${msg}`);
   } finally {
@@ -179,7 +180,7 @@ async function transcribeWithPythonWhisper(audioPath: string, cliPath: string): 
       { encoding: 'utf-8', timeout: 120_000, stdio: ['ignore', 'pipe', 'pipe'] }
     );
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = toErrorMessage(err);
     throw new Error(`Python whisper failed: ${msg}`);
   }
 

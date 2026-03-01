@@ -167,7 +167,7 @@ describe('orchestrator - spawn failure marks child as failed', () => {
     expect(src).toContain("const child = getCodeAgent(childId);");
     expect(src).toContain("if (child && child.status === 'running')");
     expect(src).toContain("status: 'failed'");
-    expect(src).toContain("error: err instanceof Error ? err.message : String(err)");
+    expect(src).toContain("error: toErrorMessage(err)");
   });
 });
 

@@ -5,6 +5,7 @@ import { join } from 'path';
 import { homedir } from 'os';
 import type { ProviderChatParams, ProviderToolChatParams, ToolChatResult } from './types.js';
 import { stripProvider, truncateToolResult } from './utils.js';
+import { toErrorMessage } from '../utils.js';
 import { compactCodexMessages } from './context-manager.js';
 import { toCodexContent, toCodexToolDefinitions } from './content.js';
 import { toNumericUsageDetails, toCostDetails } from './observability.js';
@@ -289,7 +290,7 @@ export async function chatCodex(params: ProviderChatParams): Promise<string> {
 
     return parsed.outputText || '[No response from Codex]';
   } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
+    const errorMessage = toErrorMessage(err);
     genObs?.update({ level: 'ERROR', statusMessage: errorMessage, output: { error: errorMessage } });
     genObs?.end();
     throw err;
@@ -391,7 +392,7 @@ export async function chatWithToolsCodex(params: ProviderToolChatParams): Promis
         parsed.response?.usage?.output_tokens ?? 0,
       );
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : String(err);
+      const errorMessage = toErrorMessage(err);
       genObs?.update({ level: 'ERROR', statusMessage: errorMessage, output: { error: errorMessage } });
       genObs?.end();
       throw err;
@@ -440,7 +441,7 @@ export async function chatWithToolsCodex(params: ProviderToolChatParams): Promis
           const finalized = parseCodexSSE(finalizeSse);
           finalText = finalized.outputText?.trim() || '';
         } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
+          const msg = toErrorMessage(err);
           console.warn(`[codex] Finalization pass failed: ${msg}`);
         }
       }
@@ -530,7 +531,7 @@ export async function chatWithToolsCodex(params: ProviderToolChatParams): Promis
           input[input.length - 1].output += `\n\n[System: ${progressResult.nudge}]`;
         }
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : String(err);
+        const errorMessage = toErrorMessage(err);
         toolObs?.update({ level: 'ERROR', statusMessage: errorMessage, output: { error: errorMessage } });
         toolObs?.end();
 

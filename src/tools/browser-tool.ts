@@ -4,6 +4,7 @@ import { homedir } from 'os';
 
 import type { ToolConfig } from '../types.js';
 import { isPathAllowed } from './path-utils.js';
+import { toErrorMessage } from '../utils.js';
 
 let playwrightModule: any | null = null;
 let browserContext: any | null = null;
@@ -107,7 +108,7 @@ async function ensureBrowser(config: ToolConfig, overrides?: Record<string, any>
       ignoreDefaultArgs: ['--enable-automation', '--no-sandbox'],
     });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = toErrorMessage(err);
     throw new Error(`Failed to launch browser (${options.type}): ${msg}. Ensure the browser is installed: npx playwright install ${options.type}`);
   }
 

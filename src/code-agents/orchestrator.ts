@@ -12,6 +12,7 @@ import { notifyCodeAgentResult, resolveModelAlias } from './utils.js';
 import { parseAgentOutput, formatStructuredContext } from './structured-context.js';
 import { runAgentTurn } from '../agent.js';
 import { startTrace, addEvent, endTrace } from '../audit.js';
+import { toErrorMessage } from '../utils.js';
 
 /**
  * Compute execution waves from dependency info.
@@ -242,7 +243,8 @@ export async function runTeamOrchestrator(
     detail: { teamSize, workdir, agent, model, validate },
   });
 
-  const timeoutMinutes = Math.min(context?.fullConfig?.codeAgents?.maxConcurrent ? 60 : 20, 60);
+  const configTeamTimeout = context?.fullConfig?.codeAgents?.teamTimeoutMinutes ?? 60;
+  const timeoutMinutes = Math.min(configTeamTimeout, 120);
   // Reserve budget for overhead (decompose, synthesize, validation) and distribute rest across waves
   const overheadMinutes = 5;
   const availableForChildren = Math.max(timeoutMinutes - overheadMinutes, timeoutMinutes * 0.7);
@@ -372,7 +374,7 @@ export async function runTeamOrchestrator(
             Object.assign(child, {
               status: 'failed',
               endedAt: new Date().toISOString(),
-              error: err instanceof Error ? err.message : String(err),
+              error: toErrorMessage(err),
             });
             writeCodeAgentTask(child);
           }
@@ -623,7 +625,7 @@ export async function runTeamOrchestrator(
     writeCodeAgentTask(parentTask);
     await notifyCodeAgentResult(parentTask, getCodeAgent);
   } catch (err) {
-    const errMsg = err instanceof Error ? err.message : String(err);
+    const errMsg = toErrorMessage(err);
     addEvent(traceId, { type: 'error', summary: errMsg.slice(0, 200), durationMs: Date.now() - startedAt.getTime() });
     await endTrace(traceId, 'error');
     Object.assign(parentTask, {

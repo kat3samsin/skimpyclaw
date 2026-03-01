@@ -8,6 +8,7 @@ import matter from 'gray-matter';
 import type { SkillFrontmatter, LoadedSkill, SkillConfig, SkillContext } from './skills-types.js';
 import type { ToolConfig } from './types.js';
 import { TTLCache } from './cache.js';
+import { toErrorMessage } from './utils.js';
 
 const DEFAULT_SKILLS_DIR = join(homedir(), '.skimpyclaw', 'skills');
 const DEFAULT_PRIORITY = 100;
@@ -151,7 +152,7 @@ function parseSkillFile(dirPath: string, dirName: string, skillConfig?: SkillCon
       reason: eligibility.reason,
     };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = toErrorMessage(err);
     console.warn(`[skills] Failed to parse ${skillPath}: ${msg}`);
     return null;
   }

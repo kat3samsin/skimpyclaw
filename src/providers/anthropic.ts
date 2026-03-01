@@ -8,6 +8,7 @@ import { compactAnthropicMessages } from './context-manager.js';
 import { toAnthropicUsageDetails, toCostDetails } from './observability.js';
 import { getToolDefinitions, executeTool, type ExecuteToolContext } from '../tools.js';
 import { ToolCallGuard } from './tool-guard.js';
+import { toErrorMessage } from '../utils.js';
 import { startTrace, addEvent, endTrace } from '../audit.js';
 import { buildUsageRecord, recordUsage } from '../usage.js';
 
@@ -134,7 +135,7 @@ export async function chatAnthropic(params: ProviderChatParams): Promise<string>
 
     return text;
   } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
+    const errorMessage = toErrorMessage(err);
     genObs?.update({ level: 'ERROR', statusMessage: errorMessage, output: { error: errorMessage } });
     genObs?.end();
     throw err;
@@ -244,7 +245,7 @@ export async function chatWithToolsAnthropic(params: ProviderToolChatParams): Pr
         (response as any).usage?.output_tokens ?? 0,
       );
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : String(err);
+      const errorMessage = toErrorMessage(err);
       genObs?.update({ level: 'ERROR', statusMessage: errorMessage, output: { error: errorMessage } });
       genObs?.end();
       throw err;
@@ -336,7 +337,7 @@ export async function chatWithToolsAnthropic(params: ProviderToolChatParams): Pr
           toolResults[toolResults.length - 1].content += `\n\n[System: ${progressResult.nudge}]`;
         }
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : String(err);
+        const errorMessage = toErrorMessage(err);
         toolObs?.update({ level: 'ERROR', statusMessage: errorMessage, output: { error: errorMessage } });
         toolObs?.end();
 

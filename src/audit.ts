@@ -1,19 +1,13 @@
 // Audit log reader/writer for ~/.skimpyclaw/logs/audit/YYYY-MM-DD.jsonl
 
 import { randomUUID } from 'crypto';
-import { readFileSync, appendFileSync, existsSync, mkdirSync, readdirSync } from 'fs';
+import { appendFileSync, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import type { AuditTrace, AuditEvent } from './types.js';
+import { formatDate, readJsonlDir } from './utils.js';
 
 const AUDIT_DIR = join(homedir(), '.skimpyclaw', 'logs', 'audit');
-
-function formatDate(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
 
 // --- In-memory trace lifecycle ---
 
@@ -81,56 +75,20 @@ export async function readAuditTraces(options: ReadAuditOptions = {}): Promise<{
   const offset = options.offset ?? 0;
   const triggerFilter = options.trigger;
 
-  // Determine date range
   const endDate = options.endDate ?? new Date();
-  const startDate = options.startDate ?? new Date(endDate.getTime() - 90 * 24 * 60 * 60 * 1000); // 90 days back
+  const startDate = options.startDate ?? new Date(endDate.getTime() - 90 * 24 * 60 * 60 * 1000);
 
-  // Get all audit JSONL files in the directory
-  if (!existsSync(AUDIT_DIR)) {
-    return { traces: [], total: 0 };
-  }
-
-  const files = readdirSync(AUDIT_DIR)
-    .filter(f => f.endsWith('.jsonl'))
-    .sort()
-    .reverse(); // Newest first
-
-  const startStr = formatDate(startDate);
-  const endStr = formatDate(endDate);
-
-  // Collect all matching traces
-  const allTraces: AuditTrace[] = [];
-
-  for (const file of files) {
-    const dateStr = file.replace('.jsonl', '');
-    if (dateStr < startStr || dateStr > endStr) continue;
-
-    const filePath = join(AUDIT_DIR, file);
-    try {
-      const content = readFileSync(filePath, 'utf-8');
-      const lines = content.trim().split('\n').filter(Boolean);
-
-      // Parse lines in reverse (newest first within file)
-      for (let i = lines.length - 1; i >= 0; i--) {
-        try {
-          const trace = JSON.parse(lines[i]) as AuditTrace;
-          if (triggerFilter && trace.trigger !== triggerFilter) continue;
-          allTraces.push(trace);
-        } catch {
-          // Skip malformed lines
-        }
-      }
-    } catch {
-      // Skip unreadable files
-    }
-  }
+  const allTraces = readJsonlDir<AuditTrace>(
+    AUDIT_DIR,
+    formatDate(startDate),
+    formatDate(endDate),
+    triggerFilter ? (t) => t.trigger === triggerFilter : undefined,
+  );
 
   // Sort newest first by startedAt
-  allTraces.sort((a, b) => {
-    const dateA = new Date(b.startedAt || b.endedAt).getTime();
-    const dateB = new Date(a.startedAt || a.endedAt).getTime();
-    return dateA - dateB;
-  });
+  allTraces.sort((a, b) =>
+    Date.parse(b.startedAt || b.endedAt) - Date.parse(a.startedAt || a.endedAt)
+  );
 
   const total = allTraces.length;
   const paged = allTraces.slice(offset, offset + limit);

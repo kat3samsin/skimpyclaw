@@ -4,8 +4,8 @@ import Fastify, { FastifyInstance } from 'fastify';
 import { existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { join } from 'path';
-import { timingSafeEqual } from 'crypto';
 import type { Config, GatewayStatus } from './types.js';
+import { validateBearerToken } from './utils.js';
 import { runAgentTurn } from './agent.js';
 import { getCronJobs, runCronJob } from './cron.js';
 import { registerDashboardAPI } from './api.js';
@@ -151,15 +151,8 @@ export async function createGateway(cfg: Config): Promise<FastifyInstance> {
 
     if (!dashboardToken) return; // No token configured, allow access
 
-    const authHeader = request.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return reply.code(401).send({ error: 'Unauthorized: Bearer token required' });
-    }
-    const provided = authHeader.slice(7);
-    const tokenBuf = Buffer.from(dashboardToken, 'utf8');
-    const providedBuf = Buffer.from(provided, 'utf8');
-    if (tokenBuf.length !== providedBuf.length || !timingSafeEqual(tokenBuf, providedBuf)) {
-      return reply.code(401).send({ error: 'Unauthorized: Invalid token' });
+    if (!validateBearerToken(dashboardToken, request.headers.authorization)) {
+      return reply.code(401).send({ error: 'Unauthorized: Invalid or missing token' });
     }
   });
 

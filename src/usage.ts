@@ -1,9 +1,10 @@
 // Usage tracking — JSONL append-only storage at ~/.skimpyclaw/logs/usage/YYYY-MM-DD.jsonl
 
 import { randomUUID } from 'crypto';
-import { readFileSync, appendFileSync, existsSync, mkdirSync, readdirSync } from 'fs';
+import { appendFileSync, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
+import { formatDate, readJsonlDir } from './utils.js';
 
 const USAGE_DIR = join(homedir(), '.skimpyclaw', 'logs', 'usage');
 
@@ -49,13 +50,6 @@ export interface ReadUsageOptions {
   limit?: number;
   offset?: number;
   model?: string;
-}
-
-function formatDate(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
 }
 
 /** For testing: override the usage directory */
@@ -126,10 +120,6 @@ export function buildUsageRecord(opts: {
  */
 export function readUsageRecords(options: ReadUsageOptions = {}): { records: UsageRecord[]; total: number } {
   const dir = getUsageDir();
-  if (!existsSync(dir)) {
-    return { records: [], total: 0 };
-  }
-
   const limit = options.limit ?? 50;
   const offset = options.offset ?? 0;
 
@@ -137,38 +127,16 @@ export function readUsageRecords(options: ReadUsageOptions = {}): { records: Usa
   const endDate = options.endDate ?? formatDate(now);
   const startDate = options.startDate ?? formatDate(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000));
 
-  const files = readdirSync(dir)
-    .filter(f => f.endsWith('.jsonl'))
-    .sort()
-    .reverse(); // newest first
-
-  const allRecords: UsageRecord[] = [];
-
-  for (const file of files) {
-    const dateStr = file.replace('.jsonl', '');
-    if (dateStr < startDate || dateStr > endDate) continue;
-
-    const filePath = join(dir, file);
-    try {
-      const content = readFileSync(filePath, 'utf-8');
-      const lines = content.trim().split('\n').filter(Boolean);
-
-      for (let i = lines.length - 1; i >= 0; i--) {
-        try {
-          const record = JSON.parse(lines[i]) as UsageRecord;
-          if (options.model && record.model !== options.model) continue;
-          allRecords.push(record);
-        } catch {
-          // Skip malformed lines
-        }
-      }
-    } catch {
-      // Skip unreadable files
-    }
-  }
+  const modelFilter = options.model;
+  const allRecords = readJsonlDir<UsageRecord>(
+    dir,
+    startDate,
+    endDate,
+    modelFilter ? (r) => r.model === modelFilter : undefined,
+  );
 
   // Sort newest first
-  allRecords.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  allRecords.sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp));
 
   const total = allRecords.length;
   const paged = allRecords.slice(offset, offset + limit);

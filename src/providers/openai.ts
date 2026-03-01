@@ -8,6 +8,7 @@ import { compactOpenAIMessages } from './context-manager.js';
 import { toOpenAIContent } from './content.js';
 import { toUsageDetails, toCostDetails } from './observability.js';
 import { getToolDefinitions, executeTool } from '../tools.js';
+import { toErrorMessage } from '../utils.js';
 import { ToolCallGuard } from './tool-guard.js';
 import { addEvent } from '../audit.js';
 import { buildUsageRecord, recordUsage } from '../usage.js';
@@ -135,7 +136,7 @@ export async function chatOpenAI(params: ProviderChatParams, provider: string): 
 
     return content;
   } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : String(err);
+    const errorMessage = toErrorMessage(err);
     genObs?.update({ level: 'ERROR', statusMessage: errorMessage, output: { error: errorMessage } });
     genObs?.end();
     throw err;
@@ -233,7 +234,7 @@ export async function chatWithToolsOpenAI(params: ProviderToolChatParams, provid
         completion.usage?.completion_tokens ?? 0,
       );
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : String(err);
+      const errorMessage = toErrorMessage(err);
       genObs?.update({ level: 'ERROR', statusMessage: errorMessage, output: { error: errorMessage } });
       genObs?.end();
       throw err;
@@ -369,7 +370,7 @@ export async function chatWithToolsOpenAI(params: ProviderToolChatParams, provid
           apiMessages[apiMessages.length - 1].content += `\n\n[System: ${progressResult.nudge}]`;
         }
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : String(err);
+        const errorMessage = toErrorMessage(err);
         toolObs?.update({ level: 'ERROR', statusMessage: errorMessage, output: { error: errorMessage } });
         toolObs?.end();
 
