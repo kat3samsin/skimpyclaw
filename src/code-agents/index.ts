@@ -207,8 +207,13 @@ export async function executeCodeWithAgent(
   writeCodeAgentTask(caTask);
 
   // Fire-and-forget: spawn background process
-  const resolvedInput = { ...input, model: resolvedModel };
-  runCodeAgentBackground(id, agent, task, workdir, validate, resolvedInput, startedAt).catch((err) => {
+  const configTimeout = context?.fullConfig?.codeAgents?.timeoutMinutes ?? 30;
+  const soloTimeout = Math.min(input.timeout_minutes || configTimeout, 60);
+  const resolvedInput = { ...input, model: resolvedModel, timeout_minutes: soloTimeout };
+  runCodeAgentBackground(id, agent, task, workdir, validate, resolvedInput, startedAt, {
+    defaultTimeoutMinutes: soloTimeout,
+    maxTimeoutMinutes: 60,
+  }).catch((err) => {
     console.error(`[code-agent] Background error for ${id}:`, err);
   });
 
@@ -291,12 +296,13 @@ export async function executeCodeWithTeam(
     storeCodeAgentTask(caTask);
     writeCodeAgentTask(caTask);
 
-    const timeoutMinutes = Math.min(input.timeout_minutes || 20, 60);
+    const configTeamTimeout = context?.fullConfig?.codeAgents?.teamTimeoutMinutes ?? 60;
+    const timeoutMinutes = Math.min(input.timeout_minutes || configTeamTimeout, 120);
     const resolvedInput = { ...input, model: resolvedModel, timeout_minutes: timeoutMinutes };
     runCodeAgentBackground(id, 'claude', teamPrompt, workdir, validate, resolvedInput, startedAt, {
       env: { CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1' },
       defaultTimeoutMinutes: timeoutMinutes,
-      maxTimeoutMinutes: 60,
+      maxTimeoutMinutes: 120,
     }).catch((err) => {
       console.error(`[code-team] Claude native teams error for ${id}:`, err);
     });

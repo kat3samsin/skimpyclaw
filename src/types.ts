@@ -64,6 +64,8 @@ export interface Config {
   codeAgents?: {
     maxConcurrent?: number;   // Max parallel coding agents (default 5)
     defaultAgent?: string;    // Default coding agent CLI: "claude" | "codex" | "kimi" (default: "claude")
+    timeoutMinutes?: number;  // Default timeout for solo code_with_agent (default: 30, max: 60)
+    teamTimeoutMinutes?: number; // Default timeout for code_with_team (default: 60, max: 120)
   };
   langfuse?: {
     enabled?: boolean;
