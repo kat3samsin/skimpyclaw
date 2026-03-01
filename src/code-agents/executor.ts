@@ -184,11 +184,28 @@ function buildMonorepoValidationCommand(workdir: string): string | null {
 }
 
 /**
+ * Walk up from a directory to find a monorepo root (directory with workspaces).
+ * Returns the root path or null if not inside a monorepo.
+ */
+function findMonorepoRoot(startDir: string): string | null {
+  let dir = startDir;
+  const root = '/';
+  while (dir !== root) {
+    if (getWorkspacePatterns(dir)) return dir;
+    const parent = join(dir, '..');
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return null;
+}
+
+/**
  * Build the validation command for a project directory.
  *
  * Resolution order:
  * 1. Per-project override from config `codeAgents.validationCommands`
  * 2. Monorepo auto-detection: scope to changed packages only
+ *    - Works both when workdir is the repo root AND when it's a package subdir
  * 3. Auto-detect from package.json scripts (build + test)
  * 4. Empty string (skip validation) if no scripts found
  */
@@ -203,9 +220,16 @@ export function buildValidationCommand(workdir: string, validationCommands?: Rec
     }
   }
 
-  // 2. Monorepo auto-detection — scope to changed packages
+  // 2. Monorepo auto-detection — check workdir and parent dirs
   const monorepoCmd = buildMonorepoValidationCommand(workdir);
   if (monorepoCmd) return monorepoCmd;
+
+  // Also check if workdir is a subpackage inside a monorepo
+  const monorepoRoot = findMonorepoRoot(workdir);
+  if (monorepoRoot && monorepoRoot !== workdir) {
+    const rootCmd = buildMonorepoValidationCommand(monorepoRoot);
+    if (rootCmd) return rootCmd;
+  }
 
   // 3. Simple project — use root package.json scripts
   const pm = detectPackageManager(workdir);
@@ -241,9 +265,11 @@ export function runValidation(workdir: string, validationCommands?: Record<strin
     // No build/test scripts found — nothing to validate, pass by default
     return Promise.resolve({ passed: true, output: 'PASS (no build/test scripts found)' });
   }
+  // If workdir is inside a monorepo, run from the repo root so workspace commands work
+  const execDir = findMonorepoRoot(workdir) || workdir;
   return new Promise((resolve) => {
     exec(cmd, {
-      cwd: workdir,
+      cwd: execDir,
       timeout: VALIDATE_TIMEOUT_MS,
       maxBuffer: 5 * 1024 * 1024,
     }, (error, vStdout, vStderr) => {
