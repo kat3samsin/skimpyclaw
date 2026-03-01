@@ -136,7 +136,7 @@ function isGitForcePushSegment(segment: string[]): boolean {
     // Options with explicit values.
     if (
       tok === '-c' ||
-      tok === '-c' ||
+      tok === '-C' ||
       tok === '--git-dir' ||
       tok === '--work-tree' ||
       tok === '--namespace' ||

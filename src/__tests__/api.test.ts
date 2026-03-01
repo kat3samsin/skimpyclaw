@@ -124,6 +124,7 @@ vi.mock('../config.js', () => ({
   getSessionsDir: () => SESSIONS_DIR,
   getLogsDir: () => LOGS_DIR,
   getAgentDir: (agentId: string) => join(TEST_ROOT, 'agents', agentId),
+  isValidAgentId: (agentId: string) => /^[a-zA-Z0-9_-]+$/.test(agentId),
   listMemoryFiles: (agentId: string) => {
     const { existsSync, readdirSync, statSync } = require('fs');
     const memDir = join(TEST_ROOT, 'agents', agentId, 'memory', 'logs');

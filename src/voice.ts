@@ -440,6 +440,8 @@ export async function synthesizeSpeech(text: string, config: VoiceConfig): Promi
 
   const { name, provider } = ttsProvider;
 
+  const macosVoice = config.providers?.macos?.tts?.voice || 'Zoe';
+
   // macOS `say` command
   if (name === 'macos') {
     const voice = provider.tts?.voice || 'Zoe';
@@ -452,7 +454,7 @@ export async function synthesizeSpeech(text: string, config: VoiceConfig): Promi
     if (!apiKey) {
       if (canFallbackToMacOS(config)) {
         console.warn('[voice] No ElevenLabs API key — falling back to macOS TTS');
-        return synthesizeWithMacOS(text, config.providers?.macos?.tts?.voice || 'Zoe');
+        return synthesizeWithMacOS(text, macosVoice);
       }
       throw new Error('No API key configured for ElevenLabs TTS provider.');
     }
@@ -477,7 +479,7 @@ export async function synthesizeSpeech(text: string, config: VoiceConfig): Promi
     } catch (err) {
       if (canFallbackToMacOS(config)) {
         console.warn(`[voice] ElevenLabs failed, falling back to macOS TTS: ${(err as Error).message}`);
-        return synthesizeWithMacOS(text, config.providers?.macos?.tts?.voice || 'Zoe');
+        return synthesizeWithMacOS(text, macosVoice);
       }
       throw err;
     }
@@ -488,7 +490,7 @@ export async function synthesizeSpeech(text: string, config: VoiceConfig): Promi
   if (!apiKey) {
     if (canFallbackToMacOS(config)) {
       console.warn(`[voice] No API key for "${name}" — falling back to macOS TTS`);
-      return synthesizeWithMacOS(text, config.providers?.macos?.tts?.voice || 'Zoe');
+      return synthesizeWithMacOS(text, macosVoice);
     }
     throw new Error(`No API key configured for TTS provider "${name}".`);
   }
@@ -511,7 +513,7 @@ export async function synthesizeSpeech(text: string, config: VoiceConfig): Promi
   } catch (err) {
     if (canFallbackToMacOS(config)) {
       console.warn(`[voice] ${name} TTS failed, falling back to macOS TTS: ${(err as Error).message}`);
-      return synthesizeWithMacOS(text, config.providers?.macos?.tts?.voice || 'Zoe');
+      return synthesizeWithMacOS(text, macosVoice);
     }
     throw err;
   }

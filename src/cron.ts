@@ -394,7 +394,7 @@ function resolveMessageSource(message: string): string {
 
   // Expand ~ to home directory
   const resolved = trimmed.startsWith('~/')
-    ? join(process.env.HOME || '', trimmed.slice(2))
+    ? join(homedir(), trimmed.slice(2))
     : trimmed;
 
   if (existsSync(resolved)) {
@@ -403,7 +403,7 @@ function resolveMessageSource(message: string): string {
   }
 
   // Fallback: check ~/.skimpyclaw/prompts/ directory
-  const promptsDir = join(process.env.HOME || '', '.skimpyclaw', 'prompts', trimmed);
+  const promptsDir = join(homedir(), '.skimpyclaw', 'prompts', trimmed);
   if (existsSync(promptsDir)) {
     console.log(`[cron] Loading prompt from prompts dir: ${promptsDir}`);
     return readFileSync(promptsDir, 'utf-8');

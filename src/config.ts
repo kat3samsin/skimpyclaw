@@ -64,8 +64,12 @@ export function getConfigPath(): string {
   return CONFIG_PATH;
 }
 
+export function isValidAgentId(agentId: string): boolean {
+  return /^[a-zA-Z0-9_-]+$/.test(agentId);
+}
+
 export function getAgentDir(agentId: string): string {
-  if (!/^[a-zA-Z0-9_-]+$/.test(agentId)) {
+  if (!isValidAgentId(agentId)) {
     throw new Error('Invalid agent ID');
   }
   return join(homedir(), '.skimpyclaw', 'agents', agentId);
@@ -128,8 +132,7 @@ export function listMemoryFiles(agentId: string): { name: string; date: string; 
 }
 
 export function readMemoryFile(agentId: string, filename: string): string {
-  // Validate agentId is a safe identifier
-  if (!/^[a-zA-Z0-9_-]+$/.test(agentId)) {
+  if (!isValidAgentId(agentId)) {
     throw new Error('Invalid agent ID');
   }
   // Validate no path traversal

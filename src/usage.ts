@@ -58,10 +58,6 @@ function formatDate(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
-function getUsageFilePath(dateStr: string): string {
-  return join(USAGE_DIR, `${dateStr}.jsonl`);
-}
-
 /** For testing: override the usage directory */
 let usageDirOverride: string | null = null;
 export function setUsageDirForTesting(dir: string | null): void {
@@ -211,6 +207,7 @@ export function aggregateUsage(startDate: string, endDate: string): UsageAggrega
 
 /**
  * Get usage summary for today, last 7 days, and last 30 days.
+ * Reads files once for the full 30-day window, then partitions in memory.
  */
 export function getUsageSummary(): UsageSummary {
   const now = new Date();
@@ -218,10 +215,33 @@ export function getUsageSummary(): UsageSummary {
 
   const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const weekAgoStr = formatDate(weekAgo);
+  const monthAgoStr = formatDate(monthAgo);
+
+  // Read all records once for the full 30-day range
+  const { records: allRecords } = readUsageRecords({ startDate: monthAgoStr, endDate: todayStr, limit: 100000 });
+
+  const aggregate = (records: UsageRecord[]): UsageAggregation => {
+    const agg = emptyAggregation();
+    for (const r of records) {
+      agg.totalCost += r.totalCost;
+      agg.totalInputTokens += r.inputTokens;
+      agg.totalOutputTokens += r.outputTokens;
+      agg.totalCalls++;
+      if (!agg.byModel[r.model]) {
+        agg.byModel[r.model] = { calls: 0, inputTokens: 0, outputTokens: 0, cost: 0 };
+      }
+      agg.byModel[r.model].calls++;
+      agg.byModel[r.model].inputTokens += r.inputTokens;
+      agg.byModel[r.model].outputTokens += r.outputTokens;
+      agg.byModel[r.model].cost += r.totalCost;
+    }
+    return agg;
+  };
 
   return {
-    today: aggregateUsage(todayStr, todayStr),
-    week: aggregateUsage(formatDate(weekAgo), todayStr),
-    month: aggregateUsage(formatDate(monthAgo), todayStr),
+    today: aggregate(allRecords.filter(r => r.timestamp.slice(0, 10) === todayStr)),
+    week: aggregate(allRecords.filter(r => r.timestamp.slice(0, 10) >= weekAgoStr)),
+    month: aggregate(allRecords),
   };
 }

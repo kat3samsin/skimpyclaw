@@ -13,6 +13,7 @@ import {
   getSessionsDir,
   getLogsDir,
   getAgentDir,
+  isValidAgentId,
   listMemoryFiles,
   readMemoryFile,
 } from './config.js';
@@ -56,17 +57,14 @@ function validateFilename(filename: string): boolean {
   return !filename.includes('..') && filename === basename(filename);
 }
 
-function validateAgentId(agentId: string): boolean {
-  // Agent IDs should be simple identifiers: alphanumeric, hyphens, underscores
-  return /^[a-zA-Z0-9_-]+$/.test(agentId);
-}
+// Use isValidAgentId from config.ts
 
 function validateSkillName(name: string): boolean {
   return /^[a-zA-Z0-9-]+$/.test(name) && name.length <= 100;
 }
 
 function getSkillsDir(cfg: Config): string {
-  return (cfg as any).skills?.directory || join(homedir(), '.skimpyclaw', 'skills');
+  return cfg.skills?.directory || join(homedir(), '.skimpyclaw', 'skills');
 }
 
 function resolveCronPromptPath(inputPath: string): string | null {
@@ -336,7 +334,7 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
   // --- Memory ---
   fastify.get<{ Params: { agentId: string } }>('/api/dashboard/memory/:agentId', async (request, reply) => {
     const { agentId } = request.params;
-    if (!validateAgentId(agentId)) {
+    if (!isValidAgentId(agentId)) {
       return reply.code(400).send({ error: 'Invalid agent ID' });
     }
     const files = listMemoryFiles(agentId);
@@ -347,7 +345,7 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
     Params: { agentId: string; filename: string };
   }>('/api/dashboard/memory/:agentId/:filename', async (request, reply) => {
     const { agentId, filename } = request.params;
-    if (!validateAgentId(agentId)) {
+    if (!isValidAgentId(agentId)) {
       return reply.code(400).send({ error: 'Invalid agent ID' });
     }
 
@@ -512,7 +510,7 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
   // --- Templates ---
   fastify.get<{ Params: { agentId: string } }>('/api/dashboard/templates/:agentId', async (request, reply) => {
     const { agentId } = request.params;
-    if (!validateAgentId(agentId)) {
+    if (!isValidAgentId(agentId)) {
       return reply.code(400).send({ error: 'Invalid agent ID' });
     }
     const agentDir = getAgentDir(agentId);
@@ -534,7 +532,7 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
     Params: { agentId: string; name: string };
   }>('/api/dashboard/templates/:agentId/:name', async (request, reply) => {
     const { agentId, name } = request.params;
-    if (!validateAgentId(agentId)) {
+    if (!isValidAgentId(agentId)) {
       return reply.code(400).send({ error: 'Invalid agent ID' });
     }
     const content = getAgentTemplateContent(agentId, name);
@@ -549,7 +547,7 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
     Body: { content: string };
   }>('/api/dashboard/templates/:agentId/:name', async (request, reply) => {
     const { agentId, name } = request.params;
-    if (!validateAgentId(agentId)) {
+    if (!isValidAgentId(agentId)) {
       return reply.code(400).send({ error: 'Invalid agent ID' });
     }
     const { content } = request.body;

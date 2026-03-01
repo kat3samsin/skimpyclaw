@@ -1,6 +1,6 @@
 // Agent runner: loads templates, calls models, manages memory
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync } from 'fs';
+import { readFileSync, writeFileSync, appendFileSync, existsSync, mkdirSync, unlinkSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { getAgentDir } from './config.js';
@@ -124,9 +124,7 @@ export function appendToMemory(agentId: string, entry: string): void {
 
   const path = getTodayMemoryPath(agentId);
   const timestamp = new Date().toISOString();
-  const content = existsSync(path) ? readFileSync(path, 'utf-8') : '';
-  const newContent = content + `\n## ${timestamp}\n\n${entry}\n`;
-  writeFileSync(path, newContent.trim() + '\n');
+  appendFileSync(path, `\n## ${timestamp}\n\n${entry}\n`, 'utf-8');
 }
 
 // --- Agent Turn ---

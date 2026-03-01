@@ -94,11 +94,22 @@ export function isRateLimited(userId: string | number): boolean {
   const recent = timestamps.filter(t => now - t < WINDOW_MS);
 
   if (recent.length >= RATE_LIMIT) {
+    rateLimiter.set(key, recent);
     return true;
   }
 
   recent.push(now);
   rateLimiter.set(key, recent);
+
+  // Prune stale entries periodically (every 100th call)
+  if (rateLimiter.size > 50) {
+    for (const [k, ts] of rateLimiter) {
+      if (ts.every(t => now - t >= WINDOW_MS)) {
+        rateLimiter.delete(k);
+      }
+    }
+  }
+
   return false;
 }
 

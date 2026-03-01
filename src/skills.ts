@@ -16,11 +16,17 @@ const DEFAULT_PRIORITY = 100;
  * Check if a binary exists on PATH.
  * Returns true if found, false otherwise.
  */
+const binExistsCache = new Map<string, boolean>();
+
 function binExists(name: string): boolean {
+  const cached = binExistsCache.get(name);
+  if (cached !== undefined) return cached;
   try {
     execSync(`which ${name}`, { stdio: 'ignore' });
+    binExistsCache.set(name, true);
     return true;
   } catch {
+    binExistsCache.set(name, false);
     return false;
   }
 }

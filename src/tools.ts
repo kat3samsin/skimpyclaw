@@ -327,8 +327,6 @@ export async function executeTool(
         const { isPathAllowed } = await import('./tools/path-utils.js');
         for (const [key, value] of Object.entries(input)) {
           if (typeof value === 'string' && (value.startsWith('/') || value.startsWith('~/') || value.startsWith('./'))) {
-            const { resolve } = await import('path');
-            const { homedir } = await import('os');
             const resolved = value.startsWith('~/') ? resolve(homedir(), value.slice(2)) : resolve(value);
             if (!isPathAllowed(resolved, config.allowedPaths)) {
               return `Error: MCP tool argument "${key}" references path outside allowed directories: ${value}`;
