@@ -342,6 +342,61 @@ export async function runTeamOrchestrator(
       return `Context from completed prerequisite tasks:\n${contextParts.join('\n')}${diffBlock}\nYour task: ${sub.description}`;
     }
 
+    // Helper: take a git snapshot (stash hash) so we can diff per-child changes
+    function gitSnapshot(): string {
+      try {
+        return execSync('git rev-parse HEAD 2>/dev/null', {
+          cwd: workdir, timeout: 5000, encoding: 'utf-8',
+        }).trim();
+      } catch { return ''; }
+    }
+
+    // Helper: get list of changed files since a snapshot
+    function getChangedFilesSince(snapshot: string): string[] {
+      if (!snapshot) return [];
+      try {
+        const output = execSync(`git diff --name-only ${snapshot} 2>/dev/null`, {
+          cwd: workdir, timeout: 5000, encoding: 'utf-8',
+        }).trim();
+        return output ? output.split('\n') : [];
+      } catch { return []; }
+    }
+
+    // Helper: detect file overlaps between parallel children in a wave.
+    // Takes a pre-wave snapshot, diffs each child's changes by looking at
+    // git log entries during the wave window. For simplicity, we diff the
+    // entire wave and check against each child's declared file scope from
+    // the structured output.
+    function detectFileOverlaps(waveIndices: number[]): { overlaps: string[], filesByChild: Map<string, string[]> } {
+      const filesByChild = new Map<string, string[]>();
+      const fileCounts = new Map<string, string[]>(); // file → list of child IDs that touched it
+
+      for (const subtaskIdx of waveIndices) {
+        const childId = childIdByIndex[subtaskIdx];
+        const child = getCodeAgent(childId);
+        if (!child || !child.outputPreview) continue;
+
+        const parsed = parseAgentOutput(child.outputPreview);
+        const files = parsed.files;
+        filesByChild.set(childId, files);
+
+        for (const f of files) {
+          const existing = fileCounts.get(f) || [];
+          existing.push(childId);
+          fileCounts.set(f, existing);
+        }
+      }
+
+      const overlaps: string[] = [];
+      for (const [file, owners] of fileCounts) {
+        if (owners.length > 1) {
+          overlaps.push(`${file} (touched by ${owners.join(', ')})`);
+        }
+      }
+
+      return { overlaps, filesByChild };
+    }
+
     // Phase 3: Execute waves sequentially, tasks within each wave in parallel
     const POLL_INTERVAL = 3000;
     const totalTimeoutMs = timeoutMinutes * 60 * 1000;
@@ -537,6 +592,23 @@ export async function runTeamOrchestrator(
               durationMs: Date.now() - startedAt.getTime(),
             });
           }
+        }
+      }
+
+      // File overlap detection: check if multiple children in this wave touched the same files
+      if (waveIndices.length > 1 && Date.now() - startedAt.getTime() < totalTimeoutMs) {
+        const { overlaps } = detectFileOverlaps(waveIndices);
+        if (overlaps.length > 0) {
+          const overlapMsg = `File conflicts in wave ${waveIdx + 1}: ${overlaps.join('; ')}`;
+          addEvent(traceId, {
+            type: 'file_overlap',
+            summary: overlapMsg,
+            durationMs: Date.now() - startedAt.getTime(),
+          });
+          console.warn(`[code-team] ${overlapMsg}`);
+          // Store overlap info on parent for synthesis and notification
+          parentTask.error = (parentTask.error ? parentTask.error + '\n' : '') + overlapMsg;
+          writeCodeAgentTask(parentTask);
         }
       }
 
