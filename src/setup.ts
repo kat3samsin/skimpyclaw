@@ -1430,8 +1430,11 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
     let step = 1;
     console.log(`${step++}. Review templates in ~/.skimpyclaw/agents/main/`);
     if (enableSandbox) {
+      const runtimeHint = detectedSandboxRuntime === 'docker'
+        ? 'open -a Docker    # or start Docker Desktop'
+        : 'container system start';
       console.log(`${step++}. Start the container runtime (if not already running):`);
-      console.log('   container system start');
+      console.log(`   ${runtimeHint}`);
       console.log(`${step++}. Initialize the sandbox:`);
       console.log('   skimpyclaw sandbox init');
       console.log(`${step++}. Verify sandbox is working:`);
