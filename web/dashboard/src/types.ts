@@ -181,7 +181,10 @@ export interface CodeAgent {
   subtask?: string;
   synthesisResult?: string;
   validationPassed?: boolean;
+  validationOutput?: string;
   workdir?: string;
+  wave?: number;
+  retryCount?: number;
   totalCost?: number;
   inputTokens?: number;
   outputTokens?: number;

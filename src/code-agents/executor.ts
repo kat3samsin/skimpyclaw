@@ -1,6 +1,6 @@
 // Code Agent Executor - Background execution logic
 
-import { spawn, exec } from 'child_process';
+import { spawn, exec, execSync } from 'child_process';
 import type { ChildProcess } from 'child_process';
 import { createWriteStream, existsSync, readFileSync } from 'fs';
 import { join } from 'path';
@@ -65,15 +65,152 @@ export function detectPackageManager(workdir: string): PackageManager {
 }
 
 /**
- * Build the validation command for a project directory.
- * Checks for `build` and `test` scripts in package.json, then runs them
- * with the detected package manager. Falls back to `<pm> build && <pm> test`.
+ * Detect monorepo workspaces from package.json.
+ * Returns workspace glob patterns or null if not a monorepo.
  */
-export function buildValidationCommand(workdir: string): string {
+function getWorkspacePatterns(workdir: string): string[] | null {
+  try {
+    const pkgPath = join(workdir, 'package.json');
+    if (!existsSync(pkgPath)) return null;
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+    // yarn/npm: "workspaces": ["packages/*"] or "workspaces": { "packages": [...] }
+    const ws = pkg.workspaces;
+    if (Array.isArray(ws)) return ws;
+    if (ws && Array.isArray(ws.packages)) return ws.packages;
+    // pnpm: check pnpm-workspace.yaml
+    const pnpmWsPath = join(workdir, 'pnpm-workspace.yaml');
+    if (existsSync(pnpmWsPath)) {
+      const content = readFileSync(pnpmWsPath, 'utf-8');
+      const matches = content.match(/- ['"]?([^'"\n]+)['"]?/g);
+      if (matches) return matches.map(m => m.replace(/^- ['"]?|['"]?$/g, ''));
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Find which monorepo packages have changed files (git diff).
+ * Returns package directories relative to workdir.
+ */
+function getChangedPackageDirs(workdir: string): string[] {
+  try {
+    // Get changed files vs HEAD (staged + unstaged + untracked)
+    const diff = execSync(
+      'git diff --name-only HEAD 2>/dev/null; git diff --name-only --cached 2>/dev/null; git ls-files --others --exclude-standard 2>/dev/null',
+      { cwd: workdir, timeout: 5000, encoding: 'utf-8' },
+    ).trim();
+    if (!diff) return [];
+
+    const files = [...new Set(diff.split('\n').filter(Boolean))];
+    // Extract unique top-level package directories (e.g. "packages/image-studio/src/foo.ts" → "packages/image-studio")
+    const pkgDirs = new Set<string>();
+    for (const f of files) {
+      const parts = f.split('/');
+      // Look for package.json at each depth to find package boundary
+      for (let depth = 1; depth <= Math.min(parts.length - 1, 4); depth++) {
+        const candidate = parts.slice(0, depth).join('/');
+        if (existsSync(join(workdir, candidate, 'package.json'))) {
+          pkgDirs.add(candidate);
+          break;
+        }
+      }
+    }
+    return [...pkgDirs];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Build scoped validation commands for a monorepo by detecting changed packages.
+ * Returns a combined command that builds/tests only affected packages, or null
+ * if this doesn't look like a monorepo or no packages were changed.
+ */
+function buildMonorepoValidationCommand(workdir: string): string | null {
+  const wsPatterns = getWorkspacePatterns(workdir);
+  if (!wsPatterns) return null;
+
+  const changedDirs = getChangedPackageDirs(workdir);
+  if (changedDirs.length === 0) return null;
+
+  const pm = detectPackageManager(workdir);
+  const parts: string[] = [];
+
+  for (const dir of changedDirs) {
+    const pkgJsonPath = join(workdir, dir, 'package.json');
+    if (!existsSync(pkgJsonPath)) continue;
+
+    try {
+      const pkg = JSON.parse(readFileSync(pkgJsonPath, 'utf-8'));
+      const pkgName = pkg.name;
+      const scripts = pkg.scripts || {};
+
+      if (!pkgName) continue;
+
+      // Build with workspace command
+      if (scripts.build) {
+        if (pm === 'pnpm') parts.push(`pnpm --filter ${pkgName} run build`);
+        else if (pm === 'yarn') parts.push(`yarn workspace ${pkgName} build`);
+        else if (pm === 'bun') parts.push(`bun --filter ${pkgName} run build`);
+        else parts.push(`npm -w ${pkgName} run build`);
+      }
+
+      // Test: prefer package-scoped test, fall back to root test runner scoped to path
+      if (scripts.test) {
+        if (pm === 'pnpm') parts.push(`pnpm --filter ${pkgName} run test`);
+        else if (pm === 'yarn') parts.push(`yarn workspace ${pkgName} test`);
+        else if (pm === 'bun') parts.push(`bun --filter ${pkgName} run test`);
+        else parts.push(`npm -w ${pkgName} run test`);
+      } else {
+        // No package-level test script — try running root test scoped to the package path
+        // This handles monorepos like wp-calypso with `jest --testPathPattern`
+        const rootPkg = JSON.parse(readFileSync(join(workdir, 'package.json'), 'utf-8'));
+        const rootScripts = rootPkg.scripts || {};
+        // Check for common monorepo test patterns
+        if (rootScripts['test-packages']) {
+          if (pm === 'yarn') parts.push(`yarn test-packages ${dir}`);
+          else parts.push(`${pm} run test-packages ${dir}`);
+        }
+      }
+    } catch { /* skip this package */ }
+  }
+
+  if (parts.length === 0) return null;
+
+  console.log(`[validation] Monorepo: scoped to ${changedDirs.length} package(s): ${changedDirs.join(', ')}`);
+  return parts.join(' && ');
+}
+
+/**
+ * Build the validation command for a project directory.
+ *
+ * Resolution order:
+ * 1. Per-project override from config `codeAgents.validationCommands`
+ * 2. Monorepo auto-detection: scope to changed packages only
+ * 3. Auto-detect from package.json scripts (build + test)
+ * 4. Empty string (skip validation) if no scripts found
+ */
+export function buildValidationCommand(workdir: string, validationCommands?: Record<string, string>): string {
+  // 1. Check per-project overrides
+  if (validationCommands) {
+    const dirName = workdir.split('/').pop() || '';
+    for (const [key, cmd] of Object.entries(validationCommands)) {
+      if (key === dirName || workdir === key || workdir.endsWith(`/${key}`)) {
+        return cmd;
+      }
+    }
+  }
+
+  // 2. Monorepo auto-detection — scope to changed packages
+  const monorepoCmd = buildMonorepoValidationCommand(workdir);
+  if (monorepoCmd) return monorepoCmd;
+
+  // 3. Simple project — use root package.json scripts
   const pm = detectPackageManager(workdir);
   const run = pm === 'npm' ? 'npm run' : pm;
 
-  // Check which scripts exist in package.json
   let hasBuild = false;
   let hasTest = false;
   try {
@@ -90,9 +227,6 @@ export function buildValidationCommand(workdir: string): string {
   if (hasBuild) parts.push(`${run} build`);
   if (hasTest) parts.push(`${run} test`);
 
-  // If neither build nor test scripts exist, skip validation.
-  // Plain HTML/CSS/JS projects and projects without package.json
-  // shouldn't fail validation just because there's no build step.
   if (parts.length === 0) {
     return '';
   }
@@ -101,8 +235,8 @@ export function buildValidationCommand(workdir: string): string {
 }
 
 /** Run build/test validation. Shared by solo agents and team orchestrator. */
-export function runValidation(workdir: string): Promise<ValidationResult> {
-  const cmd = buildValidationCommand(workdir);
+export function runValidation(workdir: string, validationCommands?: Record<string, string>): Promise<ValidationResult> {
+  const cmd = buildValidationCommand(workdir, validationCommands);
   if (!cmd) {
     // No build/test scripts found — nothing to validate, pass by default
     return Promise.resolve({ passed: true, output: 'PASS (no build/test scripts found)' });
@@ -345,7 +479,7 @@ export async function runCodeAgentBackground(
       caTask.liveOutput = undefined;
       writeCodeAgentTask(caTask);
 
-      const validationCmd = buildValidationCommand(workdir);
+      const validationCmd = buildValidationCommand(workdir, options?.validationCommands);
       const runValidationPromise = (): Promise<string> => new Promise((res) => {
         const validationProc = exec(validationCmd, {
           cwd: workdir,

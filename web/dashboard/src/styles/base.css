@@ -1591,7 +1591,58 @@ textarea::placeholder {
 .coding-subagent-icon.failed { background: var(--error-soft); color: var(--error); }
 .coding-subagent-icon.pending { background: var(--pending-soft); color: var(--pending); }
 .coding-subagent-task { font-size: 12px; color: var(--text-dim); line-height: 1.45; font-weight: 400; }
-.coding-subagent-time { font-size: 11px; color: var(--text-muted); font-family: var(--mono); }
+.coding-subagent-time { font-size: 11px; color: var(--text-muted); font-family: var(--mono); display: inline-flex; align-items: center; gap: 3px; }
+
+/* Expandable subagent cards */
+.coding-subagent-card {
+  margin-top: 8px;
+  border: 1px solid var(--border-light);
+  background: var(--surface-alt);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  transition: border-color 0.15s;
+}
+.coding-subagent-card.running { border-left: 2px solid var(--card-accent, var(--coding-accent)); }
+.coding-subagent-card.completed { border-left: 2px solid var(--success); }
+.coding-subagent-card.failed { border-left: 2px solid var(--error); }
+.coding-subagent-card.pending { border-left: 2px solid var(--border); opacity: 0.7; }
+.coding-subagent-header {
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 12px;
+}
+.coding-subagent-header::-webkit-details-marker { display: none; }
+.coding-subagent-chevron {
+  flex-shrink: 0;
+  transition: transform 0.15s;
+  color: var(--text-muted);
+}
+.coding-subagent-card[open] > .coding-subagent-header .coding-subagent-chevron {
+  transform: rotate(0deg);
+}
+.coding-subagent-card:not([open]) > .coding-subagent-header .coding-subagent-chevron {
+  transform: rotate(-90deg);
+}
+.coding-subagent-body {
+  padding: 0 14px 12px;
+  border-top: 1px solid var(--border-light);
+}
+.coding-subagent-body .coding-subagent-task {
+  padding: 8px 0 4px;
+}
+.ca-subagent-output {
+  max-height: 300px;
+  overflow-y: auto;
+  font-size: 12px;
+  padding: 8px;
+  background: rgba(0,0,0,0.1);
+  border-radius: var(--radius-sm);
+  margin-top: 6px;
+}
 
 .ca-status-badge {
   display: inline-flex;

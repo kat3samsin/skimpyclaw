@@ -66,6 +66,11 @@ export interface Config {
     defaultAgent?: string;    // Default coding agent CLI: "claude" | "codex" | "kimi" (default: "claude")
     timeoutMinutes?: number;  // Default timeout for solo code_with_agent (default: 30, max: 60)
     teamTimeoutMinutes?: number; // Default timeout for code_with_team (default: 60, max: 120)
+    maxTurns?: number;        // Max tool-use turns per agent (default: 50, team children: 25)
+    skipPlaywright?: boolean; // Skip Playwright MCP for coding agents (default: false)
+    /** Per-project validation commands. Keys match project names from `projects` config.
+     *  Values are shell commands run in the project dir. Overrides auto-detected build+test. */
+    validationCommands?: Record<string, string>;
   };
   langfuse?: {
     enabled?: boolean;

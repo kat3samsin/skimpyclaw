@@ -53,6 +53,18 @@ Coding agents run **on the host**, not inside the sandbox. They spawn external C
 
 The sandbox only applies to the built-in `Bash` tool used by the main agent. If you need sandboxed code execution, use a cron job or the main agent's `Bash` tool instead of `code_with_agent`.
 
+## CLI monitoring
+
+```bash
+skimpyclaw agents              # List all agents (active + recent)
+skimpyclaw agents <id>         # Show details for an agent (task, children, live output)
+skimpyclaw agents <id> --follow  # Follow live output (refreshes every 3s until done)
+```
+
+For team coordinators, this shows all child agents grouped by wave with status, elapsed time, and live output.
+
+The dashboard (`/dashboard` → Coding page) also shows real-time agent status with expandable subagent cards.
+
 ## Selection behavior
 
 - Agent selection supports `claude`, `codex`, `kimi`

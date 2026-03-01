@@ -252,16 +252,62 @@ export function Coding() {
                   <details class="coding-subagents" open>
                     <summary><LuChevronDown size={14} /> Subagents ({children.length})</summary>
                     <div class="coding-subagents-list">
-                      {children.map(child => (
-                        <div key={child.id} class="coding-subagent-row">
-                          <span class={`coding-subagent-icon ${statusClass(child.status)}`}>{statusIcon(child.status)}</span>
-                          <span class="audit-id">{child.id}</span>
-                          <span class={`ca-status-badge ${child.status}`}>{child.status}</span>
-                          <span class="coding-pill">{child.totalCost != null ? `$${child.totalCost.toFixed(2)}` : '$--'}</span>
-                          <span class="coding-subagent-task">{child.subtask || child.task}</span>
-                          <span class="coding-subagent-time">{formatElapsed(child)}</span>
-                        </div>
-                      ))}
+                      {children.map(child => {
+                        const childCls = statusClass(child.status);
+                        const childAccent = accentForTask(child.id);
+                        const childOutput = child.liveOutput || child.outputPreview;
+                        return (
+                          <details
+                            key={child.id}
+                            class={`coding-subagent-card ${childCls}`}
+                            style={{
+                              '--card-accent': childAccent.color,
+                              '--card-accent-soft': childAccent.soft,
+                            } as any}
+                            open={child.status === 'running' || child.status === 'validating'}
+                          >
+                            <summary class="coding-subagent-header">
+                              <span class="coding-subagent-chevron"><LuChevronDown size={13} /></span>
+                              <span class={`coding-subagent-icon ${childCls}`}>{statusIcon(child.status)}</span>
+                              <span class="audit-id">{child.id}</span>
+                              <span class={`ca-status-badge ${child.status}`}>{child.status}</span>
+                              {child.wave != null && <span class="coding-pill">Wave {child.wave + 1}</span>}
+                              {child.retryCount ? <span class="coding-pill" style={{ color: '#d4a03c' }}>retry #{child.retryCount}</span> : null}
+                              <span class="coding-pill">{child.totalCost != null ? `$${child.totalCost.toFixed(2)}` : '$--'}</span>
+                              <span class="coding-subagent-time"><LuClock3 size={12} /> {formatElapsed(child)}</span>
+                              {child.status === 'running' || child.status === 'validating' ? (
+                                <button
+                                  class={`coding-task-action ${childCls}`}
+                                  type="button"
+                                  disabled={cancellingIds.has(child.id)}
+                                  onClick={(e) => { e.preventDefault(); void onCancel(child.id); }}
+                                  style={{ marginLeft: 'auto', fontSize: '11px', padding: '2px 8px' }}
+                                >
+                                  {cancellingIds.has(child.id) ? '…' : 'Cancel'}
+                                </button>
+                              ) : null}
+                            </summary>
+                            <div class="coding-subagent-body">
+                              <div class="coding-subagent-task">{child.subtask || child.task}</div>
+                              {childOutput ? (
+                                <Markdown
+                                  content={childOutput}
+                                  className={`ca-output markdown-content ca-subagent-output${child.error ? ' ca-error' : ''}`}
+                                />
+                              ) : null}
+                              {!childOutput && child.error ? (
+                                <div class="ca-output ca-error" style={{ fontSize: '12px', padding: '8px', whiteSpace: 'pre-wrap' }}>{child.error}</div>
+                              ) : null}
+                              {child.validationOutput ? (
+                                <details class="coding-validation-detail">
+                                  <summary style={{ fontSize: '11px', color: 'var(--text-muted)', cursor: 'pointer' }}>Validation output</summary>
+                                  <pre style={{ fontSize: '11px', maxHeight: '200px', overflow: 'auto', padding: '8px', background: 'rgba(0,0,0,0.15)', borderRadius: '4px', margin: '4px 0' }}>{child.validationOutput.slice(0, 2000)}</pre>
+                                </details>
+                              ) : null}
+                            </div>
+                          </details>
+                        );
+                      })}
                     </div>
                   </details>
                 )}

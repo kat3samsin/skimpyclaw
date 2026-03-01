@@ -13,6 +13,15 @@ import { parseAgentOutput, formatStructuredContext } from './structured-context.
 import { runAgentTurn } from '../agent.js';
 import { startTrace, addEvent, endTrace } from '../audit.js';
 import { toErrorMessage } from '../utils.js';
+import {
+  isGitRepo,
+  commitPendingChanges,
+  createWorktree,
+  mergeWorktree,
+  removeWorktree,
+  cleanupAllWorktrees,
+  type WorktreeInfo,
+} from './worktree.js';
 
 /**
  * Compute execution waves from dependency info.
@@ -114,7 +123,7 @@ export async function decomposeTask(
 
 Rules:
 - Each subtask should be self-contained with clear file scope
-- Minimize file overlap between subtasks (agents work on the same worktree)
+- Each parallel agent gets its own git worktree (branch), so file overlap is OK but be aware changes are merged after
 - Use dependsOn to order subtasks that must run sequentially (e.g. create interface before implementation)
 - Be specific: mention exact files, functions, and expected changes
 - Return JSON only: {"subtasks":[{"description":"...","dependsOn":[]},...]}
@@ -250,6 +259,10 @@ export async function runTeamOrchestrator(
   const availableForChildren = Math.max(timeoutMinutes - overheadMinutes, timeoutMinutes * 0.7);
   const CANCELLED_MESSAGE = 'Cancelled by user';
 
+  // Worktree state — declared outside try so catch can clean up
+  const _useWorktrees = isGitRepo(workdir);
+  const _activeWorktrees: Map<string, WorktreeInfo> = new Map();
+
   try {
     if (getCodeAgent(parentId)?.status === 'cancelled') throw new Error(CANCELLED_MESSAGE);
     // Phase 1: Decompose
@@ -342,59 +355,22 @@ export async function runTeamOrchestrator(
       return `Context from completed prerequisite tasks:\n${contextParts.join('\n')}${diffBlock}\nYour task: ${sub.description}`;
     }
 
-    // Helper: take a git snapshot (stash hash) so we can diff per-child changes
-    function gitSnapshot(): string {
-      try {
-        return execSync('git rev-parse HEAD 2>/dev/null', {
-          cwd: workdir, timeout: 5000, encoding: 'utf-8',
-        }).trim();
-      } catch { return ''; }
-    }
+    // Worktree isolation: parallel agents in the same wave get their own worktree
+    // so they can't overwrite each other's files. After the wave, branches are
+    // merged back sequentially. Falls back to shared workdir if not a git repo.
+    const useWorktrees = _useWorktrees;
+    const activeWorktrees = _activeWorktrees;
 
-    // Helper: get list of changed files since a snapshot
-    function getChangedFilesSince(snapshot: string): string[] {
-      if (!snapshot) return [];
-      try {
-        const output = execSync(`git diff --name-only ${snapshot} 2>/dev/null`, {
-          cwd: workdir, timeout: 5000, encoding: 'utf-8',
-        }).trim();
-        return output ? output.split('\n') : [];
-      } catch { return []; }
-    }
-
-    // Helper: detect file overlaps between parallel children in a wave.
-    // Takes a pre-wave snapshot, diffs each child's changes by looking at
-    // git log entries during the wave window. For simplicity, we diff the
-    // entire wave and check against each child's declared file scope from
-    // the structured output.
-    function detectFileOverlaps(waveIndices: number[]): { overlaps: string[], filesByChild: Map<string, string[]> } {
-      const filesByChild = new Map<string, string[]>();
-      const fileCounts = new Map<string, string[]>(); // file → list of child IDs that touched it
-
-      for (const subtaskIdx of waveIndices) {
-        const childId = childIdByIndex[subtaskIdx];
-        const child = getCodeAgent(childId);
-        if (!child || !child.outputPreview) continue;
-
-        const parsed = parseAgentOutput(child.outputPreview);
-        const files = parsed.files;
-        filesByChild.set(childId, files);
-
-        for (const f of files) {
-          const existing = fileCounts.get(f) || [];
-          existing.push(childId);
-          fileCounts.set(f, existing);
-        }
-      }
-
-      const overlaps: string[] = [];
-      for (const [file, owners] of fileCounts) {
-        if (owners.length > 1) {
-          overlaps.push(`${file} (touched by ${owners.join(', ')})`);
-        }
-      }
-
-      return { overlaps, filesByChild };
+    if (useWorktrees) {
+      // Clean up any stale worktrees from previous crashed runs
+      cleanupAllWorktrees(workdir);
+      addEvent(traceId, {
+        type: 'worktree',
+        summary: 'Git worktree isolation enabled',
+        durationMs: Date.now() - startedAt.getTime(),
+      });
+    } else {
+      console.warn('[code-team] Not a git repo — agents will share workdir (risk of file conflicts)');
     }
 
     // Phase 3: Execute waves sequentially, tasks within each wave in parallel
@@ -412,17 +388,17 @@ export async function runTeamOrchestrator(
         durationMs: Date.now() - startedAt.getTime(),
       });
 
-      // Helper: spawn a single child task
-      function spawnChild(childId: string, prompt: string) {
+      // Helper: spawn a single child task in the given workdir
+      function spawnChild(childId: string, prompt: string, childWorkdir: string) {
         runCodeAgentBackground(
           childId,
           agent,
           prompt,
-          workdir,
+          childWorkdir,
           false, // per-child validation is handled by the orchestrator below
           { task: prompt, model, timeout_minutes: perChildTimeout },
           new Date(),
-          { skipNotification: true, defaultTimeoutMinutes: perChildTimeout, maxTimeoutMinutes: perChildTimeout },
+          { skipNotification: true, defaultTimeoutMinutes: perChildTimeout, maxTimeoutMinutes: perChildTimeout, validationCommands: fullConfig?.codeAgents?.validationCommands },
         ).catch((err) => {
           const child = getCodeAgent(childId);
           if (child && child.status === 'running') {
@@ -437,18 +413,42 @@ export async function runTeamOrchestrator(
         });
       }
 
+      // Create worktrees for parallel tasks (waves with >1 child)
+      const useWorktreeForWave = useWorktrees && waveIndices.length > 1;
+      if (useWorktreeForWave) {
+        // Commit any pending changes so worktrees branch from a clean state
+        commitPendingChanges(workdir, `[skimpyclaw] pre-wave-${waveIdx + 1}`);
+
+        parentTask.liveOutput = `Phase: Creating worktrees for wave ${waveIdx + 1}...`;
+        writeCodeAgentTask(parentTask);
+      }
+
       // Spawn all tasks in this wave
       for (const subtaskIdx of waveIndices) {
         const childId = childIdByIndex[subtaskIdx];
         const child = getCodeAgent(childId)!;
         const prompt = buildChildPrompt(subtaskIdx);
 
+        // Determine workdir for this child
+        let childWorkdir = workdir;
+        if (useWorktreeForWave) {
+          try {
+            const wt = createWorktree(workdir, childId);
+            activeWorktrees.set(childId, wt);
+            childWorkdir = wt.path;
+            console.log(`[code-team] Created worktree for ${childId}: ${wt.path} (branch ${wt.branch})`);
+          } catch (err) {
+            console.error(`[code-team] Failed to create worktree for ${childId}, using shared workdir:`, err);
+          }
+        }
+
         child.status = 'running';
         child.task = prompt;
+        child.workdir = childWorkdir;
         child.startedAt = new Date().toISOString();
         writeCodeAgentTask(child);
 
-        spawnChild(childId, prompt);
+        spawnChild(childId, prompt, childWorkdir);
       }
 
       // Poll until all tasks in this wave complete
@@ -535,7 +535,7 @@ export async function runTeamOrchestrator(
           parentTask.liveOutput = `Phase: Validating wave ${waveIdx + 1}/${totalWaves}...`;
           writeCodeAgentTask(parentTask);
 
-          const { passed, output: valOutput } = await runValidation(workdir);
+          const { passed, output: valOutput } = await runValidation(workdir, fullConfig?.codeAgents?.validationCommands);
           if (!passed) {
             addEvent(traceId, {
               type: 'wave_validation',
@@ -560,7 +560,7 @@ export async function runTeamOrchestrator(
               child.task = retryPrompt;
               writeCodeAgentTask(child);
 
-              spawnChild(childId, retryPrompt);
+              spawnChild(childId, retryPrompt, workdir);
               retryChildIds.push(childId);
             }
 
@@ -595,19 +595,56 @@ export async function runTeamOrchestrator(
         }
       }
 
-      // File overlap detection: check if multiple children in this wave touched the same files
-      if (waveIndices.length > 1 && Date.now() - startedAt.getTime() < totalTimeoutMs) {
-        const { overlaps } = detectFileOverlaps(waveIndices);
-        if (overlaps.length > 0) {
-          const overlapMsg = `File conflicts in wave ${waveIdx + 1}: ${overlaps.join('; ')}`;
-          addEvent(traceId, {
-            type: 'file_overlap',
-            summary: overlapMsg,
-            durationMs: Date.now() - startedAt.getTime(),
-          });
-          console.warn(`[code-team] ${overlapMsg}`);
-          // Store overlap info on parent for synthesis and notification
-          parentTask.error = (parentTask.error ? parentTask.error + '\n' : '') + overlapMsg;
+      // Merge worktree branches back into main branch sequentially
+      if (useWorktreeForWave && Date.now() - startedAt.getTime() < totalTimeoutMs) {
+        parentTask.liveOutput = `Phase: Merging wave ${waveIdx + 1} results...`;
+        writeCodeAgentTask(parentTask);
+
+        const mergeErrors: string[] = [];
+        for (const subtaskIdx of waveIndices) {
+          const childId = childIdByIndex[subtaskIdx];
+          const wt = activeWorktrees.get(childId);
+          if (!wt) continue;
+
+          const child = getCodeAgent(childId);
+          if (!child || child.status !== 'completed') {
+            // Don't merge failed/timed-out children
+            console.log(`[code-team] Skipping merge for ${childId} (status: ${child?.status})`);
+            removeWorktree(workdir, childId, wt.branch);
+            activeWorktrees.delete(childId);
+            continue;
+          }
+
+          // Commit any uncommitted changes in the worktree before merging
+          commitPendingChanges(wt.path, `[skimpyclaw] ${childId}: ${subtasks[subtaskIdx].description.slice(0, 60)}`);
+
+          const { merged, conflict } = mergeWorktree(workdir, wt.branch, childId);
+          if (merged) {
+            console.log(`[code-team] Merged ${childId} (branch ${wt.branch}) successfully`);
+            addEvent(traceId, {
+              type: 'merge',
+              summary: `Merged ${childId} successfully`,
+              durationMs: Date.now() - startedAt.getTime(),
+            });
+          } else {
+            const conflictMsg = `Merge conflict for ${childId}: ${conflict}`;
+            console.error(`[code-team] ${conflictMsg}`);
+            mergeErrors.push(conflictMsg);
+            addEvent(traceId, {
+              type: 'merge_conflict',
+              summary: conflictMsg.slice(0, 200),
+              durationMs: Date.now() - startedAt.getTime(),
+            });
+          }
+
+          // Clean up worktree regardless of merge result
+          removeWorktree(workdir, childId, wt.branch);
+          activeWorktrees.delete(childId);
+        }
+
+        if (mergeErrors.length > 0) {
+          const errorMsg = `Merge conflicts in wave ${waveIdx + 1}:\n${mergeErrors.join('\n')}`;
+          parentTask.error = (parentTask.error ? parentTask.error + '\n' : '') + errorMsg;
           writeCodeAgentTask(parentTask);
         }
       }
@@ -646,7 +683,7 @@ export async function runTeamOrchestrator(
       parentTask.status = 'validating';
       writeCodeAgentTask(parentTask);
 
-      const { passed, output } = await runValidation(workdir);
+      const { passed, output } = await runValidation(workdir, fullConfig?.codeAgents?.validationCommands);
       const endedAt = new Date();
       const duration = Math.round((endedAt.getTime() - startedAt.getTime()) / 1000);
 
@@ -697,6 +734,15 @@ export async function runTeamOrchestrator(
     writeCodeAgentTask(parentTask);
     await notifyCodeAgentResult(parentTask, getCodeAgent);
   } catch (err) {
+    // Clean up any remaining worktrees
+    for (const [childId, wt] of _activeWorktrees) {
+      try { removeWorktree(workdir, childId, wt.branch); } catch { /* best effort */ }
+    }
+    _activeWorktrees.clear();
+    if (_useWorktrees) {
+      try { cleanupAllWorktrees(workdir); } catch { /* best effort */ }
+    }
+
     const errMsg = toErrorMessage(err);
     addEvent(traceId, { type: 'error', summary: errMsg.slice(0, 200), durationMs: Date.now() - startedAt.getTime() });
     await endTrace(traceId, 'error');

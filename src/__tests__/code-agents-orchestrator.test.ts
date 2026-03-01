@@ -218,7 +218,7 @@ describe('decomposeTask with workdir', () => {
     const call = mockRunAgentTurn.mock.calls[mockRunAgentTurn.mock.calls.length - 1];
     const prompt = call[1] as string;
     expect(prompt).toContain('task decomposition expert');
-    expect(prompt).toContain('Minimize file overlap');
+    expect(prompt).toContain('git worktree');
   });
 });
 

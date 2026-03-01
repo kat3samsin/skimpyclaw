@@ -47,6 +47,9 @@ Commands:
   tools list              List available tools (built-in + MCP)
   tools install <name>    Add MCP server (--command <cmd> [--args ...] or --url <url>)
   tools remove <name>     Remove MCP server
+  agents                  List coding agents (active + recent)
+  agents <id>             Show details for a coding agent (with live output)
+  agents <id> --follow    Follow live output for an agent
   sandbox status          Show active sandbox containers
   sandbox prune           Force-prune all sandbox containers
   sandbox init            Auto-setup sandbox runtime/image/config (supports --profile)
@@ -168,23 +171,47 @@ function startDaemon(): number {
   return 0;
 }
 
+// All launchd labels that may be running (current + legacy)
+const ALL_LAUNCHD_LABELS = [LAUNCHD_LABEL, 'com.katre.skimpyclaw'];
+
 function stopDaemon(): number {
-  if (!launchctlAvailable()) {
-    console.error('Daemon control is only supported on macOS with launchctl.');
-    return 1;
-  }
-  if (!existsSync(LAUNCHD_PLIST)) {
-    console.error(`Launchd plist not found: ${LAUNCHD_PLIST}`);
-    return 1;
+  const launchAgentsDir = join(homedir(), 'Library', 'LaunchAgents');
+  const uid = process.getuid?.();
+
+  // 1. Unload and remove plists for all known labels
+  if (launchctlAvailable()) {
+    for (const label of ALL_LAUNCHD_LABELS) {
+      const plist = join(launchAgentsDir, `${label}.plist`);
+      if (existsSync(plist)) {
+        runLaunchctl(['unload', plist]);
+        rmSync(plist, { force: true });
+        console.log(`Unloaded and removed: ${label}`);
+      }
+      // Also try bootout in case the service is loaded without a plist
+      if (uid !== undefined) {
+        runLaunchctl(['bootout', `gui/${uid}/${label}`]);
+      }
+    }
   }
 
-  const result = runLaunchctl(['unload', LAUNCHD_PLIST]);
-  if (!result.ok && !result.output.includes('Could not find specified service')) {
-    console.error(result.output || 'Failed to unload daemon');
-    return 1;
+  // 2. Kill anything still listening on the gateway port
+  const lsofResult = spawnSync('lsof', ['-ti', `:${DEFAULT_PORT}`], { encoding: 'utf-8' });
+  const pids = (lsofResult.stdout || '')
+    .split('\n')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (pids.length > 0) {
+    for (const pid of pids) {
+      try {
+        process.kill(Number(pid), 'SIGTERM');
+        console.log(`Killed process ${pid} on port ${DEFAULT_PORT}`);
+      } catch {
+        // already dead
+      }
+    }
   }
 
-  console.log(`Daemon stopped: ${LAUNCHD_LABEL}`);
+  console.log('Daemon stopped.');
   return 0;
 }
 
@@ -893,6 +920,130 @@ function printSandboxCheck(ok: boolean, name: string, detail: string, hint?: str
   }
 }
 
+async function commandAgents(args: string[]): Promise<number> {
+  const { getAllCodeAgents, getCodeAgent, restoreCodeAgentTasks } = await import('./code-agents/index.js');
+
+  // Restore tasks from disk so we can see them
+  restoreCodeAgentTasks();
+
+  const id = args.find(a => !a.startsWith('-'));
+  const follow = args.includes('--follow') || args.includes('-f');
+
+  if (id) {
+    // Show details for a specific agent
+    const showAgent = () => {
+      const agent = getCodeAgent(id);
+      if (!agent) {
+        console.error(`No coding agent found with ID "${id}".`);
+        return false;
+      }
+
+      // Clear screen in follow mode
+      if (follow) process.stdout.write('\x1b[2J\x1b[H');
+
+      const elapsed = agent.durationSeconds != null
+        ? agent.durationSeconds
+        : Math.round((Date.now() - new Date(agent.startedAt).getTime()) / 1000);
+      const elapsedStr = elapsed < 60 ? `${elapsed}s` : `${Math.floor(elapsed / 60)}m${elapsed % 60}s`;
+
+      console.log(`\x1b[1m${agent.id}\x1b[0m  ${agent.agent}  \x1b[33m${agent.status}\x1b[0m  (${elapsedStr})`);
+      if (agent.model) console.log(`Model: ${agent.model}`);
+      console.log(`Workdir: ${agent.workdir}`);
+      console.log(`Task: ${agent.task.slice(0, 200)}${agent.task.length > 200 ? '...' : ''}`);
+
+      // Show children for team coordinator
+      if (agent.childTaskIds && agent.childTaskIds.length > 0) {
+        console.log(`\n\x1b[1mChildren:\x1b[0m`);
+        for (const childId of agent.childTaskIds) {
+          const child = getCodeAgent(childId);
+          if (!child) continue;
+          const cElapsed = child.durationSeconds != null
+            ? child.durationSeconds
+            : Math.round((Date.now() - new Date(child.startedAt).getTime()) / 1000);
+          const cStr = cElapsed < 60 ? `${cElapsed}s` : `${Math.floor(cElapsed / 60)}m${cElapsed % 60}s`;
+          const waveLabel = child.wave != null ? ` [wave ${child.wave + 1}]` : '';
+          const icon = child.status === 'completed' ? '✅' : child.status === 'failed' ? '❌' : child.status === 'running' ? '🔄' : child.status === 'pending' ? '⏳' : '❓';
+          console.log(`  ${icon} ${child.id} ${child.status} (${cStr})${waveLabel}`);
+          const subtask = (child.subtask || child.task).slice(0, 120);
+          console.log(`     ${subtask}${(child.subtask || child.task).length > 120 ? '...' : ''}`);
+        }
+      }
+
+      // Show live output
+      if (agent.liveOutput) {
+        console.log(`\n\x1b[1mLive Output:\x1b[0m`);
+        console.log(agent.liveOutput.slice(-3000));
+      }
+
+      // Show result
+      if (agent.outputPreview) {
+        console.log(`\n\x1b[1mResult:\x1b[0m`);
+        console.log(agent.outputPreview.slice(0, 2000));
+      }
+      if (agent.error) {
+        console.log(`\n\x1b[31mError: ${agent.error}\x1b[0m`);
+      }
+      if (agent.validationOutput) {
+        console.log(`\n\x1b[1mValidation:\x1b[0m`);
+        console.log(agent.validationOutput.slice(0, 1000));
+      }
+
+      return agent.status === 'running' || agent.status === 'validating' || agent.status === 'pending';
+    };
+
+    if (follow) {
+      let stillRunning = showAgent();
+      while (stillRunning) {
+        await new Promise(r => setTimeout(r, 3000));
+        restoreCodeAgentTasks();
+        stillRunning = showAgent();
+      }
+      // Show final state
+      showAgent();
+      return 0;
+    }
+
+    showAgent();
+    return 0;
+  }
+
+  // List all agents
+  const all = getAllCodeAgents();
+  if (all.length === 0) {
+    console.log('No coding agents have run yet.');
+    return 0;
+  }
+
+  // Group: active first, then recent
+  const active = all.filter(a => a.status === 'running' || a.status === 'validating' || a.status === 'pending');
+  const finished = all.filter(a => a.status !== 'running' && a.status !== 'validating' && a.status !== 'pending');
+
+  if (active.length > 0) {
+    console.log('\x1b[1mActive:\x1b[0m');
+    for (const a of active) {
+      const elapsed = Math.round((Date.now() - new Date(a.startedAt).getTime()) / 1000);
+      const elapsedStr = elapsed < 60 ? `${elapsed}s` : `${Math.floor(elapsed / 60)}m${elapsed % 60}s`;
+      const taskPreview = a.task.slice(0, 80) + (a.task.length > 80 ? '...' : '');
+      const children = a.childTaskIds ? ` (${a.childTaskIds.length} children)` : '';
+      console.log(`  ${a.id}: \x1b[33m${a.status}\x1b[0m ${a.agent} (${elapsedStr})${children} — ${taskPreview}`);
+    }
+  }
+
+  if (finished.length > 0) {
+    console.log(active.length > 0 ? '\n\x1b[1mRecent:\x1b[0m' : '\x1b[1mRecent:\x1b[0m');
+    for (const a of finished.slice(-15)) {
+      const dur = a.durationSeconds != null
+        ? (a.durationSeconds < 60 ? `${a.durationSeconds}s` : `${Math.floor(a.durationSeconds / 60)}m`)
+        : '?';
+      const icon = a.status === 'completed' ? '✅' : a.status === 'failed' ? '❌' : a.status === 'timeout' ? '⏰' : a.status === 'cancelled' ? '🚫' : '❓';
+      const taskPreview = a.task.slice(0, 80) + (a.task.length > 80 ? '...' : '');
+      console.log(`  ${icon} ${a.id}: ${a.status} ${a.agent} (${dur}) — ${taskPreview}`);
+    }
+  }
+
+  return 0;
+}
+
 async function commandSandbox(args: string[]): Promise<number> {
   const sub = args[0];
   if (sub === 'status') {
@@ -1164,6 +1315,10 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<nu
 
     if (command === 'tools') {
       return await commandTools(args);
+    }
+
+    if (command === 'agents') {
+      return await commandAgents(args);
     }
 
     if (command === 'sandbox') {

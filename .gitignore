@@ -13,3 +13,4 @@ com.skimpyclaw.gateway.plist
 docs/node_modules/
 docs/.vitepress/cache/
 docs/.vitepress/dist/
+.skimpyclaw-worktrees/

@@ -50,6 +50,8 @@ export interface CodeAgentBackgroundOptions {
   maxTimeoutMinutes?: number;
   /** Skip sending notification on completion (parent handles it) */
   skipNotification?: boolean;
+  /** Per-project validation command overrides from config */
+  validationCommands?: Record<string, string>;
   /** Sandbox configuration — when enabled, run CLI inside container */
   sandboxConfig?: SandboxConfig;
   /** Paths to mount into the sandbox container */

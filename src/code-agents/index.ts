@@ -213,6 +213,7 @@ export async function executeCodeWithAgent(
   runCodeAgentBackground(id, agent, task, workdir, validate, resolvedInput, startedAt, {
     defaultTimeoutMinutes: soloTimeout,
     maxTimeoutMinutes: 60,
+    validationCommands: context?.fullConfig?.codeAgents?.validationCommands,
   }).catch((err) => {
     console.error(`[code-agent] Background error for ${id}:`, err);
   });

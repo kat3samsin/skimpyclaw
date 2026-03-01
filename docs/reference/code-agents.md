@@ -18,22 +18,41 @@ Normal tool calling (`Read/Write/Bash/Browser`) is separate from coding-agent CL
 
 ## Validation & Package Manager Detection
 
-When `validate: true` (default), both `code_with_agent` and `code_with_team` run a post-completion validation step. The validation command is **auto-detected** based on the target project's package manager:
+When `validate: true` (default), both `code_with_agent` and `code_with_team` run a post-completion validation step. The validation command is **auto-detected** with monorepo awareness:
 
-Detection order (first match wins):
+### Resolution order
+1. **Per-project override** from config `codeAgents.validationCommands` (keyed by project directory name)
+2. **Monorepo auto-detection** — if the root `package.json` has `workspaces` (or `pnpm-workspace.yaml` exists), scopes validation to only the changed packages:
+   - Uses `git diff` to find changed files
+   - Maps files → package directories (finds nearest `package.json`)
+   - Runs scoped `yarn workspace <name> build` / `yarn workspace <name> test` per package
+   - Falls back to `yarn test-packages <path>` if the root has a `test-packages` script and the package has no `test` script
+3. **Simple project** — runs `build` and `test` scripts from root `package.json` using the detected package manager
+
+### Package manager detection (first match wins)
 1. `package.json` `packageManager` field (e.g. `"yarn@4.1.0"`)
 2. Lockfile: `yarn.lock` → yarn, `pnpm-lock.yaml` → pnpm, `bun.lockb`/`bun.lock` → bun, `package-lock.json` → npm
 3. Fallback: `pnpm` (SkimpyClaw default)
 
-The validation command runs the project's `build` and `test` scripts using the detected manager:
-- **pnpm**: `pnpm build && pnpm test`
-- **yarn**: `yarn build && yarn test`
-- **npm**: `npm run build && npm run test`
-- **bun**: `bun build && bun test`
+Implementation: `detectPackageManager()`, `buildMonorepoValidationCommand()`, and `buildValidationCommand()` in `src/code-agents/executor.ts`.
 
-If only one of `build`/`test` exists in `package.json` scripts, only that command runs. The system prompt given to coding agents also reflects the detected package manager.
+## Team Orchestration — Git Worktree Isolation
 
-Implementation: `detectPackageManager()` and `buildValidationCommand()` in `src/code-agents/executor.ts`.
+When `code_with_team` runs parallel agents in the same wave, each agent gets its own **git worktree** so they can't overwrite each other's files. After the wave completes, branches are merged back sequentially.
+
+### Flow
+1. Before each parallel wave: `git worktree add` creates `.skimpyclaw-worktrees/<childId>` on branch `skimpyclaw-team/<childId>`
+2. Each child agent runs in its own worktree directory
+3. After wave: child commits are merged back into the main branch one at a time
+4. Merge conflicts are detected and reported (not silently lost)
+5. Worktrees are cleaned up after each wave and on error/cancel
+
+### Fallbacks
+- Waves with only 1 child skip worktrees (no isolation needed)
+- Non-git repos fall back to shared workdir
+- Stale worktrees from crashed runs are cleaned up on next team start
+
+Implementation: `src/code-agents/worktree.ts` and wave execution in `src/code-agents/orchestrator.ts`.
 
 ## Exec Approval
 
