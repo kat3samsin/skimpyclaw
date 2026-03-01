@@ -1427,13 +1427,22 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
     console.log(`   ${c.dim('(also available via: skimpyclaw status)')}`);
 
     console.log('\nNext steps:');
-    console.log('1. Review templates in ~/.skimpyclaw/agents/main/');
-    console.log('2. Start the daemon:');
+    let step = 1;
+    console.log(`${step++}. Review templates in ~/.skimpyclaw/agents/main/`);
+    if (enableSandbox) {
+      console.log(`${step++}. Start the container runtime (if not already running):`);
+      console.log('   container system start');
+      console.log(`${step++}. Initialize the sandbox:`);
+      console.log('   skimpyclaw sandbox init');
+      console.log(`${step++}. Verify sandbox is working:`);
+      console.log('   skimpyclaw sandbox doctor');
+    }
+    console.log(`${step++}. Start the daemon:`);
     console.log('   skimpyclaw start --daemon');
-    console.log('3. Check health:');
+    console.log(`${step++}. Check health:`);
     console.log('   skimpyclaw status');
-    console.log(`4. Optional daemon controls: skimpyclaw stop | skimpyclaw restart`);
-    console.log(`5. Send /help in your ${useDiscord ? 'Discord bot DM/server' : 'Telegram bot'}`);
+    console.log(`${step++}. Optional daemon controls: skimpyclaw stop | skimpyclaw restart`);
+    console.log(`${step++}. Send /help in your ${useDiscord ? 'Discord bot DM/server' : 'Telegram bot'}`);
     console.log('\n👙🦞 Enjoy!');
   } finally {
     rl.close();
