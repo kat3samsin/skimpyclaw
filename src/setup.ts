@@ -1203,10 +1203,8 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
     sectionHeader('Starter Packs (optional)');
     const localTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
     const addTechNewsCron = /^y(es)?$/i.test(await ask(rl, '   Add starter cron: top 10 Hacker News daily? [y/N]: '));
-    const addWeatherCron = /^y(es)?$/i.test(await ask(rl, '   Add starter cron: weather check daily at 7:00am? [y/N]: '));
     let cronTimezone = localTz;
-    let weatherLocation = 'New York, NY';
-    if (addTechNewsCron || addWeatherCron) {
+    if (addTechNewsCron) {
       const tzInput = await ask(rl, `   Timezone for starter cron jobs [${localTz}]: `);
       cronTimezone = tzInput || localTz;
       try {
@@ -1216,22 +1214,16 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
         cronTimezone = localTz;
       }
     }
-    if (addWeatherCron) {
-      const locationInput = await ask(rl, '   Weather location (city, state/country) [New York, NY]: ');
-      weatherLocation = locationInput || 'New York, NY';
-    }
     const addDailyNotesSkill = /^y(es)?$/i.test(await ask(rl, '   Add starter skill: daily-notes? [y/N]: '));
-    const addWeatherSkill = /^y(es)?$/i.test(await ask(rl, '   Add starter skill: weather? [y/N]: '));
-    const addWebSearchSkill = /^y(es)?$/i.test(await ask(rl, '   Add starter skill: web-search (uses Browser tool)? [y/N]: '));
 
     const starters: SetupStarters = {
       cronTechNews: addTechNewsCron,
-      cronWeather: addWeatherCron,
+      cronWeather: false,
       timezone: cronTimezone,
-      weatherLocation,
+      weatherLocation: '',
       skillDailyNotes: addDailyNotesSkill,
-      skillWeather: addWeatherSkill,
-      skillWebSearch: addWebSearchSkill,
+      skillWeather: false,
+      skillWebSearch: false,
     };
 
     const { envContent, config: generatedConfig } = buildSetupArtifacts({
