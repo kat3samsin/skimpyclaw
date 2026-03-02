@@ -353,34 +353,65 @@ describe('formatSkillsPrompt', () => {
     expect(formatSkillsPrompt([])).toBe('');
   });
 
-  it('formats single skill with header', () => {
-    const result = formatSkillsPrompt([makeSkill('greet', 'Say hello.')]);
-    expect(result).toContain('## Active Skills');
-    expect(result).toContain('### greet');
-    expect(result).toContain('Say hello.');
+  describe('dynamic loading (default)', () => {
+    it('formats skill catalog with names, descriptions, and paths', () => {
+      const result = formatSkillsPrompt([makeSkill('greet', 'Say hello.')]);
+      expect(result).toContain('## Skills');
+      expect(result).toContain('read the SKILL.md file');
+      expect(result).toContain('greet');
+      expect(result).toContain('`/fake/greet/SKILL.md`');
+    });
+
+    it('includes emoji in catalog', () => {
+      const result = formatSkillsPrompt([makeSkill('greet', 'Say hello.', '👋')]);
+      expect(result).toContain('👋 greet');
+    });
+
+    it('does not include skill body', () => {
+      const result = formatSkillsPrompt([makeSkill('greet', 'Say hello.')]);
+      expect(result).not.toContain('Say hello.');
+    });
+
+    it('lists multiple skills', () => {
+      const result = formatSkillsPrompt([
+        makeSkill('a', 'A body'),
+        makeSkill('b', 'B body'),
+      ]);
+      expect(result).toContain('| a |');
+      expect(result).toContain('| b |');
+    });
   });
 
-  it('includes emoji in header when present', () => {
-    const result = formatSkillsPrompt([makeSkill('greet', 'Say hello.', '👋')]);
-    expect(result).toContain('### 👋 greet');
-  });
+  describe('inline loading (dynamicLoading=false)', () => {
+    it('formats single skill with header and body', () => {
+      const result = formatSkillsPrompt([makeSkill('greet', 'Say hello.')], undefined, false);
+      expect(result).toContain('## Active Skills');
+      expect(result).toContain('### greet');
+      expect(result).toContain('Say hello.');
+    });
 
-  it('separates multiple skills with dividers', () => {
-    const result = formatSkillsPrompt([
-      makeSkill('a', 'A body'),
-      makeSkill('b', 'B body'),
-    ]);
-    expect(result).toContain('---');
-    expect(result).toContain('### a');
-    expect(result).toContain('### b');
-  });
+    it('includes emoji in header when present', () => {
+      const result = formatSkillsPrompt([makeSkill('greet', 'Say hello.', '👋')], undefined, false);
+      expect(result).toContain('### 👋 greet');
+    });
 
-  it('does not skip skills based on prompt budget argument', () => {
-    const result = formatSkillsPrompt([
-      makeSkill('small', 'tiny'),
-      makeSkill('big', 'x'.repeat(50000)),
-    ], 100);
-    expect(result).toContain('### small');
-    expect(result).toContain('### big');
+    it('separates multiple skills with dividers', () => {
+      const result = formatSkillsPrompt([
+        makeSkill('a', 'A body'),
+        makeSkill('b', 'B body'),
+      ], undefined, false);
+      expect(result).toContain('---');
+      expect(result).toContain('### a');
+      expect(result).toContain('### b');
+    });
+
+    it('does not skip skills based on prompt budget argument', () => {
+      const result = formatSkillsPrompt([
+        makeSkill('small', 'tiny'),
+        makeSkill('big', 'x'.repeat(50000)),
+      ], 100, false);
+      expect(result).toContain('### small');
+      expect(result).toContain('### big');
+    });
   });
 });

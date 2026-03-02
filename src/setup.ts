@@ -1438,6 +1438,11 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
     console.log('   skimpyclaw status');
     console.log(`${step++}. Optional daemon controls: skimpyclaw stop | skimpyclaw restart`);
     console.log(`${step++}. Send /help in your ${useDiscord ? 'Discord bot DM/server' : 'Telegram bot'}`);
+    console.log('');
+    console.log(`${c.yellow('Note:')} The /team and /code tools require an external coding CLI on your PATH:`);
+    console.log('   • Claude Code CLI  →  https://docs.anthropic.com/en/docs/claude-code');
+    console.log('   • Codex CLI        →  https://github.com/openai/codex');
+    console.log('   Install at least one to use code_with_agent / code_with_team.');
     console.log('\n👙🦞 Enjoy!');
   } finally {
     rl.close();

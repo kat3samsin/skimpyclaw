@@ -95,7 +95,7 @@ export function buildSystemPrompt(agentId: string, skillsContext?: SkillsPromptC
       cronJobId: skillsContext?.cronJobId,
       tags: skillsContext?.tags,
     });
-    skillsSection = formatSkillsPrompt(contextSkills, skillsContext?.skillConfig?.maxPromptTokens);
+    skillsSection = formatSkillsPrompt(contextSkills, skillsContext?.skillConfig?.maxPromptTokens, skillsContext?.skillConfig?.dynamicLoading);
   }
 
   const base = [soul, identity, tools, skillsSection].filter(Boolean).join('\n\n---\n\n');

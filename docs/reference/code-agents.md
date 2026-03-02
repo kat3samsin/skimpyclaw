@@ -1,5 +1,11 @@
 # Coding Agent Execution
 
+> **Prerequisite:** `code_with_agent` and `code_with_team` require at least one external coding CLI installed on your system:
+> - [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) (`claude`)
+> - [Codex CLI](https://github.com/openai/codex) (`codex`)
+>
+> Without one of these installed and on your `PATH`, coding agent tools will fail.
+
 `code_with_agent` and `code_with_team` run external CLIs via `buildCodeAgentArgs()` in `src/code-agents/utils.ts`.
 
 ## Worker Commands

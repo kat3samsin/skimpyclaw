@@ -268,22 +268,47 @@ export function getSkillsForContext(
 
 /**
  * Format eligible, context-filtered skills into a markdown prompt section.
+ *
+ * When dynamicLoading is true (default), only skill names, descriptions, and
+ * file paths are included. The agent loads full content on-demand via the Read tool.
+ * When false, full skill bodies are inlined (legacy behavior).
  */
-export function formatSkillsPrompt(skills: LoadedSkill[], _maxTokens?: number): string {
+export function formatSkillsPrompt(skills: LoadedSkill[], _maxTokens?: number, dynamicLoading?: boolean): string {
   if (skills.length === 0) return '';
-  const sections: string[] = [];
 
-  // Header
+  // Default to dynamic loading
+  const useDynamic = dynamicLoading !== false;
+
+  if (useDynamic) {
+    const lines = [
+      '## Skills',
+      '',
+      'Available skills — read the SKILL.md file with the Read tool when the task matches a skill\'s description.',
+      '',
+      '| Skill | Description | Path |',
+      '|-------|-------------|------|',
+    ];
+
+    for (const skill of skills) {
+      const emoji = skill.frontmatter.emoji ? `${skill.frontmatter.emoji} ` : '';
+      const desc = skill.frontmatter.description || '(no description)';
+      const path = join(skill.dirPath, 'SKILL.md');
+      lines.push(`| ${emoji}${skill.name} | ${desc} | \`${path}\` |`);
+    }
+
+    return lines.join('\n');
+  }
+
+  // Legacy: inline full skill bodies
+  const sections: string[] = [];
   const header = '## Active Skills\n';
 
   for (const skill of skills) {
     const emoji = skill.frontmatter.emoji ? `${skill.frontmatter.emoji} ` : '';
     const section = `### ${emoji}${skill.name}\n\n${skill.body}`;
-
     sections.push(section);
   }
 
   if (sections.length === 0) return '';
-
   return header + sections.join('\n\n---\n\n');
 }

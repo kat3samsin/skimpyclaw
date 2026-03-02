@@ -68,4 +68,10 @@ export interface SkillConfig {
   entries?: Record<string, boolean>;
   /** Max approximate tokens for injected skills prompt (default: 4000) */
   maxPromptTokens?: number;
+  /**
+   * Dynamic loading: only include skill names and descriptions in the system prompt.
+   * Full skill content is loaded on-demand via the Read tool.
+   * Default: true (progressive disclosure)
+   */
+  dynamicLoading?: boolean;
 }
