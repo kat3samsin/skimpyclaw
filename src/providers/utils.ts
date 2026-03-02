@@ -1,5 +1,8 @@
 // Provider Utilities
 
+import { writeFileSync, mkdirSync, existsSync } from 'fs';
+import { join } from 'path';
+import { homedir } from 'os';
 import type { ChatMessage, ContentBlock, ChatOptions, Config } from '../types.js';
 
 // Anti-hallucination instructions injected between the Claude Code identity
@@ -217,14 +220,10 @@ const MASK_THRESHOLD = 8_000; // ~2000 tokens
  * Returns the original result if small enough, or a summary + file path if large.
  * Falls back to simple truncation if file write fails.
  */
-export function truncateToolResult(result: string, maxBytes: number = 10_240): string {
+export function truncateToolResult(result: string, _maxBytes: number = 10_240): string {
   if (result.length <= MASK_THRESHOLD) return result;
 
   try {
-    const { writeFileSync, mkdirSync, existsSync } = require('fs');
-    const { join } = require('path');
-    const { homedir } = require('os');
-
     const scratchDir = join(homedir(), '.skimpyclaw', 'scratch');
     if (!existsSync(scratchDir)) mkdirSync(scratchDir, { recursive: true });
 
@@ -239,10 +238,10 @@ export function truncateToolResult(result: string, maxBytes: number = 10_240): s
 
     console.log(`[context-manager] Masked ${result.length} chars → ${filePath}`);
     return `${summary}\n\n[Full output (${result.length} chars) saved to ${filePath} — use Read tool to access]`;
-  } catch {
+  } catch (err) {
     // Fallback: simple truncation
-    if (result.length <= maxBytes) return result;
-    return result.slice(0, maxBytes) + `\n\n[Truncated: ${result.length} chars total]`;
+    console.warn(`[context-manager] Masking failed: ${err instanceof Error ? err.message : err}`);
+    return result.slice(0, MASK_THRESHOLD) + `\n\n[Truncated: ${result.length} chars total]`;
   }
 }
 
