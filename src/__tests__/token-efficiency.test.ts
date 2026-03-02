@@ -1,5 +1,21 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterAll } from 'vitest';
 import { truncateToolResult } from '../providers/utils.js';
+import { existsSync, readdirSync, unlinkSync, rmdirSync } from 'fs';
+import { join } from 'path';
+import { homedir } from 'os';
+
+const scratchDir = join(homedir(), '.skimpyclaw', 'scratch');
+
+// Clean up scratch files created during tests
+afterAll(() => {
+  try {
+    if (existsSync(scratchDir)) {
+      for (const f of readdirSync(scratchDir)) {
+        try { unlinkSync(join(scratchDir, f)); } catch { /* ignore */ }
+      }
+    }
+  } catch { /* ignore */ }
+});
 
 describe('token efficiency', () => {
   describe('truncateToolResult', () => {
@@ -8,24 +24,28 @@ describe('token efficiency', () => {
       expect(truncateToolResult(result)).toBe(result);
     });
 
-    it('truncates at exact boundary', () => {
-      const result = 'x'.repeat(10_240);
-      expect(truncateToolResult(result)).toBe(result); // exactly at limit
+    it('returns results under mask threshold unchanged', () => {
+      const result = 'x'.repeat(7_999);
+      expect(truncateToolResult(result)).toBe(result);
     });
 
-    it('truncates over limit with notice', () => {
-      const result = 'x'.repeat(20_000);
-      const truncated = truncateToolResult(result);
-      expect(truncated.length).toBeLessThan(result.length);
-      expect(truncated).toContain('[Truncated: 20000 chars total]');
-      expect(truncated.startsWith('x'.repeat(10_240))).toBe(true);
+    it('masks large results to scratch file with summary', () => {
+      const result = 'START' + 'x'.repeat(10_000) + 'END';
+      const masked = truncateToolResult(result);
+      expect(masked.length).toBeLessThan(result.length);
+      expect(masked).toContain('[Full output');
+      expect(masked).toContain('saved to');
+      expect(masked).toContain('.skimpyclaw/scratch/');
+      expect(masked).toContain('use Read tool to access');
+      // Summary includes head and tail
+      expect(masked).toContain('START');
+      expect(masked).toContain('END');
     });
 
-    it('respects custom maxBytes', () => {
-      const result = 'abcdefghij'; // 10 chars
-      const truncated = truncateToolResult(result, 5);
-      expect(truncated).toContain('[Truncated: 10 chars total]');
-      expect(truncated.startsWith('abcde')).toBe(true);
+    it('includes char count in masked output', () => {
+      const result = 'y'.repeat(20_000);
+      const masked = truncateToolResult(result);
+      expect(masked).toContain('20000 chars');
     });
   });
 

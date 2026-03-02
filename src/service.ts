@@ -15,6 +15,25 @@ export interface SkimpyClawRuntime {
   stop: () => Promise<void>;
 }
 
+/** Clean up old scratch files (observation masking). Keeps files < 24h. */
+function cleanupScratch(): void {
+  try {
+    const { readdirSync, statSync, unlinkSync } = require('fs');
+    const { join } = require('path');
+    const { homedir } = require('os');
+    const dir = join(homedir(), '.skimpyclaw', 'scratch');
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+    let count = 0;
+    for (const f of readdirSync(dir)) {
+      const p = join(dir, f);
+      try {
+        if (statSync(p).mtimeMs < cutoff) { unlinkSync(p); count++; }
+      } catch { /* skip */ }
+    }
+    if (count > 0) console.log(`[scratch] Cleaned up ${count} old file(s)`);
+  } catch { /* dir doesn't exist yet, fine */ }
+}
+
 export async function startRuntime(config: Config): Promise<SkimpyClawRuntime> {
   const smokeTest = process.env.SKIMPYCLAW_SMOKE_TEST === '1';
 
@@ -22,6 +41,7 @@ export async function startRuntime(config: Config): Promise<SkimpyClawRuntime> {
   initProviders(config);
   restoreCodeAgentTasks();
   setCodeAgentConfig(config);
+  cleanupScratch();
 
   // Initialize sandbox runtime if configured — auto-disable if no runtime available
   if (config.sandbox?.enabled) {

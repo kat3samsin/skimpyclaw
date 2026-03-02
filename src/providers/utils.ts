@@ -205,9 +205,45 @@ export function stripProvider(model: string, openaiClients?: Map<string, unknown
 }
 
 /** Truncate tool result to maxBytes. Appends truncation notice. */
+/**
+ * Observation masking threshold. Tool outputs above this size are written to
+ * a scratch file and replaced with a compact summary + file path.
+ * Outputs below this are returned inline (no file I/O overhead).
+ */
+const MASK_THRESHOLD = 8_000; // ~2000 tokens
+
+/**
+ * Mask large tool outputs by writing to scratch files.
+ * Returns the original result if small enough, or a summary + file path if large.
+ * Falls back to simple truncation if file write fails.
+ */
 export function truncateToolResult(result: string, maxBytes: number = 10_240): string {
-  if (result.length <= maxBytes) return result;
-  return result.slice(0, maxBytes) + `\n\n[Truncated: ${result.length} chars total]`;
+  if (result.length <= MASK_THRESHOLD) return result;
+
+  try {
+    const { writeFileSync, mkdirSync, existsSync } = require('fs');
+    const { join } = require('path');
+    const { homedir } = require('os');
+
+    const scratchDir = join(homedir(), '.skimpyclaw', 'scratch');
+    if (!existsSync(scratchDir)) mkdirSync(scratchDir, { recursive: true });
+
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const filePath = join(scratchDir, `${id}.txt`);
+    writeFileSync(filePath, result);
+
+    // Build a compact summary: first 500 chars + last 500 chars
+    const head = result.slice(0, 500);
+    const tail = result.slice(-500);
+    const summary = head + (result.length > 1000 ? '\n...\n' + tail : '');
+
+    console.log(`[context-manager] Masked ${result.length} chars → ${filePath}`);
+    return `${summary}\n\n[Full output (${result.length} chars) saved to ${filePath} — use Read tool to access]`;
+  } catch {
+    // Fallback: simple truncation
+    if (result.length <= maxBytes) return result;
+    return result.slice(0, maxBytes) + `\n\n[Truncated: ${result.length} chars total]`;
+  }
 }
 
 /**
