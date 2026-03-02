@@ -29,6 +29,7 @@ import {
   resolveWorkdir,
   resolveModelAlias,
   readTeamState,
+  getCodingCliPreflightError,
 } from './utils.js';
 import { parseStreamJsonForLive, parseClaudeOutput, parseCodexOutput } from './parser.js';
 
@@ -188,6 +189,9 @@ export async function executeCodeWithAgent(
     return `Error: Concurrency limit reached (${activeCount}/${maxConcurrent} coding agents running). Wait for one to finish or increase codeAgents.maxConcurrent.`;
   }
 
+  const cliPreflightError = getCodingCliPreflightError();
+  if (cliPreflightError) return cliPreflightError;
+
   const validate = input.validate !== false; // default true
 
   // Create task with unique ID
@@ -275,6 +279,9 @@ export async function executeCodeWithTeam(
   if (activeCount + teamSize > maxConcurrent) {
     return `Error: Concurrency limit — need ${teamSize} slots but only ${maxConcurrent - activeCount} available (${activeCount}/${maxConcurrent} running). Wait for agents to finish.`;
   }
+
+  const cliPreflightError = getCodingCliPreflightError();
+  if (cliPreflightError) return cliPreflightError;
 
   // Create parent task
   const id = getNextCodeAgentId();

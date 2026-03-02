@@ -656,6 +656,23 @@ export async function runTeamOrchestrator(
     // Phase 4: Collect results and synthesize
     if (getCodeAgent(parentId)?.status === 'cancelled') throw new Error(CANCELLED_MESSAGE);
     parentTask.liveOutput = 'Phase: Synthesizing results...';
+
+    // Aggregate cost/tokens from all children into parent
+    let totalCost = 0;
+    let totalInput = 0;
+    let totalOutput = 0;
+    let hasCostData = false;
+    for (const cid of childIds) {
+      const child = getCodeAgent(cid);
+      if (child?.totalCost != null) { totalCost += child.totalCost; hasCostData = true; }
+      if (child?.inputTokens != null) totalInput += child.inputTokens;
+      if (child?.outputTokens != null) totalOutput += child.outputTokens;
+    }
+    if (hasCostData) {
+      parentTask.totalCost = totalCost;
+      parentTask.inputTokens = totalInput;
+      parentTask.outputTokens = totalOutput;
+    }
     writeCodeAgentTask(parentTask);
 
     const childResults: ChildResult[] = childIds.map(id => {

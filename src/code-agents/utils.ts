@@ -16,9 +16,37 @@ function resolveCliPath(name: string): string {
   }
 }
 
+function isCommandAvailable(name: string): boolean {
+  try {
+    execSync(`command -v ${name}`, { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 const CLAUDE_CLI_PATH = resolveCliPath('claude');
 const CODEX_CLI_PATH = resolveCliPath('codex');
 const KIMI_CLI_PATH = resolveCliPath('kimi');
+
+/** Return supported coding CLIs currently available on PATH. */
+export function getAvailableCodingCliTools(
+  commandChecker: (name: string) => boolean = isCommandAvailable
+): Array<'codex' | 'claude' | 'kimi'> {
+  const available: Array<'codex' | 'claude' | 'kimi'> = [];
+  if (commandChecker('codex')) available.push('codex');
+  if (commandChecker('claude') || commandChecker('claude-code')) available.push('claude');
+  if (commandChecker('kimi')) available.push('kimi');
+  return available;
+}
+
+/** Return preflight error when no supported coding CLI is installed. */
+export function getCodingCliPreflightError(
+  commandChecker: (name: string) => boolean = isCommandAvailable
+): string | null {
+  if (getAvailableCodingCliTools(commandChecker).length > 0) return null;
+  return 'Error: No supported coding CLI found on PATH. Install Codex CLI (`codex`), Claude Code CLI (`claude` or `claude-code`), or Kimi CLI (`kimi`).';
+}
 
 /**
  * Normalize legacy/default agent values to supported CLI agent IDs.

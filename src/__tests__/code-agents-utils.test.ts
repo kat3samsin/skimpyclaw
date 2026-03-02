@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeCodeAgent, resolveSelectedCodeAgent } from '../code-agents/utils.js';
+import {
+  normalizeCodeAgent,
+  resolveSelectedCodeAgent,
+  getAvailableCodingCliTools,
+  getCodingCliPreflightError,
+} from '../code-agents/utils.js';
 
 describe('normalizeCodeAgent', () => {
   it('accepts strict ids', () => {
@@ -46,5 +51,20 @@ describe('resolveSelectedCodeAgent', () => {
 
   it('respects explicit agent even when model suggests different agent', () => {
     expect(resolveSelectedCodeAgent('claude', 'claude', 'gpt-4.1')).toBe('claude');
+  });
+});
+
+describe('coding CLI preflight', () => {
+  it('returns a clear error when no supported CLI is found on PATH', () => {
+    expect(getAvailableCodingCliTools(() => false)).toEqual([]);
+    expect(getCodingCliPreflightError(() => false)).toBe(
+      'Error: No supported coding CLI found on PATH. Install Codex CLI (`codex`), Claude Code CLI (`claude` or `claude-code`), or Kimi CLI (`kimi`).'
+    );
+  });
+
+  it('accepts claude-code binary as claude support', () => {
+    const hasCommand = (name: string) => name === 'claude-code';
+    expect(getAvailableCodingCliTools(hasCommand)).toEqual(['claude']);
+    expect(getCodingCliPreflightError(hasCommand)).toBeNull();
   });
 });
