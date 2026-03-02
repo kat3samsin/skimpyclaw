@@ -204,8 +204,13 @@ export function parseCodexOutput(stdout: string): string {
   for (const line of lines) {
     try {
       const obj = JSON.parse(line);
+      // Standard output_text events
       if (obj.type === 'output_text' || obj.output_text) {
         outputs.push(obj.output_text || obj.text || '');
+      }
+      // Codex stream-json: item.completed with agent_message
+      else if (obj.type === 'item.completed' && obj.item?.type === 'agent_message' && obj.item?.text) {
+        outputs.push(obj.item.text);
       }
     } catch {
       if (line.trim()) outputs.push(line);
