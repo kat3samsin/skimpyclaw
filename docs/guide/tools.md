@@ -4,7 +4,7 @@
 
 | Layer | Tools | When included |
 |-------|-------|---------------|
-| Built-in | Read, Write, Glob, Bash | Always (when tools enabled) |
+| Built-in | Read, Write, Glob, Bash, Fetch | Always (when tools enabled) |
 | Browser | Browser (Playwright) | When `tools.browser.enabled` is true |
 | MCP | Auto-discovered from mcporter | All servers in `~/.mcporter/mcporter.json` |
 | Agent | code_with_agent, code_with_team, check_code_agent | When chatId + config present |
@@ -33,6 +33,7 @@ Related files:
 - **Write** — write a file (restricted to `allowedPaths`, uses file locking for concurrent writes)
 - **Glob** — find files by pattern (restricted to `allowedPaths`)
 - **Bash** — run shell commands (blocked list via `isBashCommandSafe()`)
+- **Fetch** — make HTTP requests and return the response. HTML is auto-converted to plain text. Use for APIs, web search (e.g. `https://duckduckgo.com/html/?q=your+query`), or fetching page content. Prefer over Browser for simple requests
 
 ## Tool config
 
