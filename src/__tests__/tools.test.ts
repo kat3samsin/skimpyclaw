@@ -73,11 +73,11 @@ describe('getToolDefinitions', () => {
   });
 
   describe('tool profiles', () => {
-    it('minimal returns exactly 4 built-in tools', async () => {
+    it('minimal returns built-in tools plus Fetch', async () => {
       const config: ToolConfig = { ...toolConfig, toolProfile: 'minimal' };
       const tools = await getToolDefinitions(config, { includeAgentTools: true, includeMcp: true });
-      expect(tools).toHaveLength(4);
-      expect(tools.map(t => t.name)).toEqual(['Read', 'Write', 'Glob', 'Bash']);
+      expect(tools).toHaveLength(5);
+      expect(tools.map(t => t.name)).toEqual(['Read', 'Write', 'Glob', 'Bash', 'Fetch']);
     });
 
     it('minimal excludes Browser even when browser.enabled is true', async () => {

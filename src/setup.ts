@@ -850,7 +850,7 @@ function ensureStarterSkills(starters: SetupStarters): string[] {
   const skillsDir = join(CONFIG_DIR, 'skills');
   mkdirSync(skillsDir, { recursive: true });
 
-  const requested: string[] = ['duckduckgo-html-search']; // always installed
+  const requested: string[] = []; // skills are opt-in via onboarding prompts
   if (starters.skillDailyNotes) requested.push('daily-notes');
   if (starters.skillWeather) requested.push('weather');
   if (starters.skillWebSearch) requested.push('web-search');

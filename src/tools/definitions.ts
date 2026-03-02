@@ -118,8 +118,27 @@ export const BROWSER_TOOL_DEFINITION = {
   },
 };
 
+export const FETCH_TOOL_DEFINITION = {
+  name: 'Fetch',
+  description: 'Make an HTTP request and return the response. HTML is auto-converted to plain text. Use for APIs, web search (e.g. https://duckduckgo.com/html/?q=your+query), or fetching page content. Prefer over Browser for simple requests.',
+  input_schema: {
+    type: 'object' as const,
+    properties: {
+      url: { type: 'string', description: 'URL to fetch' },
+      method: { type: 'string', description: 'HTTP method (GET, POST, PUT, DELETE, PATCH). Default: GET' },
+      headers: {
+        type: 'object' as const,
+        description: 'Request headers (e.g. {"Authorization": "Bearer ..."})',
+        additionalProperties: { type: 'string' },
+      },
+      body: { type: 'string', description: 'Request body (for POST/PUT/PATCH)' },
+    },
+    required: ['url'],
+  },
+};
+
 // Legacy export for backward compat — static list (built-ins + browser + no MCP)
-export const TOOL_DEFINITIONS = [...BUILTIN_TOOL_DEFINITIONS, BROWSER_TOOL_DEFINITION];
+export const TOOL_DEFINITIONS = [...BUILTIN_TOOL_DEFINITIONS, BROWSER_TOOL_DEFINITION, FETCH_TOOL_DEFINITION];
 
 
 export const CODE_WITH_AGENT_TOOL = {

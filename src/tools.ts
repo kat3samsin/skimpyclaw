@@ -11,6 +11,7 @@ import {
   toClaudeCodeName,
   BUILTIN_TOOL_DEFINITIONS,
   BROWSER_TOOL_DEFINITION,
+  FETCH_TOOL_DEFINITION,
   TOOL_DEFINITIONS,
   CODE_WITH_AGENT_TOOL,
   CODE_WITH_TEAM_TOOL,
@@ -20,6 +21,7 @@ import type { ExecuteToolContext } from './tools/execute-context.js';
 import { executeReadFile, executeWriteFileLocked, executeListDirectory } from './tools/file-tools.js';
 import { executeBash } from './tools/bash-tool.js';
 import { executeBrowser, cleanupBrowser } from './tools/browser-tool.js';
+import { executeFetch } from './tools/fetch-tool.js';
 import type { SandboxConfig } from './types.js';
 import { ensureContainer, SANDBOX_DEFAULTS, translatePath, validateMountPaths } from './sandbox/index.js';
 import { sandboxBash, sandboxReadFile, sandboxWriteFile, sandboxListDir, sandboxGlob } from './sandbox/index.js';
@@ -57,6 +59,7 @@ export {
   toClaudeCodeName,
   BUILTIN_TOOL_DEFINITIONS,
   BROWSER_TOOL_DEFINITION,
+  FETCH_TOOL_DEFINITION,
   TOOL_DEFINITIONS,
   CODE_WITH_AGENT_TOOL,
   CODE_WITH_TEAM_TOOL,
@@ -179,7 +182,10 @@ export async function getToolDefinitions(config?: ToolConfig, options?: { includ
 
   const tools: any[] = [...BUILTIN_TOOL_DEFINITIONS];
 
-  // Minimal profile: only the 4 built-in tools (Read, Write, Glob, Bash).
+  // Fetch is always available (lightweight HTTP, no dependencies)
+  tools.push(FETCH_TOOL_DEFINITION);
+
+  // Minimal profile: built-in tools + fetch.
   // Used by orchestrator decompose/synthesize calls.
   if (profile === 'minimal') {
     toolDefsCache.set(cacheKey, tools);
@@ -260,54 +266,6 @@ export async function cleanupMcp(): Promise<void> {
     await mcpRuntime.close().catch(() => {});
     mcpRuntime = null;
   }
-}
-
-async function executeWebSearch(query: string): Promise<string> {
-  const q = query.trim();
-  if (!q) return 'Error: $web_search requires a non-empty query';
-
-  const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(q)}&format=json&no_redirect=1&no_html=1&skip_disambig=1`;
-  const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-  if (!res.ok) {
-    return `Error: web search failed (${res.status} ${res.statusText})`;
-  }
-
-  const data = await res.json() as {
-    AbstractText?: string;
-    AbstractURL?: string;
-    RelatedTopics?: Array<{ Text?: string; FirstURL?: string } | { Topics?: Array<{ Text?: string; FirstURL?: string }> }>;
-  };
-
-  const lines: string[] = [];
-  if (data.AbstractText) {
-    lines.push(`Summary: ${data.AbstractText}`);
-    if (data.AbstractURL) {
-      lines.push(`Source: ${data.AbstractURL}`);
-    }
-  }
-
-  const related: Array<{ Text?: string; FirstURL?: string }> = [];
-  for (const item of data.RelatedTopics || []) {
-    if ('Topics' in item && Array.isArray(item.Topics)) {
-      related.push(...item.Topics);
-    } else {
-      related.push(item as { Text?: string; FirstURL?: string });
-    }
-  }
-
-  const top = related.filter((item) => item.Text && item.FirstURL).slice(0, 5);
-  if (top.length > 0) {
-    lines.push('Top results:');
-    for (const item of top) {
-      lines.push(`- ${item.Text}\n  ${item.FirstURL}`);
-    }
-  }
-
-  if (lines.length === 0) {
-    return `No web results found for: ${q}`;
-  }
-
-  return lines.join('\n');
 }
 
 // --- Tool Executor ---
@@ -459,7 +417,8 @@ export async function executeTool(
       case '$web_search':
       case 'web_search':
       case 'websearch':
-        return await executeWebSearch(input.query || input.q || input.text || '');
+        // Legacy: redirect to Fetch with DuckDuckGo HTML search
+        return await executeFetch({ url: `https://duckduckgo.com/html/?q=${encodeURIComponent(input.query || input.q || input.text || '')}` } as any, config);
       case 'read_file':
         return executeReadFile(input.file_path || input.path, config);
       case 'write_file':
@@ -470,6 +429,8 @@ export async function executeTool(
         return await executeBash(input.command, input.cwd, config, context);
       case 'browser':
         return await executeBrowser(input, config);
+      case 'fetch':
+        return await executeFetch(input as any, config);
       default:
         return `Error: Unknown tool "${name}"`;
     }

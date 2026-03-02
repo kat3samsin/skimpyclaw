@@ -298,7 +298,7 @@ export async function chatWithToolsOpenAI(params: ProviderToolChatParams, provid
     // Execute each tool call
     for (const toolCall of message.tool_calls) {
       const fnName = toolCall.function.name;
-      if (fnName.startsWith('$') && fnName !== '$web_search') {
+      if (fnName.startsWith('$')) {
         const unsupported = `Provider-native tool "${fnName}" is not supported in this runtime.`;
         console.warn(`[agent:openai-tools] ${unsupported}`);
         apiMessages.push({
