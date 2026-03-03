@@ -96,6 +96,32 @@ function sanitizeToolName(name: string): string {
 // Maps sanitized tool name → { server (original), tool (original) } for routing
 const mcpToolNameMap = new Map<string, { server: string; tool: string }>();
 
+/**
+ * Fallback tool definitions for MCP servers that don't support tools/list.
+ * Loaded from ~/.skimpyclaw/mcp-fallbacks.json if it exists.
+ *
+ * Format: { "<server-name>": [ { name, description, input_schema } ] }
+ */
+let mcpFallbackCache: Record<string, Array<{ name: string; description: string; input_schema: Record<string, unknown> }>> | null = null;
+
+function getMcpFallbackTools(server: string): Array<{ name: string; description: string; input_schema: Record<string, unknown> }> {
+  if (!mcpFallbackCache) {
+    const fallbackPath = join(homedir(), '.skimpyclaw', 'mcp-fallbacks.json');
+    try {
+      if (existsSync(fallbackPath)) {
+        mcpFallbackCache = JSON.parse(readFileSync(fallbackPath, 'utf-8'));
+        console.log(`[mcp] Loaded fallback tools from ${fallbackPath}`);
+      } else {
+        mcpFallbackCache = {};
+      }
+    } catch (err) {
+      console.warn('[mcp] Failed to load mcp-fallbacks.json:', err instanceof Error ? err.message : err);
+      mcpFallbackCache = {};
+    }
+  }
+  return mcpFallbackCache![server] || [];
+}
+
 export async function discoverMcpTools(): Promise<any[]> {
   if (discoveredMcpTools !== null) return discoveredMcpTools;
 
@@ -123,6 +149,18 @@ export async function discoverMcpTools(): Promise<any[]> {
         }
       } catch (err) {
         console.warn(`[mcp] Failed to list tools for server "${server}":`, err instanceof Error ? err.message : err);
+        // Fallback: register well-known tools for servers that don't support tools/list
+        const fallbackTools = getMcpFallbackTools(server);
+        if (fallbackTools.length > 0) {
+          const sanitizedServer = sanitizeToolName(server);
+          for (const ft of fallbackTools) {
+            const sanitizedTool = sanitizeToolName(ft.name);
+            const name = `mcp__${sanitizedServer}__${sanitizedTool}`;
+            mcpToolNameMap.set(name, { server, tool: ft.name });
+            tools.push({ name, description: ft.description, input_schema: ft.input_schema });
+          }
+          console.log(`[mcp] Registered ${fallbackTools.length} fallback tools for "${server}"`);
+        }
       }
     }
   } catch (err) {
@@ -138,6 +176,26 @@ export function clearMcpToolCache(): void {
 }
 
 const toolDefsCache = new TTLCache<any[]>(60_000);
+
+/** Force-reconnect the MCP runtime (clears cached runtime and tool discovery). */
+export async function reconnectMcp(): Promise<void> {
+  console.log('[mcp] Reconnecting...');
+  if (mcpRuntime) {
+    await mcpRuntime.close().catch(() => {});
+    mcpRuntime = null;
+  }
+  discoveredMcpTools = null;
+  mcpToolNameMap.clear();
+  mcpFallbackCache = null;
+  toolDefsCache.clear();
+  try {
+    await getMcpRuntime();
+    const tools = await discoverMcpTools();
+    console.log(`[mcp] Reconnected — ${tools.length} tools discovered`);
+  } catch (err) {
+    console.error('[mcp] Reconnect failed:', err instanceof Error ? err.message : err);
+  }
+}
 
 /** Inject project names into a tool's workdir description, or return the tool unchanged. */
 function injectProjects(tool: any, projects?: Record<string, string>): any {
@@ -234,31 +292,43 @@ export function clearToolDefsCache(): void {
 
 // --- MCP Tool Execution (generic) ---
 
-async function executeMcpToolGeneric(fullName: string, args: Record<string, any>): Promise<string> {
-  // Look up original server/tool names from the sanitized name map
-  const mapping = mcpToolNameMap.get(fullName);
-  if (!mapping) {
-    // Fallback: parse from the name directly (works when names don't need sanitizing)
-    const parts = fullName.split('__');
-    if (parts.length < 3) return `Error: Invalid MCP tool name "${fullName}"`;
-    const server = parts[1];
-    const toolName = parts.slice(2).join('__');
-    const runtime = await getMcpRuntime();
-    const result = await runtime.callTool(server, toolName, { args });
-    const content = (result as any)?.content;
-    if (Array.isArray(content)) {
-      return content.map((c: any) => c.text || JSON.stringify(c)).join('\n');
-    }
-    return JSON.stringify(result);
-  }
-
+async function callMcpTool(server: string, tool: string, args: Record<string, any>): Promise<string> {
   const runtime = await getMcpRuntime();
-  const result = await runtime.callTool(mapping.server, mapping.tool, { args });
+  const result = await runtime.callTool(server, tool, { args });
   const content = (result as any)?.content;
   if (Array.isArray(content)) {
     return content.map((c: any) => c.text || JSON.stringify(c)).join('\n');
   }
   return JSON.stringify(result);
+}
+
+async function executeMcpToolGeneric(fullName: string, args: Record<string, any>): Promise<string> {
+  const mapping = mcpToolNameMap.get(fullName);
+  let server: string;
+  let toolName: string;
+
+  if (mapping) {
+    server = mapping.server;
+    toolName = mapping.tool;
+  } else {
+    const parts = fullName.split('__');
+    if (parts.length < 3) return `Error: Invalid MCP tool name "${fullName}"`;
+    server = parts[1];
+    toolName = parts.slice(2).join('__');
+  }
+
+  try {
+    return await callMcpTool(server, toolName, args);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // Retry once on connection/session errors
+    if (msg.includes('session') || msg.includes('Session') || msg.includes('ECONNR') || msg.includes('EPIPE') || msg.includes('closed') || msg.includes('disconnected')) {
+      console.warn(`[mcp] Tool call failed (${msg}), reconnecting and retrying...`);
+      await reconnectMcp();
+      return await callMcpTool(server, toolName, args);
+    }
+    throw err;
+  }
 }
 
 export async function cleanupMcp(): Promise<void> {

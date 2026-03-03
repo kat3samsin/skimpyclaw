@@ -761,6 +761,12 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
     }
   });
 
+  fastify.post('/api/dashboard/mcp/reconnect', async () => {
+    const { reconnectMcp } = await import('./tools.js');
+    await reconnectMcp();
+    return { reconnected: true, timestamp: new Date().toISOString() };
+  });
+
   // --- Audit Log ---
   // Reads from ~/.skimpyclaw/logs/audit/YYYY-MM-DD.jsonl files
   fastify.get<{
