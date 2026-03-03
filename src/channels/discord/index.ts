@@ -35,6 +35,8 @@ export async function initDiscord(cfg: Config): Promise<boolean> {
   });
 
   client.on('messageCreate', (message: Message) => {
+    if (message.author.bot) return;
+
     void (async () => {
       const text = message.content.trim();
       const isPrefixedCommand = text.startsWith('/') || text.startsWith('!');
