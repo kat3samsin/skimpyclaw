@@ -21,7 +21,7 @@ const discordMock = vi.hoisted(() => ({
 }));
 
 vi.mock('../channels/telegram/index.js', () => telegramMock);
-vi.mock('../discord.js', () => discordMock);
+vi.mock('../channels/discord/index.js', () => discordMock);
 
 import {
   getActiveChannelId,

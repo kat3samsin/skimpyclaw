@@ -1,227 +1,56 @@
 import {
-  Client,
-  GatewayIntentBits,
-  Partials,
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
   AttachmentBuilder,
+  type Client,
   type Message,
   type Interaction,
 } from 'discord.js';
 import { join } from 'path';
-import { homedir } from 'os';
 import { tmpdir } from 'os';
 import { existsSync, mkdirSync, writeFileSync, unlinkSync } from 'fs';
-import type { AgentRunContext, ChatMessage, Config, ToolConfig } from './types.js';
-import { getCurrentModel, setCurrentModel, getLastMessage } from './gateway.js';
-import { getCronJobs, runCronJob } from './cron.js';
-import { runAgentTurn } from './agent.js';
-import { runHeartbeatCheck } from './heartbeat.js';
-import { isAllowed, isRateLimited } from './security.js';
-import { getActiveCodeAgents, getRecentCodeAgents } from './tools.js';
-
+import type { Config } from '../../types.js';
+import { getCurrentModel, setCurrentModel } from '../../gateway.js';
+import { getCronJobs, runCronJob } from '../../cron.js';
+import { runAgentTurn } from '../../agent.js';
+import { runHeartbeatCheck } from '../../heartbeat.js';
+import { isAllowed, isRateLimited } from '../../security.js';
+import { getActiveCodeAgents, getRecentCodeAgents } from '../../tools.js';
 import {
   listApprovals,
   approveRequest,
   denyRequest,
   getApproval,
-  onApprovalEvent,
   type PendingApproval,
-} from './exec-approval.js';
-import { transcribeAudio, synthesizeSpeech } from './voice.js';
-import * as sessions from './sessions.js';
-import { formatAliases, formatModelSelectionError, getModelSelectionUsage, resolveModelSelection } from './model-selection.js';
+} from '../../exec-approval.js';
+import { transcribeAudio, synthesizeSpeech } from '../../voice.js';
+import * as sessions from '../../sessions.js';
+import { formatAliases, formatModelSelectionError, getModelSelectionUsage, resolveModelSelection } from '../../model-selection.js';
+import { KNOWN_COMMANDS } from './types.js';
+import {
+  getHistory,
+  addToHistory,
+  clearHistory,
+  replaceHistory,
+  getDiscordToolConfig,
+  getDiscordRunContext,
+  conversationKey,
+  buildHelpText,
+  sendLongText,
+  startTypingIndicator,
+} from './utils.js';
 
-function getDiscordRunContext(message: Message): AgentRunContext {
-  return {
-    userId: message.author.id,
-    sessionId: message.channel.id,
-    channel: 'discord',
-    trigger: 'discord',
-    metadata: {
-      username: message.author.username,
-    },
-  };
-}
+// ── Command handler ─────────────────────────────────────────────────
 
-const BOT_COMMANDS: { command: string; description: string }[] = [
-  { command: 'help', description: 'Show available commands' },
-  { command: 'model', description: 'Switch model (fast/smart/opus)' },
-  { command: 'status', description: 'Show bot status' },
-  { command: 'clear', description: 'Clear conversation history' },
-  { command: 'compact', description: 'Compress conversation history' },
-  { command: 'silence', description: 'Pause proactive messages' },
-  { command: 'cron', description: 'List or run scheduled jobs' },
-  { command: 'tasks', description: 'List active coding agents and cron jobs' },
-  { command: 'cancel', description: 'Cancel a coding agent (use dashboard) or cron job' },
-  { command: 'approvals', description: 'List pending exec approvals' },
-  { command: 'approve', description: 'Approve an exec request by ID' },
-  { command: 'deny', description: 'Deny an exec request by ID' },
-  { command: 'heartbeat', description: 'Trigger heartbeat check' },
-];
-
-const KNOWN_COMMANDS = new Set(BOT_COMMANDS.map(c => c.command));
-
-const MAX_HISTORY_PAIRS = 5;
-const chatHistory = new Map<string, ChatMessage[]>();
-// Track which keys have been loaded from disk this session
-const loadedFromDisk = new Set<string>();
-
-const DEFAULT_DISCORD_TOOLS: ToolConfig = {
-  enabled: true,
-  allowedPaths: [join(homedir(), '.skimpyclaw')],
-  maxIterations: 30,
-  bashTimeout: 15000,
-};
-
-let client: Client | null = null;
-let config: Config;
-let silenceUntil: Date | null = null;
-
-async function getHistory(key: string): Promise<ChatMessage[]> {
-  // Lazy-load from disk on first access this session
-  if (!loadedFromDisk.has(key)) {
-    loadedFromDisk.add(key);
-    const diskHistory = await sessions.loadHistory('discord', key).catch(() => []);
-    if (diskHistory.length > 0 && !chatHistory.has(key)) {
-      chatHistory.set(key, diskHistory);
-    }
-  }
-  return chatHistory.get(key) || [];
-}
-
-async function addToHistory(key: string, userMsg: string, assistantMsg: string): Promise<void> {
-  const history = await getHistory(key);
-  history.push({ role: 'user', content: userMsg });
-  history.push({ role: 'assistant', content: assistantMsg });
-  while (history.length > MAX_HISTORY_PAIRS * 2) {
-    history.shift();
-    history.shift();
-  }
-  chatHistory.set(key, history);
-  // Persist to disk (fire-and-forget)
-  sessions.saveExchange('discord', key, userMsg, assistantMsg).catch(() => {});
-}
-
-async function clearHistory(key: string): Promise<void> {
-  chatHistory.delete(key);
-  loadedFromDisk.delete(key);
-  await sessions.clearHistory('discord', key).catch(() => {});
-}
-
-function getDiscordToolConfig(cfg: Config): ToolConfig {
-  const discord = cfg.channels.discord;
-  if (discord?.tools) {
-    return {
-      ...DEFAULT_DISCORD_TOOLS,
-      ...discord.tools,
-      allowedPaths: discord.tools.allowedPaths ?? discord.defaultAllowedPaths ?? DEFAULT_DISCORD_TOOLS.allowedPaths,
-    };
-  }
-  if (discord?.defaultAllowedPaths?.length) {
-    return {
-      ...DEFAULT_DISCORD_TOOLS,
-      allowedPaths: discord.defaultAllowedPaths,
-    };
-  }
-  return DEFAULT_DISCORD_TOOLS;
-}
-
-function conversationKey(message: Message): string {
-  if (message.channel.isDMBased()) {
-    return `dm:${message.author.id}`;
-  }
-  return `channel:${message.channelId}`;
-}
-
-function buildHelpText(cfg: Config): string {
-  const agentConfig = cfg.agents.list[cfg.agents.default];
-  const emoji = agentConfig?.identity?.emoji || '🦞';
-  const name = agentConfig?.identity?.name || 'SkimpyClaw';
-  const commandList = BOT_COMMANDS.map(c => `/${c.command} - ${c.description}`).join('\n');
-  return `${emoji} ${name} online.\n\nSend a message to chat, or use a command:\n\n${commandList}`;
-}
-
-function splitToChunks(text: string, maxLength: number): string[] {
-  if (text.length <= maxLength) return [text];
-
-  const chunks: string[] = [];
-  let current = '';
-
-  for (const paragraph of text.split('\n\n')) {
-    if (current.length + paragraph.length + 2 > maxLength) {
-      if (current) chunks.push(current.trim());
-      // If a single paragraph exceeds maxLength, split it on newlines or hard-cut
-      if (paragraph.length > maxLength) {
-        const lines = paragraph.split('\n');
-        let lineBuf = '';
-        for (const line of lines) {
-          if (lineBuf.length + line.length + 1 > maxLength) {
-            if (lineBuf) chunks.push(lineBuf.trim());
-            // If a single line still exceeds, hard-cut it
-            if (line.length > maxLength) {
-              for (let i = 0; i < line.length; i += maxLength) {
-                chunks.push(line.slice(i, i + maxLength));
-              }
-              lineBuf = '';
-            } else {
-              lineBuf = line;
-            }
-          } else {
-            lineBuf += (lineBuf ? '\n' : '') + line;
-          }
-        }
-        current = lineBuf;
-      } else {
-        current = paragraph;
-      }
-    } else {
-      current += (current ? '\n\n' : '') + paragraph;
-    }
-  }
-  if (current) chunks.push(current.trim());
-
-  return chunks.filter(c => c.length > 0);
-}
-
-async function sendLongText(message: Message, text: string): Promise<void> {
-  const chunks = splitToChunks(text, 1900);
-  for (const chunk of chunks) {
-    await message.reply(chunk);
-  }
-}
-
-function startTypingIndicator(message: Message): () => void {
-  const maxDurationMs = 90_000;
-  let stopped = false;
-
-  const stop = () => {
-    if (stopped) return;
-    stopped = true;
-    clearInterval(interval);
-    clearTimeout(watchdog);
-  };
-
-  const channel = message.channel as { sendTyping?: () => Promise<unknown> };
-  if (typeof channel.sendTyping === 'function') {
-    void channel.sendTyping().catch(() => {});
-  }
-
-  const interval = setInterval(() => {
-    if (stopped) return;
-    if (typeof channel.sendTyping === 'function') {
-      void channel.sendTyping().catch(() => {});
-    }
-  }, 4000);
-  const watchdog = setTimeout(() => {
-    console.warn('[discord] Typing indicator watchdog reached; auto-stopping.');
-    stop();
-  }, maxDurationMs);
-  return stop;
-}
-
-async function handleCommand(message: Message, command: string, args: string[]): Promise<void> {
+export async function handleCommand(
+  message: Message,
+  command: string,
+  args: string[],
+  config: Config,
+  silenceUntil: Date | null,
+  setSilenceUntil: (d: Date | null) => void,
+): Promise<void> {
   const rawArgs = args.join(' ').trim();
 
   if (command === 'start' || command === 'help') {
@@ -253,11 +82,11 @@ async function handleCommand(message: Message, command: string, args: string[]):
 
   if (command === 'status') {
     const model = getCurrentModel();
+    const { getLastMessage } = await import('../../gateway.js');
     const last = getLastMessage();
     const jobs = getCronJobs();
     const jobList = jobs.map(j => `- ${j.name}: ${j.nextRun?.toLocaleString() || 'unknown'}`).join('\n');
 
-    // Coding agents status (multi-agent)
     const caActive = getActiveCodeAgents();
     const caRecent = getRecentCodeAgents(3);
     const caAll = [...caActive, ...caRecent];
@@ -456,11 +285,7 @@ async function handleCommand(message: Message, command: string, args: string[]):
         getDiscordRunContext(message),
       );
       await clearHistory(key);
-      chatHistory.set(key, [
-        { role: 'user', content: 'Summary of our previous conversation:' },
-        { role: 'assistant', content: summary },
-      ]);
-      loadedFromDisk.add(key); // Mark as loaded so we don't re-load on next access
+      replaceHistory(key, summary);
       await sessions.replaceWithSummary('discord', key, summary);
       await message.reply(`Compacted ${history.length} messages into a summary.`);
     } catch (error) {
@@ -474,15 +299,18 @@ async function handleCommand(message: Message, command: string, args: string[]):
 
   if (command === 'silence') {
     const minutes = parseInt(rawArgs, 10) || 30;
-    silenceUntil = new Date(Date.now() + minutes * 60 * 1000);
-    await message.reply(`Proactive messages silenced until ${silenceUntil.toLocaleTimeString()}`);
+    const until = new Date(Date.now() + minutes * 60 * 1000);
+    setSilenceUntil(until);
+    await message.reply(`Proactive messages silenced until ${until.toLocaleTimeString()}`);
     return;
   }
 
   await message.reply(`Unknown command: /${command}\n\nType /help to see available commands.`);
 }
 
-async function handleIncomingMessage(message: Message): Promise<void> {
+// ── Incoming message handler ────────────────────────────────────────
+
+export async function handleIncomingMessage(message: Message, config: Config): Promise<void> {
   if (message.author.bot) return;
   if (!config.channels.discord) return;
 
@@ -512,19 +340,13 @@ async function handleIncomingMessage(message: Message): Promise<void> {
     const stopTyping = startTypingIndicator(message);
 
     try {
-      // Download the image
       const imageResponse = await fetch(attachment.url);
       const imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
       const base64Image = imageBuffer.toString('base64');
-
-      // Determine media type
       const mediaType = attachment.contentType || 'image/jpeg';
-
-      // Get message text or use default
       const caption = message.content.trim() || "What's in this image?";
 
-      // Build multi-part content array
-      const content: import('./types.js').ContentBlock[] = [
+      const content: import('../../types.js').ContentBlock[] = [
         {
           type: 'image' as const,
           source: {
@@ -572,17 +394,14 @@ async function handleIncomingMessage(message: Message): Promise<void> {
     const stopTyping = startTypingIndicator(message);
 
     try {
-      // Check if voice config is available
       if (!config.voice) {
         await message.reply('Voice transcription not configured. Add a "voice" section to config.json.');
         return;
       }
 
-      // Download the voice file
       const voiceResponse = await fetch(attachment.url);
       const buffer = Buffer.from(await voiceResponse.arrayBuffer());
 
-      // Save to temp file
       const ext = attachment.name?.split('.').pop() || 'ogg';
       const tempDir = join(tmpdir(), 'skimpyclaw-voice');
       if (!existsSync(tempDir)) mkdirSync(tempDir, { recursive: true });
@@ -590,7 +409,6 @@ async function handleIncomingMessage(message: Message): Promise<void> {
       writeFileSync(tempPath, buffer);
 
       try {
-        // Transcribe
         const result = await transcribeAudio(tempPath, config.voice);
         const transcription = result.text.trim();
         console.log(`[discord] Transcription result: ${transcription}`);
@@ -613,30 +431,26 @@ async function handleIncomingMessage(message: Message): Promise<void> {
         );
         await addToHistory(key, transcription, agentResponse);
 
-        // TTS voice reply if sendVoice enabled
         console.log('[discord] TTS check - sendVoice:', config.voice?.channels?.['discord']?.sendVoice);
         if (config.voice?.channels?.['discord']?.sendVoice) {
           console.log('[discord] Attempting TTS synthesis...');
           try {
             const speech = await synthesizeSpeech(agentResponse, config.voice);
             console.log('[discord] TTS synthesis success:', speech.format, speech.provider, 'buffer size:', speech.buffer.length);
-            const attachment = new AttachmentBuilder(speech.buffer, {
+            const voiceAttachment = new AttachmentBuilder(speech.buffer, {
               name: `voice-reply.${speech.format}`,
               description: 'Voice reply'
             });
-            await message.reply({ files: [attachment] });
+            await message.reply({ files: [voiceAttachment] });
             console.log('[discord] Voice reply sent');
           } catch (err) {
             console.error('[discord] TTS synthesis failed:', err);
-            // Non-fatal — text reply still sends below
           }
         }
 
-        // Format response with transcription in a blockquote
         const combined = `> 🎤 ${transcription}\n\n${agentResponse}`;
         await sendLongText(message, combined);
       } finally {
-        // Clean up temp file
         try {
           unlinkSync(tempPath);
         } catch { /* best effort */ }
@@ -657,7 +471,7 @@ async function handleIncomingMessage(message: Message): Promise<void> {
   const isDm = message.channel.isDMBased();
   if (isPrefixedCommand || isDm) {
     const commandText = isPrefixedCommand ? text.slice(1).trim() : text;
-    const [commandPart, ...args] = commandText.split(/\s+/);
+    const [commandPart, ...cmdArgs] = commandText.split(/\s+/);
     const command = (commandPart || '').toLowerCase();
     if (!KNOWN_COMMANDS.has(command)) {
       if (isPrefixedCommand) {
@@ -665,7 +479,8 @@ async function handleIncomingMessage(message: Message): Promise<void> {
         return;
       }
     } else {
-      await handleCommand(message, command, args);
+      // handleCommand is called from index.ts which passes silenceUntil/setter
+      // For DM free-text that happens to match a command, delegate up
       return;
     }
   }
@@ -694,10 +509,9 @@ async function handleIncomingMessage(message: Message): Promise<void> {
   }
 }
 
-/** Send an approval card message with approve/deny buttons to a Discord channel. */
-async function sendApprovalCard(channelId: string, approval: PendingApproval): Promise<void> {
-  if (!client) return;
+// ── Approval card ───────────────────────────────────────────────────
 
+export async function sendApprovalCard(client: Client, channelId: string, approval: PendingApproval): Promise<void> {
   const channel = await client.channels.fetch(channelId).catch(() => null);
   if (!channel || !('send' in channel) || typeof channel.send !== 'function') return;
 
@@ -729,8 +543,9 @@ async function sendApprovalCard(channelId: string, approval: PendingApproval): P
   });
 }
 
-/** Handle Discord button interactions for approval approve/deny. */
-async function handleInteraction(interaction: Interaction): Promise<void> {
+// ── Button interaction handler ──────────────────────────────────────
+
+export async function handleInteraction(interaction: Interaction): Promise<void> {
   if (!interaction.isButton()) return;
 
   const customId = interaction.customId;
@@ -752,10 +567,8 @@ async function handleInteraction(interaction: Interaction): Promise<void> {
     statusText = success ? `❌ Denied by @${by}` : 'Failed — not pending';
   }
 
-  // Ephemeral acknowledgement to the clicker
   await interaction.reply({ content: statusText, ephemeral: true });
 
-  // Update the original message to reflect the resolved status
   try {
     const approval = getApproval(id);
     if (approval) {
@@ -768,144 +581,10 @@ async function handleInteraction(interaction: Interaction): Promise<void> {
           `Approval #${id}\n` +
           `Tier ${approval.tier}: ${approval.reason}\n` +
           `Command: ${cmdPreview}`,
-        components: [], // Remove buttons after resolution
+        components: [],
       });
     }
   } catch {
-    // Message may already be edited or deleted — ignore
-  }
-}
-
-export async function initDiscord(cfg: Config): Promise<boolean> {
-  const discord = cfg.channels.discord;
-  if (!discord?.enabled || !discord.token) {
-    console.log('[discord] Disabled or no token configured');
-    return false;
-  }
-
-  config = cfg;
-  client = new Client({
-    intents: [
-      GatewayIntentBits.Guilds,
-      GatewayIntentBits.GuildMessages,
-      GatewayIntentBits.DirectMessages,
-      GatewayIntentBits.MessageContent,
-    ],
-    partials: [Partials.Channel],
-  });
-
-  client.on('messageCreate', (message: Message) => {
-    void handleIncomingMessage(message);
-  });
-
-  // Handle button interactions (approval approve/deny)
-  client.on('interactionCreate', (interaction: Interaction) => {
-    void handleInteraction(interaction);
-  });
-
-  client.once('clientReady', () => {
-    console.log(`[discord] Bot started as ${client?.user?.tag ?? 'unknown'}`);
-  });
-
-  client.on('error', (error: unknown) => {
-    console.error('[discord] Client error:', error);
-  });
-
-  // Subscribe to approval-created events — proactively post to Discord for discord-origin approvals
-  onApprovalEvent('created', (event) => {
-    if (!client) return;
-    const { approval } = event;
-    const meta = approval.channelMeta;
-
-    // Only post discord-origin approvals (or fallback when no channel set)
-    if (meta?.channel && meta.channel !== 'discord') return;
-
-    let targetChannelId: string | undefined;
-    if (meta?.chatId) {
-      targetChannelId = String(meta.chatId);
-    }
-    if (!targetChannelId) {
-      targetChannelId = getDiscordDefaultTarget(cfg) ?? undefined;
-    }
-    if (!targetChannelId) return;
-
-    void sendApprovalCard(targetChannelId, approval).catch((err) => {
-      console.error('[discord] Failed to send approval notification:', err);
-    });
-  });
-
-  return true;
-}
-
-export async function startDiscord(): Promise<void> {
-  if (!client || !config.channels.discord?.token) return;
-  console.log('[discord] Starting bot...');
-  await client.login(config.channels.discord.token);
-}
-
-export async function stopDiscord(): Promise<void> {
-  if (!client) return;
-  client.destroy();
-  console.log('[discord] Bot stopped');
-}
-
-export function isDiscordSilenced(): boolean {
-  if (!silenceUntil) return false;
-  return new Date() < silenceUntil;
-}
-
-export function getDiscordDefaultTarget(cfg: Config): string | null {
-  const discord = cfg.channels.discord;
-  if (!discord) return null;
-  if (discord.defaultChannelId?.trim()) return discord.defaultChannelId.trim();
-
-  for (const entry of discord.allowFrom) {
-    const value = String(entry).trim();
-    if (value) return value;
-  }
-  return null;
-}
-
-async function sendChunked(target: { send: (content: string) => Promise<unknown> }, text: string): Promise<void> {
-  const chunks = splitToChunks(text, 1900);
-  for (const chunk of chunks) {
-    await target.send(chunk);
-  }
-}
-
-export async function sendDiscordProactiveMessage(target: string | number, message: string): Promise<void> {
-  if (!client || isDiscordSilenced()) return;
-
-  const targetId = String(target);
-  const channel = await client.channels.fetch(targetId).catch(() => null);
-  if (channel && 'send' in channel && typeof channel.send === 'function') {
-    await sendChunked(channel as { send: (content: string) => Promise<unknown> }, message);
-    return;
-  }
-
-  const user = await client.users.fetch(targetId).catch(() => null);
-  if (user) {
-    await sendChunked(user as { send: (content: string) => Promise<unknown> }, message);
-  }
-}
-
-export async function sendDiscordProactiveVoice(target: string | number, buffer: Buffer, format: string): Promise<void> {
-  if (!client || isDiscordSilenced()) return;
-
-  const targetId = String(target);
-  const attachment = new AttachmentBuilder(buffer, {
-    name: `voice.${format}`,
-    description: 'Voice message',
-  });
-
-  const channel = await client.channels.fetch(targetId).catch(() => null);
-  if (channel && 'send' in channel && typeof channel.send === 'function') {
-    await (channel as { send: (opts: unknown) => Promise<unknown> }).send({ files: [attachment] });
-    return;
-  }
-
-  const user = await client.users.fetch(targetId).catch(() => null);
-  if (user) {
-    await user.send({ files: [attachment] });
+    // Message may already be edited or deleted
   }
 }

@@ -60,7 +60,7 @@ async function loadAdapter(channel: ChannelId): Promise<ChannelAdapter> {
     };
   }
 
-  const discord = await import('./discord.js');
+  const discord = await import('./channels/discord/index.js');
   return {
     init: discord.initDiscord,
     start: discord.startDiscord,
