@@ -107,6 +107,7 @@ export function buildCodeAgentArgs(input: BuildCodeAgentArgsInput): { cmd: strin
       '--full-auto',
       '--json',
       '--color', 'never',
+      '--skip-git-repo-check',
     ];
     if (input.workdir) args.push('-C', input.workdir);
     if (input.model) args.push('-m', input.model);

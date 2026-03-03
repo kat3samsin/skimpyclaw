@@ -488,6 +488,7 @@ describe('code_with_agent', () => {
       expect(cmd).toContain('codex');
       expect(args[0]).toBe('exec');
       expect(args).toContain('--full-auto');
+      expect(args).toContain('--skip-git-repo-check');
       expect(args).toContain('--json');
       expect(args).toContain('--color');
       expect(args).toContain('never');
