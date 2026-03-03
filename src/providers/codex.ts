@@ -298,7 +298,7 @@ export async function chatCodex(params: ProviderChatParams): Promise<string> {
 }
 
 export async function chatWithToolsCodex(params: ProviderToolChatParams): Promise<ToolChatResult> {
-  const { messages, options, toolConfig, toolContext } = params;
+  const { messages, options, config, toolConfig, toolContext } = params;
   const modelId = stripProvider(options.model);
   const maxIterations = toolConfig.maxIterations || 100;
 
@@ -347,7 +347,13 @@ export async function chatWithToolsCodex(params: ProviderToolChatParams): Promis
     }
 
     // Compact old tool results if context is growing large
-    const inputForApi = compactCodexMessages(input, toolConfig.contextManagement, i + 1);
+    const compactionResult = await compactCodexMessages(input, toolConfig.contextManagement, i + 1, config);
+    const inputForApi = compactionResult.messages;
+    if (compactionResult.compacted) {
+      const method = compactionResult.method === 'llm' ? 'LLM summary' : 'truncation';
+      const detail = `~${Math.round((compactionResult.tokensBefore || 0) / 1000)}k → ~${Math.round((compactionResult.tokensAfter || 0) / 1000)}k tokens`;
+      toolLog.push(`[context compacted via ${method}: ${detail}]`);
+    }
 
     const body: any = {
       model: modelId,

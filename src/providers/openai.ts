@@ -190,7 +190,13 @@ export async function chatWithToolsOpenAI(params: ProviderToolChatParams, provid
     }
 
     // Compact old tool results if context is growing large
-    const messagesForApi = compactOpenAIMessages(apiMessages, toolConfig.contextManagement, i + 1);
+    const compactionResult = await compactOpenAIMessages(apiMessages, toolConfig.contextManagement, i + 1, config);
+    const messagesForApi = compactionResult.messages;
+    if (compactionResult.compacted) {
+      const method = compactionResult.method === 'llm' ? 'LLM summary' : 'truncation';
+      const detail = `~${Math.round((compactionResult.tokensBefore || 0) / 1000)}k → ~${Math.round((compactionResult.tokensAfter || 0) / 1000)}k tokens`;
+      toolLog.push(`[context compacted via ${method}: ${detail}]`);
+    }
 
     console.log(`[agent:openai-tools] Iteration ${i + 1}/${maxIterations} (provider: ${provider}, model: ${modelId})`);
 

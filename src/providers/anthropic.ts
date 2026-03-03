@@ -187,7 +187,13 @@ export async function chatWithToolsAnthropic(params: ProviderToolChatParams): Pr
     }
 
     // Compact old tool results if context is growing large
-    const messagesForApi = compactAnthropicMessages(apiMessages, toolConfig.contextManagement, i + 1);
+    const compactionResult = await compactAnthropicMessages(apiMessages, toolConfig.contextManagement, i + 1, config);
+    const messagesForApi = compactionResult.messages;
+    if (compactionResult.compacted) {
+      const method = compactionResult.method === 'llm' ? 'LLM summary' : 'truncation';
+      const detail = `~${Math.round((compactionResult.tokensBefore || 0) / 1000)}k → ~${Math.round((compactionResult.tokensAfter || 0) / 1000)}k tokens`;
+      toolLog.push(`[context compacted via ${method}: ${detail}]`);
+    }
 
     const anthropicParams: any = {
       model: modelId,
