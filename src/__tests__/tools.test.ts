@@ -239,14 +239,16 @@ describe('bash', () => {
     expect(result.trim()).toBe('hello');
   });
 
-  it('blocks dangerous commands', async () => {
-    const result = await executeTool('Bash', { command: 'rm -rf /' }, toolConfig);
-    expect(result).toContain('Error: Command blocked');
+  it('blocks dangerous commands via exec approval', async () => {
+    const result = await executeTool('Bash', { command: `rm -rf ${TEST_DIR}` }, toolConfig);
+    expect(result).toContain('⛔');
+    expect(result).toContain('tier 3');
   });
 
-  it('blocks sudo', async () => {
-    const result = await executeTool('Bash', { command: 'sudo cat /etc/passwd' }, toolConfig);
-    expect(result).toContain('Error: Command blocked');
+  it('blocks sudo via exec approval', async () => {
+    const result = await executeTool('Bash', { command: `sudo ls ${TEST_DIR}` }, toolConfig);
+    expect(result).toContain('⛔');
+    expect(result).toContain('tier 2');
   });
 
   it('respects cwd when in allowed paths', async () => {
