@@ -6,6 +6,7 @@ export interface ContainerOpts {
   memory?: string;
   network?: string;
   mounts?: Array<{ host: string; container: string; readOnly?: boolean }>;
+  env?: Record<string, string>;
   user?: string;
 }
 
@@ -156,6 +157,12 @@ export async function createContainer(name: string, opts: ContainerOpts): Promis
         mountArg += ',ro';
       }
       args.push('--mount', mountArg);
+    }
+  }
+
+  if (opts.env) {
+    for (const [key, val] of Object.entries(opts.env)) {
+      args.push('-e', `${key}=${val}`);
     }
   }
 

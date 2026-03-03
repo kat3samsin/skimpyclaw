@@ -164,6 +164,7 @@ export interface SandboxConfig {
   memory?: string;          // default '2G'
   network?: string;         // default 'none'
   idleTimeoutMs?: number;   // default 3600000 (1h)
+  env?: Record<string, string>;  // extra env vars injected into containers
 }
 
 export interface ToolConfig {

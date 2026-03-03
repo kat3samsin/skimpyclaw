@@ -67,6 +67,7 @@ export async function ensureContainer(
       container: m.container,
       readOnly: m.readOnly,
     })),
+    env: config.env,
     user: `${uid}:${gid}`,
   };
 
