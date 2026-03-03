@@ -20,6 +20,9 @@ const SENSITIVE_ENV_PATTERNS = [
   /^KIMI_/i, /^TOGETHER_/i, /^GROQ_/i, /^OPENROUTER_/i,
 ];
 
+/** Common tool paths that may be missing when launched as a service/daemon. */
+const EXTRA_PATH_DIRS = ['/opt/homebrew/bin', '/opt/homebrew/sbin', '/usr/local/bin'];
+
 /** Create a sanitized copy of process.env with secrets stripped. */
 function sanitizeEnv(): Record<string, string | undefined> {
   const env = { ...process.env };
@@ -27,6 +30,12 @@ function sanitizeEnv(): Record<string, string | undefined> {
     if (SENSITIVE_ENV_PATTERNS.some(p => p.test(key))) {
       delete env[key];
     }
+  }
+  // Ensure common tool directories are in PATH (daemon/service launches often have a minimal PATH)
+  const currentPath = env.PATH || '';
+  const missing = EXTRA_PATH_DIRS.filter(d => !currentPath.includes(d));
+  if (missing.length > 0) {
+    env.PATH = `${currentPath}:${missing.join(':')}`;
   }
   return env;
 }
