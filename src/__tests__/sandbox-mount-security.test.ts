@@ -145,6 +145,15 @@ describe('sandbox/mount-security', () => {
       expect(translatePath('/tmp/random/file', mounts)).toBe('/tmp/random/file');
     });
 
+    it('expands ~ to home directory before matching', () => {
+      const home = process.env.HOME || '/Users/katre';
+      const homeMounts = [
+        { host: `${home}/.skimpyclaw`, container: '/workspace/config', readOnly: false },
+      ];
+      expect(translatePath('~/.skimpyclaw/agents/main/HEARTBEAT.md', homeMounts))
+        .toBe('/workspace/config/agents/main/HEARTBEAT.md');
+    });
+
     it('matches most specific mount first', () => {
       const nestedMounts = [
         { host: '/Users/katre', container: '/workspace/home', readOnly: false },

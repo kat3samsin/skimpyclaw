@@ -99,7 +99,11 @@ export function validateMountPaths(allowedPaths: string[]): MountSpec[] {
  * Returns the original path if no mount matches (will likely fail inside container).
  */
 export function translatePath(hostPath: string, mounts: MountSpec[]): string {
-  const candidates = getPathCandidates(hostPath);
+  // Expand ~ to home directory (~ is a shell feature, not handled by resolve())
+  const expanded = hostPath.startsWith('~/')
+    ? homedir() + hostPath.slice(1)
+    : hostPath;
+  const candidates = getPathCandidates(expanded);
 
   // Sort by host path length descending so we match the most specific mount first
   const sorted = [...mounts].sort((a, b) => b.host.length - a.host.length);
