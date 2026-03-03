@@ -31,6 +31,9 @@ export interface VoiceConfig {
 }
 
 export interface Config {
+  /** Global allowed paths. Channels, cron, and heartbeat inherit these
+   *  unless they specify their own tools.allowedPaths override. */
+  allowedPaths?: string[];
   gateway: {
     port: number;
     host?: string;  // Bind address (default: '127.0.0.1')

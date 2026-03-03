@@ -131,6 +131,18 @@ export function listMemoryFiles(agentId: string): { name: string; date: string; 
   }).sort((a, b) => b.date.localeCompare(a.date));
 }
 
+/**
+ * Resolve allowed paths for a given context. Priority:
+ * 1. Explicit toolConfig.allowedPaths (if provided)
+ * 2. Config top-level allowedPaths
+ * 3. Fallback: ~/.skimpyclaw only
+ */
+export function resolveAllowedPaths(config: Config, overridePaths?: string[]): string[] {
+  if (overridePaths?.length) return overridePaths;
+  if (config.allowedPaths?.length) return config.allowedPaths;
+  return [join(homedir(), '.skimpyclaw')];
+}
+
 export function readMemoryFile(agentId: string, filename: string): string {
   if (!isValidAgentId(agentId)) {
     throw new Error('Invalid agent ID');

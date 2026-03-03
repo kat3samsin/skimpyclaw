@@ -8,6 +8,7 @@ import type { Config, ToolConfig } from './types.js';
 import { join } from 'path';
 import { homedir } from 'os';
 import { runAgentTurn } from './agent.js';
+import { resolveAllowedPaths } from './config.js';
 import { pruneIdle, SANDBOX_DEFAULTS } from './sandbox/index.js';
 import {
   getActiveChannelId,
@@ -18,30 +19,22 @@ import {
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 let running = false;
 
-const DEFAULT_HEARTBEAT_TOOLS: ToolConfig = {
-  enabled: true,
-  allowedPaths: [join(homedir(), '.skimpyclaw')],
-  maxIterations: 100,
-  bashTimeout: 15000,
-};
-
 function getHeartbeatTools(config: Config): ToolConfig {
   if (config.heartbeat.tools) {
-    return config.heartbeat.tools;
-  }
-
-  const defaultAllowedPaths = config.channels.active === 'discord'
-    ? config.channels.discord?.defaultAllowedPaths
-    : config.channels.telegram.defaultAllowedPaths || config.channels.discord?.defaultAllowedPaths;
-
-  if (defaultAllowedPaths?.length) {
     return {
-      ...DEFAULT_HEARTBEAT_TOOLS,
-      allowedPaths: defaultAllowedPaths,
+      ...config.heartbeat.tools,
+      allowedPaths: config.heartbeat.tools.allowedPaths?.length
+        ? config.heartbeat.tools.allowedPaths
+        : resolveAllowedPaths(config),
     };
   }
 
-  return DEFAULT_HEARTBEAT_TOOLS;
+  return {
+    enabled: true,
+    allowedPaths: resolveAllowedPaths(config),
+    maxIterations: 100,
+    bashTimeout: 15000,
+  };
 }
 
 function getHeartbeatFilePath(config: Config): string {

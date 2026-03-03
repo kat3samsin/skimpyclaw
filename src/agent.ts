@@ -232,7 +232,7 @@ export async function runAgentTurn(
     if (toolConfig?.enabled) {
       // Provider-specific routing is centralized in providers/chatWithTools.
       console.log(
-        `[agent] Running with tools (provider: ${provider}, model: ${modelId}, paths: ${toolConfig.allowedPaths.join(', ')})`
+        `[agent] Running with tools (provider: ${provider}, model: ${modelId}, paths: ${(toolConfig.allowedPaths ?? []).join(', ')})`
       );
       const result = await chatWithTools(messages, chatOptions, config, toolConfig, toolCtx);
       response = result.response;

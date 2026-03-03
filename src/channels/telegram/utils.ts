@@ -5,6 +5,7 @@ import { existsSync, readdirSync, statSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import type { Config, ChatMessage, ToolConfig, AgentRunContext } from '../../types.js';
+import { resolveAllowedPaths } from '../../config.js';
 import type { SkillConfig } from '../../skills-types.js';
 import { state, MAX_HISTORY_PAIRS, BOT_COMMANDS, type MemoryFileInfo } from './types.js';
 import * as sessions from '../../sessions.js';
@@ -122,24 +123,20 @@ export function getRunContext(ctx: Context): AgentRunContext {
 }
 
 // Default tool config for Telegram — gives the agent file/bash access
-export function getDefaultTelegramToolConfig(cfg: Config): ToolConfig | undefined {
+export function getDefaultTelegramToolConfig(cfg: Config): ToolConfig {
   if (cfg.channels.telegram.tools) {
-    return cfg.channels.telegram.tools;
-  }
-
-  if (cfg.channels.telegram.defaultAllowedPaths?.length) {
     return {
-      enabled: true,
-      allowedPaths: cfg.channels.telegram.defaultAllowedPaths,
-      maxIterations: 100,
-      bashTimeout: 15000,
+      ...cfg.channels.telegram.tools,
+      allowedPaths: cfg.channels.telegram.tools.allowedPaths?.length
+        ? cfg.channels.telegram.tools.allowedPaths
+        : resolveAllowedPaths(cfg),
     };
   }
 
   return {
     enabled: true,
-    allowedPaths: [join(homedir(), '.skimpyclaw')],
-    maxIterations: 30,
+    allowedPaths: resolveAllowedPaths(cfg),
+    maxIterations: 100,
     bashTimeout: 15000,
   };
 }

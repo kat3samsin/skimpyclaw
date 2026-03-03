@@ -5,13 +5,21 @@ import { join } from 'path';
 import { homedir } from 'os';
 import { spawn, spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
-import { loadConfig, loadRawConfig, getConfigPath, saveConfig } from './config.js';
+import { loadConfig, loadRawConfig, getConfigPath, saveConfig, resolveAllowedPaths } from './config.js';
 import type { Config, ToolConfig } from './types.js';
 import { startRuntime } from './service.js';
 import { runSetup, renderGatewayPlist } from './setup.js';
 import { runDoctor as runDoctorCommand } from './doctor/index.js';
 import { executeTool, getToolDefinitions, BUILTIN_TOOL_DEFINITIONS, BROWSER_TOOL_DEFINITION } from './tools.js';
 import { formatModelSelectionError, getModelSelectionUsage, resolveModelSelection } from './model-selection.js';
+import {
+  detectSandboxRuntime,
+  isSandboxRuntimeRunning,
+  sandboxNetworkExists,
+  defaultSandboxNetwork,
+  sandboxImageExists,
+  type SandboxRuntime,
+} from './sandbox-utils.js';
 
 const APP_NAME = 'skimpyclaw';
 const DEFAULT_PORT = 18790;
@@ -113,18 +121,17 @@ function hasFlag(args: string[], flag: string): boolean {
 }
 
 function getCliToolConfig(config: Config): ToolConfig {
-  if (config.channels.telegram.tools) return config.channels.telegram.tools;
-  if (config.channels.telegram.defaultAllowedPaths?.length) {
+  if (config.channels.telegram.tools) {
     return {
-      enabled: true,
-      allowedPaths: config.channels.telegram.defaultAllowedPaths,
-      maxIterations: 100,
-      bashTimeout: 15000,
+      ...config.channels.telegram.tools,
+      allowedPaths: config.channels.telegram.tools.allowedPaths?.length
+        ? config.channels.telegram.tools.allowedPaths
+        : resolveAllowedPaths(config),
     };
   }
   return {
     enabled: true,
-    allowedPaths: [join(homedir(), '.skimpyclaw')],
+    allowedPaths: resolveAllowedPaths(config),
     maxIterations: 100,
     bashTimeout: 15000,
   };
@@ -835,7 +842,6 @@ async function commandTools(args: string[]): Promise<number> {
   return 1;
 }
 
-type SandboxRuntime = 'container' | 'docker';
 type SandboxProfile = 'minimal' | 'dev' | 'full';
 
 const SANDBOX_CLI_BY_PROFILE: Record<SandboxProfile, string[]> = {
@@ -843,45 +849,6 @@ const SANDBOX_CLI_BY_PROFILE: Record<SandboxProfile, string[]> = {
   dev: ['bash', 'curl', 'git', 'gh', 'jq', 'python3', 'rg', 'pnpm', 'gcc', 'g++', 'make'],
   full: ['bash', 'curl', 'git', 'gh', 'jq', 'python3', 'rg', 'pnpm', 'gcc', 'g++', 'make', 'pip3', 'sqlite3'],
 };
-
-function defaultSandboxNetwork(runtime: SandboxRuntime): string {
-  return runtime === 'container' ? 'default' : 'bridge';
-}
-
-function detectSandboxRuntime(preferred?: string): SandboxRuntime | null {
-  if (preferred === 'container' || preferred === 'docker') {
-    return spawnSync(preferred, ['--version'], { encoding: 'utf-8' }).status === 0 ? preferred : null;
-  }
-
-  if (spawnSync('container', ['--version'], { encoding: 'utf-8' }).status === 0) {
-    return 'container';
-  }
-  if (spawnSync('docker', ['--version'], { encoding: 'utf-8' }).status === 0) {
-    return 'docker';
-  }
-  return null;
-}
-
-function isSandboxRuntimeRunning(runtime: SandboxRuntime): boolean {
-  if (runtime === 'container') {
-    return spawnSync('container', ['system', 'status'], { encoding: 'utf-8' }).status === 0;
-  }
-  return spawnSync('docker', ['info'], { encoding: 'utf-8' }).status === 0;
-}
-
-function sandboxNetworkExists(runtime: SandboxRuntime, network: string): boolean {
-  if (runtime === 'container') {
-    const result = spawnSync('container', ['network', 'ls'], { encoding: 'utf-8' });
-    if (result.status !== 0) return false;
-    return result.stdout.split('\n').some((line) => line.trim().split(/\s+/)[0] === network);
-  }
-  const result = spawnSync('docker', ['network', 'inspect', network], { encoding: 'utf-8' });
-  return result.status === 0;
-}
-
-function sandboxImageExists(runtime: SandboxRuntime, image: string): boolean {
-  return spawnSync(runtime, ['image', 'inspect', image], { encoding: 'utf-8' }).status === 0;
-}
 
 function resolveSandboxDir(): string | null {
   // 1. Check CWD (user is in repo root)

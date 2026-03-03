@@ -4,7 +4,7 @@ import { Cron } from 'croner';
 import { exec } from 'child_process';
 import { existsSync, mkdirSync, appendFileSync, readFileSync, watch, type FSWatcher } from 'fs';
 import { join } from 'path';
-import { getLogsDir, getConfigPath, loadConfig } from './config.js';
+import { getLogsDir, getConfigPath, loadConfig, resolveAllowedPaths } from './config.js';
 import type { Config, CronJob, SandboxConfig, ToolConfig } from './types.js';
 import { homedir } from 'node:os';
 import { runAgentTurn } from './agent.js';
@@ -194,16 +194,19 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
       appendCronLogLine(jobDef.id, `Agent turn started (prompt: ${message.slice(0, 100)}...)`);
       const defaultTools: ToolConfig = {
         enabled: true,
-        allowedPaths: [`${homedir()}/.skimpyclaw`],
+        allowedPaths: resolveAllowedPaths(config),
         maxIterations: 30,
         bashTimeout: 15000,
       };
+      const tools = jobDef.payload.tools
+        ? { ...jobDef.payload.tools, allowedPaths: jobDef.payload.tools.allowedPaths?.length ? jobDef.payload.tools.allowedPaths : resolveAllowedPaths(config) }
+        : defaultTools;
       const response = await runAgentTurn(
         config.agents.default,
         message,
         config,
         jobDef.model,
-        jobDef.payload.tools || defaultTools,
+        tools,
         undefined,
         {
           channel: getActiveChannelId() || 'telegram',
