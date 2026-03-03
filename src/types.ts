@@ -177,6 +177,7 @@ export interface ToolConfig {
   contextManagement?: {
     enabled?: boolean;          // default true
     maxContextTokens?: number;  // token threshold before compaction triggers (default: 100000)
+    compactionModel?: string;   // model for LLM summarization (default: anthropic/claude-haiku-3-5)
   };
   browser?: {
     enabled?: boolean;
