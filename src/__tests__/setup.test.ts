@@ -151,7 +151,7 @@ describe('setup config generation', () => {
 
     expect(config.cron.jobs).toHaveLength(3);
     expect(config.cron.jobs[0].id).toBe('memory-trim');
-    expect(config.cron.jobs[0].model).toBe('claude-haiku');
+    expect(config.cron.jobs[0].model).toBe('claude-fast');
     expect(config.cron.jobs[1].id).toBe('tech-digest');
     expect(config.cron.jobs[2].id).toBe('weather');
     expect(config.cron.jobs[2].schedule.tz).toBe('America/New_York');
