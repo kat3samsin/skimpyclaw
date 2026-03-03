@@ -437,12 +437,23 @@ export async function executeTool(
         switch (normalized) {
           case 'bash': {
             const translatedCmd = translateBashPaths(input.command);
-            // Apply hard safety blocks and exec-approval inside sandbox.
-            // The sandbox provides filesystem isolation but not command-level policy.
+            // Apply hard safety blocks inside sandbox.
+            // Sandbox provides filesystem isolation, so opaque script execution
+            // (heredocs, -c, -e) is safe — only require approval for truly
+            // destructive patterns (rm -rf, dd, mkfs, etc.).
             if (!isBashCommandSafe(translatedCmd)) {
               return 'Error: Command blocked by safety filter.';
             }
             const classification = classifyCommandRisk(translatedCmd);
+            // Downgrade opaque-script classifications in sandbox — the isolation
+            // already handles the risk that inline code poses on the host.
+            if (classification.tier >= 2 && (
+              classification.reason === 'Inline heredoc script execution' ||
+              classification.reason === 'Inline interpreter code execution'
+            )) {
+              classification.tier = 0 as import('./exec-approval.js').RiskTier;
+              classification.reason = `${classification.reason} (sandboxed — auto-approved)`;
+            }
             const approvalConfig = config.execApproval;
             if (requiresApproval(classification, approvalConfig)) {
               const isUnattended =
