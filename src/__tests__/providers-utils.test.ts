@@ -54,6 +54,8 @@ describe('provider utils', () => {
     expect(resolveModel('claude-3-5-haiku-20241022', cfg)).toBe('claude-haiku-4-5');
     expect(resolveModel('anthropic/claude-3-5-haiku-20241022', cfg)).toBe('anthropic/claude-haiku-4-5');
     expect(resolveModel('claude-3.5-haiku', cfg)).toBe('claude-haiku-4-5');
+    expect(resolveModel('claude-haiku', cfg)).toBe('claude-haiku-4-5');
+    expect(resolveModel('anthropic/claude-haiku', cfg)).toBe('anthropic/claude-haiku-4-5');
   });
 
   it('migrates deprecated claude opus 4 model ids', () => {
