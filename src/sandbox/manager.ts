@@ -57,6 +57,18 @@ export async function ensureContainer(
   const gid = process.getgid?.() ?? 20;
 
   const merged = { ...SANDBOX_DEFAULTS, ...config };
+
+  // Expand ${VAR} references in env values from process.env
+  let resolvedEnv: Record<string, string> | undefined;
+  if (config.env) {
+    resolvedEnv = {};
+    for (const [key, val] of Object.entries(config.env)) {
+      resolvedEnv[key] = val.replace(/\$\{(\w+)\}/g, (_match, name) => {
+        return process.env[name] ?? '';
+      });
+    }
+  }
+
   const opts: ContainerOpts = {
     image: merged.image!,
     cpus: merged.cpus,
@@ -67,7 +79,7 @@ export async function ensureContainer(
       container: m.container,
       readOnly: m.readOnly,
     })),
-    env: config.env,
+    env: resolvedEnv,
     user: `${uid}:${gid}`,
   };
 

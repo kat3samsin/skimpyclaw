@@ -85,6 +85,32 @@ describe('sandbox/manager', () => {
       expect(mockRemoveContainer).toHaveBeenCalledWith('skimpyclaw-sbx-default');
       expect(mockCreateContainer).toHaveBeenCalledTimes(1);
     });
+
+    it('expands ${VAR} references in env from process.env', async () => {
+      process.env.MY_SECRET = 'hunter2';
+      try {
+        const configWithEnv: SandboxConfig = {
+          ...testConfig,
+          env: { TOKEN: '${MY_SECRET}', PLAIN: 'literal' },
+        };
+        await ensureContainer('env-test', configWithEnv, ['/p']);
+        const opts = mockCreateContainer.mock.calls[0][1];
+        expect(opts.env).toEqual({ TOKEN: 'hunter2', PLAIN: 'literal' });
+      } finally {
+        delete process.env.MY_SECRET;
+      }
+    });
+
+    it('expands unset ${VAR} to empty string', async () => {
+      delete process.env.NONEXISTENT_VAR_XYZ;
+      const configWithEnv: SandboxConfig = {
+        ...testConfig,
+        env: { VAL: '${NONEXISTENT_VAR_XYZ}' },
+      };
+      await ensureContainer('env-test2', configWithEnv, ['/p']);
+      const opts = mockCreateContainer.mock.calls[0][1];
+      expect(opts.env).toEqual({ VAL: '' });
+    });
   });
 
   describe('releaseContainer', () => {

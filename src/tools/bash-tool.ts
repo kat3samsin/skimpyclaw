@@ -20,6 +20,9 @@ const SENSITIVE_ENV_PATTERNS = [
   /^KIMI_/i, /^TOGETHER_/i, /^GROQ_/i, /^OPENROUTER_/i,
 ];
 
+/** Env vars that match SENSITIVE_ENV_PATTERNS but should be kept (e.g. tool auth). */
+const SENSITIVE_ENV_ALLOWLIST = new Set(['GH_TOKEN']);
+
 /** Common tool paths that may be missing when launched as a service/daemon. */
 const EXTRA_PATH_DIRS = ['/opt/homebrew/bin', '/opt/homebrew/sbin', '/usr/local/bin'];
 
@@ -27,7 +30,7 @@ const EXTRA_PATH_DIRS = ['/opt/homebrew/bin', '/opt/homebrew/sbin', '/usr/local/
 function sanitizeEnv(): Record<string, string | undefined> {
   const env = { ...process.env };
   for (const key of Object.keys(env)) {
-    if (SENSITIVE_ENV_PATTERNS.some(p => p.test(key))) {
+    if (!SENSITIVE_ENV_ALLOWLIST.has(key) && SENSITIVE_ENV_PATTERNS.some(p => p.test(key))) {
       delete env[key];
     }
   }
