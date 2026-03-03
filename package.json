@@ -1,6 +1,6 @@
 {
   "name": "skimpyclaw",
-  "version": "0.3.14",
+  "version": "0.3.15",
   "description": "A lobster in a bikini",
   "type": "module",
   "main": "dist/index.js",
