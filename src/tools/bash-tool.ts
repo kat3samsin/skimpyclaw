@@ -34,6 +34,7 @@ function sanitizeEnv(): Record<string, string | undefined> {
       delete env[key];
     }
   }
+
   // Ensure common tool directories are in PATH (daemon/service launches often have a minimal PATH)
   const currentPath = env.PATH || '';
   const missing = EXTRA_PATH_DIRS.filter(d => !currentPath.includes(d));

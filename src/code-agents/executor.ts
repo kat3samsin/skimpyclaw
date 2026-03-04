@@ -350,9 +350,11 @@ export async function runCodeAgentBackground(
   const logPath = join(getCodeAgentsDir(), `${id}.log`);
   ensureCodeAgentsDir();
   const logStream = createWriteStream(logPath, { flags: 'w' });
-  logStream.write(`=== ${id} | ${agent} | ${new Date().toISOString()} ===\n`);
-  logStream.write(`Task: ${task.slice(0, 500)}\n`);
-  logStream.write(`Workdir: ${workdir}\n\n`);
+  let logStreamEnded = false;
+  const logWrite = (data: string | Buffer) => { if (!logStreamEnded) logStream.write(data); };
+  logWrite(`=== ${id} | ${agent} | ${new Date().toISOString()} ===\n`);
+  logWrite(`Task: ${task.slice(0, 500)}\n`);
+  logWrite(`Workdir: ${workdir}\n\n`);
 
   try {
     // Resolve sandbox container name if enabled (used for spawn wrapping)
@@ -386,7 +388,7 @@ export async function runCodeAgentBackground(
 
       proc.stdout.on('data', (chunk: Buffer) => {
         stdout += chunk.toString();
-        logStream.write(chunk);
+        logWrite(chunk);
         const now = Date.now();
         if (now - lastStatusWrite > STATUS_WRITE_INTERVAL) {
           lastStatusWrite = now;
@@ -399,7 +401,7 @@ export async function runCodeAgentBackground(
       });
       proc.stderr.on('data', (chunk: Buffer) => {
         stderr += chunk.toString();
-        logStream.write(chunk);
+        logWrite(chunk);
         const now = Date.now();
         if (now - lastStatusWrite > STATUS_WRITE_INTERVAL) {
           lastStatusWrite = now;
@@ -430,8 +432,11 @@ export async function runCodeAgentBackground(
         if (activeTimer) clearTimeout(activeTimer);
         activeTimer = null;
         activeProc = null;
-        logStream.write(`\n=== EXIT ${code} | ${new Date().toISOString()} ===\n`);
-        logStream.end();
+        if (!logStreamEnded) {
+          logStreamEnded = true;
+          logStream.write(`\n=== EXIT ${code} | ${new Date().toISOString()} ===\n`);
+          logStream.end();
+        }
         if (cancelled || caTask.status === 'cancelled') {
           reject(new Error(CANCELLED_MESSAGE));
           return;
@@ -447,8 +452,11 @@ export async function runCodeAgentBackground(
         if (activeTimer) clearTimeout(activeTimer);
         activeTimer = null;
         activeProc = null;
-        logStream.write(`\n=== ERROR: ${err.message} ===\n`);
-        logStream.end();
+        if (!logStreamEnded) {
+          logStreamEnded = true;
+          logStream.write(`\n=== ERROR: ${err.message} ===\n`);
+          logStream.end();
+        }
         reject(err);
       });
     });
