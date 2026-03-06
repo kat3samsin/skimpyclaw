@@ -322,7 +322,7 @@ async function executeMcpToolGeneric(fullName: string, args: Record<string, any>
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     // Retry once on connection/session errors
-    if (msg.includes('session') || msg.includes('Session') || msg.includes('ECONNR') || msg.includes('EPIPE') || msg.includes('closed') || msg.includes('disconnected')) {
+    if (msg.includes('session') || msg.includes('Session') || msg.includes('ECONNR') || msg.includes('EPIPE') || msg.includes('closed') || msg.includes('close') || msg.includes('disconnected') || msg.includes('fetch failed') || msg.includes('timed out') || msg.includes('-32603') || msg.includes('-32001')) {
       console.warn(`[mcp] Tool call failed (${msg}), reconnecting and retrying...`);
       await reconnectMcp();
       return await callMcpTool(server, toolName, args);
