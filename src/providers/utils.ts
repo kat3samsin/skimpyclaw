@@ -246,6 +246,113 @@ export function truncateToolResult(result: string, _maxBytes: number = 10_240): 
 }
 
 /**
+ * Write full output to a scratch file. Returns the file path, or null on failure.
+ */
+function writeScratchFile(result: string): string | null {
+  try {
+    const scratchDir = join(homedir(), '.skimpyclaw', 'scratch');
+    if (!existsSync(scratchDir)) mkdirSync(scratchDir, { recursive: true });
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const filePath = join(scratchDir, `${id}.txt`);
+    writeFileSync(filePath, result);
+    return filePath;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Structured split tool results: generates a semantic summary based on tool type.
+ * For small results (<= MASK_THRESHOLD), returns unchanged.
+ * For large results, writes full output to scratch file and returns a compact,
+ * tool-aware summary with the scratch file path.
+ */
+export function splitToolResult(
+  toolName: string,
+  toolInput: Record<string, any>,
+  result: string
+): string {
+  // Never split scratch file reads — these are already split results being retrieved
+  const nameLower0 = toolName.toLowerCase();
+  if (nameLower0 === 'read' || nameLower0 === 'read_file') {
+    const filePath = toolInput.file_path || toolInput.path || '';
+    const scratchPrefix = join(homedir(), '.skimpyclaw', 'scratch');
+    if (typeof filePath === 'string' && (filePath.startsWith(scratchPrefix) || filePath.startsWith('~/.skimpyclaw/scratch/'))) {
+      return result;
+    }
+  }
+
+  if (result.length <= MASK_THRESHOLD) return result;
+
+  const scratchPath = writeScratchFile(result);
+  if (!scratchPath) {
+    // Fallback to legacy truncation
+    return truncateToolResult(result);
+  }
+
+  console.log(`[context-manager] Split ${result.length} chars (${toolName}) → ${scratchPath}`);
+
+  const lines = result.split('\n');
+  const lineCount = lines.length;
+  const nameLower = toolName.toLowerCase();
+
+  // Read / read_file
+  if (nameLower === 'read' || nameLower === 'read_file') {
+    const filePath = toolInput.file_path || toolInput.path || 'unknown';
+    const first3 = lines.slice(0, 3).join('\n');
+    const last3 = lines.slice(-3).join('\n');
+    return `File: ${filePath} (${lineCount} lines, ${result.length} bytes). Preview:\n${first3}\n...\n${last3}\nFull content saved to ${scratchPath} — use Read tool to access.`;
+  }
+
+  // Bash / bash
+  if (nameLower === 'bash') {
+    const cmd = toolInput.command || 'unknown';
+    // Try to extract exit code from the output (common pattern: "exit code: N" or trailing line)
+    const exitMatch = result.match(/exit code[:\s]+(\d+)/i);
+    const exitCode = exitMatch ? exitMatch[1] : '0';
+    // Extract stderr lines if present (heuristic: lines starting with common error prefixes)
+    const stderrLines = lines.filter(l =>
+      /^(error|warning|fatal|stderr|ERR!|npm ERR)/i.test(l.trim())
+    );
+    const stderrNote = stderrLines.length > 0
+      ? ` Stderr (${stderrLines.length} lines):\n${stderrLines.slice(0, 5).join('\n')}`
+      : '';
+    return `Command: ${cmd} | Exit: ${exitCode} | ${lineCount} lines output.${stderrNote}\nFull output saved to ${scratchPath} — use Read tool to access.`;
+  }
+
+  // Glob / list_directory
+  if (nameLower === 'glob' || nameLower === 'list_directory' || nameLower === 'ls') {
+    const dirPath = toolInput.path || toolInput.pattern || 'unknown';
+    const entries = lines.filter(l => l.trim().length > 0);
+    const dirCount = entries.filter(l => l.endsWith('/') || l.includes('/')).length;
+    const fileCount = entries.length - dirCount;
+    return `Directory: ${dirPath} | ${entries.length} entries (${dirCount} dirs, ${fileCount} files). Full listing saved to ${scratchPath} — use Read tool to access.`;
+  }
+
+  // Fetch / fetch
+  if (nameLower === 'fetch' || nameLower === 'web_fetch') {
+    const url = toolInput.url || 'unknown';
+    const statusMatch = result.match(/^HTTP[\/\d.\s]+(\d{3})/m) || result.match(/status[:\s]+(\d{3})/i);
+    const status = statusMatch ? statusMatch[1] : 'unknown';
+    return `Fetched: ${url} | ${status} | ${result.length} chars. Content saved to ${scratchPath} — use Read tool to access.`;
+  }
+
+  // Browser tools
+  if (nameLower.startsWith('browser') || nameLower.includes('browser')) {
+    const action = toolInput.action || toolName;
+    return `Browser action: ${action}. ${lineCount} lines output. Full output saved to ${scratchPath} — use Read tool to access.`;
+  }
+
+  // MCP tools (context-a8c, etc.)
+  if (nameLower.startsWith('mcp') || nameLower.startsWith('mcp__')) {
+    return `MCP ${toolName}: ${lineCount} lines output. Full output saved to ${scratchPath} — use Read tool to access.`;
+  }
+
+  // Default
+  return `${toolName}: ${result.length} chars output. Full output saved to ${scratchPath} — use Read tool to access.`;
+}
+
+/**
  * Build thinking config based on thinking level.
  */
 export function buildThinkingConfig(thinking?: 'none' | 'low' | 'medium' | 'high'): { budget: number; maxTokens: number } | undefined {

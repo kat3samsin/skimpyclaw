@@ -4,7 +4,7 @@ import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import type { ProviderChatParams, ProviderToolChatParams, ToolChatResult } from './types.js';
-import { stripProvider, truncateToolResult } from './utils.js';
+import { stripProvider, splitToolResult } from './utils.js';
 import { toErrorMessage } from '../utils.js';
 import { compactCodexMessages } from './context-manager.js';
 import { toCodexContent, toCodexToolDefinitions } from './content.js';
@@ -508,7 +508,7 @@ export async function chatWithToolsCodex(params: ProviderToolChatParams): Promis
       const toolStart = Date.now();
       try {
         const result = await executeTool(fc.name, args, toolConfig, toolContext) || '';
-        const truncatedResult = truncateToolResult(result);
+        const truncatedResult = splitToolResult(fc.name, args, result);
         const resultPreview = result.slice(0, 200) + (result.length > 200 ? '...' : '');
         console.log(`[codex:tools] <- ${resultPreview}`);
         toolLog.push(`${fc.name}(${inputStr}) → ${resultPreview}`);

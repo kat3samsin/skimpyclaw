@@ -3,7 +3,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { startObservation } from '@langfuse/tracing';
 import type { ProviderChatParams, ProviderToolChatParams, ToolChatResult } from './types.js';
-import { buildSystemParam, addToolCacheBreakpoint, contentToText, stripProvider, buildThinkingConfig, truncateToolResult } from './utils.js';
+import { buildSystemParam, addToolCacheBreakpoint, contentToText, stripProvider, buildThinkingConfig, splitToolResult } from './utils.js';
 import { compactAnthropicMessages } from './context-manager.js';
 import { toAnthropicUsageDetails, toCostDetails } from './observability.js';
 import { getToolDefinitions, executeTool, type ExecuteToolContext } from '../tools.js';
@@ -313,7 +313,7 @@ export async function chatWithToolsAnthropic(params: ProviderToolChatParams): Pr
       const toolStart = Date.now();
       try {
         const result = await executeTool(block.name, block.input as Record<string, any>, toolConfig, toolContext);
-        const truncatedResult = truncateToolResult(result);
+        const truncatedResult = splitToolResult(block.name, block.input as Record<string, any>, result);
         const resultPreview = result.slice(0, 200) + (result.length > 200 ? '...' : '');
         console.log(`[agent:tools] <- ${resultPreview}`);
         toolLog.push(`${block.name}(${inputStr}) → ${resultPreview}`);

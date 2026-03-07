@@ -3,7 +3,7 @@
 import OpenAI from 'openai';
 import { startObservation } from '@langfuse/tracing';
 import type { ProviderChatParams, ProviderToolChatParams, ToolChatResult } from './types.js';
-import { stripProvider, toOpenAITools, truncateToolResult } from './utils.js';
+import { stripProvider, toOpenAITools, splitToolResult } from './utils.js';
 import { compactOpenAIMessages } from './context-manager.js';
 import { toOpenAIContent } from './content.js';
 import { toUsageDetails, toCostDetails } from './observability.js';
@@ -346,7 +346,7 @@ export async function chatWithToolsOpenAI(params: ProviderToolChatParams, provid
       const toolStart = Date.now();
       try {
         const result = await executeTool(fnName, args, toolConfig, toolContext) || '';
-        const truncatedResult = truncateToolResult(result);
+        const truncatedResult = splitToolResult(fnName, args, result);
         const resultPreview = result.slice(0, 200) + (result.length > 200 ? '...' : '');
         console.log(`[agent:openai-tools] <- ${resultPreview}`);
         toolLog.push(`${fnName}(${inputStr}) → ${resultPreview}`);
