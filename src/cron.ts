@@ -141,6 +141,10 @@ export function initCron(config: Config): void {
 }
 
 function scheduleJob(jobDef: CronJob, config: Config): void {
+  if ((jobDef as any).enabled === false) {
+    console.log(`[cron] Skipping disabled job: ${jobDef.id}`);
+    return;
+  }
   if (jobDef.schedule.kind !== 'cron') {
     console.warn(`[cron] Unsupported schedule kind: ${jobDef.schedule.kind}`);
     return;
