@@ -51,7 +51,9 @@ export function resolveModelSelection(input: string, config: Config): ResolvedMo
     return { ok: true, resolved: resolveModel(value, config) };
   }
 
-  if (BARE_MODEL_ID_RE.test(value) && /[-.]/.test(value)) {
+  // Accept bare model IDs only if they contain a version-like pattern (digits after a hyphen/dot)
+  // e.g. "claude-sonnet-4-5", "gpt-5.3-codex" — but NOT "claude-opuis"
+  if (BARE_MODEL_ID_RE.test(value) && /[-.]/.test(value) && /\d/.test(value)) {
     return { ok: true, resolved: resolveModel(value, config) };
   }
 

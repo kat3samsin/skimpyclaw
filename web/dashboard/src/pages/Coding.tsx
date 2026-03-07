@@ -219,7 +219,7 @@ export function Coding() {
                       <span class="coding-pill">TEAM ({children.length})</span>
                       <span class={`coding-pill status ${cls}`}>{task.status}</span>
                     </div>
-                    <div class="coding-task-title">{task.task}</div>
+                    <Markdown content={task.task} className="coding-task-title markdown-content" />
                     <div class="coding-task-submeta">
                       {task.model && <span>{task.model}</span>}
                       <span>•</span>
@@ -288,7 +288,7 @@ export function Coding() {
                               ) : null}
                             </summary>
                             <div class="coding-subagent-body">
-                              <div class="coding-subagent-task">{child.subtask || child.task}</div>
+                              <Markdown content={child.subtask || child.task} className="coding-subagent-task markdown-content" />
                               {childOutput ? (
                                 <Markdown
                                   content={childOutput}

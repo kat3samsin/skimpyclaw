@@ -369,6 +369,9 @@ export async function runCodeAgentBackground(
     const exitCode = await new Promise<number | null>((resolvePromise, reject) => {
       const spawnEnv = { ...process.env };
       delete spawnEnv.CLAUDECODE;
+      // Remove stale GH_TOKEN so gh CLI falls back to keyring auth
+      delete spawnEnv.GH_TOKEN;
+      delete spawnEnv.GITHUB_TOKEN;
       // Apply extra env vars (e.g. team mode feature flag)
       if (options?.env) Object.assign(spawnEnv, options.env);
 
@@ -562,6 +565,8 @@ export async function runCodeAgentBackground(
         const retryExitCode = await new Promise<number | null>((resolveRetry, rejectRetry) => {
           const spawnEnv = { ...process.env };
           delete spawnEnv.CLAUDECODE;
+          delete spawnEnv.GH_TOKEN;
+          delete spawnEnv.GITHUB_TOKEN;
           const retrySpawnCmd = sandboxContainer ? getRuntime() : retryCmd;
           const retrySpawnArgs = sandboxContainer ? ['exec', sandboxContainer, retryCmd, ...retryArgs] : retryArgs;
           const retryProc = spawn(retrySpawnCmd, retrySpawnArgs, {
