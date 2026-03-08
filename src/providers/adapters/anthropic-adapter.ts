@@ -14,7 +14,7 @@ import type {
 import { getAnthropicClient } from '../anthropic.js';
 import { buildSystemParam, addToolCacheBreakpoint, contentToText, stripProvider, buildThinkingConfig } from '../utils.js';
 import { toCostDetails } from '../observability.js';
-import { compactAnthropicMessages } from '../context-manager.js';
+import { compactMessages, anthropicFormatHelper } from '../context-manager.js';
 import { buildUsageRecord, recordUsage } from '../../usage.js';
 
 export class AnthropicAdapter implements ProviderAdapter {
@@ -171,8 +171,9 @@ export class AnthropicAdapter implements ProviderAdapter {
     iteration: number,
     fullConfig?: Config,
   ): Promise<CompactionResult<any>> {
-    const result = await compactAnthropicMessages(
+    const result = await compactMessages(
       providerMessages.messages,
+      anthropicFormatHelper,
       config,
       iteration,
       fullConfig,

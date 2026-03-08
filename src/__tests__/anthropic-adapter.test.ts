@@ -28,10 +28,16 @@ vi.mock('../providers/utils.js', () => ({
 
 // Mock context manager
 vi.mock('../providers/context-manager.js', () => ({
-  compactAnthropicMessages: vi.fn(async (messages: any[]) => ({
+  compactMessages: vi.fn(async (messages: any[]) => ({
     messages,
     compacted: false,
   })),
+  anthropicFormatHelper: {
+    isToolResult: () => false,
+    truncateToolResult: (item: any) => item,
+    serialize: () => '',
+    buildSummaryMessage: (s: string) => ({ role: 'user', content: [{ type: 'text', text: s }] }),
+  },
 }));
 
 // Mock observability
@@ -260,8 +266,8 @@ describe('AnthropicAdapter', () => {
   });
 
   describe('compactMessages', () => {
-    it('should delegate to compactAnthropicMessages', async () => {
-      const { compactAnthropicMessages } = await import('../providers/context-manager.js');
+    it('should delegate to generic compactMessages with anthropicFormatHelper', async () => {
+      const { compactMessages } = await import('../providers/context-manager.js');
 
       const providerMessages = {
         messages: [{ role: 'user', content: 'Hi' }],
@@ -269,7 +275,7 @@ describe('AnthropicAdapter', () => {
 
       const result = await adapter.compactMessages(providerMessages, {}, 1, config);
 
-      expect(compactAnthropicMessages).toHaveBeenCalled();
+      expect(compactMessages).toHaveBeenCalled();
       expect(result.compacted).toBe(false);
     });
   });

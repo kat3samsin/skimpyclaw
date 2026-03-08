@@ -4,11 +4,12 @@
 //
 // Falls back to mechanical truncation if the LLM call fails.
 //
-// Key constraint: tool_use/tool_result pairs (Anthropic) and
-// function_call/function_call_output pairs (Codex) must stay structurally intact.
+// Uses a generic compactMessages() driven by MessageFormatHelper adapters,
+// so the compaction algorithm is written once regardless of provider format.
 
 import type { ContextManagementConfig } from './types.js';
 import type { Config, ChatMessage } from '../types.js';
+import type { MessageFormatHelper } from './adapter.js';
 
 export type { ContextManagementConfig };
 
@@ -56,6 +57,220 @@ Rules:
 - Note any unresolved issues or ongoing tasks
 - Be concise but don't lose critical information that the assistant needs to continue working
 - Output ONLY the summary, no preamble`;
+
+/**
+ * Pick the best available compaction model from candidates.
+ * Checks which providers are initialized and returns the first match.
+ */
+async function pickCompactionModel(config: Config): Promise<string> {
+  const { isAnthropicAvailable } = await import('./anthropic.js');
+  const { isOpenAIAvailable } = await import('./openai.js');
+
+  for (const candidate of COMPACTION_MODEL_CANDIDATES) {
+    const provider = candidate.split('/')[0];
+    if (provider === 'anthropic' && isAnthropicAvailable()) return candidate;
+    if (isOpenAIAvailable(provider)) return candidate;
+  }
+  // Last resort: return the first candidate and let chat() fail → fallback to truncation
+  return COMPACTION_MODEL_CANDIDATES[0];
+}
+
+/**
+ * Call the LLM to summarize a conversation transcript.
+ * Returns the summary text, or null if the call fails.
+ */
+async function llmSummarize(
+  transcript: string,
+  config: Config,
+  compactionModel?: string,
+): Promise<string | null> {
+  try {
+    // Dynamically import to avoid circular dependency
+    const { chat } = await import('./index.js');
+
+    const model = compactionModel || await pickCompactionModel(config);
+    const messages: ChatMessage[] = [
+      { role: 'system', content: COMPACTION_SYSTEM_PROMPT },
+      {
+        role: 'user',
+        content: `Summarize the following conversation between an AI coding assistant and a user. This summary will replace the old messages in the context window so the assistant can continue working.\n\n---\n${transcript}\n---`,
+      },
+    ];
+
+    console.log(`[context-manager] Requesting LLM summary via ${model}`);
+    const summary = await chat(messages, {
+      model,
+      maxTokens: SUMMARY_MAX_TOKENS,
+    }, config);
+
+    if (!summary || summary.trim().length === 0) {
+      console.warn('[context-manager] LLM returned empty summary, falling back to truncation');
+      return null;
+    }
+
+    console.log(`[context-manager] LLM summary: ${summary.length} chars`);
+    return summary.trim();
+  } catch (err) {
+    console.warn(`[context-manager] LLM summarization failed, falling back to truncation: ${err instanceof Error ? err.message : err}`);
+    return null;
+  }
+}
+
+// --- Track whether we already compacted for a given conversation ---
+const compactedMarker = new WeakSet<any[]>();
+
+// =====================================================================
+// Generic compaction — single algorithm, format-agnostic via helper
+// =====================================================================
+
+/**
+ * Generic compaction function for any message format.
+ * Delegates format-specific concerns (truncation, serialization, summary building)
+ * to the provided MessageFormatHelper.
+ *
+ * Does NOT mutate the input array — returns a new array.
+ */
+export async function compactMessages<T>(
+  items: T[],
+  helper: MessageFormatHelper<T>,
+  config?: ContextManagementConfig,
+  iteration: number = 0,
+  fullConfig?: Config,
+): Promise<CompactionResult<T>> {
+  if (config?.enabled === false) return { messages: items, compacted: false };
+  const maxTokens = config?.maxContextTokens ?? DEFAULT_MAX_CONTEXT_TOKENS;
+  const estimated = estimateTokens(items as any[]);
+  if (estimated <= maxTokens) return { messages: items, compacted: false };
+
+  const tail = items.slice(-KEEP_TAIL);
+  const head = items.slice(0, -KEEP_TAIL);
+
+  // If we already compacted this array, use truncation fallback
+  // to progressively shrink rather than re-summarizing repeatedly.
+  if (compactedMarker.has(items as any[])) {
+    console.log(`[context-manager] Already compacted, using truncation fallback (iteration ${iteration})`);
+    const truncatedHead = head.map(item =>
+      helper.isToolResult(item) ? helper.truncateToolResult(item, RESULT_MAX_CHARS) : item,
+    );
+    const result = [...truncatedHead, ...tail];
+    return { messages: result, compacted: true, method: 'truncation', tokensBefore: estimated, tokensAfter: estimateTokens(result as any[]) };
+  }
+
+  console.log(
+    `[context-manager] Compacting at iteration ${iteration} (~${Math.round(estimated / 1000)}k tokens > ${Math.round(maxTokens / 1000)}k threshold)`,
+  );
+
+  // Attempt LLM summarization
+  if (fullConfig) {
+    const transcript = helper.serialize(head);
+    const summary = await llmSummarize(transcript, fullConfig, config?.compactionModel);
+    if (summary) {
+      const summaryItem = helper.buildSummaryMessage(summary);
+      const result = [summaryItem, ...tail];
+      compactedMarker.add(result as any[]);
+      const tokensAfter = estimateTokens(result as any[]);
+      return { messages: result, compacted: true, method: 'llm', summary, tokensBefore: estimated, tokensAfter };
+    }
+  }
+
+  // Fallback: mechanical truncation
+  const truncatedHead = head.map(item =>
+    helper.isToolResult(item) ? helper.truncateToolResult(item, RESULT_MAX_CHARS) : item,
+  );
+  const result = [...truncatedHead, ...tail];
+  return { messages: result, compacted: true, method: 'truncation', tokensBefore: estimated, tokensAfter: estimateTokens(result as any[]) };
+}
+
+// =====================================================================
+// Provider-specific MessageFormatHelper implementations
+// =====================================================================
+
+/** Anthropic message format helper. */
+export const anthropicFormatHelper: MessageFormatHelper<any> = {
+  isToolResult(item: any): boolean {
+    if (!Array.isArray(item.content)) return false;
+    return item.content.some((block: any) => block.type === 'tool_result');
+  },
+
+  truncateToolResult(item: any, maxChars: number): any {
+    if (!Array.isArray(item.content)) return item;
+    let changed = false;
+    const newContent = item.content.map((block: any) => {
+      if (block.type !== 'tool_result') return block;
+      const raw = typeof block.content === 'string'
+        ? block.content
+        : JSON.stringify(block.content);
+      if (raw.length <= maxChars) return block;
+      changed = true;
+      return { ...block, content: raw.slice(0, maxChars) + ' [truncated]' };
+    });
+    return changed ? { ...item, content: newContent } : item;
+  },
+
+  serialize(items: any[]): string {
+    return serializeAnthropicMessages(items);
+  },
+
+  buildSummaryMessage(summary: string): any {
+    return {
+      role: 'user',
+      content: [{ type: 'text', text: `[Conversation Summary]\n${summary}` }],
+    };
+  },
+};
+
+/** OpenAI message format helper. */
+export const openaiFormatHelper: MessageFormatHelper<any> = {
+  isToolResult(item: any): boolean {
+    return item.role === 'tool';
+  },
+
+  truncateToolResult(item: any, maxChars: number): any {
+    if (typeof item.content !== 'string') return item;
+    if (item.content.length <= maxChars) return item;
+    return { ...item, content: item.content.slice(0, maxChars) + ' [truncated]' };
+  },
+
+  serialize(items: any[]): string {
+    return serializeOpenAIMessages(items);
+  },
+
+  buildSummaryMessage(summary: string): any {
+    return {
+      role: 'user' as const,
+      content: `[Conversation Summary]\n${summary}`,
+    };
+  },
+};
+
+/** Codex message format helper. */
+export const codexFormatHelper: MessageFormatHelper<any> = {
+  isToolResult(item: any): boolean {
+    return item.type === 'function_call_output';
+  },
+
+  truncateToolResult(item: any, maxChars: number): any {
+    if (typeof item.output !== 'string') return item;
+    if (item.output.length <= maxChars) return item;
+    return { ...item, output: item.output.slice(0, maxChars) + ' [truncated]' };
+  },
+
+  serialize(items: any[]): string {
+    return serializeCodexMessages(items);
+  },
+
+  buildSummaryMessage(summary: string): any {
+    return {
+      type: 'message',
+      role: 'user',
+      content: `[Conversation Summary]\n${summary}`,
+    };
+  },
+};
+
+// =====================================================================
+// Serialization helpers (used by format helpers and exported for tests)
+// =====================================================================
 
 /**
  * Serialize Anthropic-format messages into a human-readable conversation transcript
@@ -147,110 +362,15 @@ function serializeCodexMessages(items: any[]): string {
   return lines.join('\n');
 }
 
-/**
- * Pick the best available compaction model from candidates.
- * Checks which providers are initialized and returns the first match.
- */
-async function pickCompactionModel(config: Config): Promise<string> {
-  const { isAnthropicAvailable } = await import('./anthropic.js');
-  const { isOpenAIAvailable } = await import('./openai.js');
-
-  for (const candidate of COMPACTION_MODEL_CANDIDATES) {
-    const provider = candidate.split('/')[0];
-    if (provider === 'anthropic' && isAnthropicAvailable()) return candidate;
-    if (isOpenAIAvailable(provider)) return candidate;
-  }
-  // Last resort: return the first candidate and let chat() fail → fallback to truncation
-  return COMPACTION_MODEL_CANDIDATES[0];
-}
-
-/**
- * Call the LLM to summarize a conversation transcript.
- * Returns the summary text, or null if the call fails.
- */
-async function llmSummarize(
-  transcript: string,
-  config: Config,
-  compactionModel?: string,
-): Promise<string | null> {
-  try {
-    // Dynamically import to avoid circular dependency
-    const { chat } = await import('./index.js');
-
-    const model = compactionModel || await pickCompactionModel(config);
-    const messages: ChatMessage[] = [
-      { role: 'system', content: COMPACTION_SYSTEM_PROMPT },
-      {
-        role: 'user',
-        content: `Summarize the following conversation between an AI coding assistant and a user. This summary will replace the old messages in the context window so the assistant can continue working.\n\n---\n${transcript}\n---`,
-      },
-    ];
-
-    console.log(`[context-manager] Requesting LLM summary via ${model}`);
-    const summary = await chat(messages, {
-      model,
-      maxTokens: SUMMARY_MAX_TOKENS,
-    }, config);
-
-    if (!summary || summary.trim().length === 0) {
-      console.warn('[context-manager] LLM returned empty summary, falling back to truncation');
-      return null;
-    }
-
-    console.log(`[context-manager] LLM summary: ${summary.length} chars`);
-    return summary.trim();
-  } catch (err) {
-    console.warn(`[context-manager] LLM summarization failed, falling back to truncation: ${err instanceof Error ? err.message : err}`);
-    return null;
-  }
-}
-
-// --- Fallback truncation (original mechanical approach) ---
-
-function truncateAnthropicHead(head: any[]): any[] {
-  return head.map(msg => {
-    if (!Array.isArray(msg.content)) return msg;
-    let changed = false;
-    const newContent = msg.content.map((block: any) => {
-      if (block.type !== 'tool_result') return block;
-      const raw = typeof block.content === 'string'
-        ? block.content
-        : JSON.stringify(block.content);
-      if (raw.length <= RESULT_MAX_CHARS) return block;
-      changed = true;
-      return { ...block, content: raw.slice(0, RESULT_MAX_CHARS) + ' [truncated]' };
-    });
-    return changed ? { ...msg, content: newContent } : msg;
-  });
-}
-
-function truncateOpenAIHead(head: any[]): any[] {
-  return head.map(msg => {
-    if (msg.role !== 'tool') return msg;
-    if (typeof msg.content !== 'string') return msg;
-    if (msg.content.length <= RESULT_MAX_CHARS) return msg;
-    return { ...msg, content: msg.content.slice(0, RESULT_MAX_CHARS) + ' [truncated]' };
-  });
-}
-
-function truncateCodexHead(head: any[]): any[] {
-  return head.map(item => {
-    if (item.type !== 'function_call_output') return item;
-    if (typeof item.output !== 'string') return item;
-    if (item.output.length <= RESULT_MAX_CHARS) return item;
-    return { ...item, output: item.output.slice(0, RESULT_MAX_CHARS) + ' [truncated]' };
-  });
-}
-
-// --- Track whether we already compacted for a given conversation ---
-// Key: a hash of the tail messages to avoid re-summarizing the same head repeatedly.
-// This is a WeakMap so we don't leak memory across conversations.
-const compactedMarker = new WeakSet<any[]>();
+// =====================================================================
+// Legacy wrapper functions — delegate to generic compactMessages()
+// These preserve backward compatibility for the old provider tool loops
+// (anthropic.ts, codex.ts, openai.ts) until Phase 5 removes them.
+// =====================================================================
 
 /**
  * Compact Anthropic-format apiMessages when over threshold.
- * Uses LLM summarization for old messages; falls back to truncation on failure.
- * Does NOT mutate the input array — returns a new array.
+ * @deprecated Use compactMessages() with anthropicFormatHelper instead.
  */
 export async function compactAnthropicMessages(
   messages: any[],
@@ -258,53 +378,12 @@ export async function compactAnthropicMessages(
   iteration: number = 0,
   fullConfig?: Config,
 ): Promise<CompactionResult<any>> {
-  if (config?.enabled === false) return { messages, compacted: false };
-  const maxTokens = config?.maxContextTokens ?? DEFAULT_MAX_CONTEXT_TOKENS;
-  const estimated = estimateTokens(messages);
-  if (estimated <= maxTokens) return { messages, compacted: false };
-
-  // If we already compacted this array (it has a summary message), use truncation fallback
-  // to progressively shrink rather than re-summarizing repeatedly.
-  if (compactedMarker.has(messages)) {
-    console.log(`[context-manager] Already compacted, using truncation fallback (iteration ${iteration})`);
-    const tail = messages.slice(-KEEP_TAIL);
-    const head = messages.slice(0, -KEEP_TAIL);
-    const result = [...truncateAnthropicHead(head), ...tail];
-    return { messages: result, compacted: true, method: 'truncation', tokensBefore: estimated, tokensAfter: estimateTokens(result) };
-  }
-
-  console.log(
-    `[context-manager] Compacting at iteration ${iteration} (~${Math.round(estimated / 1000)}k tokens > ${Math.round(maxTokens / 1000)}k threshold)`,
-  );
-
-  const tail = messages.slice(-KEEP_TAIL);
-  const head = messages.slice(0, -KEEP_TAIL);
-
-  // Attempt LLM summarization
-  if (fullConfig) {
-    const transcript = serializeAnthropicMessages(head);
-    const summary = await llmSummarize(transcript, fullConfig, config?.compactionModel);
-    if (summary) {
-      const summaryMessage = {
-        role: 'user',
-        content: [{ type: 'text', text: `[Conversation Summary]\n${summary}` }],
-      };
-      const result = [summaryMessage, ...tail];
-      compactedMarker.add(result);
-      const tokensAfter = estimateTokens(result);
-      return { messages: result, compacted: true, method: 'llm', summary, tokensBefore: estimated, tokensAfter };
-    }
-  }
-
-  // Fallback: mechanical truncation
-  const result = [...truncateAnthropicHead(head), ...tail];
-  return { messages: result, compacted: true, method: 'truncation', tokensBefore: estimated, tokensAfter: estimateTokens(result) };
+  return compactMessages(messages, anthropicFormatHelper, config, iteration, fullConfig);
 }
 
 /**
  * Compact OpenAI-format apiMessages when over threshold.
- * Uses LLM summarization for old messages; falls back to truncation on failure.
- * Does NOT mutate the input array — returns a new array.
+ * @deprecated Use compactMessages() with openaiFormatHelper instead.
  */
 export async function compactOpenAIMessages(
   messages: any[],
@@ -312,51 +391,12 @@ export async function compactOpenAIMessages(
   iteration: number = 0,
   fullConfig?: Config,
 ): Promise<CompactionResult<any>> {
-  if (config?.enabled === false) return { messages, compacted: false };
-  const maxTokens = config?.maxContextTokens ?? DEFAULT_MAX_CONTEXT_TOKENS;
-  const estimated = estimateTokens(messages);
-  if (estimated <= maxTokens) return { messages, compacted: false };
-
-  if (compactedMarker.has(messages)) {
-    console.log(`[context-manager] Already compacted, using truncation fallback (iteration ${iteration})`);
-    const tail = messages.slice(-KEEP_TAIL);
-    const head = messages.slice(0, -KEEP_TAIL);
-    const result = [...truncateOpenAIHead(head), ...tail];
-    return { messages: result, compacted: true, method: 'truncation', tokensBefore: estimated, tokensAfter: estimateTokens(result) };
-  }
-
-  console.log(
-    `[context-manager] Compacting OpenAI messages at iteration ${iteration} (~${Math.round(estimated / 1000)}k tokens > ${Math.round(maxTokens / 1000)}k threshold)`,
-  );
-
-  const tail = messages.slice(-KEEP_TAIL);
-  const head = messages.slice(0, -KEEP_TAIL);
-
-  // Attempt LLM summarization
-  if (fullConfig) {
-    const transcript = serializeOpenAIMessages(head);
-    const summary = await llmSummarize(transcript, fullConfig, config?.compactionModel);
-    if (summary) {
-      const summaryMessage = {
-        role: 'user' as const,
-        content: `[Conversation Summary]\n${summary}`,
-      };
-      const result = [summaryMessage, ...tail];
-      compactedMarker.add(result);
-      const tokensAfter = estimateTokens(result);
-      return { messages: result, compacted: true, method: 'llm', summary, tokensBefore: estimated, tokensAfter };
-    }
-  }
-
-  // Fallback: mechanical truncation
-  const result = [...truncateOpenAIHead(head), ...tail];
-  return { messages: result, compacted: true, method: 'truncation', tokensBefore: estimated, tokensAfter: estimateTokens(result) };
+  return compactMessages(messages, openaiFormatHelper, config, iteration, fullConfig);
 }
 
 /**
  * Compact Codex-format input items when over threshold.
- * Uses LLM summarization for old items; falls back to truncation on failure.
- * Does NOT mutate the input array — returns a new array.
+ * @deprecated Use compactMessages() with codexFormatHelper instead.
  */
 export async function compactCodexMessages(
   input: any[],
@@ -364,46 +404,7 @@ export async function compactCodexMessages(
   iteration: number = 0,
   fullConfig?: Config,
 ): Promise<CompactionResult<any>> {
-  if (config?.enabled === false) return { messages: input, compacted: false };
-  const maxTokens = config?.maxContextTokens ?? DEFAULT_MAX_CONTEXT_TOKENS;
-  const estimated = estimateTokens(input);
-  if (estimated <= maxTokens) return { messages: input, compacted: false };
-
-  if (compactedMarker.has(input)) {
-    console.log(`[context-manager] Already compacted, using truncation fallback (iteration ${iteration})`);
-    const tail = input.slice(-KEEP_TAIL);
-    const head = input.slice(0, -KEEP_TAIL);
-    const result = [...truncateCodexHead(head), ...tail];
-    return { messages: result, compacted: true, method: 'truncation', tokensBefore: estimated, tokensAfter: estimateTokens(result) };
-  }
-
-  console.log(
-    `[context-manager] Compacting Codex input at iteration ${iteration} (~${Math.round(estimated / 1000)}k tokens > ${Math.round(maxTokens / 1000)}k threshold)`,
-  );
-
-  const tail = input.slice(-KEEP_TAIL);
-  const head = input.slice(0, -KEEP_TAIL);
-
-  // Attempt LLM summarization
-  if (fullConfig) {
-    const transcript = serializeCodexMessages(head);
-    const summary = await llmSummarize(transcript, fullConfig, config?.compactionModel);
-    if (summary) {
-      const summaryItem = {
-        type: 'message',
-        role: 'user',
-        content: `[Conversation Summary]\n${summary}`,
-      };
-      const result = [summaryItem, ...tail];
-      compactedMarker.add(result);
-      const tokensAfter = estimateTokens(result);
-      return { messages: result, compacted: true, method: 'llm', summary, tokensBefore: estimated, tokensAfter };
-    }
-  }
-
-  // Fallback: mechanical truncation
-  const result = [...truncateCodexHead(head), ...tail];
-  return { messages: result, compacted: true, method: 'truncation', tokensBefore: estimated, tokensAfter: estimateTokens(result) };
+  return compactMessages(input, codexFormatHelper, config, iteration, fullConfig);
 }
 
 // --- Exported helpers for testing ---
