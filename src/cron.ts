@@ -3,7 +3,7 @@
 import { Cron } from 'croner';
 import { exec } from 'child_process';
 import { existsSync, mkdirSync, appendFileSync, readFileSync, watch, type FSWatcher } from 'fs';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { getLogsDir, getConfigPath, loadConfig, resolveAllowedPaths } from './config.js';
 import type { Config, CronJob, SandboxConfig, ToolConfig } from './types.js';
 import { homedir } from 'node:os';
@@ -13,6 +13,7 @@ import { sendActiveChannelProactiveMessage, sendActiveChannelProactiveVoice, get
 import { parseAndSaveDigest } from './digests.js';
 import { synthesizeSpeech } from './voice.js';
 import { toErrorMessage } from './utils.js';
+import { sanitizeExecEnv } from './env-sanitizer.js';
 
 function safeTimezone(tz: string | undefined): string {
   const fallback = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
@@ -382,7 +383,7 @@ async function executeScript(jobDef: CronJob, config: Config): Promise<string> {
     const child = exec(script, {
       cwd: cwd || undefined,
       timeout: timeoutMs,
-      env: { ...process.env },
+      env: sanitizeExecEnv(),
       maxBuffer: 10 * 1024 * 1024, // 10MB output buffer
     }, (error, stdout, stderr) => {
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
@@ -421,21 +422,21 @@ function resolveMessageSource(message: string): string {
   const trimmed = message.trim();
   if (!trimmed.endsWith('.md')) return message;
 
-  // Expand ~ to home directory
+  const promptsRoot = resolve(homedir(), '.skimpyclaw', 'prompts');
   const resolved = trimmed.startsWith('~/')
-    ? join(homedir(), trimmed.slice(2))
-    : trimmed;
+    ? resolve(homedir(), trimmed.slice(2))
+    : trimmed.startsWith('/')
+      ? resolve(trimmed)
+      : resolve(promptsRoot, trimmed);
+  const insidePromptsRoot = resolved === promptsRoot || resolved.startsWith(`${promptsRoot}/`);
+  if (!insidePromptsRoot) {
+    console.warn(`[cron] Rejected prompt path outside ~/.skimpyclaw/prompts: ${trimmed}`);
+    return message;
+  }
 
   if (existsSync(resolved)) {
     console.log(`[cron] Loading prompt from file: ${resolved}`);
     return readFileSync(resolved, 'utf-8');
-  }
-
-  // Fallback: check ~/.skimpyclaw/prompts/ directory
-  const promptsDir = join(homedir(), '.skimpyclaw', 'prompts', trimmed);
-  if (existsSync(promptsDir)) {
-    console.log(`[cron] Loading prompt from prompts dir: ${promptsDir}`);
-    return readFileSync(promptsDir, 'utf-8');
   }
 
   console.warn(`[cron] Could not resolve prompt file: ${trimmed}`);

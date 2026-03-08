@@ -31,6 +31,14 @@ JSON values support env var substitution:
 "${CLAUDE_CODE_OAUTH_TOKEN}"
 ```
 
+macOS Keychain references are also supported in string values:
+
+```json
+"${KEYCHAIN:service/account}"
+```
+
+When the app writes `~/.skimpyclaw/config.json`, it enforces restrictive `0600` file permissions.
+
 ## Gateway
 
 ```json

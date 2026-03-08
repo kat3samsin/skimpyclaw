@@ -141,13 +141,15 @@ export async function createGateway(cfg: Config): Promise<FastifyInstance> {
   const dashboardToken = ensureDashboardToken(config);
   console.log(`[dashboard] URL: http://localhost:${config.gateway.port}/dashboard`);
 
-  // Auth guard for gateway write endpoints (same token as dashboard)
+  // Auth guard for sensitive gateway endpoints (same token as dashboard)
   const PROTECTED_ROUTES = new Set(['/message', '/model', '/reload']);
   fastify.addHook('onRequest', async (request, reply) => {
     const url = request.url;
-    // Protect write endpoints + cron trigger
-    if (!PROTECTED_ROUTES.has(url) && !url.startsWith('/cron/')) return;
-    if (request.method === 'GET') return; // GET /health, GET /status are fine
+    const isProtected =
+      PROTECTED_ROUTES.has(url) ||
+      url.startsWith('/cron/') ||
+      url === '/status';
+    if (!isProtected) return;
 
     if (!dashboardToken) return; // No token configured, allow access
 

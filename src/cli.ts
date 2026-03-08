@@ -281,11 +281,18 @@ function daemonStatus(): string {
 async function requestGateway(path: string, init?: RequestInit, port?: number): Promise<any> {
   const cfgPort = port ?? loadConfig().gateway.port;
   const url = `http://127.0.0.1:${cfgPort}${path}`;
+  let dashboardToken = '';
+  try {
+    dashboardToken = String((loadRawConfig() as any)?.dashboard?.token || '');
+  } catch {
+    // best effort
+  }
 
   const res = await fetch(url, {
     ...init,
     headers: {
       'content-type': 'application/json',
+      ...(dashboardToken ? { authorization: `Bearer ${dashboardToken}` } : {}),
       ...(init?.headers || {}),
     },
     signal: AbortSignal.timeout(5000),

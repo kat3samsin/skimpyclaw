@@ -56,6 +56,11 @@
     "playwright": "^1.49.0"
   },
   "pnpm": {
+    "overrides": {
+      "@eslint/config-array>minimatch": "3.1.2",
+      "@eslint/eslintrc>minimatch": "3.1.2",
+      "vite>rollup": "4.57.1"
+    },
     "onlyBuiltDependencies": [
       "esbuild"
     ]

@@ -12,37 +12,7 @@ import type { ToolConfig } from '../types.js';
 import type { ExecuteToolContext } from './execute-context.js';
 import { isPathAllowed } from './path-utils.js';
 import { validateBashPaths } from './bash-path-validation.js';
-
-/** Env var name patterns that should never be exposed to model-executed commands. */
-const SENSITIVE_ENV_PATTERNS = [
-  /api.?key/i, /token/i, /secret/i, /password/i, /credential/i,
-  /^ANTHROPIC_/i, /^OPENAI_/i, /^CLAUDE/i, /^CODEX_/i, /^MINIMAX_/i,
-  /^KIMI_/i, /^TOGETHER_/i, /^GROQ_/i, /^OPENROUTER_/i,
-];
-
-/** Env vars that match SENSITIVE_ENV_PATTERNS but should be kept (e.g. tool auth). */
-const SENSITIVE_ENV_ALLOWLIST = new Set(['GH_TOKEN']);
-
-/** Common tool paths that may be missing when launched as a service/daemon. */
-const EXTRA_PATH_DIRS = ['/opt/homebrew/bin', '/opt/homebrew/sbin', '/usr/local/bin'];
-
-/** Create a sanitized copy of process.env with secrets stripped. */
-function sanitizeEnv(): Record<string, string | undefined> {
-  const env = { ...process.env };
-  for (const key of Object.keys(env)) {
-    if (!SENSITIVE_ENV_ALLOWLIST.has(key) && SENSITIVE_ENV_PATTERNS.some(p => p.test(key))) {
-      delete env[key];
-    }
-  }
-
-  // Ensure common tool directories are in PATH (daemon/service launches often have a minimal PATH)
-  const currentPath = env.PATH || '';
-  const missing = EXTRA_PATH_DIRS.filter(d => !currentPath.includes(d));
-  if (missing.length > 0) {
-    env.PATH = `${currentPath}:${missing.join(':')}`;
-  }
-  return env;
-}
+import { sanitizeExecEnv } from '../env-sanitizer.js';
 
 export async function executeBash(command: string, cwd: string | undefined, config: ToolConfig, context?: ExecuteToolContext): Promise<string> {
   // Hard block: existing safety filter (always enforced)
@@ -108,7 +78,7 @@ export async function executeBash(command: string, cwd: string | undefined, conf
     exec(command, {
       cwd: cwd || undefined,
       timeout,
-      env: sanitizeEnv(),
+      env: sanitizeExecEnv(),
       maxBuffer: 5 * 1024 * 1024,
     }, (error, stdout, stderr) => {
       if (error) {

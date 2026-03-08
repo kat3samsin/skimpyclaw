@@ -1,15 +1,18 @@
 // Config loader with environment variable expansion
 
-import { readFileSync, writeFileSync, existsSync, readdirSync, statSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, readdirSync, statSync, chmodSync, mkdirSync } from 'fs';
 import { randomUUID } from 'crypto';
 import { homedir } from 'os';
 import { join, basename } from 'path';
+import { spawnSync } from 'child_process';
 import dotenv from 'dotenv';
 import type { Config } from './types.js';
 
 const CONFIG_PATH = join(homedir(), '.skimpyclaw', 'config.json');
+const CONFIG_DIR = join(homedir(), '.skimpyclaw');
 const ENV_PATH = join(homedir(), '.skimpyclaw', '.env');
 let envLoaded = false;
+const keychainCache = new Map<string, string>();
 
 function ensureEnvLoaded(): void {
   if (envLoaded) return;
@@ -17,14 +20,55 @@ function ensureEnvLoaded(): void {
   envLoaded = true;
 }
 
+function resolveKeychainReference(raw: string): string {
+  const [service, account] = raw.split('/');
+  if (!service || !account) {
+    console.warn(`[config] invalid keychain reference: ${raw} (expected service/account)`);
+    return '';
+  }
+
+  if (process.platform !== 'darwin') {
+    console.warn(`[config] keychain reference is only supported on macOS: ${raw}`);
+    return '';
+  }
+
+  const cacheKey = `${service}/${account}`;
+  const cached = keychainCache.get(cacheKey);
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  const result = spawnSync(
+    'security',
+    ['find-generic-password', '-s', service, '-a', account, '-w'],
+    { encoding: 'utf-8', timeout: 5000, stdio: ['ignore', 'pipe', 'pipe'] },
+  );
+  if (result.status !== 0) {
+    const detail = (result.stderr || result.stdout || '').trim();
+    console.warn(`[config] failed to resolve keychain secret ${cacheKey}: ${detail || 'not found'}`);
+    return '';
+  }
+
+  const value = (result.stdout || '').trim();
+  keychainCache.set(cacheKey, value);
+  return value;
+}
+
+function expandStringReferences(value: string): string {
+  return value.replace(/\$\{([^}]+)\}/g, (_, token: string) => {
+    if (token.startsWith('KEYCHAIN:')) {
+      return resolveKeychainReference(token.slice('KEYCHAIN:'.length));
+    }
+    if (process.env[token] === undefined) {
+      console.warn(`[config] env var \${${token}} is not set`);
+    }
+    return process.env[token] || '';
+  });
+}
+
 function expandEnvVars(obj: any): any {
   if (typeof obj === 'string') {
-    return obj.replace(/\$\{(\w+)\}/g, (_, key) => {
-      if (process.env[key] === undefined) {
-        console.warn(`[config] env var \${${key}} is not set`);
-      }
-      return process.env[key] || '';
-    });
+    return expandStringReferences(obj);
   }
   if (Array.isArray(obj)) {
     return obj.map(expandEnvVars);
@@ -84,7 +128,9 @@ export function getSessionsDir(): string {
 }
 
 export function saveConfig(config: Config): void {
-  writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), 'utf-8');
+  mkdirSync(CONFIG_DIR, { recursive: true });
+  writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), { encoding: 'utf-8', mode: 0o600 });
+  chmodSync(CONFIG_PATH, 0o600);
 }
 
 /**
@@ -102,7 +148,9 @@ export function ensureDashboardToken(config: Config): string {
   const raw = loadRawConfig();
   raw.dashboard = raw.dashboard || {};
   raw.dashboard.token = token;
-  writeFileSync(CONFIG_PATH, JSON.stringify(raw, null, 2), 'utf-8');
+  mkdirSync(CONFIG_DIR, { recursive: true });
+  writeFileSync(CONFIG_PATH, JSON.stringify(raw, null, 2), { encoding: 'utf-8', mode: 0o600 });
+  chmodSync(CONFIG_PATH, 0o600);
 
   // Update the in-memory config too
   if (!config.dashboard) {

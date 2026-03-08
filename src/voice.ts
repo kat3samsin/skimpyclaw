@@ -1,6 +1,6 @@
 // Voice transcription — local Whisper CLI (free) with API fallback
 import { existsSync, readFileSync, writeFileSync, unlinkSync, readdirSync } from 'fs';
-import { execSync } from 'child_process';
+import { execSync, spawnSync } from 'child_process';
 import { basename, dirname, join } from 'path';
 import { tmpdir } from 'os';
 import type { VoiceConfig, VoiceProviderConfig } from './types.js';
@@ -410,9 +410,24 @@ function synthesizeWithMacOS(text: string, voice: string = 'Zoe'): SpeechResult 
   const aiffPath = join(tmpdir(), `skimpyclaw-tts-${id}.aiff`);
   const oggPath = join(tmpdir(), `skimpyclaw-tts-${id}.ogg`);
   try {
-    const safeText = text.replace(/'/g, "'\\''");
-    execSync(`say -v '${voice}' -o '${aiffPath}' '${safeText}'`, { stdio: ['ignore', 'pipe', 'pipe'] });
-    execSync(`ffmpeg -i '${aiffPath}' -c:a libopus '${oggPath}' -y`, { stdio: ['ignore', 'pipe', 'pipe'] });
+    const sayResult = spawnSync('say', ['-v', voice, '-o', aiffPath, text], {
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    if (sayResult.status !== 0) {
+      const msg = (sayResult.stderr || sayResult.stdout || '').trim() || 'unknown error';
+      throw new Error(`macOS say failed: ${msg}`);
+    }
+
+    const ffmpegResult = spawnSync('ffmpeg', ['-i', aiffPath, '-c:a', 'libopus', oggPath, '-y'], {
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    if (ffmpegResult.status !== 0) {
+      const msg = (ffmpegResult.stderr || ffmpegResult.stdout || '').trim() || 'unknown error';
+      throw new Error(`ffmpeg conversion failed: ${msg}`);
+    }
+
     const buffer = readFileSync(oggPath);
     return { buffer, format: 'ogg', provider: `macos (${voice})` };
   } finally {

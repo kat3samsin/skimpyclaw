@@ -5,6 +5,9 @@ import type { VoiceConfig } from '../types.js';
 const { mockAudioSpeechCreate } = vi.hoisted(() => ({
   mockAudioSpeechCreate: vi.fn(),
 }));
+const { mockSpawnSync } = vi.hoisted(() => ({
+  mockSpawnSync: vi.fn(() => ({ status: 0, stdout: '', stderr: '' })),
+}));
 
 // Mock openai — use a class so `new OpenAI()` works correctly in ESM mocking context
 vi.mock('openai', () => ({
@@ -21,6 +24,7 @@ vi.mock('openai', () => ({
 // Mock child_process — execSync used by macOS say provider
 vi.mock('child_process', () => ({
   execSync: vi.fn(() => Buffer.from('')),
+  spawnSync: (...args: any[]) => (mockSpawnSync as any)(...args),
 }));
 
 // Mock fs to avoid actual disk I/O
@@ -219,6 +223,33 @@ describe('synthesizeSpeech', () => {
       };
       await expect(synthesizeSpeech('test', config)).rejects.toThrow(
         'macOS say provider is only available on macOS'
+      );
+    } finally {
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
+    }
+  });
+
+  it('uses non-shell args for macOS say + ffmpeg', async () => {
+    const originalPlatform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true });
+    try {
+      const config: VoiceConfig = {
+        ...baseVoiceConfig,
+        providers: { macos: { tts: { voice: "Bad'Voice; rm -rf /" } } },
+      };
+      const result = await synthesizeSpeech("hello'; say hacked", config);
+      expect(result.format).toBe('ogg');
+      expect(mockSpawnSync).toHaveBeenNthCalledWith(
+        1,
+        'say',
+        ['-v', "Bad'Voice; rm -rf /", '-o', expect.stringContaining('.aiff'), "hello'; say hacked"],
+        expect.any(Object),
+      );
+      expect(mockSpawnSync).toHaveBeenNthCalledWith(
+        2,
+        'ffmpeg',
+        ['-i', expect.stringContaining('.aiff'), '-c:a', 'libopus', expect.stringContaining('.ogg'), '-y'],
+        expect.any(Object),
       );
     } finally {
       Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });

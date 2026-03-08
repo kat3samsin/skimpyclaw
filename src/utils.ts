@@ -2,7 +2,7 @@
 
 import { readFileSync, readdirSync, existsSync } from 'fs';
 import { join } from 'path';
-import { timingSafeEqual } from 'crypto';
+import { createHash, timingSafeEqual } from 'crypto';
 
 /**
  * Format a Date as YYYY-MM-DD string.
@@ -73,8 +73,7 @@ export function readJsonlDir<T>(
 export function validateBearerToken(expected: string, authHeader: string | undefined): boolean {
   if (!authHeader || !authHeader.startsWith('Bearer ')) return false;
   const provided = authHeader.slice(7);
-  const expectedBuf = Buffer.from(expected, 'utf8');
-  const providedBuf = Buffer.from(provided, 'utf8');
-  if (expectedBuf.length !== providedBuf.length) return false;
-  return timingSafeEqual(expectedBuf, providedBuf);
+  const expectedDigest = createHash('sha256').update(expected, 'utf8').digest();
+  const providedDigest = createHash('sha256').update(provided, 'utf8').digest();
+  return timingSafeEqual(expectedDigest, providedDigest);
 }

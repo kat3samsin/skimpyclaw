@@ -3,6 +3,8 @@
 Configuration lives at `~/.skimpyclaw/config.json`. All fields are optional unless noted.
 
 Environment variable interpolation is supported via `${ENV_VAR}` syntax in string values (e.g. `"${HOME}/.skimpyclaw"`).
+On macOS, generic-password keychain references are also supported via `${KEYCHAIN:service/account}`.
+`~/.skimpyclaw/config.json` is written with `0600` permissions.
 
 ---
 
