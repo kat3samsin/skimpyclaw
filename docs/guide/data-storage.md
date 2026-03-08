@@ -86,9 +86,17 @@ Digests are stored in `logs/digests/<job-id>/YYYY-MM-DD-<digest-id>.json`:
 
 ## Security notes
 
+- `config.json` is written with `0600` permissions (owner-only read/write)
+- Secrets use `${ENV_VAR}` or `${KEYCHAIN:service/account}` references — never stored as plaintext in config
+- Child processes (bash tool, cron scripts) receive a sanitized env via `sanitizeExecEnv()` — API keys, tokens, passwords, and provider-specific vars are stripped. `GH_TOKEN` is allowlisted
+- The fetch tool validates all URLs against a private/reserved IP blocklist and blocked hostnames (localhost, cloud metadata endpoints). Redirect targets are re-validated on each hop
 - Channel access is allowlist-based (`allowFrom` IDs/usernames)
 - Basic per-user message rate limiting is enabled
 - User input is sanitized for common prompt-injection markers
 - Dashboard config responses redact key/token-like fields
+- All gateway endpoints that expose state or accept writes (`/message`, `/model`, `/reload`, `/cron/*`, `/status`) require Bearer token auth
 - Tool execution is constrained by `allowedPaths` and a bash safety blocklist
+- Cron prompt file paths are restricted to `~/.skimpyclaw/prompts/` — path traversal attempts are rejected
+- Bearer token validation uses SHA-256 hashing with `timingSafeEqual` to prevent timing side-channels
+- Voice TTS uses `spawnSync` with argument arrays (no shell injection risk)
 - Gateway binds to `127.0.0.1` by default

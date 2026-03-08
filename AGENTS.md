@@ -41,6 +41,7 @@ Always run `pnpm build && pnpm test` after making changes. Do not submit work wi
 | `src/cron.ts` | Cron scheduler — `agentTurn` and `script` payloads |
 | `src/skills.ts` | Skills system — loads from `~/.skimpyclaw/skills/` |
 | `src/usage.ts` | Cost & token usage tracking (JSONL) |
+| `src/env-sanitizer.ts` | Shared env sanitization for child processes (strips secrets, extends PATH) |
 | `src/model-selection.ts` | Model alias/provider resolution (single source of truth) |
 | `src/cli.ts` | CLI entrypoint (start/stop/restart/status/logs/onboard/config/model/cron/tools/sandbox/uninstall) |
 | `src/types.ts` | All TypeScript interfaces and types |
@@ -58,6 +59,17 @@ Always run `pnpm build && pnpm test` after making changes. Do not submit work wi
 - **Skills directory** — `~/.skimpyclaw/skills/`, NOT `~/.claude/skills/`
 - **Model selection** — always call `resolveModelSelection`, don't duplicate alias parsing
 - **Sandbox CLI workflows** — use `skimpyclaw sandbox init` for runtime/image/profile bootstrap and `skimpyclaw sandbox doctor` for targeted diagnostics
+
+## Security & Secrets
+
+- **Never store raw secrets in config.json** — use `${ENV_VAR}` or `${KEYCHAIN:service/account}` references
+- **Config file permissions** — `saveConfig()` enforces `0600`; do not weaken this
+- **Env sanitization** — `sanitizeExecEnv()` in `src/env-sanitizer.ts` strips sensitive env vars from child processes. Used by both bash tool and cron scripts. Add new provider key patterns to `SENSITIVE_ENV_PATTERNS` when adding providers
+- **Fetch tool** — validates URLs against an IP blocklist (RFC 1918, link-local, metadata) and blocked hostnames. Re-validates on every redirect. Do not bypass `validateTarget()`
+- **Gateway auth** — `/status` and all write endpoints require Bearer token. Do not add unauthed endpoints that expose config or runtime state
+- **Cron prompt paths** — `resolveMessageSource()` only reads files inside `~/.skimpyclaw/prompts/`. Do not relax this path restriction
+- **Voice TTS** — uses `spawnSync` with argument arrays. Never use `execSync` with string interpolation for user-controlled text
+- **Token comparison** — `validateBearerToken()` hashes both sides with SHA-256 before `timingSafeEqual`. Do not revert to direct buffer comparison
 
 ## Testing
 

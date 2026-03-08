@@ -206,12 +206,12 @@ The `message` field can reference a markdown file:
 {
   "payload": {
     "kind": "agentTurn",
-    "message": "~/prompts/morning-brief.md"
+    "message": "morning-brief.md"
   }
 }
 ```
 
-Files are resolved relative to `~/.skimpyclaw/prompts/` or as absolute paths.
+Prompt files must live inside `~/.skimpyclaw/prompts/`. Paths outside this directory are rejected as a security measure. Bare filenames (e.g. `morning-brief.md`) are resolved relative to the prompts directory.
 
 ## Code Agents
 

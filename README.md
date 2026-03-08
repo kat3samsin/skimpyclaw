@@ -136,6 +136,25 @@ http://127.0.0.1:18790/dashboard
 
 Bearer token is shown in startup logs.
 
+## Security
+
+SkimpyClaw applies defense-in-depth for a locally-run agent that executes tools on your behalf.
+
+| Layer | Mechanism |
+|-------|-----------|
+| **Config file permissions** | `~/.skimpyclaw/config.json` is written with `0600` (owner-only) permissions |
+| **Secrets in config** | Use `${ENV_VAR}` or `${KEYCHAIN:service/account}` (macOS) — raw secrets are never stored in JSON |
+| **Env sanitization** | Bash and cron-script child processes get a sanitized env with API keys, tokens, and credentials stripped. `GH_TOKEN` is allowlisted |
+| **Fetch SSRF protection** | The fetch tool blocks private/reserved IPs, cloud metadata endpoints, and re-validates targets on every redirect hop |
+| **Gateway auth** | All sensitive endpoints (`/message`, `/model`, `/reload`, `/cron/*`, `/status`) require a Bearer token |
+| **Cron prompt paths** | Prompt file references in cron jobs are restricted to `~/.skimpyclaw/prompts/` — path traversal is rejected |
+| **Tool path restriction** | All file/dir tool operations are constrained to `ToolConfig.allowedPaths` |
+| **Bash safety** | Dangerous commands are blocked by a blocklist; risky commands (tier 2–3) require human approval via exec-approval |
+| **Token comparison** | Bearer token validation uses SHA-256 hashing with `timingSafeEqual` to prevent timing attacks |
+| **Voice TTS** | Shell commands use `spawnSync` with argument arrays — no string interpolation / shell injection risk |
+| **Channel allowlists** | Telegram/Discord access restricted to configured `allowFrom` IDs |
+| **Dashboard redaction** | Config API responses redact key/token-like fields |
+
 ## Tech Stack
 
 - **Backend:** TypeScript (ESM), Fastify, Vitest
