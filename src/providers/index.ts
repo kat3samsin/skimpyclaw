@@ -1,12 +1,17 @@
 // Providers Module - Unified AI Provider Interface
+//
+// Provider registry pattern: adapters implement ProviderAdapter (chat, chatWithTools, isAvailable).
+// Routing resolves a model spec to an adapter and delegates to it.
 
 import type { Config, ChatMessage, ChatOptions, ToolConfig } from '../types.js';
 import type { ExecuteToolContext } from '../tools/execute-context.js';
 import type { ToolChatResult, ProviderChatParams, ProviderToolChatParams } from './types.js';
+import type { ProviderAdapter } from './adapter.js';
 import { calculateUsageCost, isLangfuseEnabled } from '../langfuse.js';
 
 // Re-export types
 export type { ToolChatResult, ProviderChatParams, ProviderToolChatParams } from './types.js';
+export type { ProviderAdapter } from './adapter.js';
 
 // Re-export utilities
 export {
@@ -38,20 +43,14 @@ export {
 } from './observability.js';
 import { setLangfuseHelpers } from './observability.js';
 
-// Import provider functions directly to avoid circular deps
+// Import provider module functions for init and backward-compat re-exports
 import {
   setAnthropicClient,
-  isAnthropicAvailable,
-  chatAnthropic,
-  chatWithToolsAnthropic,
 } from './anthropic.js';
 
 import {
   addOpenAIClient,
   clearOpenAIClients,
-  isOpenAIAvailable,
-  chatOpenAI,
-  chatWithToolsOpenAI,
 } from './openai.js';
 
 import {
@@ -61,10 +60,6 @@ import {
   setCodexBaseUrl,
   initCodexAuth,
   resetCodexProviderState,
-  loadCodexAuth,
-  isCodexAvailable,
-  chatCodex,
-  chatWithToolsCodex,
 } from './codex.js';
 
 import {
@@ -75,6 +70,30 @@ import {
 import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
 
+// Lazy adapter imports (avoid circular deps at module load time)
+import { AnthropicAdapter } from './adapters/anthropic-adapter.js';
+import { OpenAIAdapter } from './adapters/openai-adapter.js';
+import { CodexAdapter } from './adapters/codex-adapter.js';
+
+// Wire provider observability helpers to runtime cost calculator.
+setLangfuseHelpers(calculateUsageCost, isLangfuseEnabled);
+
+// ---------------------------------------------------------------------------
+// Provider Registry
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve a provider name to a ProviderAdapter instance.
+ * Adapters are lightweight — creating one per call is fine.
+ */
+export function getAdapter(provider: string): ProviderAdapter {
+  if (provider === 'anthropic') return new AnthropicAdapter();
+  // Codex providers are registered dynamically via addResponsesApiProvider
+  if (isResponsesApiProvider(provider)) return new CodexAdapter();
+  // Everything else goes through the OpenAI-compatible adapter
+  return new OpenAIAdapter(provider);
+}
+
 interface NormalizedChatRoute {
   resolvedModel: string;
   provider: string;
@@ -82,9 +101,6 @@ interface NormalizedChatRoute {
   chatOpts: ChatOptions;
   useCodexAliasProvider: boolean;
 }
-
-// Wire provider observability helpers to runtime cost calculator.
-setLangfuseHelpers(calculateUsageCost, isLangfuseEnabled);
 
 function normalizeChatRoute(options: ChatOptions, config: Config): NormalizedChatRoute {
   const route = resolveProviderRoute(options.model, config);
@@ -98,7 +114,38 @@ function normalizeChatRoute(options: ChatOptions, config: Config): NormalizedCha
   };
 }
 
-// Re-export all provider functions
+/**
+ * Resolve routing and return the correct adapter + normalized options.
+ * Handles the Codex alias compatibility path (openai/*-codex → codex provider).
+ */
+function resolveAdapter(
+  options: ChatOptions,
+  config: Config,
+): { adapter: ProviderAdapter; resolvedModel: string; chatOpts: ChatOptions } {
+  const { resolvedModel, provider, chatOpts, useCodexAliasProvider } = normalizeChatRoute(options, config);
+
+  // Codex alias compatibility: openai/*-codex routes to codex when configured
+  if (useCodexAliasProvider || isResponsesApiProvider(provider)) {
+    const codexAdapter = new CodexAdapter();
+    if (codexAdapter.isAvailable()) {
+      return { adapter: codexAdapter, resolvedModel, chatOpts };
+    }
+    throw new Error(`Codex provider "${provider}" is configured but auth is unavailable. Run "codex" to re-authenticate.`);
+  }
+
+  const adapter = getAdapter(provider);
+  if (adapter.isAvailable()) {
+    return { adapter, resolvedModel, chatOpts };
+  }
+
+  throw new Error(`Unknown provider "${provider}" for model: ${resolvedModel}`);
+}
+
+// ---------------------------------------------------------------------------
+// Backward-compat re-exports (provider module functions)
+// ---------------------------------------------------------------------------
+
+// Anthropic
 export {
   setAnthropicClient,
   isAnthropicAvailable,
@@ -106,6 +153,7 @@ export {
   chatWithToolsAnthropic,
 } from './anthropic.js';
 
+// OpenAI
 export {
   addOpenAIClient,
   getOpenAIClient,
@@ -117,6 +165,7 @@ export {
   chatWithToolsOpenAI,
 } from './openai.js';
 
+// Codex
 export {
   addResponsesApiProvider,
   isResponsesApiProvider,
@@ -131,7 +180,10 @@ export {
   chatWithToolsCodex,
 } from './codex.js';
 
-// Initialize all providers from config
+// ---------------------------------------------------------------------------
+// Provider Initialization (unchanged behavior)
+// ---------------------------------------------------------------------------
+
 export async function initProviders(config: Config): Promise<void> {
   // Reset provider state so reloads strictly reflect current config.
   setAnthropicClient(null);
@@ -140,7 +192,7 @@ export async function initProviders(config: Config): Promise<void> {
   resetCodexProviderState();
 
   const anthropicConfig = config.models.providers.anthropic;
-  
+
   // Initialize Anthropic if configured
   if (anthropicConfig?.apiKey || anthropicConfig?.authToken) {
     if (anthropicConfig.authToken) {
@@ -203,36 +255,21 @@ export async function initProviders(config: Config): Promise<void> {
   }
 }
 
-// Unified chat function that routes to appropriate provider
+// ---------------------------------------------------------------------------
+// Unified chat + chatWithTools — route via adapter registry
+// ---------------------------------------------------------------------------
+
+/** Unified chat function that routes to appropriate provider via adapter. */
 export async function chat(
   messages: ChatMessage[],
   options: ChatOptions,
   config: Config
 ): Promise<string> {
-  const { resolvedModel, provider, chatOpts, useCodexAliasProvider } = normalizeChatRoute(options, config);
-
-  // Route to Codex if available (supports openai/*-codex legacy alias)
-  if ((isResponsesApiProvider(provider) || useCodexAliasProvider) && isCodexAvailable()) {
-    return chatCodex({ messages, options: chatOpts, config });
-  }
-  if (isResponsesApiProvider(provider) || useCodexAliasProvider) {
-    throw new Error(`Codex provider "${provider}" is configured but auth is unavailable. Run "codex" to re-authenticate.`);
-  }
-
-  // Route to Anthropic if available
-  if (provider === 'anthropic' && isAnthropicAvailable()) {
-    return chatAnthropic({ messages, options: chatOpts, config });
-  }
-
-  // Route to OpenAI-compatible
-  if (isOpenAIAvailable(provider)) {
-    return chatOpenAI({ messages, options: chatOpts, config }, provider);
-  }
-
-  throw new Error(`Unknown provider "${provider}" for model: ${resolvedModel}`);
+  const { adapter, chatOpts } = resolveAdapter(options, config);
+  return adapter.chat(messages, chatOpts, config);
 }
 
-// Unified chatWithTools function that routes to appropriate provider
+/** Unified chatWithTools function that routes to appropriate provider via adapter. */
 export async function chatWithTools(
   messages: ChatMessage[],
   options: ChatOptions,
@@ -240,25 +277,13 @@ export async function chatWithTools(
   toolConfig: ToolConfig,
   toolContext?: ExecuteToolContext
 ): Promise<ToolChatResult> {
-  const { resolvedModel, provider, chatOpts, useCodexAliasProvider } = normalizeChatRoute(options, config);
+  const { adapter, resolvedModel, chatOpts } = resolveAdapter(options, config);
 
-  // Route to Codex if available (supports openai/*-codex legacy alias)
-  if ((isResponsesApiProvider(provider) || useCodexAliasProvider) && isCodexAvailable()) {
-    return chatWithToolsCodex({ messages, options: chatOpts, config, toolConfig, toolContext });
-  }
-  if (isResponsesApiProvider(provider) || useCodexAliasProvider) {
-    throw new Error(`Codex provider "${provider}" is configured but auth is unavailable. Run "codex" to re-authenticate.`);
-  }
+  // Codex default: bump maxIterations to 100 if not specified
+  const effectiveToolConfig = (adapter.name === 'codex' && !toolConfig.maxIterations)
+    ? { ...toolConfig, maxIterations: 100 }
+    : toolConfig;
 
-  // Route to Anthropic if available
-  if (provider === 'anthropic' && isAnthropicAvailable()) {
-    return chatWithToolsAnthropic({ messages, options: chatOpts, config, toolConfig, toolContext });
-  }
-
-  // Route to OpenAI-compatible
-  if (isOpenAIAvailable(provider)) {
-    return chatWithToolsOpenAI({ messages, options: chatOpts, config, toolConfig, toolContext }, provider);
-  }
-
-  throw new Error(`Unknown provider "${provider}" for model: ${resolvedModel}`);
+  const { runToolLoop } = await import('./tool-loop.js');
+  return runToolLoop(adapter, messages, chatOpts, config, effectiveToolConfig, toolContext);
 }

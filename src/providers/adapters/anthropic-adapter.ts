@@ -20,6 +20,60 @@ import { buildUsageRecord, recordUsage } from '../../usage.js';
 export class AnthropicAdapter implements ProviderAdapter {
   readonly name = 'anthropic';
 
+  isAvailable(): boolean {
+    return getAnthropicClient() !== null;
+  }
+
+  async chat(messages: ChatMessage[], options: ChatOptions, config: Config): Promise<string> {
+    const client = getAnthropicClient();
+    if (!client) {
+      throw new Error('Anthropic client not initialized');
+    }
+
+    const modelId = stripProvider(options.model);
+    const systemMessage = messages.find(m => m.role === 'system');
+    const chatMessages = messages
+      .filter(m => m.role !== 'system')
+      .map(m => ({
+        role: m.role as 'user' | 'assistant',
+        content: m.content as any,
+      }));
+
+    const cacheEnabled = config.models?.promptCaching !== false;
+    const anthropicParams: any = {
+      model: modelId,
+      max_tokens: options.maxTokens || 4096,
+      messages: chatMessages,
+    };
+
+    const systemParam = buildSystemParam(contentToText(systemMessage?.content || ''), cacheEnabled);
+    if (systemParam) {
+      anthropicParams.system = systemParam;
+    }
+
+    const thinkingConfig = buildThinkingConfig(options.thinking);
+    if (thinkingConfig) {
+      anthropicParams.thinking = { type: 'enabled', budget_tokens: thinkingConfig.budget };
+      anthropicParams.max_tokens = Math.max(anthropicParams.max_tokens, thinkingConfig.maxTokens);
+    }
+
+    const response = await client.messages.create(anthropicParams);
+    const usage = (response as any).usage;
+
+    if (usage?.cache_read_input_tokens > 0 || usage?.cache_creation_input_tokens > 0) {
+      console.log(`[cache] read=${usage.cache_read_input_tokens || 0} created=${usage.cache_creation_input_tokens || 0}`);
+    }
+    this.recordUsage(modelId, {
+      inputTokens: usage?.input_tokens ?? 0,
+      outputTokens: usage?.output_tokens ?? 0,
+      cacheReadTokens: usage?.cache_read_input_tokens,
+      cacheCreationTokens: usage?.cache_creation_input_tokens,
+    }, 'api');
+
+    const textContent = response.content.find((c: any) => c.type === 'text');
+    return (textContent as any)?.text || '';
+  }
+
   buildMessages(messages: ChatMessage[], options: ChatOptions, config: Config): ProviderMessages {
     const cacheEnabled = config.models?.promptCaching !== false;
     const systemMessage = messages.find(m => m.role === 'system');

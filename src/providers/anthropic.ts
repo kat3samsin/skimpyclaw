@@ -1,11 +1,8 @@
 // Anthropic Provider
 
 import Anthropic from '@anthropic-ai/sdk';
-import { startObservation } from '@langfuse/tracing';
 import type { ProviderChatParams, ProviderToolChatParams, ToolChatResult } from './types.js';
-import { buildSystemParam, contentToText, stripProvider, buildThinkingConfig } from './utils.js';
-import { toAnthropicUsageDetails, toCostDetails } from './observability.js';
-import { toErrorMessage } from '../utils.js';
+import { toCostDetails } from './observability.js';
 import { buildUsageRecord, recordUsage } from '../usage.js';
 
 let anthropicClient: Anthropic | null = null;
@@ -56,86 +53,15 @@ async function startGenerationObservation(name: string, attributes: Record<strin
   const { isLangfuseEnabled } = await import('../langfuse.js');
   if (!isLangfuseEnabled()) return null;
   attributes.metadata = { app: LANGFUSE_APP_NAME, ...attributes.metadata };
+  const { startObservation } = await import('@langfuse/tracing');
   return startObservation(name, attributes, { asType: 'generation' });
 }
 
+/** @deprecated Use adapter.chat() via the provider registry instead. */
 export async function chatAnthropic(params: ProviderChatParams): Promise<string> {
-  if (!anthropicClient) {
-    throw new Error('Anthropic client not initialized');
-  }
-
-  const { messages, options, config } = params;
-  const modelId = stripProvider(options.model);
-  
-  const systemMessage = messages.find(m => m.role === 'system');
-  const chatMessages = messages
-    .filter(m => m.role !== 'system')
-    .map(m => ({
-      role: m.role as 'user' | 'assistant',
-      content: m.content as any,
-    }));
-
-  // Build request parameters
-  const cacheEnabled = config.models?.promptCaching !== false;
-  const anthropicParams: Anthropic.MessageCreateParams = {
-    model: modelId,
-    max_tokens: options.maxTokens || 4096,
-    messages: chatMessages,
-  };
-
-  const systemParam = buildSystemParam(contentToText(systemMessage?.content || ''), cacheEnabled);
-  if (systemParam) {
-    anthropicParams.system = systemParam;
-  }
-
-  // Add extended thinking if requested
-  const thinkingConfig = buildThinkingConfig(options.thinking);
-  if (thinkingConfig) {
-    anthropicParams.thinking = {
-      type: 'enabled',
-      budget_tokens: thinkingConfig.budget,
-    };
-    anthropicParams.max_tokens = Math.max(anthropicParams.max_tokens, thinkingConfig.maxTokens);
-  }
-
-  const genObs = await startGenerationObservation(`anthropic:${modelId}`, {
-    input: { system: systemMessage?.content, messages: chatMessages },
-    model: modelId,
-    modelParameters: {
-      max_tokens: anthropicParams.max_tokens,
-      ...(options.thinking && options.thinking !== 'none' ? { thinking: options.thinking } : {}),
-    },
-    metadata: { provider: 'anthropic' },
-  });
-
-  try {
-    const response = await anthropicClient.messages.create(anthropicParams);
-    const usage = (response as any).usage;
-
-    // Log cache metrics
-    if (usage?.cache_read_input_tokens > 0 || usage?.cache_creation_input_tokens > 0) {
-      console.log(`[cache] read=${usage.cache_read_input_tokens || 0} created=${usage.cache_creation_input_tokens || 0}`);
-    }
-    recordAnthropicUsage({ model: modelId, usage, trigger: 'api' });
-
-    // Extract text content
-    const textContent = response.content.find(c => c.type === 'text');
-    const text = textContent?.text || '';
-    
-    genObs?.update({
-      output: { text },
-      usageDetails: toAnthropicUsageDetails(usage),
-      costDetails: toCostDetails(modelId, usage),
-    });
-    genObs?.end();
-
-    return text;
-  } catch (err) {
-    const errorMessage = toErrorMessage(err);
-    genObs?.update({ level: 'ERROR', statusMessage: errorMessage, output: { error: errorMessage } });
-    genObs?.end();
-    throw err;
-  }
+  const { AnthropicAdapter } = await import('./adapters/anthropic-adapter.js');
+  const adapter = new AnthropicAdapter();
+  return adapter.chat(params.messages, params.options, params.config);
 }
 
 export async function chatWithToolsAnthropic(params: ProviderToolChatParams): Promise<ToolChatResult> {

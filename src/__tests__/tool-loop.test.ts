@@ -16,6 +16,14 @@ import type { ChatMessage, ChatOptions, Config, ToolConfig } from '../types.js';
 class MockAdapter implements ProviderAdapter {
   readonly name = 'mock';
 
+  isAvailable(): boolean {
+    return true;
+  }
+
+  async chat(_messages: ChatMessage[], _options: ChatOptions, _config: Config): Promise<string> {
+    return 'mock response';
+  }
+
   // Track calls for assertions
   callCount = 0;
   buildMessagesCallCount = 0;

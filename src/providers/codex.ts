@@ -4,11 +4,7 @@ import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import type { ProviderChatParams, ProviderToolChatParams, ToolChatResult } from './types.js';
-import { stripProvider } from './utils.js';
-import { toErrorMessage } from '../utils.js';
-import { toCodexContent } from './content.js';
-import { toNumericUsageDetails, toCostDetails } from './observability.js';
-import { startObservation } from '@langfuse/tracing';
+import { toCostDetails } from './observability.js';
 import { buildUsageRecord, recordUsage } from '../usage.js';
 
 const DEFAULT_CODEX_AUTH_PATH = join(homedir(), '.codex', 'auth.json');
@@ -138,6 +134,7 @@ async function startGenerationObservation(name: string, attributes: Record<strin
   const { isLangfuseEnabled } = await import('../langfuse.js');
   if (!isLangfuseEnabled()) return null;
   attributes.metadata = { app: LANGFUSE_APP_NAME, ...attributes.metadata };
+  const { startObservation } = await import('@langfuse/tracing');
   return startObservation(name, attributes, { asType: 'generation' });
 }
 
@@ -231,66 +228,11 @@ export function parseCodexSSE(text: string): { outputText: string; functionCalls
   return { outputText, functionCalls, response: completedResponse };
 }
 
+/** @deprecated Use adapter.chat() via the provider registry instead. */
 export async function chatCodex(params: ProviderChatParams): Promise<string> {
-  const { messages, options } = params;
-  const modelId = stripProvider(options.model);
-
-  // Build input — system messages go to `instructions`, rest to `input`
-  let instructions = 'You are a helpful assistant.';
-  const input: any[] = [];
-  
-  for (const m of messages) {
-    if (m.role === 'system') {
-      // Convert content to text
-      const { contentToText } = await import('./utils.js');
-      instructions = contentToText(m.content);
-    } else {
-      const contentType = m.role === 'assistant' ? 'output_text' : 'input_text';
-      const content = toCodexContent(m.content, contentType);
-      input.push({
-        type: 'message',
-        role: m.role,
-        content,
-      });
-    }
-  }
-
-  const body: any = {
-    model: modelId,
-    instructions,
-    input,
-    store: false,
-    stream: true,
-    reasoning: { effort: 'medium', summary: 'auto' },
-    include: ['reasoning.encrypted_content'],
-  };
-
-  const genObs = await startGenerationObservation(`codex:${modelId}`, {
-    input: { instructions, input },
-    model: modelId,
-    modelParameters: { stream: true, reasoning: body.reasoning },
-    metadata: { provider: 'codex' },
-  });
-
-  try {
-    const sseText = await codexFetch(body);
-    const parsed = parseCodexSSE(sseText);
-    recordCodexUsage({ model: modelId, usage: parsed.response?.usage, trigger: 'api' });
-    
-    genObs?.update({
-      output: { text: parsed.outputText },
-      usageDetails: toNumericUsageDetails(parsed.response?.usage),
-      costDetails: toCostDetails(modelId, parsed.response?.usage),
-    });
-    genObs?.end();
-
-    return parsed.outputText || '[No response from Codex]';
-  } catch (err) {
-    const errorMessage = toErrorMessage(err);
-    genObs?.update({ level: 'ERROR', statusMessage: errorMessage, output: { error: errorMessage } });
-    genObs?.end();
-    throw err;
-  }
+  const { CodexAdapter } = await import('./adapters/codex-adapter.js');
+  const adapter = new CodexAdapter();
+  return adapter.chat(params.messages, params.options, params.config);
 }
 
 export async function chatWithToolsCodex(params: ProviderToolChatParams): Promise<ToolChatResult> {

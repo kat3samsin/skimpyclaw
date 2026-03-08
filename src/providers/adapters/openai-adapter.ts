@@ -27,6 +27,47 @@ export class OpenAIAdapter implements ProviderAdapter {
     this.name = `openai:${provider}`;
   }
 
+  isAvailable(): boolean {
+    return getOpenAIClient(this.provider) !== undefined;
+  }
+
+  async chat(messages: ChatMessage[], options: ChatOptions, config: Config): Promise<string> {
+    const client = getOpenAIClient(this.provider);
+    if (!client) {
+      throw new Error(`OpenAI client not initialized for provider: ${this.provider}`);
+    }
+
+    const modelId = stripProvider(options.model);
+    const providerBaseURL = config.models.providers[this.provider]?.baseURL || '';
+    const isKimiLike = providerBaseURL.includes('kimi.com') || providerBaseURL.includes('moonshot.ai');
+    const kimiRequestExtras = isKimiLike
+      ? { extra_body: { interleaved: { field: 'reasoning_content' } } }
+      : {};
+
+    const openaiMessages: any[] = messages.map(m => ({
+      role: m.role,
+      content: toOpenAIContent(m.content),
+    }));
+
+    const response = await client.chat.completions.create({
+      model: modelId,
+      messages: openaiMessages,
+      max_tokens: options.maxTokens || 4096,
+      temperature: options.temperature,
+      ...kimiRequestExtras,
+    });
+
+    let content = response.choices[0]?.message?.content || '';
+    content = content.replace(/<think>[\s\S]*?<\/think>\s*/g, '').trim();
+
+    this.recordUsage(modelId, {
+      inputTokens: response.usage?.prompt_tokens ?? 0,
+      outputTokens: response.usage?.completion_tokens ?? 0,
+    }, 'api');
+
+    return content;
+  }
+
   getToolDefinitionOptions(_toolContext?: ExecuteToolContext, _config?: Config): { includeMcp?: boolean } {
     // OpenAI-compatible providers do not support MCP tools.
     return { includeMcp: false };

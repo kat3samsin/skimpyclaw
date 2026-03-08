@@ -90,6 +90,12 @@ export interface MessageFormatHelper<T> {
 export interface ProviderAdapter {
   readonly name: string;
 
+  /** Check whether this provider is initialized and ready to handle requests. */
+  isAvailable(): boolean;
+
+  /** Simple chat (no tool loop). Returns the model's text response. */
+  chat(messages: ChatMessage[], options: ChatOptions, config: Config): Promise<string>;
+
   /** Provider-specific tool discovery options (e.g. disable MCP for non-Anthropic providers). */
   getToolDefinitionOptions?(
     toolContext?: ExecuteToolContext,

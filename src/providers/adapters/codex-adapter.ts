@@ -15,10 +15,55 @@ import { contentToText, stripProvider } from '../utils.js';
 import { compactMessages, codexFormatHelper } from '../context-manager.js';
 import { toCodexContent, toCodexToolDefinitions } from '../content.js';
 import { toCostDetails } from '../observability.js';
-import { codexFetch, parseCodexSSE, recordCodexUsage } from '../codex.js';
+import { codexFetch, parseCodexSSE, isCodexAvailable, recordCodexUsage } from '../codex.js';
 
 export class CodexAdapter implements ProviderAdapter {
   readonly name = 'codex';
+
+  isAvailable(): boolean {
+    return isCodexAvailable();
+  }
+
+  async chat(messages: ChatMessage[], options: ChatOptions, _config: Config): Promise<string> {
+    const modelId = stripProvider(options.model);
+
+    let instructions = 'You are a helpful assistant.';
+    const input: any[] = [];
+
+    for (const m of messages) {
+      if (m.role === 'system') {
+        instructions = contentToText(m.content);
+        continue;
+      }
+      const contentType = m.role === 'assistant' ? 'output_text' : 'input_text';
+      input.push({
+        type: 'message',
+        role: m.role,
+        content: toCodexContent(m.content, contentType),
+      });
+    }
+
+    const body: any = {
+      model: modelId,
+      instructions,
+      input,
+      store: false,
+      stream: true,
+      reasoning: { effort: 'medium', summary: 'auto' },
+      include: ['reasoning.encrypted_content'],
+    };
+
+    const sseText = await codexFetch(body);
+    const parsed = parseCodexSSE(sseText);
+
+    this.recordUsage(modelId, {
+      inputTokens: parsed.response?.usage?.input_tokens ?? 0,
+      outputTokens: parsed.response?.usage?.output_tokens ?? 0,
+      cacheReadTokens: parsed.response?.usage?.input_tokens_details?.cached_tokens,
+    }, 'api');
+
+    return parsed.outputText || '[No response from Codex]';
+  }
 
   getToolDefinitionOptions(_toolContext?: ExecuteToolContext, _config?: Config): { includeMcp?: boolean } {
     // Codex/OpenAI-compatible providers do not support MCP tools.
