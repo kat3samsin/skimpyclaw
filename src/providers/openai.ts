@@ -42,7 +42,7 @@ export function isOpenAIAvailable(provider: string): boolean {
 
 const LANGFUSE_APP_NAME = 'skimpyclaw';
 
-function recordOpenAIUsage(params: {
+export function recordOpenAIUsage(params: {
   model: string;
   provider: string;
   usage: any;
@@ -149,6 +149,15 @@ export async function chatWithToolsOpenAI(params: ProviderToolChatParams, provid
     throw new Error(`OpenAI client not initialized for provider: ${provider}`);
   }
 
+  // Unified tool loop is the default; explicitly set false to fall back to legacy behavior.
+  if (params.config.experimental?.unifiedToolLoop !== false) {
+    const { runToolLoop } = await import('./tool-loop.js');
+    const { OpenAIAdapter } = await import('./adapters/openai-adapter.js');
+    const adapter = new OpenAIAdapter(provider);
+    return runToolLoop(adapter, params.messages, params.options, params.config, params.toolConfig, params.toolContext);
+  }
+
+  // TODO: Remove legacy OpenAI loop after unifiedToolLoop rollout is complete.
   const { messages, options, config, toolConfig, toolContext } = params;
   const modelId = stripProvider(options.model, openaiClients);
   const maxIterations = toolConfig.maxIterations || 20;

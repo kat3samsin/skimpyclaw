@@ -72,6 +72,13 @@ class MockAdapter implements ProviderAdapter {
 
   appendToolResults?(messages: ProviderMessages, results: { toolCallId: string; result: string; isError?: boolean }[]): void;
 
+  onEmptyFinalResponse?(
+    providerMessages: ProviderMessages,
+    toolDefs: any[],
+    options: ChatOptions,
+    config: Config,
+  ): Promise<string | undefined>;
+
   async compactMessages(
     messages: ProviderMessages,
     config: any,
@@ -387,5 +394,171 @@ describe('runToolLoop', () => {
     const result = await runToolLoop(adapter, messages, options, config, toolConfig);
 
     expect(result.response).toContain('Completed with 1 tool calls');
+  });
+
+  describe('onEmptyFinalResponse hook', () => {
+    it('should call onEmptyFinalResponse when final text is empty after tool use', async () => {
+      adapter.onEmptyFinalResponse = vi.fn().mockResolvedValue('Finalized answer');
+      adapter.responses = [
+        {
+          hasToolCalls: true,
+          toolCalls: [{ id: 'call-1', name: 'testTool', args: {}, rawArgs: '{}' }],
+          textContent: '',
+          usage: { inputTokens: 100, outputTokens: 50 },
+          rawResponse: {},
+        },
+        {
+          hasToolCalls: false,
+          toolCalls: [],
+          textContent: '', // Empty — triggers finalization hook
+          usage: { inputTokens: 100, outputTokens: 50 },
+          rawResponse: {},
+        },
+      ];
+
+      const result = await runToolLoop(adapter, messages, options, config, toolConfig);
+
+      expect(result.response).toBe('Finalized answer');
+      expect(adapter.onEmptyFinalResponse).toHaveBeenCalledTimes(1);
+    });
+
+    it('should NOT call onEmptyFinalResponse when final text is non-empty', async () => {
+      adapter.onEmptyFinalResponse = vi.fn().mockResolvedValue('Should not appear');
+      adapter.responses = [
+        {
+          hasToolCalls: true,
+          toolCalls: [{ id: 'call-1', name: 'testTool', args: {}, rawArgs: '{}' }],
+          textContent: '',
+          usage: { inputTokens: 100, outputTokens: 50 },
+          rawResponse: {},
+        },
+        {
+          hasToolCalls: false,
+          toolCalls: [],
+          textContent: 'Got a real answer',
+          usage: { inputTokens: 100, outputTokens: 50 },
+          rawResponse: {},
+        },
+      ];
+
+      const result = await runToolLoop(adapter, messages, options, config, toolConfig);
+
+      expect(result.response).toBe('Got a real answer');
+      expect(adapter.onEmptyFinalResponse).not.toHaveBeenCalled();
+    });
+
+    it('should NOT call onEmptyFinalResponse when no tool calls were made', async () => {
+      adapter.onEmptyFinalResponse = vi.fn().mockResolvedValue('Should not appear');
+      adapter.responses = [
+        {
+          hasToolCalls: false,
+          toolCalls: [],
+          textContent: '', // Empty but no tool calls — no finalization
+          usage: { inputTokens: 100, outputTokens: 50 },
+          rawResponse: {},
+        },
+      ];
+
+      const result = await runToolLoop(adapter, messages, options, config, toolConfig);
+
+      expect(result.response).toBe('');
+      expect(adapter.onEmptyFinalResponse).not.toHaveBeenCalled();
+    });
+
+    it('should fall back to default message when onEmptyFinalResponse returns undefined', async () => {
+      adapter.onEmptyFinalResponse = vi.fn().mockResolvedValue(undefined);
+      adapter.responses = [
+        {
+          hasToolCalls: true,
+          toolCalls: [{ id: 'call-1', name: 'testTool', args: {}, rawArgs: '{}' }],
+          textContent: '',
+          usage: { inputTokens: 100, outputTokens: 50 },
+          rawResponse: {},
+        },
+        {
+          hasToolCalls: false,
+          toolCalls: [],
+          textContent: '',
+          usage: { inputTokens: 100, outputTokens: 50 },
+          rawResponse: {},
+        },
+      ];
+
+      const result = await runToolLoop(adapter, messages, options, config, toolConfig);
+
+      expect(result.response).toContain('Completed with 1 tool calls');
+      expect(adapter.onEmptyFinalResponse).toHaveBeenCalledTimes(1);
+    });
+
+    it('should fall back to default message when onEmptyFinalResponse throws', async () => {
+      adapter.onEmptyFinalResponse = vi.fn().mockRejectedValue(new Error('finalize failed'));
+      adapter.responses = [
+        {
+          hasToolCalls: true,
+          toolCalls: [{ id: 'call-1', name: 'testTool', args: {}, rawArgs: '{}' }],
+          textContent: '',
+          usage: { inputTokens: 100, outputTokens: 50 },
+          rawResponse: {},
+        },
+        {
+          hasToolCalls: false,
+          toolCalls: [],
+          textContent: '',
+          usage: { inputTokens: 100, outputTokens: 50 },
+          rawResponse: {},
+        },
+      ];
+
+      const result = await runToolLoop(adapter, messages, options, config, toolConfig);
+
+      expect(result.response).toContain('Completed with 1 tool calls');
+      expect(adapter.onEmptyFinalResponse).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('Codex-specific behavior through unified loop', () => {
+    it('should accumulate usage across iterations', async () => {
+      adapter.responses = [
+        {
+          hasToolCalls: true,
+          toolCalls: [{ id: 'call-1', name: 'testTool', args: {}, rawArgs: '{}' }],
+          textContent: '',
+          usage: { inputTokens: 100, outputTokens: 50 },
+          cost: { input: 0.001, output: 0.002, total: 0.003 },
+          rawResponse: {},
+        },
+        {
+          hasToolCalls: false,
+          toolCalls: [],
+          textContent: 'Done',
+          usage: { inputTokens: 200, outputTokens: 80 },
+          cost: { input: 0.002, output: 0.004, total: 0.006 },
+          rawResponse: {},
+        },
+      ];
+
+      const result = await runToolLoop(adapter, messages, options, config, toolConfig);
+
+      expect(result.usage?.prompt_tokens).toBe(300);
+      expect(result.usage?.completion_tokens).toBe(130);
+      expect(result.usage?.total_tokens).toBe(430);
+      expect(result.cost?.total).toBeCloseTo(0.009);
+    });
+
+    it('should respect custom maxIterations from toolConfig', async () => {
+      const customToolConfig = { ...toolConfig, maxIterations: 3 };
+      adapter.responses = Array(5).fill({
+        hasToolCalls: true,
+        toolCalls: [{ id: 'call-x', name: 'testTool', args: { x: 1 }, rawArgs: '{"x":1}' }],
+        textContent: '',
+        usage: { inputTokens: 10, outputTokens: 5 },
+        rawResponse: {},
+      });
+
+      const result = await runToolLoop(adapter, messages, options, config, customToolConfig);
+
+      expect(result.response).toContain('maximum iterations');
+      expect(adapter.callCount).toBe(3);
+    });
   });
 });

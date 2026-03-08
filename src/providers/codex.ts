@@ -112,7 +112,7 @@ export function isCodexAvailable(): boolean {
 
 const LANGFUSE_APP_NAME = 'skimpyclaw';
 
-function recordCodexUsage(params: {
+export function recordCodexUsage(params: {
   model: string;
   usage: any;
   trigger?: string;
@@ -148,7 +148,7 @@ async function startGenerationObservation(name: string, attributes: Record<strin
 /**
  * Make a single Codex API call. Returns raw SSE text.
  */
-async function codexFetch(body: any, timeoutMs: number = DEFAULT_CODEX_FETCH_TIMEOUT_MS): Promise<string> {
+export async function codexFetch(body: any, timeoutMs: number = DEFAULT_CODEX_FETCH_TIMEOUT_MS): Promise<string> {
   if (!codexAuth) {
     throw new Error('Codex auth not initialized. Run "codex" CLI to authenticate.');
   }
@@ -190,7 +190,7 @@ async function codexFetch(body: any, timeoutMs: number = DEFAULT_CODEX_FETCH_TIM
  * Parse an SSE response from the Codex backend.
  * Extracts function calls from the completed response object.
  */
-function parseCodexSSE(text: string): { outputText: string; functionCalls: any[]; response: any | null } {
+export function parseCodexSSE(text: string): { outputText: string; functionCalls: any[]; response: any | null } {
   let outputText = '';
   let completedResponse: any = null;
 
@@ -298,6 +298,18 @@ export async function chatCodex(params: ProviderChatParams): Promise<string> {
 }
 
 export async function chatWithToolsCodex(params: ProviderToolChatParams): Promise<ToolChatResult> {
+  // Unified tool loop is the default; explicitly set false to fall back to legacy behavior.
+  if (params.config.experimental?.unifiedToolLoop !== false) {
+    const { runToolLoop } = await import('./tool-loop.js');
+    const { CodexAdapter } = await import('./adapters/codex-adapter.js');
+    const adapter = new CodexAdapter();
+    const unifiedToolConfig = params.toolConfig.maxIterations
+      ? params.toolConfig
+      : { ...params.toolConfig, maxIterations: 100 };
+    return runToolLoop(adapter, params.messages, params.options, params.config, unifiedToolConfig, params.toolContext);
+  }
+
+  // TODO: Remove legacy Codex loop after unifiedToolLoop rollout is complete.
   const { messages, options, config, toolConfig, toolContext } = params;
   const modelId = stripProvider(options.model);
   const maxIterations = toolConfig.maxIterations || 100;
@@ -555,13 +567,4 @@ export async function chatWithToolsCodex(params: ProviderToolChatParams): Promis
 
   console.warn(`[codex:tools] Max iterations (${maxIterations}) reached`);
   return { response: '[Tool use loop reached maximum iterations]', toolCalls: toolLog };
-}
-
-/** Build UsageDetails from Codex usage response */
-function buildCodexUsageDetails(usage: any) {
-  return {
-    prompt_tokens: usage?.input_tokens ?? 0,
-    completion_tokens: usage?.output_tokens ?? 0,
-    total_tokens: (usage?.input_tokens ?? 0) + (usage?.output_tokens ?? 0),
-  };
 }

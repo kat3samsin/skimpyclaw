@@ -43,8 +43,10 @@ export async function runToolLoop(
 
   // Resolve tool definitions once
   const includeSpawn = !!(toolContext?.fullConfig && (toolContext?.chatId || toolContext?.isCronJob));
+  const providerToolDefOptions = adapter.getToolDefinitionOptions?.(toolContext, config) || {};
   const rawToolDefs = await getToolDefinitions(toolConfig, {
     includeAgentTools: includeSpawn,
+    includeMcp: providerToolDefOptions.includeMcp,
     projects: toolContext?.fullConfig?.projects,
   });
 
@@ -142,7 +144,20 @@ export async function runToolLoop(
         let responseText = response.textContent;
         // Fallback when model did tool work but returned no text summary
         if (!responseText && toolLog.length > 0) {
-          responseText = `[Completed with ${toolLog.length} tool calls, no text response]`;
+          // Let adapter attempt a finalization pass (e.g. Codex re-asks without tools)
+          if (adapter.onEmptyFinalResponse) {
+            try {
+              const finalized = await adapter.onEmptyFinalResponse(
+                providerMessages, providerToolDefs, options, config,
+              );
+              if (finalized) responseText = finalized;
+            } catch (err) {
+              console.warn(`[${adapter.name}] finalization pass failed: ${toErrorMessage(err)}`);
+            }
+          }
+          if (!responseText) {
+            responseText = `[Completed with ${toolLog.length} tool calls, no text response]`;
+          }
         }
         return {
           response: responseText,
