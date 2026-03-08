@@ -90,10 +90,6 @@ export interface Config {
    *  Project paths are automatically added to tool allowedPaths and available to code_with_agent by name. */
   projects?: Record<string, string>;
   sandbox?: SandboxConfig;
-  experimental?: {
-    /** Override Anthropic tool loop behavior: defaults to unified loop; set false for legacy fallback. */
-    unifiedToolLoop?: boolean;
-  };
 }
 
 export interface AgentConfig {

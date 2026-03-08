@@ -10,27 +10,13 @@ vi.mock('../providers/tool-loop.js', () => ({
   runToolLoop: mockRunToolLoop,
 }));
 
-// Mock tools module so the legacy path doesn't need real tool definitions
-vi.mock('../tools.js', () => ({
-  getToolDefinitions: vi.fn().mockResolvedValue([]),
-  executeTool: vi.fn().mockResolvedValue('ok'),
-}));
-
-// Mock audit module
-vi.mock('../audit.js', () => ({
-  startTrace: vi.fn().mockReturnValue('trace-gating'),
-  addEvent: vi.fn(),
-  endTrace: vi.fn().mockResolvedValue(undefined),
-}));
-
-// Mock the OpenAI client module internals for legacy path
+// Mock the OpenAI client module internals
 vi.mock('openai', () => ({
   default: class {},
 }));
 
 // Provide a fake OpenAI client for the provider
-const mockCreate = vi.fn();
-const fakeClient = { chat: { completions: { create: mockCreate } } };
+const fakeClient = { chat: { completions: { create: vi.fn() } } };
 
 // We need to add the fake client to the openaiClients map
 import { addOpenAIClient, clearOpenAIClients } from '../providers/openai.js';
@@ -51,7 +37,7 @@ describe('chatWithToolsOpenAI unified loop gating', () => {
     maxIterations: 10,
   } as ToolConfig;
 
-  it('uses unified runToolLoop by default', async () => {
+  it('uses unified runToolLoop', async () => {
     mockRunToolLoop.mockResolvedValueOnce({ response: 'unified', toolCalls: [] });
     addOpenAIClient('testprovider', fakeClient as any);
 
@@ -64,30 +50,6 @@ describe('chatWithToolsOpenAI unified loop gating', () => {
 
     expect(mockRunToolLoop).toHaveBeenCalledOnce();
     expect(result.response).toBe('unified');
-
-    clearOpenAIClients();
-  });
-
-  it('falls back to legacy loop when unifiedToolLoop is false', async () => {
-    mockRunToolLoop.mockReset();
-    addOpenAIClient('testprovider', fakeClient as any);
-    const abortController = new AbortController();
-    abortController.abort();
-
-    const result = await chatWithToolsOpenAI({
-      messages: [{ role: 'user', content: 'hi' }],
-      options: { model: 'testprovider/gpt-4o' },
-      config: {
-        ...baseConfig,
-        experimental: { unifiedToolLoop: false },
-      },
-      toolConfig: baseToolConfig,
-      toolContext: { abortSignal: abortController.signal },
-    }, 'testprovider');
-
-    expect(mockRunToolLoop).not.toHaveBeenCalled();
-    // Legacy path returns cancelled because we aborted
-    expect(result.response).toContain('Cancelled');
 
     clearOpenAIClients();
   });
