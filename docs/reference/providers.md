@@ -1,18 +1,41 @@
 # Model Provider Architecture
 
-Three provider paths in `agent.ts`:
+Provider routing is centralized in `src/providers/index.ts` using a provider registry and adapter interface.
 
-1. **Anthropic** — `chatWithTools()` — standard Anthropic SDK with tool_use
-2. **Codex** — `codexChat()` — raw fetch to `chatgpt.com/backend-api/codex/responses` (NOT api.openai.com, NOT OpenAI SDK)
-3. **OpenAI-compatible** — `chat()` via OpenAI SDK — includes OpenAI, Kimi, MiniMax, openrouter, groq, etc.
+## Core Flow
 
-Both Anthropic and Codex share `ExecuteToolContext` for spawn_subagent and file locking. New tools must be wired into BOTH paths.
+```mermaid
+flowchart LR
+  A["agent.ts"] --> R["providers/index.ts"]
+  R --> G["getAdapter(provider)"]
+  G --> P["ProviderAdapter"]
+  P --> C["chat()"]
+  P --> T["chatWithTools()"]
+  T --> L["runToolLoop()"]
+  L --> X["executeTool()"]
+  L --> CM["context-manager"]
+```
 
-Provider determined by model prefix: `anthropic/claude-opus-4-6`, `openai/gpt-5.3-codex`
+- Both `chat()` and `chatWithTools()` calls are routed through the same adapter registry.
+- Providers expose a common interface (`src/providers/adapter.ts`), including:
+  - `isAvailable()`
+  - `chat(messages, options, config)`
+  - tool-loop adapter methods used by `runToolLoop()`
+- `runToolLoop()` is the single tool execution path across Anthropic, Codex, and OpenAI-compatible providers.
+- Context compaction behavior is unified through shared context manager utilities used by each adapter.
+
+## Registry + Adapters
+
+- Registry entrypoint: `src/providers/index.ts`
+- Adapter implementations:
+  - `src/providers/adapters/anthropic-adapter.ts`
+  - `src/providers/adapters/codex-adapter.ts`
+  - `src/providers/adapters/openai-adapter.ts`
+- Provider selection is resolved from model input via `resolveProviderRoute()` and model aliases.
 
 ## MCP Support
 
-MCP tools (via mcporter) are **only available on the Anthropic path**. Codex and OpenAI-compatible providers do not support MCP tools. mcporter spawns MCP servers as child processes and communicates over stdio JSON-RPC. Config at `~/.mcporter/mcporter.json`.
+MCP tools (via mcporter) are **only available on the Anthropic adapter path**. Codex and OpenAI-compatible adapters do not include MCP tools. mcporter spawns MCP servers as child processes and communicates over stdio JSON-RPC. Config at `~/.mcporter/mcporter.json`.
 
 ## Browser Tool
 

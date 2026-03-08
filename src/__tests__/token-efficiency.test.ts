@@ -1,10 +1,16 @@
-import { describe, it, expect, afterAll } from 'vitest';
-import { truncateToolResult, splitToolResult } from '../providers/utils.js';
+import { describe, it, expect, afterAll, vi } from 'vitest';
 import { existsSync, readdirSync, unlinkSync } from 'fs';
 import { join } from 'path';
-import { homedir } from 'os';
+import { fileURLToPath } from 'url';
 
-const scratchDir = join(homedir(), '.skimpyclaw', 'scratch');
+const testHome = fileURLToPath(new URL('../..', import.meta.url));
+vi.mock('os', async () => {
+  const actual = await vi.importActual<typeof import('os')>('os');
+  return { ...actual, homedir: () => testHome };
+});
+const { truncateToolResult, splitToolResult } = await import('../providers/utils.js');
+
+const scratchDir = join(testHome, '.skimpyclaw', 'scratch');
 
 // Clean up scratch files created during tests
 afterAll(() => {
@@ -63,7 +69,7 @@ describe('token efficiency', () => {
     describe('scratch file reads', () => {
       it('does not split reads from scratch directory', () => {
         const largeResult = 'x'.repeat(20_000);
-        const scratchPath = join(homedir(), '.skimpyclaw', 'scratch', '12345-abc.txt');
+        const scratchPath = join(testHome, '.skimpyclaw', 'scratch', '12345-abc.txt');
         const split = splitToolResult('Read', { file_path: scratchPath }, largeResult);
         expect(split).toBe(largeResult);
       });
@@ -76,7 +82,7 @@ describe('token efficiency', () => {
 
       it('does not split read_file from scratch directory', () => {
         const largeResult = 'z'.repeat(20_000);
-        const scratchPath = join(homedir(), '.skimpyclaw', 'scratch', 'foo.txt');
+        const scratchPath = join(testHome, '.skimpyclaw', 'scratch', 'foo.txt');
         const split = splitToolResult('read_file', { path: scratchPath }, largeResult);
         expect(split).toBe(largeResult);
       });

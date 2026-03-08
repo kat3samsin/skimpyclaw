@@ -46,7 +46,7 @@ describe('BUILTIN_TOOL_DEFINITIONS', () => {
 
 describe('getToolDefinitions', () => {
   it('returns at least the 4 built-in tools', async () => {
-    const tools = await getToolDefinitions();
+    const tools = await getToolDefinitions(undefined, { includeMcp: false });
     expect(tools.length).toBeGreaterThanOrEqual(4);
     const names = tools.map(t => t.name);
     expect(names).toContain('Read');
@@ -57,18 +57,18 @@ describe('getToolDefinitions', () => {
 
   it('includes Browser when browser.enabled is true', async () => {
     const config: ToolConfig = { ...toolConfig, browser: { enabled: true } };
-    const tools = await getToolDefinitions(config);
+    const tools = await getToolDefinitions(config, { includeMcp: false });
     expect(tools.map(t => t.name)).toContain('Browser');
   });
 
   it('excludes Browser when browser.enabled is false', async () => {
     const config: ToolConfig = { ...toolConfig, browser: { enabled: false } };
-    const tools = await getToolDefinitions(config);
+    const tools = await getToolDefinitions(config, { includeMcp: false });
     expect(tools.map(t => t.name)).not.toContain('Browser');
   });
 
   it('excludes Browser when no config provided', async () => {
-    const tools = await getToolDefinitions();
+    const tools = await getToolDefinitions(undefined, { includeMcp: false });
     expect(tools.map(t => t.name)).not.toContain('Browser');
   });
 
@@ -109,8 +109,8 @@ describe('getToolDefinitions', () => {
     });
 
     it('full profile behaves like default (no profile set)', async () => {
-      const defaultTools = await getToolDefinitions(toolConfig);
-      const fullTools = await getToolDefinitions({ ...toolConfig, toolProfile: 'full' });
+      const defaultTools = await getToolDefinitions(toolConfig, { includeMcp: false });
+      const fullTools = await getToolDefinitions({ ...toolConfig, toolProfile: 'full' }, { includeMcp: false });
       expect(fullTools.map(t => t.name)).toEqual(defaultTools.map(t => t.name));
     }, 15000);
   });
@@ -447,12 +447,12 @@ describe('code_with_agent', () => {
     });
 
     it('is included in getToolDefinitions when includeSpawnSubagent is true', async () => {
-      const tools = await getToolDefinitions(toolConfig, { includeAgentTools: true });
+      const tools = await getToolDefinitions(toolConfig, { includeAgentTools: true, includeMcp: false });
       expect(tools.map(t => t.name)).toContain('code_with_agent');
     });
 
     it('is excluded from getToolDefinitions when includeSpawnSubagent is false', async () => {
-      const tools = await getToolDefinitions(toolConfig);
+      const tools = await getToolDefinitions(toolConfig, { includeMcp: false });
       expect(tools.map(t => t.name)).not.toContain('code_with_agent');
     });
   });
@@ -584,12 +584,12 @@ describe('code_with_agent', () => {
     });
 
     it('is included in getToolDefinitions when includeSpawnSubagent is true', async () => {
-      const tools = await getToolDefinitions(toolConfig, { includeAgentTools: true });
+      const tools = await getToolDefinitions(toolConfig, { includeAgentTools: true, includeMcp: false });
       expect(tools.map(t => t.name)).toContain('check_code_agent');
     });
 
     it('is excluded from getToolDefinitions when includeSpawnSubagent is false', async () => {
-      const tools = await getToolDefinitions(toolConfig);
+      const tools = await getToolDefinitions(toolConfig, { includeMcp: false });
       expect(tools.map(t => t.name)).not.toContain('check_code_agent');
     });
   });
@@ -645,12 +645,12 @@ describe('code_with_team', () => {
     });
 
     it('is included in getToolDefinitions when includeSpawnSubagent is true', async () => {
-      const tools = await getToolDefinitions(toolConfig, { includeAgentTools: true });
+      const tools = await getToolDefinitions(toolConfig, { includeAgentTools: true, includeMcp: false });
       expect(tools.map(t => t.name)).toContain('code_with_team');
     });
 
     it('is excluded from getToolDefinitions when includeSpawnSubagent is false', async () => {
-      const tools = await getToolDefinitions(toolConfig);
+      const tools = await getToolDefinitions(toolConfig, { includeMcp: false });
       expect(tools.map(t => t.name)).not.toContain('code_with_team');
     });
   });

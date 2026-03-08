@@ -114,6 +114,8 @@ sequenceDiagram
   participant U as User
   participant C as Channel / API
   participant A as Agent Runtime
+  participant R as Provider Registry
+  participant P as Provider Adapter
   participant M as Model API
   participant T as Tools
 
@@ -123,15 +125,19 @@ sequenceDiagram
   A->>A: Load relevant skills
   A->>A: Sanitize user input
   alt Tools enabled
-    loop Tool loop
-      A->>M: chatWithTools(messages)
+    A->>R: chatWithTools(messages, options)
+    R->>P: resolveAdapter(model)
+    loop runToolLoop
+      P->>M: call(...)
       M-->>A: tool_use blocks
       A->>T: executeTool(name, args)
       T-->>A: tool result
     end
     M-->>A: Final text response
   else Tools disabled
-    A->>M: chat(messages)
+    A->>R: chat(messages, options)
+    R->>P: resolveAdapter(model)
+    P->>M: chat(...)
     M-->>A: Response text
   end
   A->>A: Append turn to daily memory
@@ -144,36 +150,35 @@ sequenceDiagram
 <summary>📄 Text version</summary>
 
 ```
-User    Channel/API    Agent Runtime    Model API    Tools
- │           │               │              │          │
- │──message────────────────►│              │          │
- │           │──runAgentTurn(agent, msg)──►│          │
- │           │               │──build prompt          │
- │           │               │──load skills           │
- │           │               │──sanitize              │
- │           │               │              │          │
- │           │    [Tools enabled]                      │
- │           │               │              │          │
- │           │               ╔══════════════╧══════════╗
- │           │               ║       TOOL LOOP         ║
- │           │               ║  ──chatWithTools───────►│
- │           │               ║  ◄──tool_use blocks─────│
- │           │               ║  ──executeTool──────────┼──►
- │           │               ║  ◄──tool result─────────┼──│
- │           │               ╚═════════════════════════╝
- │           │               │              │          │
- │           │               │◄─final response          │
- │           │               │                         │
- │           │    [Tools disabled]                     │
- │           │               │              │          │
- │           │               │──chat───────►│          │
- │           │               │◄─response────│          │
- │           │               │              │          │
- │           │               │──append to memory       │
- │           │               │──record audit           │
- │           │◄──────────────│              │          │
- │◄─reply────────────────────│              │          │
- │           │               │              │          │
+User   Channel/API   Agent Runtime   Provider Registry   Adapter   Model API   Tools
+ │          │              │                 │              │          │         │
+ │──message───────────────►│                 │              │          │         │
+ │          │──runAgentTurn(agent,msg)──────►│              │          │         │
+ │          │              │──build prompt                  │          │         │
+ │          │              │──load skills                   │          │         │
+ │          │              │──sanitize                      │          │         │
+ │          │              │                 │              │          │         │
+ │          │   [Tools enabled]             │              │          │         │
+ │          │              │──chatWithTools─►│              │          │         │
+ │          │              │                 │──resolve────►│          │         │
+ │          │              │                 │              ╔══════════╧══════╗  │
+ │          │              │                 │              ║   runToolLoop    ║  │
+ │          │              │                 │              ║ ──call──────────►│  │
+ │          │              │                 │              ║ ◄─tool calls─────│  │
+ │          │              │──executeTool──────────────────────────────────────►│
+ │          │              │◄────────────────────────────────────tool result────│
+ │          │              │                 │              ╚═══════════════════╝
+ │          │              │◄────────────────final response──────│          │     │
+ │          │              │                 │              │          │         │
+ │          │   [Tools disabled]            │              │          │         │
+ │          │              │──chat──────────►│              │          │         │
+ │          │              │                 │──resolve────►│          │         │
+ │          │              │                 │              │──chat───►│         │
+ │          │              │                 │              │◄─response│         │
+ │          │              │──append to memory                                │
+ │          │              │──record audit                                    │
+ │          │◄─────────────│                 │              │          │         │
+ │◄─reply──────────────────│                 │              │          │         │
 ```
 </details>
 
@@ -308,13 +313,37 @@ dist/                   # Compiled output + built dashboard assets
 
 ## Model Provider Architecture
 
-Three provider paths in `agent.ts`:
+Provider routing is unified through `src/providers/index.ts`:
 
-1. **Anthropic** — `chatWithTools()` — standard Anthropic SDK with tool_use
-2. **Codex** — `codexChat()` — raw fetch to `chatgpt.com/backend-api/codex/responses` (ChatGPT backend)
-3. **OpenAI-compatible** — `chat()` via OpenAI SDK — includes OpenAI, Kimi, MiniMax, openrouter, groq, etc.
+1. `chat()` resolves the provider/model, gets an adapter from the registry, and calls `adapter.chat(...)`.
+2. `chatWithTools()` resolves the provider/model, gets an adapter, and runs `runToolLoop(adapter, ...)`.
+3. `runToolLoop()` is the shared tool loop for all providers (iteration control, guards, tool execution, compaction, usage/audit hooks).
 
-Both Anthropic and Codex share `ExecuteToolContext` for tool routing and file locking.
+```mermaid
+flowchart LR
+  A["agent.ts"] --> I["providers/index.ts"]
+  I --> G["getAdapter(provider)"]
+  G --> P["ProviderAdapter"]
+  P --> C["chat()"]
+  P --> TW["tool-loop hooks"]
+  I --> L["runToolLoop(adapter, ...)"]
+  L --> E["executeTool()"]
+  L --> CM["context-manager"]
+```
+
+Adapter contract (`src/providers/adapter.ts`):
+
+- `isAvailable()`
+- `chat(messages, options, config)`
+- provider-specific tool-loop methods used by `runToolLoop()` (`buildMessages`, `buildToolDefs`, `call`, result appending, compaction, usage recording)
+
+Current adapters:
+
+- `AnthropicAdapter`
+- `CodexAdapter`
+- `OpenAIAdapter` (OpenAI-compatible providers including Kimi, MiniMax, OpenRouter, Groq, etc.)
+
+MCP support is adapter-scoped: Anthropic includes MCP tool definitions; Codex/OpenAI-compatible adapters do not.
 
 ## Skills System Flow
 

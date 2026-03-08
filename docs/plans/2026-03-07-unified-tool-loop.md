@@ -1,10 +1,12 @@
 # Unified Tool Loop Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+>
+> **Status (2026-03-08):** Migration is complete. Provider routing is adapter-based (`src/providers/index.ts`) and the unified loop (`runToolLoop`) is the only tool-loop runtime path.
+>
+> **Historical note:** References below to feature flags (`config.experimental.unifiedToolLoop`) and side-by-side legacy loop phases are implementation history from the migration period, not current runtime behavior.
 
 **Goal:** Eliminate per-provider tool loop duplication by creating a single agentic loop that works with a normalized provider interface.
-
-> Current status: `unifiedToolLoop` is the default runtime path. `config.experimental.unifiedToolLoop = false` is an explicit Anthropic fallback override.
 
 **Architecture:** Extract the shared agentic loop logic (iteration, guard, compaction, observability, audit, tool execution) into a generic orchestrator. Each provider implements a thin adapter that handles only API-specific concerns (request building, response parsing, message format conversion). The orchestrator calls adapters through a normalized interface.
 

@@ -35,6 +35,13 @@ Use SkimpyClaw if you live in Telegram or Discord, want to read and own every li
 
 ## Architecture
 
+SkimpyClaw routes all model calls through a provider adapter registry in `src/providers/index.ts`.
+
+- `chat()` and `chatWithTools()` both resolve provider/model and dispatch to a `ProviderAdapter`.
+- Adapters implement `isAvailable()`, `chat()`, and `chatWithTools()` behavior via a shared interface.
+- Tool-enabled turns use one common execution path: `runToolLoop()` in `src/providers/tool-loop.ts`.
+- Context compaction is unified through shared context-management utilities used by all adapters.
+
 ```mermaid
 flowchart LR
   subgraph Channels
@@ -49,6 +56,9 @@ flowchart LR
 
   subgraph Core
     agent["Agent Runtime"]
+    registry["Provider Registry"]
+    adapters["Provider Adapters"]
+    loop["runToolLoop()"]
     codeAgents["Coding Agents"]
     cron["Cron"]
     hb["Heartbeat"]
@@ -65,12 +75,14 @@ flowchart LR
   agent --> audit
   agent --> skills
   agent --> approvals
-  agent --> models["Anthropic / OpenAI / Codex"]
+  agent --> registry --> adapters
+  adapters --> loop
+  adapters --> models["Anthropic / OpenAI / Codex / OpenAI-compatible"]
   agent --> mcp["MCP Servers"]
   agent --> fs["~/.skimpyclaw"]
 ```
 
-See [docs/architecture.md](docs/architecture.md) for runtime flow and startup sequence diagrams.
+See [docs/guide/architecture.md](docs/guide/architecture.md) for runtime flow and startup sequence diagrams.
 
 ## Quick Start
 
@@ -140,10 +152,10 @@ Bearer token is shown in startup logs.
 src/
   index.ts              # App entrypoint with logging setup
   gateway.ts            # Fastify server + top-level routes
-  agent.ts              # Prompt assembly, model routing, tool loop, memory writes
+  agent.ts              # Prompt assembly, runAgentTurn orchestration, memory writes
   tools.ts              # Tool registry + dispatch
   tools/                # Tool executors (bash, browser, file tools, path utils, execute context)
-  providers/            # Provider routing + provider implementations (anthropic/openai/codex)
+  providers/            # Provider registry, adapters, unified tool loop, provider implementations
   code-agents/          # Background coding-agent runtime (executor/parser/orchestrator/registry)
   channels/             # Channel adapters/utilities (telegram/discord)
   file-lock.ts          # In-memory file lock for concurrent writes
@@ -202,17 +214,17 @@ dist/                   # Compiled output + built dashboard assets
 
 | Doc                                            | Contents                                                         |
 | ---------------------------------------------- | ---------------------------------------------------------------- |
-| [docs/architecture.md](docs/architecture.md)   | Component diagram, runtime flow, startup sequence, source layout |
-| [docs/configuration.md](docs/configuration.md) | Full config reference, all sections with examples                |
-| [docs/tools.md](docs/tools.md)                 | Built-in tools, browser tool, MCP integration, code agents       |
-| [docs/dashboard.md](docs/dashboard.md)         | Web dashboard, all HTTP endpoints + API routes                   |
-| [docs/coding-agents.md](docs/coding-agents.md) | Coding-agent execution model and CLI backends                    |
-| [docs/cli.md](docs/cli.md)                     | CLI commands, service management                                 |
-| [docs/chat-commands.md](docs/chat-commands.md) | Telegram/Discord bot commands                                    |
-| [docs/skills.md](docs/skills.md)               | Skills system, built-in skills, creating custom skills           |
-| [docs/data-storage.md](docs/data-storage.md)   | File layout, audit log format, security notes                    |
+| [docs/guide/architecture.md](docs/guide/architecture.md)   | Component diagram, runtime flow, startup sequence, source layout |
+| [docs/guide/configuration.md](docs/guide/configuration.md) | Full config reference, all sections with examples                |
+| [docs/guide/tools.md](docs/guide/tools.md)                 | Built-in tools, browser tool, MCP integration, code agents       |
+| [docs/guide/dashboard.md](docs/guide/dashboard.md)         | Web dashboard, all HTTP endpoints + API routes                   |
+| [docs/guide/coding-agents.md](docs/guide/coding-agents.md) | Coding-agent execution model and CLI backends                    |
+| [docs/guide/cli.md](docs/guide/cli.md)                     | CLI commands, service management                                 |
+| [docs/guide/chat-commands.md](docs/guide/chat-commands.md) | Telegram/Discord bot commands                                    |
+| [docs/guide/skills.md](docs/guide/skills.md)               | Skills system, built-in skills, creating custom skills           |
+| [docs/guide/data-storage.md](docs/guide/data-storage.md)   | File layout, audit log format, security notes                    |
 | [Setup Guide](https://docs.skimpyclaw.xyz/guide/setup-guide.html) | Step-by-step installation and setup guide                        |
-| [docs/troubleshooting.md](docs/troubleshooting.md) | Common issues and solutions                                  |
+| [docs/guide/troubleshooting.md](docs/guide/troubleshooting.md) | Common issues and solutions                                  |
 
 ## Development
 

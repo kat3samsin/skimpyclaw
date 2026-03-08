@@ -24,7 +24,10 @@ Always run `pnpm build && pnpm test` after making changes. Do not submit work wi
 
 | File | Purpose |
 |------|---------|
-| `src/agent.ts` | AI model runner — Anthropic + Codex + OpenAI-compatible |
+| `src/agent.ts` | AI model runner — orchestrates prompts, provider calls, tools, and memory |
+| `src/providers/index.ts` | Provider registry + unified routing for `chat` and `chatWithTools` |
+| `src/providers/adapter.ts` | `ProviderAdapter` interface (`isAvailable()`, `chat()`, `chatWithTools` flow hooks) |
+| `src/providers/tool-loop.ts` | `runToolLoop` shared tool execution path for all providers |
 | `src/tools.ts` | Tool orchestration + MCP discovery/dispatch |
 | `src/tools/*` | Tool implementations (file, bash, browser, path-utils) |
 | `src/code-agents/*` | Coding agent CLI execution (types, parser, executor, registry, utils) |
@@ -44,7 +47,9 @@ Always run `pnpm build && pnpm test` after making changes. Do not submit work wi
 
 ## Critical Rules
 
-- **New tools go in both paths** — Anthropic `chatWithTools` AND Codex `codexChat` in agent.ts
+- **Provider routing is adapter-based** — both `chat` and `chatWithTools` route through `src/providers/index.ts`
+- **Tool loops are unified** — all providers use `runToolLoop`; do not add per-provider loop logic
+- **New providers implement `ProviderAdapter`** — include `isAvailable()`, `chat()`, and tool-loop adapter methods
 - **MCP is Anthropic-only** — Codex/OpenAI providers don't support MCP tools
 - **Pass toolConfig to runAgentTurn** — without it, the model hallucinates XML tool calls
 - **Guard Codex SSE responses** — `fc.arguments` can be undefined
