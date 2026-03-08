@@ -332,7 +332,7 @@ export function splitToolResult(
   // Fetch / fetch
   if (nameLower === 'fetch' || nameLower === 'web_fetch') {
     const url = toolInput.url || 'unknown';
-    const statusMatch = result.match(/^HTTP[\/\d.\s]+(\d{3})/m) || result.match(/status[:\s]+(\d{3})/i);
+    const statusMatch = result.match(/^HTTP[/\d.\s]+(\d{3})/m) || result.match(/status[:\s]+(\d{3})/i);
     const status = statusMatch ? statusMatch[1] : 'unknown';
     return `Fetched: ${url} | ${status} | ${result.length} chars. Content saved to ${scratchPath} — use Read tool to access.`;
   }

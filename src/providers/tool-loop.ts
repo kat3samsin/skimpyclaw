@@ -64,7 +64,7 @@ export async function runToolLoop(
   // Cumulative usage and cost across all iterations
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
-  let totalCost = { input: 0, output: 0, total: 0 };
+  const totalCost = { input: 0, output: 0, total: 0 };
   let traceStatus: 'ok' | 'error' = 'ok';
 
   try {
