@@ -147,6 +147,14 @@ export async function chatWithToolsAnthropic(params: ProviderToolChatParams): Pr
     throw new Error('Anthropic client not initialized');
   }
 
+  // Unified tool loop is the default; explicitly set false to fall back to legacy behavior.
+  if (params.config.experimental?.unifiedToolLoop !== false) {
+    const { runToolLoop } = await import('./tool-loop.js');
+    const { AnthropicAdapter } = await import('./adapters/anthropic-adapter.js');
+    const adapter = new AnthropicAdapter();
+    return runToolLoop(adapter, params.messages, params.options, params.config, params.toolConfig, params.toolContext);
+  }
+
   const { messages, options, config, toolConfig, toolContext } = params;
   const modelId = stripProvider(options.model);
   const maxIterations = toolConfig.maxIterations || 20;
@@ -366,14 +374,5 @@ export async function chatWithToolsAnthropic(params: ProviderToolChatParams): Pr
   return {
     response: '[Tool use loop reached maximum iterations]',
     toolCalls: toolLog,
-  };
-}
-
-/** Build UsageDetails from Anthropic usage response */
-function buildUsageDetails(usage: any) {
-  return {
-    prompt_tokens: usage?.input_tokens ?? 0,
-    completion_tokens: usage?.output_tokens ?? 0,
-    total_tokens: (usage?.input_tokens ?? 0) + (usage?.output_tokens ?? 0),
   };
 }
