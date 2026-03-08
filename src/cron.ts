@@ -245,8 +245,17 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
 
       // Parse and save digest from the text portion
       try {
-        parseAndSaveDigest(jobDef.id, jobDef.name, textPortion);
+        const digest = parseAndSaveDigest(jobDef.id, jobDef.name, textPortion);
         appendCronLogLine(jobDef.id, 'Digest saved');
+        if (digest.articles.length > 0) {
+          const digestMessage = digest.summary ?? textPortion;
+          try {
+            await sendActiveChannelProactiveMessage(config, digestMessage);
+            appendCronLogLine(jobDef.id, `Digest sent to chat (${digestMessage.length} chars)`);
+          } catch {
+            appendCronLogLine(jobDef.id, 'Failed to send digest to chat');
+          }
+        }
       } catch (digestErr) {
         const errMsg = digestErr instanceof Error ? digestErr.message : String(digestErr);
         appendCronLogLine(jobDef.id, `Failed to save digest: ${errMsg}`);
