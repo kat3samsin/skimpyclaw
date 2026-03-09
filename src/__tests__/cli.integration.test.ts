@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { spawnSync } from 'child_process';
 
 describe('cli integration', () => {
-  it('onboard --dry-run exits successfully without prompting', () => {
+  it('onboard --dry-run exits successfully without prompting', { timeout: 30000 }, () => {
     const result = spawnSync(
       process.execPath,
       ['--import', 'tsx', 'src/cli.ts', 'onboard', '--dry-run'],

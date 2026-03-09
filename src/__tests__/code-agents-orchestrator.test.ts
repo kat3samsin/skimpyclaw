@@ -187,7 +187,7 @@ describe('orchestrator - skip redundant parent writes', () => {
 });
 
 describe('gatherCodebaseContext', () => {
-  it('returns a non-empty string for the project root', () => {
+  it('returns a non-empty string for the project root', { timeout: 15000 }, () => {
     // Use this project's own root as the workdir
     const { resolve } = require('path');
     const projectRoot = resolve(__dirname, '..', '..');

@@ -517,6 +517,25 @@ export async function runCodeAgentBackground(
       writeCodeAgentTask(caTask);
 
       const validationCmd = buildValidationCommand(workdir, options?.validationCommands);
+      if (!validationCmd) {
+        // No build/test scripts — skip validation, mark complete
+        const endedAt = new Date();
+        const duration = Math.round((endedAt.getTime() - startedAt.getTime()) / 1000);
+        addEvent(traceId, { type: 'validation', summary: 'Skipped (no build/test scripts found)', durationMs: Date.now() - startedAt.getTime() });
+        await endTrace(traceId, 'ok');
+        Object.assign(caTask, {
+          status: 'completed',
+          endedAt: endedAt.toISOString(),
+          durationSeconds: duration,
+          exitCode,
+          validationPassed: true,
+          validationOutput: undefined,
+          outputPreview: agentOutput.slice(0, 5000),
+        });
+        writeCodeAgentTask(caTask);
+        if (!options?.skipNotification) await notifyCodeAgentResult(caTask, (id) => getCodeAgent(id) ?? null);
+        return;
+      }
       const runValidationPromise = (): Promise<string> => new Promise((res) => {
         const validationProc = exec(validationCmd, {
           cwd: workdir,

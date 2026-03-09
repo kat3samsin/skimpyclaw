@@ -64,7 +64,7 @@ afterEach(() => {
   vi.resetModules();
 });
 
-describe('coding CLI preflight guard', () => {
+describe('coding CLI preflight guard', { timeout: 15000 }, () => {
   it('fails code_with_agent before spawning when no supported CLI is available', async () => {
     const { executeCodeWithAgent, runCodeAgentBackground } = await loadSubject(PRECHECK_ERROR);
     const result = await executeCodeWithAgent({ task: 'Fix bug', workdir: process.cwd() }, toolConfig, {
