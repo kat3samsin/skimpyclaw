@@ -77,14 +77,20 @@ export async function sendToThread(
 ): Promise<boolean> {
   try {
     const thread = await client.channels.fetch(threadId).catch(() => null);
-    if (!thread || thread.type !== ChannelType.PublicThread) {
-      console.warn(`[discord] Thread ${threadId} not found or not a public thread`);
+    if (!thread) {
+      console.warn(`[discord] Channel/thread ${threadId} not found`);
+      return false;
+    }
+
+    // Accept threads and text-based channels (GuildText, PublicThread, PrivateThread)
+    if (!('send' in thread) || typeof (thread as any).send !== 'function') {
+      console.warn(`[discord] Channel ${threadId} is not sendable (type=${thread.type})`);
       return false;
     }
 
     const chunks = splitToChunks(text, 1900);
     for (const chunk of chunks) {
-      await (thread as ThreadChannel).send(chunk);
+      await (thread as any).send(chunk);
     }
     return true;
   } catch (err) {
