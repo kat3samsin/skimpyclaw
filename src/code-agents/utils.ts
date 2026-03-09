@@ -323,6 +323,16 @@ export function resolveModelAlias(
   if (model.includes('/')) {
     model = model.split('/').slice(1).join('/');
   }
+  // Resolve common shorthand names to full model IDs
+  const SHORTHAND_MAP: Record<string, string> = {
+    opus: 'claude-opus-4-6',
+    sonnet: 'claude-sonnet-4-6',
+    haiku: 'claude-haiku-4-5',
+  };
+  const lower = model.toLowerCase();
+  if (SHORTHAND_MAP[lower]) {
+    return SHORTHAND_MAP[lower];
+  }
   // Migrate deprecated Claude model names to current equivalents
   if (/^claude[-.]3[-.]5[-.]sonnet(?:[-_.].*)?$/i.test(model)) {
     return 'claude-sonnet-4-6';
