@@ -37,6 +37,7 @@ All runtime data lives under `~/.skimpyclaw/`.
     ├── usage/                           # Token usage tracking (JSONL)
     ├── code-agent-status.json          # Coding agent live status
     └── digests/                        # Digest storage for cron outputs
+        ├── index.json                  # Digest index (id -> job/date) for direct lookup/delete
         └── <job-id>/
             └── YYYY-MM-DD-<digest-id>.json
 ```
@@ -83,6 +84,8 @@ Digests are stored in `logs/digests/<job-id>/YYYY-MM-DD-<digest-id>.json`:
   "summary": "Raw digest content from agent"
 }
 ```
+
+Digest metadata is also indexed in `logs/digests/index.json` to support direct, validated lookup/deletion by digest ID.
 
 ## Security notes
 

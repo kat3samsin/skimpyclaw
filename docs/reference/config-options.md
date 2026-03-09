@@ -90,7 +90,8 @@ Map of shorthand names to full `provider/model-id`. See [Model Aliases](./model-
 | `allowFrom` | array | Allowed user IDs (string or number) |
 | `tools` | ToolConfig | Tool access config for this channel |
 | `defaultAllowedPaths` | string[] | Filesystem paths the agent can access |
-| `defaultChannelId` | string | Default channel for proactive messages |
+| `defaultChannelId` | string | Default channel for proactive messages (cron results, coding agent notifications) |
+| `threadedReplies` | boolean | Route coding agent status updates to Discord threads (default: `true`) |
 
 ## `cron`
 

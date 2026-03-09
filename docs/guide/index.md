@@ -29,6 +29,8 @@ skimpyclaw start --daemon
 
 - Read the [Architecture](/guide/architecture) overview
 - Learn about [Configuration](/guide/configuration)
+- Review [Security](/guide/security) controls and hardening notes
+- Follow the [Discord Update Documentation Process](/guide/discord-updates) when changing Discord behavior
 - Explore available [Tools](/guide/tools)
 - Set up [Cron jobs](/guide/configuration#cron) for scheduled and long-running tasks
 

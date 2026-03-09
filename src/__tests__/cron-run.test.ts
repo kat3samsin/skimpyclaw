@@ -93,4 +93,25 @@ describe('runCronJob digest chat output', () => {
 
     expect(sendActiveChannelProactiveMessageMock).not.toHaveBeenCalledWith(config, digestText);
   });
+
+  it('skips overlapping execution for the same job id', async () => {
+    let releaseFirstRun = () => {};
+    runAgentTurnMock.mockImplementation(() => new Promise<string>(resolve => {
+      releaseFirstRun = () => resolve('1. Story https://example.com/story');
+    }));
+    parseAndSaveDigestMock.mockReturnValue({ summary: '1. Story https://example.com/story', articles: [{ id: 'a1' }] });
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const firstRun = runCronJob('tech-digest', config);
+    await Promise.resolve();
+    await runCronJob('tech-digest', config);
+
+    expect(runAgentTurnMock).toHaveBeenCalledTimes(1);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Skipping overlapping run for job "tech-digest"'));
+
+    releaseFirstRun();
+    await firstRun;
+    warnSpy.mockRestore();
+  });
 });

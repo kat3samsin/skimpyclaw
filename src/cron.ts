@@ -88,6 +88,7 @@ function appendCronLogLine(jobId: string, line: string): void {
 
 // Track currently running jobs for status queries
 const runningJobs: Map<string, CronLogEntry> = new Map();
+const activeExecutions: Set<string> = new Set();
 
 export function getCronRunStatus(): { running: string[]; recent: CronLogEntry[] } {
   return {
@@ -173,6 +174,15 @@ function scheduleJob(jobDef: CronJob, config: Config): void {
 }
 
 async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void> {
+  if (activeExecutions.has(jobDef.id)) {
+    const message = `Skipping overlapping run for job "${jobDef.id}" (previous run still active)`;
+    console.warn(`[cron] ${message}`);
+    appendCronLogLine(jobDef.id, `=== SKIPPED: overlap guard (${jobDef.id}) ===`);
+    return;
+  }
+
+  activeExecutions.add(jobDef.id);
+
   const logEntry: CronLogEntry = {
     jobId: jobDef.id,
     jobName: jobDef.name,
@@ -325,6 +335,7 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
     logEntry.durationMs = new Date(logEntry.finishedAt).getTime() - new Date(logEntry.startedAt).getTime();
     writeCronLog(logEntry);
     runningJobs.delete(jobDef.id);
+    activeExecutions.delete(jobDef.id);
     const elapsed = (logEntry.durationMs / 1000).toFixed(1);
     console.log(`[cron] Job ${jobDef.id} finished: ${logEntry.status} (${elapsed}s)`);
 

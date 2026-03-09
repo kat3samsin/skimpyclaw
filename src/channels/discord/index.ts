@@ -11,6 +11,7 @@ import { onApprovalEvent } from '../../exec-approval.js';
 import { KNOWN_COMMANDS } from './types.js';
 import { handleCommand, handleIncomingMessage, handleInteraction, sendApprovalCard } from './handlers.js';
 import { splitToChunks, conversationKey } from './utils.js';
+import { sendToThread } from './threads.js';
 
 let client: Client | null = null;
 let config: Config;
@@ -170,4 +171,14 @@ export async function sendDiscordProactiveVoice(target: string | number, buffer:
   if (user) {
     await user.send({ files: [attachment] });
   }
+}
+
+/**
+ * Send a message to a Discord thread by ID.
+ * Used by code-agent notifications to route updates to task-specific threads.
+ * Returns true if sent successfully, false if client unavailable or thread not found.
+ */
+export async function sendToDiscordThread(threadId: string, message: string): Promise<boolean> {
+  if (!client) return false;
+  return sendToThread(client, threadId, message);
 }

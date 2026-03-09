@@ -65,6 +65,18 @@ For team coordinators, this shows all child agents grouped by wave with status, 
 
 The dashboard (`/dashboard` → Coding page) also shows real-time agent status with expandable subagent cards.
 
+## Discord notifications
+
+When a coding agent starts from a Discord message, a thread is automatically created from the triggering message (unless `threadedReplies: false` in config). Status updates and completion results route to the thread first, falling back to the default channel.
+
+Notification format:
+- **Start**: Response includes "Started coding agent ca-N" which triggers thread creation
+- **Success**: `✅ Coding agent {id} completed ({duration}). Task: {preview}. Result: {output}`
+- **Failure**: Includes error details and output snippet
+- **Team tasks**: Structured summary with per-child status and validation results
+
+Notifications are also sent to the active channel (Telegram or Discord) via `sendActiveChannelProactiveMessage()`. Long messages are chunked at 1900 characters for Discord.
+
 ## Selection behavior
 
 - Agent selection supports `claude`, `codex`, `kimi`

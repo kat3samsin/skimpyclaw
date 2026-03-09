@@ -8,7 +8,7 @@ import {
   writeFileSync,
   unlinkSync,
 } from 'fs';
-import { join } from 'path';
+import { join, resolve, sep } from 'path';
 import { createHash } from 'crypto';
 import { getLogsDir } from './config.js';
 
@@ -45,6 +45,16 @@ export interface DigestListItem {
 }
 
 const DIGESTS_DIR_NAME = 'digests';
+const DIGEST_INDEX_FILE = 'index.json';
+const DIGEST_ID_PATTERN = /^[A-Za-z0-9_-]+-[a-f0-9]{8}$/;
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+interface DigestIndexEntry {
+  jobId: string;
+  date: string;
+}
+
+type DigestIndex = Record<string, DigestIndexEntry>;
 
 export function getDigestsDir(): string {
   const dir = join(getLogsDir(), DIGESTS_DIR_NAME);
@@ -71,16 +81,89 @@ function generateArticleId(url: string): string {
   return createHash('md5').update(url).digest('hex').slice(0, 12);
 }
 
+function getDigestIndexPath(): string {
+  return join(getDigestsDir(), DIGEST_INDEX_FILE);
+}
+
+function isValidPathToken(value: string): boolean {
+  return value.length > 0 && !value.includes('/') && !value.includes('\\') && !value.includes('\0') && !value.includes('..');
+}
+
+function isValidDigestId(id: string): boolean {
+  return DIGEST_ID_PATTERN.test(id) && isValidPathToken(id);
+}
+
+function isValidDate(value: string): boolean {
+  return DATE_PATTERN.test(value);
+}
+
+function getDigestDate(digest: Digest): string {
+  return new Date(digest.createdAt).toISOString().split('T')[0];
+}
+
+function loadDigestIndex(): DigestIndex {
+  const indexPath = getDigestIndexPath();
+  if (!existsSync(indexPath)) return {};
+  try {
+    const parsed = JSON.parse(readFileSync(indexPath, 'utf-8')) as Record<string, unknown>;
+    const valid: DigestIndex = {};
+    for (const [id, entry] of Object.entries(parsed)) {
+      if (!isValidDigestId(id) || !entry || typeof entry !== 'object') continue;
+      const jobId = (entry as { jobId?: unknown }).jobId;
+      const date = (entry as { date?: unknown }).date;
+      if (typeof jobId !== 'string' || typeof date !== 'string') continue;
+      if (!isValidPathToken(jobId) || !isValidDate(date)) continue;
+      valid[id] = { jobId, date };
+    }
+    return valid;
+  } catch {
+    return {};
+  }
+}
+
+function saveDigestIndex(index: DigestIndex): void {
+  writeFileSync(getDigestIndexPath(), JSON.stringify(index, null, 2), 'utf-8');
+}
+
+function setDigestIndexEntry(index: DigestIndex, digest: Digest): boolean {
+  const date = getDigestDate(digest);
+  if (!isValidDigestId(digest.id) || !isValidPathToken(digest.jobId) || !isValidDate(date)) return false;
+  const current = index[digest.id];
+  if (current && current.jobId === digest.jobId && current.date === date) return false;
+  index[digest.id] = { jobId: digest.jobId, date };
+  return true;
+}
+
+function resolveDigestFilePath(id: string, entry: DigestIndexEntry): string | null {
+  if (!isValidDigestId(id) || !isValidPathToken(entry.jobId) || !isValidDate(entry.date)) {
+    return null;
+  }
+  const baseDir = getDigestsDir();
+  const resolvedBase = resolve(baseDir);
+  const resolvedPath = resolve(baseDir, entry.jobId, `${entry.date}-${id}.json`);
+  if (resolvedPath !== resolvedBase && !resolvedPath.startsWith(`${resolvedBase}${sep}`)) {
+    return null;
+  }
+  return resolvedPath;
+}
+
 export function saveDigest(digest: Digest): void {
   const jobDir = getJobDir(digest.jobId);
-  const date = new Date(digest.createdAt).toISOString().split('T')[0];
+  const date = getDigestDate(digest);
   const filePath = join(jobDir, `${date}-${digest.id}.json`);
   writeFileSync(filePath, JSON.stringify(digest, null, 2), 'utf-8');
+
+  const index = loadDigestIndex();
+  if (setDigestIndexEntry(index, digest)) {
+    saveDigestIndex(index);
+  }
 }
 
 export function getDigests(jobId?: string, limit?: number): DigestListItem[] {
   const digestsDir = getDigestsDir();
   const items: DigestListItem[] = [];
+  const index = loadDigestIndex();
+  let indexChanged = false;
 
   const jobDirs = jobId
     ? [join(digestsDir, jobId)].filter(existsSync)
@@ -103,6 +186,9 @@ export function getDigests(jobId?: string, limit?: number): DigestListItem[] {
           articleCount: digest.articles.length,
           preview: digest.articles.slice(0, 2).map(a => a.title),
         });
+        if (setDigestIndexEntry(index, digest)) {
+          indexChanged = true;
+        }
       } catch {
         // Skip invalid files
       }
@@ -113,56 +199,57 @@ export function getDigests(jobId?: string, limit?: number): DigestListItem[] {
   items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   if (limit && limit > 0) {
+    if (indexChanged) {
+      saveDigestIndex(index);
+    }
     return items.slice(0, limit);
+  }
+  if (indexChanged) {
+    saveDigestIndex(index);
   }
   return items;
 }
 
 export function getDigest(id: string): Digest | null {
-  const digestsDir = getDigestsDir();
-  const jobDirs = readdirSync(digestsDir, { withFileTypes: true })
-    .filter(d => d.isDirectory())
-    .map(d => join(digestsDir, d.name));
+  const index = loadDigestIndex();
+  const entry = index[id];
+  if (!entry) return null;
 
-  for (const dir of jobDirs) {
-    const files = readdirSync(dir).filter(f => f.endsWith('.json'));
-    for (const file of files) {
-      try {
-        const content = readFileSync(join(dir, file), 'utf-8');
-        const digest: Digest = JSON.parse(content);
-        if (digest.id === id) {
-          return digest;
-        }
-      } catch {
-        // Skip invalid files
-      }
-    }
+  const filePath = resolveDigestFilePath(id, entry);
+  if (!filePath || !existsSync(filePath)) {
+    delete index[id];
+    saveDigestIndex(index);
+    return null;
   }
-  return null;
+
+  try {
+    const content = readFileSync(filePath, 'utf-8');
+    return JSON.parse(content) as Digest;
+  } catch {
+    return null;
+  }
 }
 
 export function deleteDigest(id: string): boolean {
-  const digestsDir = getDigestsDir();
-  const jobDirs = readdirSync(digestsDir, { withFileTypes: true })
-    .filter(d => d.isDirectory())
-    .map(d => join(digestsDir, d.name));
+  const index = loadDigestIndex();
+  const entry = index[id];
+  if (!entry) return false;
 
-  for (const dir of jobDirs) {
-    const files = readdirSync(dir).filter(f => f.endsWith('.json'));
-    for (const file of files) {
-      try {
-        const content = readFileSync(join(dir, file), 'utf-8');
-        const digest: Digest = JSON.parse(content);
-        if (digest.id === id) {
-          unlinkSync(join(dir, file));
-          return true;
-        }
-      } catch {
-        // Skip invalid files
-      }
-    }
+  const filePath = resolveDigestFilePath(id, entry);
+  if (!filePath || !existsSync(filePath)) {
+    delete index[id];
+    saveDigestIndex(index);
+    return false;
   }
-  return false;
+
+  try {
+    unlinkSync(filePath);
+    delete index[id];
+    saveDigestIndex(index);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function updateArticleReadStatus(digestId: string, articleId: string, read: boolean): boolean {

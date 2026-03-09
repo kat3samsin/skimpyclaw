@@ -74,6 +74,7 @@ export default withMermaid({
           items: [
             { text: 'Architecture', link: '/guide/architecture.html' },
             { text: 'Configuration', link: '/guide/configuration.html' },
+            { text: 'Security', link: '/guide/security.html' },
             { text: 'Data Storage', link: '/guide/data-storage.html' },
           ]
         },
@@ -95,6 +96,8 @@ export default withMermaid({
           items: [
             { text: 'CLI', link: '/guide/cli.html' },
             { text: 'Chat Commands', link: '/guide/chat-commands.html' },
+            { text: 'Discord Updates', link: '/guide/discord-updates.html' },
+            { text: 'Changelog', link: '/guide/changelog.html' },
             { text: 'Troubleshooting', link: '/guide/troubleshooting.html' },
           ]
         },

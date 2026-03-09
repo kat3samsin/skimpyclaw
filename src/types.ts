@@ -121,6 +121,8 @@ export interface DiscordChannelConfig {
   tools?: ToolConfig;
   defaultAllowedPaths?: string[];
   defaultChannelId?: string;
+  /** Route coding agent status updates to a thread on the triggering message (default: true) */
+  threadedReplies?: boolean;
 }
 
 export interface ChannelsConfig {

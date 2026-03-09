@@ -21,7 +21,7 @@
     "start": "tsx src/index.ts",
     "dev": "tsx watch src/index.ts",
     "dashboard:dev": "pnpm --dir web/dashboard dev",
-    "dashboard:build": "pnpm --dir web/dashboard install --frozen-lockfile && pnpm --dir web/dashboard build",
+    "dashboard:build": "pnpm --dir web/dashboard build",
     "docs:dev": "pnpm --dir docs dev",
     "docs:build": "pnpm --dir docs install --frozen-lockfile && pnpm --dir docs build",
     "docs:preview": "pnpm --dir docs preview",

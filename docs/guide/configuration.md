@@ -147,6 +147,7 @@ Provider is determined by the prefix before `/` in the model string (e.g., `open
   "token": "${DISCORD_BOT_TOKEN}",
   "allowFrom": ["username", "123456789"],
   "defaultChannelId": "123456789",
+  "threadedReplies": true,
   "tools": {
     "enabled": true,
     "allowedPaths": ["${HOME}/.skimpyclaw"]

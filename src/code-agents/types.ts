@@ -8,6 +8,8 @@ export interface CodeAgentTask {
   task: string;                  // full prompt
   status: 'running' | 'validating' | 'completed' | 'failed' | 'timeout' | 'pending' | 'cancelled';
   chatId?: number;               // for notification delivery
+  discordThreadId?: string;      // Discord thread ID for threaded status updates
+  discordChannelId?: string;     // Discord channel ID where the task was triggered
   startedAt: string;
   endedAt?: string;
   durationSeconds?: number;

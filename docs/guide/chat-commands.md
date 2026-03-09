@@ -10,11 +10,14 @@
 | `/cron list` | List scheduled jobs |
 | `/cron run <job-id>` | Trigger a cron job on demand |
 | `/heartbeat` | Trigger an on-demand heartbeat check |
-| `/silence <minutes>` | Suppress proactive messages for N minutes |
+| `/silence <minutes>` | Suppress proactive messages for N minutes (default: 30) |
 | `/focus` | Enable focus mode |
+| `/approvals` | List pending exec approval requests |
+| `/approve <id>` | Approve a pending exec request |
+| `/deny <id>` | Deny a pending exec request |
 | `/tasks` | Redirect to /agents or /cron |
 | `/cancel <id>` | Redirect to dashboard or /cron |
-| `/new` | Clear conversation history |
+| `/clear` | Clear conversation history |
 | `/compact` | Summarize and compress conversation history |
 
 ## Telegram-only
@@ -23,6 +26,15 @@
 |---------|-------------|
 | `/memory` | List agent memory files |
 | `/memory <filename>` | Read a specific memory file |
+
+## Discord-specific behavior
+
+- **Interactive approval cards** — When exec approval is needed, Discord sends a message with Approve/Deny buttons (Telegram uses inline keyboards).
+- **Threaded replies** — Coding agent tasks automatically create a Discord thread from the triggering message. Status updates and completion notifications route to the thread. Disable with `threadedReplies: false` in Discord config.
+- **Message chunking** — Long responses are split at paragraph/line boundaries into chunks of 1900 characters (Discord's limit is 2000).
+- **Image and voice support** — Image attachments are analyzed via the model's vision capability. Voice messages are transcribed (Whisper) and optionally replied to with TTS audio.
+
+Maintainers: for Discord posting/workflow changes, follow [Discord Update Documentation Process](/guide/discord-updates).
 
 ## Non-command messages
 

@@ -1,4 +1,7 @@
 import type { FastifyInstance } from 'fastify';
+import { readdirSync, statSync, unlinkSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import type { Config } from './types.js';
 import { createGateway } from './gateway.js';
 import { initCron, stopCron } from './cron.js';
@@ -18,9 +21,6 @@ export interface SkimpyClawRuntime {
 /** Clean up old scratch files (observation masking). Keeps files < 24h. */
 function cleanupScratch(): void {
   try {
-    const { readdirSync, statSync, unlinkSync } = require('fs');
-    const { join } = require('path');
-    const { homedir } = require('os');
     const dir = join(homedir(), '.skimpyclaw', 'scratch');
     const cutoff = Date.now() - 24 * 60 * 60 * 1000;
     let count = 0;

@@ -138,22 +138,9 @@ Bearer token is shown in startup logs.
 
 ## Security
 
-SkimpyClaw applies defense-in-depth for a locally-run agent that executes tools on your behalf.
+SkimpyClaw uses defense-in-depth for local execution: strict config/secrets handling, bearer-authenticated control endpoints, constrained tool paths, SSRF protections, and safer command execution defaults.
 
-| Layer | Mechanism |
-|-------|-----------|
-| **Config file permissions** | `~/.skimpyclaw/config.json` is written with `0600` (owner-only) permissions |
-| **Secrets in config** | Use `${ENV_VAR}` or `${KEYCHAIN:service/account}` (macOS) — raw secrets are never stored in JSON |
-| **Env sanitization** | Bash and cron-script child processes get a sanitized env with API keys, tokens, and credentials stripped. `GH_TOKEN` is allowlisted |
-| **Fetch SSRF protection** | The fetch tool blocks private/reserved IPs, cloud metadata endpoints, and re-validates targets on every redirect hop |
-| **Gateway auth** | All sensitive endpoints (`/message`, `/model`, `/reload`, `/cron/*`, `/status`) require a Bearer token |
-| **Cron prompt paths** | Prompt file references in cron jobs are restricted to `~/.skimpyclaw/prompts/` — path traversal is rejected |
-| **Tool path restriction** | All file/dir tool operations are constrained to `ToolConfig.allowedPaths` |
-| **Bash safety** | Dangerous commands are blocked by a blocklist; risky commands (tier 2–3) require human approval via exec-approval |
-| **Token comparison** | Bearer token validation uses SHA-256 hashing with `timingSafeEqual` to prevent timing attacks |
-| **Voice TTS** | Shell commands use `spawnSync` with argument arrays — no string interpolation / shell injection risk |
-| **Channel allowlists** | Telegram/Discord access restricted to configured `allowFrom` IDs |
-| **Dashboard redaction** | Config API responses redact key/token-like fields |
+For the full security model and controls, see [docs/guide/security.md](docs/guide/security.md).
 
 ## Tech Stack
 
@@ -235,11 +222,14 @@ dist/                   # Compiled output + built dashboard assets
 | ---------------------------------------------- | ---------------------------------------------------------------- |
 | [docs/guide/architecture.md](docs/guide/architecture.md)   | Component diagram, runtime flow, startup sequence, source layout |
 | [docs/guide/configuration.md](docs/guide/configuration.md) | Full config reference, all sections with examples                |
+| [docs/guide/security.md](docs/guide/security.md)           | Security model and runtime safeguards                             |
 | [docs/guide/tools.md](docs/guide/tools.md)                 | Built-in tools, browser tool, MCP integration, code agents       |
 | [docs/guide/dashboard.md](docs/guide/dashboard.md)         | Web dashboard, all HTTP endpoints + API routes                   |
 | [docs/guide/coding-agents.md](docs/guide/coding-agents.md) | Coding-agent execution model and CLI backends                    |
 | [docs/guide/cli.md](docs/guide/cli.md)                     | CLI commands, service management                                 |
 | [docs/guide/chat-commands.md](docs/guide/chat-commands.md) | Telegram/Discord bot commands                                    |
+| [docs/guide/discord-updates.md](docs/guide/discord-updates.md) | Discord workflow documentation maintenance process            |
+| [docs/guide/changelog.md](docs/guide/changelog.md)         | Documentation and behavior changelog                              |
 | [docs/guide/skills.md](docs/guide/skills.md)               | Skills system, built-in skills, creating custom skills           |
 | [docs/guide/data-storage.md](docs/guide/data-storage.md)   | File layout, audit log format, security notes                    |
 | [Setup Guide](https://docs.skimpyclaw.xyz/guide/setup-guide.html) | Step-by-step installation and setup guide                        |

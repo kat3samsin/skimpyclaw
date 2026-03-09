@@ -33,7 +33,7 @@ Always run `pnpm build && pnpm test` after making changes. Do not submit work wi
 | `src/code-agents/*` | Coding agent CLI execution (types, parser, executor, registry, utils) |
 | `src/exec-approval.ts` | Bash risk classification (tier 0–3) + approval registry |
 | `src/telegram.ts` | Telegram bot |
-| `src/discord.ts` | Discord bot |
+| `src/channels/discord/*` | Discord bot (handlers, threads, utils, types) |
 
 | `src/gateway.ts` | Fastify HTTP server on port 18790 |
 | `src/api.ts` | Dashboard REST API under `/api/dashboard/*` |
