@@ -9,6 +9,7 @@ import { spawnSync } from 'child_process';
 import { randomUUID } from 'crypto';
 import { runDoctor as runDoctorChecks } from './doctor/runner.js';
 import { toErrorMessage } from './utils.js';
+import { secureStoreAvailable, setSecureValue } from './secure-store.js';
 import {
   detectSandboxRuntime,
   isSandboxRuntimeRunning,
@@ -247,6 +248,85 @@ interface ProviderSecrets {
   kimiKey?: string;
 }
 
+/** Map of secret name → config reference string (KEYCHAIN ref or ENV ref). */
+interface SecretRefs {
+  anthropicKey?: string;
+  oauthToken?: string;
+  openaiKey?: string;
+  minimaxKey?: string;
+  kimiKey?: string;
+  telegramToken?: string;
+  discordToken?: string;
+}
+
+const KEYCHAIN_SERVICE = 'skimpyclaw';
+
+/** Secret name → Keychain account name mapping. */
+const SECRET_KEYCHAIN_ACCOUNTS: Record<keyof ProviderSecrets | 'telegramToken' | 'discordToken', string> = {
+  anthropicKey: 'anthropic-api-key',
+  oauthToken: 'anthropic-oauth-token',
+  openaiKey: 'openai-api-key',
+  minimaxKey: 'minimax-api-key',
+  kimiKey: 'kimi-api-key',
+  telegramToken: 'telegram-bot-token',
+  discordToken: 'discord-bot-token',
+};
+
+/** Secret name → env var name mapping (fallback when Keychain unavailable). */
+const SECRET_ENV_VARS: Record<keyof ProviderSecrets | 'telegramToken' | 'discordToken', string> = {
+  anthropicKey: 'ANTHROPIC_API_KEY',
+  oauthToken: 'CLAUDE_CODE_OAUTH_TOKEN',
+  openaiKey: 'OPENAI_API_KEY',
+  minimaxKey: 'MINIMAX_API_KEY',
+  kimiKey: 'KIMI_API_KEY',
+  telegramToken: 'TELEGRAM_BOT_TOKEN',
+  discordToken: 'DISCORD_BOT_TOKEN',
+};
+
+/**
+ * Store secrets securely. On macOS, uses Keychain and returns ${KEYCHAIN:...} refs.
+ * On other platforms, returns ${ENV_VAR} refs for .env file fallback.
+ * Returns the reference map and whether Keychain was used.
+ */
+function storeSecretsSecurely(
+  secrets: ProviderSecrets,
+  telegramToken: string,
+  discordToken?: string,
+): { refs: SecretRefs; useKeychain: boolean; storedCount: number } {
+  const keychainOk = secureStoreAvailable().ok;
+  const refs: SecretRefs = {};
+  let storedCount = 0;
+
+  const allSecrets: Array<{ key: keyof SecretRefs; value: string | undefined }> = [
+    { key: 'anthropicKey', value: secrets.anthropicKey },
+    { key: 'oauthToken', value: secrets.oauthToken },
+    { key: 'openaiKey', value: secrets.openaiKey },
+    { key: 'minimaxKey', value: secrets.minimaxKey },
+    { key: 'kimiKey', value: secrets.kimiKey },
+    { key: 'telegramToken', value: telegramToken },
+    { key: 'discordToken', value: discordToken },
+  ];
+
+  for (const { key, value } of allSecrets) {
+    if (!value) continue;
+    if (keychainOk) {
+      try {
+        const account = SECRET_KEYCHAIN_ACCOUNTS[key as keyof typeof SECRET_KEYCHAIN_ACCOUNTS];
+        setSecureValue(KEYCHAIN_SERVICE, account, value);
+        refs[key] = `\${KEYCHAIN:${KEYCHAIN_SERVICE}/${account}}`;
+        storedCount++;
+        continue;
+      } catch {
+        // Fall through to env var ref
+      }
+    }
+    const envVar = SECRET_ENV_VARS[key as keyof typeof SECRET_ENV_VARS];
+    refs[key] = `\${${envVar}}`;
+  }
+
+  return { refs, useKeychain: keychainOk && storedCount > 0, storedCount };
+}
+
 interface SetupFeatures {
   browser: boolean;
   voice: boolean;
@@ -265,6 +345,8 @@ interface SetupBuildInput {
   agentName: string;
   selectedProviders: Set<ProviderChoice>;
   providerSecrets: ProviderSecrets;
+  /** Resolved secret references (KEYCHAIN or ENV). If not provided, falls back to env var refs. */
+  secretRefs?: SecretRefs;
   features?: SetupFeatures;
   starters?: SetupStarters;
 }
@@ -362,25 +444,25 @@ async function collectProviderSecrets(
   return secrets;
 }
 
-function buildProviders(providers: Set<ProviderChoice>): Record<string, Record<string, string>> {
+function buildProviders(providers: Set<ProviderChoice>, refs?: SecretRefs): Record<string, Record<string, string>> {
   const result: Record<string, Record<string, string>> = {};
 
   if (providers.has('anthropic-api')) {
-    result.anthropic = { apiKey: '${ANTHROPIC_API_KEY}' };
+    result.anthropic = { apiKey: refs?.anthropicKey || '${ANTHROPIC_API_KEY}' };
   } else if (providers.has('anthropic-oauth')) {
-    result.anthropic = { authToken: '${CLAUDE_CODE_OAUTH_TOKEN}' };
+    result.anthropic = { authToken: refs?.oauthToken || '${CLAUDE_CODE_OAUTH_TOKEN}' };
   }
 
   if (providers.has('openai-api')) {
-    result.openai = { apiKey: '${OPENAI_API_KEY}', baseURL: 'https://api.openai.com/v1' };
+    result.openai = { apiKey: refs?.openaiKey || '${OPENAI_API_KEY}', baseURL: 'https://api.openai.com/v1' };
   }
 
   if (providers.has('minimax-api')) {
-    result.minimax = { apiKey: '${MINIMAX_API_KEY}', baseURL: 'https://api.minimax.io/v1' };
+    result.minimax = { apiKey: refs?.minimaxKey || '${MINIMAX_API_KEY}', baseURL: 'https://api.minimax.io/v1' };
   }
 
   if (providers.has('kimi-api')) {
-    result.kimi = { apiKey: '${KIMI_API_KEY}', baseURL: 'https://api.kimi.com/coding/v1' };
+    result.kimi = { apiKey: refs?.kimiKey || '${KIMI_API_KEY}', baseURL: 'https://api.kimi.com/coding/v1' };
   }
 
   if (providers.has('codex-oauth')) {
@@ -441,14 +523,17 @@ function buildEnvContent(
   providers: Set<ProviderChoice>,
   secrets: ProviderSecrets,
   discordToken?: string,
+  keychainRefs?: SecretRefs,
 ): string {
   const lines = ['# SkimpyClaw secrets'];
+  // Helper: only write to .env if NOT stored in Keychain
+  const isInKeychain = (key: keyof SecretRefs) => keychainRefs?.[key]?.includes('KEYCHAIN:');
 
-  if (providers.has('anthropic-api') && secrets.anthropicKey) {
+  if (providers.has('anthropic-api') && secrets.anthropicKey && !isInKeychain('anthropicKey')) {
     lines.push(`ANTHROPIC_API_KEY=${secrets.anthropicKey}`);
   }
 
-  if (providers.has('anthropic-oauth')) {
+  if (providers.has('anthropic-oauth') && !isInKeychain('oauthToken')) {
     if (secrets.oauthToken) {
       lines.push(`CLAUDE_CODE_OAUTH_TOKEN=${secrets.oauthToken}`);
     } else {
@@ -457,20 +542,22 @@ function buildEnvContent(
     }
   }
 
-  if (providers.has('openai-api') && secrets.openaiKey) {
+  if (providers.has('openai-api') && secrets.openaiKey && !isInKeychain('openaiKey')) {
     lines.push(`OPENAI_API_KEY=${secrets.openaiKey}`);
   }
 
-  if (providers.has('minimax-api') && secrets.minimaxKey) {
+  if (providers.has('minimax-api') && secrets.minimaxKey && !isInKeychain('minimaxKey')) {
     lines.push(`MINIMAX_API_KEY=${secrets.minimaxKey}`);
   }
 
-  if (providers.has('kimi-api') && secrets.kimiKey) {
+  if (providers.has('kimi-api') && secrets.kimiKey && !isInKeychain('kimiKey')) {
     lines.push(`KIMI_API_KEY=${secrets.kimiKey}`);
   }
 
-  lines.push(`TELEGRAM_BOT_TOKEN=${telegramToken}`);
-  if (discordToken) {
+  if (!isInKeychain('telegramToken')) {
+    lines.push(`TELEGRAM_BOT_TOKEN=${telegramToken}`);
+  }
+  if (discordToken && !isInKeychain('discordToken')) {
     lines.push(`DISCORD_BOT_TOKEN=${discordToken}`);
   }
   lines.push('');
@@ -516,14 +603,14 @@ export function buildSetupConfig(input: SetupBuildInput): Record<string, unknown
       },
     },
     models: {
-      providers: buildProviders(input.selectedProviders),
+      providers: buildProviders(input.selectedProviders, input.secretRefs),
       aliases: buildAliases(input.selectedProviders),
     },
     channels: {
       active: useDiscord ? 'discord' : 'telegram',
       telegram: {
         enabled: true,
-        token: '${TELEGRAM_BOT_TOKEN}',
+        token: input.secretRefs?.telegramToken || '${TELEGRAM_BOT_TOKEN}',
         allowFrom: [parseInt(input.telegramId, 10) || input.telegramId],
         dailyNotesDir: '${HOME}/.skimpyclaw/Daily Notes',
         defaultAllowedPaths: allPaths,
@@ -537,7 +624,7 @@ export function buildSetupConfig(input: SetupBuildInput): Record<string, unknown
       },
       discord: {
         enabled: useDiscord,
-        token: useDiscord ? '${DISCORD_BOT_TOKEN}' : '',
+        token: useDiscord ? (input.secretRefs?.discordToken || '${DISCORD_BOT_TOKEN}') : '',
         allowFrom: useDiscord ? [input.discordUserId || ''] : [],
         defaultAllowedPaths: allPaths,
         ...(input.discordDefaultChannelId ? { defaultChannelId: input.discordDefaultChannelId } : {}),
@@ -610,7 +697,7 @@ export function buildSetupArtifacts(input: SetupBuildInput): { configJson: strin
   const config = buildSetupConfig(input);
   return {
     configJson: JSON.stringify(config, null, 2),
-    envContent: buildEnvContent(input.telegramToken, input.selectedProviders, input.providerSecrets, input.discordToken),
+    envContent: buildEnvContent(input.telegramToken, input.selectedProviders, input.providerSecrets, input.discordToken, input.secretRefs),
     config,
   };
 }
@@ -975,6 +1062,16 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
       skillWebSearch: false,
     };
 
+    // Store secrets in macOS Keychain when available (default on macOS)
+    const { refs: secretRefs, useKeychain, storedCount } = storeSecretsSecurely(
+      providerSecrets,
+      telegramToken,
+      useDiscord ? discordToken : undefined,
+    );
+    if (useKeychain) {
+      statusOk(`${storedCount} secret(s) stored in macOS Keychain`);
+    }
+
     const { envContent, config: generatedConfig } = buildSetupArtifacts({
       workspaceDir: extraAllowedPaths[0] || join(homedir(), '.skimpyclaw'),
       extraAllowedPaths,
@@ -986,6 +1083,7 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
       agentName,
       selectedProviders,
       providerSecrets,
+      secretRefs,
       features,
       starters,
     });
