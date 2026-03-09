@@ -10,6 +10,7 @@ import { homedir } from 'node:os';
 import { runAgentTurn } from './agent.js';
 import { startTrace, addEvent, endTrace } from './audit.js';
 import { sendActiveChannelProactiveMessage, sendActiveChannelProactiveVoice, getActiveChannelId } from './channels.js';
+import { sendToDiscordThread } from './channels/discord/index.js';
 import { parseAndSaveDigest } from './digests.js';
 import { synthesizeSpeech } from './voice.js';
 import { toErrorMessage } from './utils.js';
@@ -95,6 +96,31 @@ export function getCronRunStatus(): { running: string[]; recent: CronLogEntry[] 
     running: Array.from(runningJobs.keys()),
     recent: Array.from(runningJobs.values()),
   };
+}
+
+/**
+ * Send a cron notification to the configured target.
+ * If discordThreadId is set, routes to that thread; otherwise falls back to the active channel.
+ * Returns true if sent successfully.
+ */
+async function sendCronNotification(config: Config, message: string, discordThreadId?: string): Promise<boolean> {
+  if (discordThreadId) {
+    const sent = await sendToDiscordThread(discordThreadId, message);
+    if (sent) return true;
+    console.warn(`[cron] Failed to send to Discord thread ${discordThreadId}, falling back to active channel`);
+  }
+  return sendActiveChannelProactiveMessage(config, message);
+}
+
+function resolveDiscordThreadTarget(jobDef: CronJob): string | undefined {
+  const threadId = jobDef.payload.discordThreadId?.trim();
+  if (!threadId) return undefined;
+  // Discord snowflakes are numeric IDs. Validate eagerly so invalid config falls back cleanly.
+  if (!/^\d{17,20}$/.test(threadId)) {
+    console.warn(`[cron] Invalid discordThreadId for job "${jobDef.id}": ${JSON.stringify(jobDef.payload.discordThreadId)}`);
+    return undefined;
+  }
+  return threadId;
 }
 
 export function initCron(config: Config): void {
@@ -190,6 +216,7 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
     status: 'running',
   };
   runningJobs.set(jobDef.id, logEntry);
+  const discordThreadId = resolveDiscordThreadTarget(jobDef);
 
   // Log start immediately
   appendCronLogLine(jobDef.id, `=== STARTED: ${jobDef.name} (${jobDef.id}) ===`);
@@ -198,7 +225,7 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
 
   // Notify channel at start
   try {
-    await sendActiveChannelProactiveMessage(config, `🔄 Cron starting: ${jobDef.name}`);
+    await sendCronNotification(config, `🔄 Cron starting: ${jobDef.name}`, discordThreadId);
   } catch {
     // Non-critical
   }
@@ -247,7 +274,7 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
         if (guardAlert) {
           appendCronLogLine(jobDef.id, guardAlert);
           try {
-            await sendActiveChannelProactiveMessage(config, guardAlert);
+            await sendCronNotification(config, guardAlert, discordThreadId);
           } catch {
             // Non-critical
           }
@@ -261,7 +288,7 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
         if (digest.articles.length > 0) {
           const digestMessage = digest.summary ?? textPortion;
           try {
-            await sendActiveChannelProactiveMessage(config, digestMessage);
+            await sendCronNotification(config, digestMessage, discordThreadId);
             appendCronLogLine(jobDef.id, `Digest sent to chat (${digestMessage.length} chars)`);
           } catch {
             appendCronLogLine(jobDef.id, 'Failed to send digest to chat');
@@ -353,7 +380,7 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
           : logEntry.output;
         notification += `\n\n${output}`;
       }
-      await sendActiveChannelProactiveMessage(config, notification);
+      await sendCronNotification(config, notification, discordThreadId);
     } catch (notifyErr) {
       console.error(`[cron] Failed to send notification: ${notifyErr}`);
     }

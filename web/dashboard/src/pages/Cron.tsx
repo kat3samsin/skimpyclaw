@@ -38,6 +38,7 @@ export function Cron({ showToast }: CronProps) {
     cwd: '',
     timeoutMs: '',
     sendAsVoice: false,
+    discordThreadId: '',
   });
 
   useEffect(() => {
@@ -91,6 +92,7 @@ export function Cron({ showToast }: CronProps) {
       cwd: job.payload?.cwd || '',
       timeoutMs: job.payload?.timeoutMs ? String(job.payload.timeoutMs) : '',
       sendAsVoice: Boolean(job.payload?.sendAsVoice),
+      discordThreadId: job.payload?.discordThreadId || '',
     });
   }
 
@@ -111,6 +113,7 @@ export function Cron({ showToast }: CronProps) {
       cwd: '',
       timeoutMs: '',
       sendAsVoice: false,
+      discordThreadId: '',
     });
   }
 
@@ -151,6 +154,7 @@ export function Cron({ showToast }: CronProps) {
     }
     if (form.payloadKind === 'http') payload.url = form.url;
     if (form.sendAsVoice) payload.sendAsVoice = true;
+    if (form.discordThreadId.trim()) payload.discordThreadId = form.discordThreadId.trim();
 
     const job = {
       id,
@@ -303,6 +307,15 @@ export function Cron({ showToast }: CronProps) {
                 <input value={form.url} onInput={(e) => setForm(f => ({ ...f, url: (e.target as HTMLInputElement).value }))} placeholder="https://..." />
               </label>
             )}
+
+            <label class="form-field" style={{ marginTop: 10 }}>
+              <span class="form-label">Discord thread ID (optional)</span>
+              <input
+                value={form.discordThreadId}
+                onInput={(e) => setForm(f => ({ ...f, discordThreadId: (e.target as HTMLInputElement).value }))}
+                placeholder="123456789012345678"
+              />
+            </label>
 
             <label class="form-checkbox" style={{ marginTop: 10 }}>
               <input type="checkbox" checked={form.sendAsVoice} onChange={(e) => setForm(f => ({ ...f, sendAsVoice: (e.target as HTMLInputElement).checked }))} />

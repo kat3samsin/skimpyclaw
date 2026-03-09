@@ -173,11 +173,14 @@ Two payload types: `agentTurn` and `script`.
   "payload": {
     "kind": "agentTurn",
     "message": "Good morning! What's on the agenda today?",
-    "sendAsVoice": false
+    "sendAsVoice": false,
+    "discordThreadId": "123456789012345678"
   },
   "model": "claude-think"
 }
 ```
+
+If `payload.discordThreadId` is set, cron notifications route to that Discord thread first. If the thread ID is invalid or delivery fails, notifications fall back to the active channel target.
 
 ### Script
 

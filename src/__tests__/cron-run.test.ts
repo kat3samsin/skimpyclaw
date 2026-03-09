@@ -3,10 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const {
   runAgentTurnMock,
   sendActiveChannelProactiveMessageMock,
+  sendToDiscordThreadMock,
   parseAndSaveDigestMock,
 } = vi.hoisted(() => ({
   runAgentTurnMock: vi.fn(),
   sendActiveChannelProactiveMessageMock: vi.fn(async () => true),
+  sendToDiscordThreadMock: vi.fn(async () => false),
   parseAndSaveDigestMock: vi.fn(),
 }));
 
@@ -22,6 +24,10 @@ vi.mock('../channels.js', () => ({
 
 vi.mock('../digests.js', () => ({
   parseAndSaveDigest: parseAndSaveDigestMock,
+}));
+
+vi.mock('../channels/discord/index.js', () => ({
+  sendToDiscordThread: sendToDiscordThreadMock,
 }));
 
 vi.mock('../config.js', () => ({
@@ -113,5 +119,103 @@ describe('runCronJob digest chat output', () => {
     releaseFirstRun();
     await firstRun;
     warnSpy.mockRestore();
+  });
+
+  it('routes notifications to a configured Discord thread when delivery succeeds', async () => {
+    const digestText = 'No links today';
+    runAgentTurnMock.mockResolvedValue(digestText);
+    parseAndSaveDigestMock.mockReturnValue({ summary: digestText, articles: [] });
+    sendToDiscordThreadMock.mockResolvedValue(true);
+
+    const threadConfig = {
+      ...config,
+      cron: {
+        jobs: [
+          {
+            id: 'tech-digest',
+            name: 'Tech Digest',
+            schedule: { kind: 'cron', expr: '* * * * *', tz: 'UTC' },
+            payload: {
+              kind: 'agentTurn',
+              message: 'digest please',
+              discordThreadId: '123456789012345678',
+            },
+          },
+        ],
+      },
+    } as any;
+
+    await runCronJob('tech-digest', threadConfig);
+
+    expect(sendToDiscordThreadMock).toHaveBeenCalled();
+    expect(sendActiveChannelProactiveMessageMock).not.toHaveBeenCalledWith(
+      threadConfig,
+      expect.stringContaining('Cron: Tech Digest'),
+    );
+  });
+
+  it('falls back to active channel when Discord thread delivery fails', async () => {
+    const digestText = 'No links today';
+    runAgentTurnMock.mockResolvedValue(digestText);
+    parseAndSaveDigestMock.mockReturnValue({ summary: digestText, articles: [] });
+    sendToDiscordThreadMock.mockResolvedValue(false);
+
+    const threadConfig = {
+      ...config,
+      cron: {
+        jobs: [
+          {
+            id: 'tech-digest',
+            name: 'Tech Digest',
+            schedule: { kind: 'cron', expr: '* * * * *', tz: 'UTC' },
+            payload: {
+              kind: 'agentTurn',
+              message: 'digest please',
+              discordThreadId: '123456789012345678',
+            },
+          },
+        ],
+      },
+    } as any;
+
+    await runCronJob('tech-digest', threadConfig);
+
+    expect(sendToDiscordThreadMock).toHaveBeenCalled();
+    expect(sendActiveChannelProactiveMessageMock).toHaveBeenCalledWith(
+      threadConfig,
+      expect.stringContaining('Cron: Tech Digest'),
+    );
+  });
+
+  it('falls back to active channel when discordThreadId is invalid', async () => {
+    const digestText = 'No links today';
+    runAgentTurnMock.mockResolvedValue(digestText);
+    parseAndSaveDigestMock.mockReturnValue({ summary: digestText, articles: [] });
+
+    const threadConfig = {
+      ...config,
+      cron: {
+        jobs: [
+          {
+            id: 'tech-digest',
+            name: 'Tech Digest',
+            schedule: { kind: 'cron', expr: '* * * * *', tz: 'UTC' },
+            payload: {
+              kind: 'agentTurn',
+              message: 'digest please',
+              discordThreadId: 'not-a-thread-id',
+            },
+          },
+        ],
+      },
+    } as any;
+
+    await runCronJob('tech-digest', threadConfig);
+
+    expect(sendToDiscordThreadMock).not.toHaveBeenCalled();
+    expect(sendActiveChannelProactiveMessageMock).toHaveBeenCalledWith(
+      threadConfig,
+      expect.stringContaining('Cron: Tech Digest'),
+    );
   });
 });

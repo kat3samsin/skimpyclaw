@@ -130,6 +130,7 @@ Map of shorthand names to full `provider/model-id`. See [Model Aliases](./model-
 | `timeoutMs` | number | Timeout in milliseconds |
 | `tools` | ToolConfig | Tool access config (for `agentTurn`) |
 | `sendAsVoice` | boolean | Send result as voice message |
+| `discordThreadId` | string | Discord thread ID to send cron notifications to; falls back to active channel if invalid/unavailable |
 
 ## `heartbeat`
 
