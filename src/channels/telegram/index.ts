@@ -123,7 +123,7 @@ export async function sendProactiveMessage(
 
 export async function sendProactiveVoice(
   chatId: string | number,
-  buffer: Buffer,
+  buffer: Uint8Array,
   format: string
 ): Promise<void> {
   if (!activeBot || isSilenced()) return;

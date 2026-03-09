@@ -23,6 +23,13 @@ describe('fetch-tool SSRF protections', () => {
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
+  it('blocks non-http protocols', async () => {
+    const out = await executeFetch({ url: 'file:///etc/passwd' }, {} as any);
+    expect(out).toContain('Error:');
+    expect(out).toContain('Unsupported protocol');
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
   it('blocks hostnames resolving to private IPs', async () => {
     mockLookup.mockResolvedValueOnce([{ address: '10.0.0.5', family: 4 }]);
     const out = await executeFetch({ url: 'https://example.test/data' }, {} as any);
@@ -46,6 +53,29 @@ describe('fetch-tool SSRF protections', () => {
     expect(mockFetch).toHaveBeenCalledTimes(1);
   });
 
+  it('re-validates DNS on each redirect hop', async () => {
+    mockLookup
+      .mockResolvedValueOnce([{ address: '93.184.216.34', family: 4 }])
+      .mockResolvedValueOnce([{ address: '93.184.216.34', family: 4 }]);
+    mockFetch
+      .mockResolvedValueOnce({
+        status: 302,
+        statusText: 'Found',
+        headers: new Headers({ location: 'https://example.com/next' }),
+        text: async () => '',
+      })
+      .mockResolvedValueOnce({
+        status: 200,
+        statusText: 'OK',
+        headers: new Headers({ 'content-type': 'text/plain' }),
+        text: async () => 'ok',
+      });
+
+    const out = await executeFetch({ url: 'https://example.com/start' }, {} as any);
+    expect(out).toContain('HTTP 200 OK');
+    expect(mockLookup).toHaveBeenCalledTimes(2);
+  });
+
   it('returns response body for valid public targets', async () => {
     mockLookup.mockResolvedValueOnce([{ address: '93.184.216.34', family: 4 }]);
     mockFetch.mockResolvedValueOnce({
@@ -62,5 +92,12 @@ describe('fetch-tool SSRF protections', () => {
       expect.any(URL),
       expect.objectContaining({ redirect: 'manual' }),
     );
+  });
+
+  it('blocks internal-style host suffixes', async () => {
+    const out = await executeFetch({ url: 'https://service.internal/api' }, {} as any);
+    expect(out).toContain('Error:');
+    expect(out).toContain('Blocked internal host');
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 });

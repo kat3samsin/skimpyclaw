@@ -23,6 +23,7 @@ const BLOCKED_HOSTNAMES = new Set([
   'metadata.google.internal.',
   'instance-data',
 ]);
+const BLOCKED_HOST_SUFFIXES = ['.internal', '.local', '.lan', '.home', '.localhost'];
 
 const IP_BLOCKLIST = (() => {
   const blockList = new BlockList();
@@ -65,9 +66,12 @@ async function validateTarget(rawUrl: string): Promise<URL> {
     throw new Error(`Unsupported protocol: ${parsed.protocol}`);
   }
 
-  const hostname = parsed.hostname.toLowerCase();
+  const hostname = parsed.hostname.toLowerCase().replace(/\.$/, '');
   if (BLOCKED_HOSTNAMES.has(hostname)) {
     throw new Error(`Blocked host: ${hostname}`);
+  }
+  if (BLOCKED_HOST_SUFFIXES.some(suffix => hostname.endsWith(suffix))) {
+    throw new Error(`Blocked internal host: ${hostname}`);
   }
 
   if (isIP(hostname) !== 0 && isBlockedIpAddress(hostname)) {
@@ -76,6 +80,9 @@ async function validateTarget(rawUrl: string): Promise<URL> {
 
   if (isIP(hostname) === 0) {
     const resolved = await lookup(hostname, { all: true, verbatim: true });
+    if (!resolved.length) {
+      throw new Error(`Could not resolve host: ${hostname}`);
+    }
     for (const rec of resolved) {
       if (isBlockedIpAddress(rec.address)) {
         throw new Error(`Blocked resolved IP for ${hostname}: ${rec.address}`);

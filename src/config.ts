@@ -4,15 +4,18 @@ import { readFileSync, writeFileSync, existsSync, readdirSync, statSync, chmodSy
 import { randomUUID } from 'crypto';
 import { homedir } from 'os';
 import { join, basename } from 'path';
-import { spawnSync } from 'child_process';
 import dotenv from 'dotenv';
 import type { Config } from './types.js';
+import { getSecureValue, setSecureValue, requireSecureStore } from './secure-store.js';
 
 const CONFIG_PATH = join(homedir(), '.skimpyclaw', 'config.json');
 const CONFIG_DIR = join(homedir(), '.skimpyclaw');
 const ENV_PATH = join(homedir(), '.skimpyclaw', '.env');
+const CONFIG_SECRET_SERVICE = 'skimpyclaw-config';
 let envLoaded = false;
 const keychainCache = new Map<string, string>();
+const SECRET_KEY_PATTERN = /(api.?key|token|secret|password|auth.?token|private.?key)/i;
+let warnedSecureStoreUnavailable = false;
 
 function ensureEnvLoaded(): void {
   if (envLoaded) return;
@@ -21,15 +24,10 @@ function ensureEnvLoaded(): void {
 }
 
 function resolveKeychainReference(raw: string): string {
-  const [service, account] = raw.split('/');
+  const [service, ...accountParts] = raw.split('/');
+  const account = accountParts.join('/');
   if (!service || !account) {
-    console.warn(`[config] invalid keychain reference: ${raw} (expected service/account)`);
-    return '';
-  }
-
-  if (process.platform !== 'darwin') {
-    console.warn(`[config] keychain reference is only supported on macOS: ${raw}`);
-    return '';
+    throw new Error(`[config] Invalid keychain reference: ${raw} (expected service/account)`);
   }
 
   const cacheKey = `${service}/${account}`;
@@ -38,18 +36,13 @@ function resolveKeychainReference(raw: string): string {
     return cached;
   }
 
-  const result = spawnSync(
-    'security',
-    ['find-generic-password', '-s', service, '-a', account, '-w'],
-    { encoding: 'utf-8', timeout: 5000, stdio: ['ignore', 'pipe', 'pipe'] },
-  );
-  if (result.status !== 0) {
-    const detail = (result.stderr || result.stdout || '').trim();
-    console.warn(`[config] failed to resolve keychain secret ${cacheKey}: ${detail || 'not found'}`);
-    return '';
+  const value = getSecureValue(service, account);
+  if (value === null) {
+    throw new Error(
+      `[config] Keychain secret not found for ${cacheKey}. Re-run setup or add it with: security add-generic-password -U -s ${service} -a ${account} -w '<secret>'`,
+    );
   }
 
-  const value = (result.stdout || '').trim();
   keychainCache.set(cacheKey, value);
   return value;
 }
@@ -64,6 +57,88 @@ function expandStringReferences(value: string): string {
     }
     return process.env[token] || '';
   });
+}
+
+function isSecureReference(value: string): boolean {
+  return value.startsWith('${') && value.endsWith('}');
+}
+
+function shouldSecureField(path: string[]): boolean {
+  const key = path[path.length - 1] || '';
+  return SECRET_KEY_PATTERN.test(key);
+}
+
+function sanitizeKeychainAccount(path: string[]): string {
+  return path.join('.').replace(/[^\w.-]/g, '_');
+}
+
+function migratePlaintextSecrets(obj: unknown, path: string[] = []): { value: unknown; migrated: number } {
+  if (Array.isArray(obj)) {
+    let migrated = 0;
+    const mapped = obj.map((item, index) => {
+      const result = migratePlaintextSecrets(item, [...path, String(index)]);
+      migrated += result.migrated;
+      return result.value;
+    });
+    return { value: mapped, migrated };
+  }
+
+  if (obj && typeof obj === 'object') {
+    const result: Record<string, unknown> = {};
+    let migrated = 0;
+    for (const [key, value] of Object.entries(obj)) {
+      const migratedValue = migratePlaintextSecrets(value, [...path, key]);
+      result[key] = migratedValue.value;
+      migrated += migratedValue.migrated;
+    }
+    return { value: result, migrated };
+  }
+
+  if (typeof obj !== 'string') {
+    return { value: obj, migrated: 0 };
+  }
+
+  if (!shouldSecureField(path)) {
+    return { value: obj, migrated: 0 };
+  }
+
+  const trimmed = obj.trim();
+  if (!trimmed || trimmed === '[REDACTED]' || isSecureReference(trimmed)) {
+    return { value: obj, migrated: 0 };
+  }
+
+  if (process.platform !== 'darwin') {
+    if (!warnedSecureStoreUnavailable) {
+      warnedSecureStoreUnavailable = true;
+      console.warn('[config] Secure secret migration requires macOS Keychain. Plaintext values are preserved on this platform.');
+    }
+    return { value: obj, migrated: 0 };
+  }
+
+  requireSecureStore('Config secret migration');
+  const account = sanitizeKeychainAccount(path);
+  setSecureValue(CONFIG_SECRET_SERVICE, account, obj);
+  return {
+    value: `\${KEYCHAIN:${CONFIG_SECRET_SERVICE}/${account}}`,
+    migrated: 1,
+  };
+}
+
+function writeConfigFile(rawConfig: unknown): void {
+  mkdirSync(CONFIG_DIR, { recursive: true });
+  writeFileSync(CONFIG_PATH, JSON.stringify(rawConfig, null, 2), { encoding: 'utf-8', mode: 0o600 });
+  chmodSync(CONFIG_PATH, 0o600);
+}
+
+function loadAndMaybeMigrateRawConfig(): Record<string, any> {
+  const raw = readFileSync(CONFIG_PATH, 'utf-8');
+  const parsed = JSON.parse(raw);
+  const migrated = migratePlaintextSecrets(parsed);
+  if (migrated.migrated > 0) {
+    writeConfigFile(migrated.value);
+    console.log(`[config] Migrated ${migrated.migrated} plaintext secret(s) to macOS Keychain`);
+  }
+  return migrated.value as Record<string, any>;
 }
 
 function expandEnvVars(obj: any): any {
@@ -89,8 +164,7 @@ export function loadConfig(): Config {
     throw new Error(`Config not found: ${CONFIG_PATH}\nRun 'pnpm run setup' to create one.`);
   }
 
-  const raw = readFileSync(CONFIG_PATH, 'utf-8');
-  const parsed = JSON.parse(raw);
+  const parsed = loadAndMaybeMigrateRawConfig();
   return expandEnvVars(parsed) as Config;
 }
 
@@ -100,8 +174,7 @@ export function loadRawConfig(): Record<string, any> {
     throw new Error(`Config not found: ${CONFIG_PATH}\nRun 'pnpm run setup' to create one.`);
   }
 
-  const raw = readFileSync(CONFIG_PATH, 'utf-8');
-  return JSON.parse(raw);
+  return loadAndMaybeMigrateRawConfig();
 }
 
 export function getConfigPath(): string {
@@ -128,9 +201,8 @@ export function getSessionsDir(): string {
 }
 
 export function saveConfig(config: Config): void {
-  mkdirSync(CONFIG_DIR, { recursive: true });
-  writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2), { encoding: 'utf-8', mode: 0o600 });
-  chmodSync(CONFIG_PATH, 0o600);
+  const migrated = migratePlaintextSecrets(config);
+  writeConfigFile(migrated.value);
 }
 
 /**
@@ -144,13 +216,12 @@ export function ensureDashboardToken(config: Config): string {
 
   const token = randomUUID();
 
-  // Read raw config to preserve env var references, then add the token
+  // Read raw config to preserve env var references, then add the token.
+  // loadRawConfig() already runs migratePlaintextSecrets(), so no need to run it again.
   const raw = loadRawConfig();
   raw.dashboard = raw.dashboard || {};
   raw.dashboard.token = token;
-  mkdirSync(CONFIG_DIR, { recursive: true });
-  writeFileSync(CONFIG_PATH, JSON.stringify(raw, null, 2), { encoding: 'utf-8', mode: 0o600 });
-  chmodSync(CONFIG_PATH, 0o600);
+  writeConfigFile(raw);
 
   // Update the in-memory config too
   if (!config.dashboard) {

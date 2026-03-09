@@ -239,6 +239,16 @@ describe('bash', () => {
     expect(result.trim()).toBe('hello');
   });
 
+  it('blocks shell command chaining to prevent injection patterns', async () => {
+    const result = await executeTool('Bash', { command: 'echo hello; uname -a' }, toolConfig);
+    expect(result).toContain('Shell control operators are blocked');
+  });
+
+  it('blocks shell pipe operators to avoid implicit shell mode', async () => {
+    const result = await executeTool('Bash', { command: 'echo hello | cat' }, toolConfig);
+    expect(result).toContain('Shell control operators are blocked');
+  });
+
   it('blocks dangerous commands via exec approval', async () => {
     const result = await executeTool('Bash', { command: `rm -rf ${TEST_DIR}` }, toolConfig);
     expect(result).toContain('⛔');

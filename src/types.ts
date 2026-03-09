@@ -258,13 +258,21 @@ export interface ChatOptions {
   thinking?: 'none' | 'low' | 'medium' | 'high';
 }
 
+export interface AbortSignalLike {
+  readonly aborted: boolean;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  addEventListener?: (...args: any[]) => void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  removeEventListener?: (...args: any[]) => void;
+}
+
 export interface AgentRunContext {
   userId?: string;
   sessionId?: string;
   channel?: string;
   tags?: string[];
   metadata?: Record<string, unknown>;
-  abortSignal?: AbortSignal;
+  abortSignal?: AbortSignalLike;
   /** Audit trigger label (e.g. "telegram", "cron", "discord", "system") */
   trigger?: AuditTrace['trigger'];
 }

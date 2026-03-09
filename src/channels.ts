@@ -14,7 +14,7 @@ interface ChannelAdapter {
   stop: () => Promise<void>;
   isSilenced?: () => boolean;
   sendProactiveMessage?: (target: ChannelTarget, message: string) => Promise<void>;
-  sendProactiveVoice?: (target: ChannelTarget, buffer: Buffer, format: string) => Promise<void>;
+  sendProactiveVoice?: (target: ChannelTarget, buffer: Uint8Array, format: string) => Promise<void>;
   resolveDefaultTarget?: (config: Config) => ChannelTarget | null;
 }
 
@@ -135,7 +135,7 @@ export async function sendActiveChannelProactiveMessage(config: Config, message:
   return true;
 }
 
-export async function sendActiveChannelProactiveVoice(config: Config, buffer: Buffer, format: string): Promise<boolean> {
+export async function sendActiveChannelProactiveVoice(config: Config, buffer: Uint8Array, format: string): Promise<boolean> {
   if (!activeAdapter?.sendProactiveVoice || !activeAdapter.resolveDefaultTarget) {
     return false;
   }

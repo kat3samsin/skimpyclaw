@@ -152,11 +152,11 @@ export async function sendDiscordProactiveMessage(target: string | number, messa
   }
 }
 
-export async function sendDiscordProactiveVoice(target: string | number, buffer: Buffer, format: string): Promise<void> {
+export async function sendDiscordProactiveVoice(target: string | number, buffer: Uint8Array, format: string): Promise<void> {
   if (!client || isDiscordSilenced()) return;
 
   const targetId = String(target);
-  const attachment = new AttachmentBuilder(buffer, {
+  const attachment = new AttachmentBuilder(Buffer.from(buffer), {
     name: `voice.${format}`,
     description: 'Voice message',
   });

@@ -42,7 +42,7 @@ vi.mock('../voice.js', () => ({
 }));
 
 vi.mock('../env-sanitizer.js', () => ({
-  sanitizeExecEnv: () => ({}),
+  sanitizeCronEnv: () => ({}),
 }));
 
 vi.mock('../sandbox/index.js', () => ({

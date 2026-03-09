@@ -350,7 +350,7 @@ export async function transcribeAudio(
 // --- TTS (Text-to-Speech) ---
 
 export interface SpeechResult {
-  buffer: Buffer;
+  buffer: Uint8Array;
   format: 'ogg' | 'mp3';
   provider: string;
 }

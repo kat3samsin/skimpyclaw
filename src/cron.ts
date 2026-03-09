@@ -13,7 +13,7 @@ import { sendActiveChannelProactiveMessage, sendActiveChannelProactiveVoice, get
 import { parseAndSaveDigest } from './digests.js';
 import { synthesizeSpeech } from './voice.js';
 import { toErrorMessage } from './utils.js';
-import { sanitizeExecEnv } from './env-sanitizer.js';
+import { sanitizeCronEnv } from './env-sanitizer.js';
 
 function safeTimezone(tz: string | undefined): string {
   const fallback = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
@@ -394,7 +394,7 @@ async function executeScript(jobDef: CronJob, config: Config): Promise<string> {
     const child = exec(script, {
       cwd: cwd || undefined,
       timeout: timeoutMs,
-      env: sanitizeExecEnv(),
+      env: sanitizeCronEnv(),
       maxBuffer: 10 * 1024 * 1024, // 10MB output buffer
     }, (error, stdout, stderr) => {
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);

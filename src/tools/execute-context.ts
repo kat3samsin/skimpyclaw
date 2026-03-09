@@ -1,8 +1,10 @@
+import type { AbortSignalLike } from '../types.js';
+
 export interface ExecuteToolContext {
   /** Task ID for file lock acquisition (concurrent writes) */
   lockTaskId?: string;
   /** Abort signal for cancelling long-running tool loops */
-  abortSignal?: AbortSignal;
+  abortSignal?: AbortSignalLike;
   /** Chat ID for channel routing */
   chatId?: number;
   /** Full config for agent tools */

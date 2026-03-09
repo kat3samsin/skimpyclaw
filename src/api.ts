@@ -41,6 +41,7 @@ import { initHeartbeat, stopHeartbeat } from './heartbeat.js';
 import { initActiveChannel, stopActiveChannel, startActiveChannel } from './channels.js';
 import { setCodeAgentConfig } from './tools.js';
 import { resolveModelSelection } from './model-selection.js';
+import { readSessionEntriesFromFile } from './sessions.js';
 
 const DEFAULT_MODEL_ALIASES: Record<string, string> = {
   'claude-fast': 'anthropic/claude-haiku-4-5',
@@ -83,13 +84,6 @@ function resolveCronPromptPath(inputPath: string): string | null {
     return null;
   }
   return expanded;
-}
-
-interface SessionLine {
-  ts?: string;
-  user?: string;
-  assistant?: string;
-  summary?: boolean;
 }
 
 interface TodoItem {
@@ -215,17 +209,7 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
       if (channelFilter && channel !== channelFilter) return null;
 
       try {
-        const content = readFileSync(join(sessionsDir, file), 'utf-8');
-        const lines = content.split('\n').filter(Boolean);
-        const entries: SessionLine[] = lines
-          .map((line) => {
-            try {
-              return JSON.parse(line) as SessionLine;
-            } catch {
-              return null;
-            }
-          })
-          .filter((v): v is SessionLine => Boolean(v));
+        const entries = readSessionEntriesFromFile(join(sessionsDir, file));
 
         const last = entries[entries.length - 1];
         const preview = last?.user || last?.assistant || '';
@@ -271,19 +255,13 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
       const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 500) : 80;
       const offset = Number.isFinite(offsetRaw) ? Math.max(offsetRaw, 0) : 0;
 
-      const content = readFileSync(filePath, 'utf-8');
-      const lines = content.split('\n').filter(Boolean);
+      const entries = readSessionEntriesFromFile(filePath);
       const messages: Array<{ ts: string; role: 'user' | 'assistant'; content: string }> = [];
 
-      for (const line of lines) {
-        try {
-          const entry = JSON.parse(line) as SessionLine;
-          const ts = entry.ts || new Date().toISOString();
-          if (entry.user) messages.push({ ts, role: 'user', content: entry.user });
-          if (entry.assistant) messages.push({ ts, role: 'assistant', content: entry.assistant });
-        } catch {
-          // Ignore malformed lines
-        }
+      for (const entry of entries) {
+        const ts = entry.ts || new Date().toISOString();
+        if (entry.user) messages.push({ ts, role: 'user', content: entry.user });
+        if (entry.assistant) messages.push({ ts, role: 'assistant', content: entry.assistant });
       }
 
       const total = messages.length;

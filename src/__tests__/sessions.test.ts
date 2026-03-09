@@ -8,18 +8,22 @@ import {
   replaceWithSummary,
   clearHistory,
   setSessionsDir,
+  clearSessionKeyCacheForTests,
   MAX_HISTORY_PAIRS,
 } from '../sessions.js';
 
 let testSessionsDir: string;
 
 beforeEach(() => {
+  clearSessionKeyCacheForTests();
+  process.env.SKIMPYCLAW_HISTORY_KEY = 'test-history-key';
   testSessionsDir = join(tmpdir(), `sk-sessions-test-${Date.now()}`);
   mkdirSync(testSessionsDir, { recursive: true });
   setSessionsDir(testSessionsDir);
 });
 
 afterEach(() => {
+  delete process.env.SKIMPYCLAW_HISTORY_KEY;
   if (existsSync(testSessionsDir)) {
     rmSync(testSessionsDir, { recursive: true, force: true });
   }
@@ -45,10 +49,11 @@ describe('saveExchange', () => {
     expect(existsSync(filePath)).toBe(true);
 
     const content = readFileSync(filePath, 'utf-8');
-    const entry = JSON.parse(content.trim());
-    expect(entry.user).toBe('hello');
-    expect(entry.assistant).toBe('hi there');
-    expect(entry.ts).toBeTruthy();
+    expect(content.trim().startsWith('ENCv1:')).toBe(true);
+
+    const messages = await loadHistory('telegram', '111');
+    expect(messages[0].content).toBe('hello');
+    expect(messages[1].content).toBe('hi there');
   });
 
   it('appends multiple entries', async () => {
@@ -59,8 +64,8 @@ describe('saveExchange', () => {
     const content = readFileSync(filePath, 'utf-8');
     const lines = content.trim().split('\n').filter(Boolean);
     expect(lines).toHaveLength(2);
-    expect(JSON.parse(lines[0]).user).toBe('msg1');
-    expect(JSON.parse(lines[1]).user).toBe('msg2');
+    expect(lines[0].startsWith('ENCv1:')).toBe(true);
+    expect(lines[1].startsWith('ENCv1:')).toBe(true);
   });
 });
 
@@ -128,10 +133,11 @@ describe('replaceWithSummary', () => {
     const content = readFileSync(filePath, 'utf-8');
     const lines = content.trim().split('\n').filter(Boolean);
     expect(lines).toHaveLength(1);
+    expect(lines[0].startsWith('ENCv1:')).toBe(true);
 
-    const entry = JSON.parse(lines[0]);
-    expect(entry.summary).toBe(true);
-    expect(entry.assistant).toBe('We talked about greetings.');
+    const messages = await loadHistory('telegram', '777');
+    expect(messages[0].content).toBe('Summary of our previous conversation:');
+    expect(messages[1].content).toBe('We talked about greetings.');
   });
 
   it('loadHistory after replaceWithSummary returns the summary pair', async () => {

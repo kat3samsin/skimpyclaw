@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sanitizeExecEnv } from '../env-sanitizer.js';
+import { sanitizeExecEnv, sanitizeCronEnv } from '../env-sanitizer.js';
 
 describe('sanitizeExecEnv', () => {
   it('strips sensitive env vars while preserving allowlisted values', () => {
@@ -26,5 +26,21 @@ describe('sanitizeExecEnv', () => {
     const env = sanitizeExecEnv();
     expect(env.PATH).toContain('/opt/homebrew/bin');
     expect(env.PATH).toContain('/usr/local/bin');
+  });
+
+  it('applies strict allowlist for cron environments', () => {
+    process.env.OPENAI_API_KEY = 'secret';
+    process.env.SKIMPYCLAW_MODE = 'prod';
+    process.env.CUSTOM_RANDOM_VAR = 'do-not-include';
+    process.env.PATH = '/usr/bin:/bin';
+    process.env.HOME = '/tmp/home';
+
+    const env = sanitizeCronEnv();
+
+    expect(env.OPENAI_API_KEY).toBeUndefined();
+    expect(env.CUSTOM_RANDOM_VAR).toBeUndefined();
+    expect(env.SKIMPYCLAW_MODE).toBe('prod');
+    expect(env.HOME).toBe('/tmp/home');
+    expect(env.PATH).toContain('/opt/homebrew/bin');
   });
 });

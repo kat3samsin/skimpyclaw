@@ -10,11 +10,50 @@ const SENSITIVE_ENV_ALLOWLIST = new Set(['GH_TOKEN']);
 
 /** Common tool paths that may be missing when launched as a service/daemon. */
 const EXTRA_PATH_DIRS = ['/opt/homebrew/bin', '/opt/homebrew/sbin', '/usr/local/bin'];
+const CRON_ENV_ALLOWLIST = new Set([
+  'HOME',
+  'USER',
+  'LOGNAME',
+  'SHELL',
+  'PATH',
+  'TMPDIR',
+  'LANG',
+  'LC_ALL',
+  'LC_CTYPE',
+  'TZ',
+  'TERM',
+  'PWD',
+  'SHLVL',
+]);
 
 export function sanitizeExecEnv(): Record<string, string | undefined> {
   const env = { ...process.env };
   for (const key of Object.keys(env)) {
     if (!SENSITIVE_ENV_ALLOWLIST.has(key) && SENSITIVE_ENV_PATTERNS.some(p => p.test(key))) {
+      delete env[key];
+    }
+  }
+
+  const currentPath = env.PATH || '';
+  const missing = EXTRA_PATH_DIRS.filter(d => !currentPath.includes(d));
+  if (missing.length > 0) {
+    env.PATH = currentPath ? `${currentPath}:${missing.join(':')}` : missing.join(':');
+  }
+  return env;
+}
+
+export function sanitizeCronEnv(): Record<string, string | undefined> {
+  const env: Record<string, string | undefined> = {};
+
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value === undefined) continue;
+    if (CRON_ENV_ALLOWLIST.has(key) || key.startsWith('SKIMPYCLAW_')) {
+      env[key] = value;
+    }
+  }
+
+  for (const key of Object.keys(env)) {
+    if (SENSITIVE_ENV_PATTERNS.some(p => p.test(key))) {
       delete env[key];
     }
   }

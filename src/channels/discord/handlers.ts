@@ -438,7 +438,7 @@ export async function handleIncomingMessage(message: Message, config: Config): P
           try {
             const speech = await synthesizeSpeech(agentResponse, config.voice);
             console.log('[discord] TTS synthesis success:', speech.format, speech.provider, 'buffer size:', speech.buffer.length);
-            const voiceAttachment = new AttachmentBuilder(speech.buffer, {
+            const voiceAttachment = new AttachmentBuilder(Buffer.from(speech.buffer), {
               name: `voice-reply.${speech.format}`,
               description: 'Voice reply'
             });
