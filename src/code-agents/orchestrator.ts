@@ -1,6 +1,6 @@
 // Code Agent Orchestrator - Team coordination logic
 
-import { execSync } from 'child_process';
+import { execSync, spawnSync } from 'child_process';
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import type { Config } from '../types.js';
@@ -244,6 +244,65 @@ export async function runTeamOrchestrator(
     throw new Error(`Parent task ${parentId} not found`);
   }
 
+  const scratchpadEnabled = process.env.SKIMPYCLAW_TEAM_SCRATCHPAD !== '0';
+  const scratchpadRunId = `team-${parentId}`;
+  const scratchpadScript = join(import.meta.dirname, '..', '..', 'scripts', 'team_scratchpad.py');
+
+  function sanitizeScratchpadText(value: string | undefined, maxLen = 240): string {
+    if (!value) return '';
+    return value.replace(/\s+/g, ' ').trim().slice(0, maxLen);
+  }
+
+  function runScratchpadCommand(args: string[]): boolean {
+    if (!scratchpadEnabled) return false;
+    try {
+      const proc = spawnSync('python3', [scratchpadScript, ...args], {
+        cwd: workdir,
+        encoding: 'utf-8',
+        timeout: 15000,
+      });
+      if (proc.status === 0) return true;
+      const stderr = sanitizeScratchpadText(proc.stderr || proc.stdout, 400);
+      console.warn(`[team-scratchpad] ${args[0]} failed for ${scratchpadRunId}${stderr ? `: ${stderr}` : ''}`);
+      return false;
+    } catch (err) {
+      console.warn(`[team-scratchpad] ${args[0]} failed for ${scratchpadRunId}:`, err);
+      return false;
+    }
+  }
+
+  function postScratchpadUpdate(input: {
+    agent: string;
+    phase: string;
+    status: 'start' | 'in_progress' | 'blocked' | 'red' | 'green' | 'review' | 'done';
+    summary: string;
+    next?: string;
+    blockers?: string[];
+  }): void {
+    if (!scratchpadEnabled) return;
+    const summary = sanitizeScratchpadText(input.summary, 280);
+    if (!summary) return;
+    const args = [
+      'post',
+      '--run-id', scratchpadRunId,
+      '--agent', sanitizeScratchpadText(input.agent, 80) || 'unknown-agent',
+      '--phase', sanitizeScratchpadText(input.phase, 80) || 'run',
+      '--status', input.status,
+      '--summary', summary,
+    ];
+    const blockers = (input.blockers || [])
+      .map(b => sanitizeScratchpadText(b, 120))
+      .filter(Boolean);
+    if (blockers.length > 0) {
+      args.push('--blockers', blockers.join(','));
+    }
+    const next = sanitizeScratchpadText(input.next, 200);
+    if (next) {
+      args.push('--next', next);
+    }
+    runScratchpadCommand(args);
+  }
+
   const traceId = startTrace('code_team');
   addEvent(traceId, {
     type: 'spawn',
@@ -264,6 +323,33 @@ export async function runTeamOrchestrator(
   const _activeWorktrees: Map<string, WorktreeInfo> = new Map();
 
   try {
+    if (scratchpadEnabled) {
+      let baseBranch = '';
+      if (_useWorktrees) {
+        try {
+          baseBranch = execSync('git rev-parse --abbrev-ref HEAD', {
+            cwd: workdir,
+            timeout: 5000,
+            encoding: 'utf-8',
+          }).trim();
+        } catch { /* best effort */ }
+      }
+      // Run ID is deterministic (`team-<parent_id>`) so team state can be correlated.
+      runScratchpadCommand([
+        'init',
+        '--run-id', scratchpadRunId,
+        '--task', sanitizeScratchpadText(task, 400) || `Team run ${parentId}`,
+        '--repo', workdir,
+        ...(baseBranch ? ['--base-branch', baseBranch] : []),
+      ]);
+      postScratchpadUpdate({
+        agent: 'team-coordinator',
+        phase: 'orchestration',
+        status: 'start',
+        summary: `Started team run ${parentId} with ${teamSize} workers`,
+      });
+    }
+
     if (getCodeAgent(parentId)?.status === 'cancelled') throw new Error(CANCELLED_MESSAGE);
     // Phase 1: Decompose
     parentTask.liveOutput = 'Phase: Decomposing task...';
@@ -287,6 +373,13 @@ export async function runTeamOrchestrator(
 
     parentTask.liveOutput = `Phase: Scheduling ${subtasks.length} agents in ${totalWaves} wave(s)...`;
     writeCodeAgentTask(parentTask);
+    postScratchpadUpdate({
+      agent: 'team-coordinator',
+      phase: 'orchestration',
+      status: 'in_progress',
+      summary: `Decomposed into ${subtasks.length} subtasks across ${totalWaves} wave(s)`,
+      next: 'Start wave execution',
+    });
 
     // Create all child tasks upfront (pending for later waves)
     const childIds: string[] = [];
@@ -378,6 +471,8 @@ export async function runTeamOrchestrator(
     const totalTimeoutMs = timeoutMinutes * 60 * 1000;
 
     let lastLiveOutput = '';
+    const childStatusById = new Map<string, string>();
+    const childProgressPosted = new Set<string>();
     for (let waveIdx = 0; waveIdx < totalWaves; waveIdx++) {
       if (getCodeAgent(parentId)?.status === 'cancelled') throw new Error(CANCELLED_MESSAGE);
       const waveIndices = waves[waveIdx];
@@ -386,6 +481,12 @@ export async function runTeamOrchestrator(
         type: 'wave_start',
         summary: `Starting wave ${waveIdx + 1}/${totalWaves} (${waveIndices.length} tasks)`,
         durationMs: Date.now() - startedAt.getTime(),
+      });
+      postScratchpadUpdate({
+        agent: 'team-coordinator',
+        phase: 'execution',
+        status: 'in_progress',
+        summary: `Starting wave ${waveIdx + 1}/${totalWaves} with ${waveIndices.length} worker(s)`,
       });
 
       // Helper: spawn a single child task in the given workdir
@@ -447,6 +548,13 @@ export async function runTeamOrchestrator(
         child.workdir = childWorkdir;
         child.startedAt = new Date().toISOString();
         writeCodeAgentTask(child);
+        childStatusById.set(childId, 'running');
+        postScratchpadUpdate({
+          agent: childId,
+          phase: `wave-${waveIdx + 1}`,
+          status: 'start',
+          summary: sanitizeScratchpadText(subtasks[subtaskIdx].description, 220) || `Started ${childId}`,
+        });
 
         spawnChild(childId, prompt, childWorkdir);
       }
@@ -477,6 +585,42 @@ export async function runTeamOrchestrator(
         const allChildren = childIds.map(id => getCodeAgent(id)!);
         const waveChildren = waveChildIds.map(id => getCodeAgent(id)!);
         const waveDone = waveChildren.filter(c => c.status !== 'running' && c.status !== 'validating').length;
+
+        for (const child of waveChildren) {
+          const current = child.status;
+          const previous = childStatusById.get(child.id);
+          if (current === 'running' && !childProgressPosted.has(child.id)) {
+            postScratchpadUpdate({
+              agent: child.id,
+              phase: `wave-${waveIdx + 1}`,
+              status: 'in_progress',
+              summary: `In progress: ${(child.subtask || child.task).slice(0, 180)}`,
+            });
+            childProgressPosted.add(child.id);
+          }
+          if (previous && previous !== current) {
+            const phase = `wave-${waveIdx + 1}`;
+            if (current === 'completed') {
+              postScratchpadUpdate({
+                agent: child.id,
+                phase,
+                status: 'done',
+                summary: `Completed: ${(child.subtask || child.task).slice(0, 180)}`,
+              });
+            } else if (current === 'failed' || current === 'timeout' || current === 'cancelled') {
+              const blocker = sanitizeScratchpadText(child.error || `${current} without error`, 140);
+              postScratchpadUpdate({
+                agent: child.id,
+                phase,
+                status: 'blocked',
+                summary: `Stopped with ${current}`,
+                blockers: blocker ? [blocker] : undefined,
+                next: 'Await coordinator retry or follow-up',
+              });
+            }
+          }
+          childStatusById.set(child.id, current);
+        }
 
         // Build wave-grouped status display
         const waveStatusLines: string[] = [];
@@ -537,6 +681,12 @@ export async function runTeamOrchestrator(
 
           const { passed, output: valOutput } = await runValidation(workdir, fullConfig?.codeAgents?.validationCommands);
           if (!passed) {
+            postScratchpadUpdate({
+              agent: 'team-coordinator',
+              phase: 'validation',
+              status: 'red',
+              summary: `Wave ${waveIdx + 1} validation failed; retrying children`,
+            });
             addEvent(traceId, {
               type: 'wave_validation',
               summary: `Wave ${waveIdx + 1} validation failed — retrying failed children`,
@@ -586,6 +736,12 @@ export async function runTeamOrchestrator(
               });
             }
           } else {
+            postScratchpadUpdate({
+              agent: 'team-coordinator',
+              phase: 'validation',
+              status: 'green',
+              summary: `Wave ${waveIdx + 1} validation passed`,
+            });
             addEvent(traceId, {
               type: 'wave_validation',
               summary: `Wave ${waveIdx + 1} validation passed`,
@@ -656,6 +812,12 @@ export async function runTeamOrchestrator(
     // Phase 4: Collect results and synthesize
     if (getCodeAgent(parentId)?.status === 'cancelled') throw new Error(CANCELLED_MESSAGE);
     parentTask.liveOutput = 'Phase: Synthesizing results...';
+    postScratchpadUpdate({
+      agent: 'team-coordinator',
+      phase: 'synthesis',
+      status: 'review',
+      summary: 'Synthesizing worker results into final summary',
+    });
 
     // Aggregate cost/tokens from all children into parent
     let totalCost = 0;
@@ -705,6 +867,13 @@ export async function runTeamOrchestrator(
       const duration = Math.round((endedAt.getTime() - startedAt.getTime()) / 1000);
 
       if (!passed) {
+        postScratchpadUpdate({
+          agent: 'team-coordinator',
+          phase: 'validation',
+          status: 'red',
+          summary: 'Final validation failed',
+          blockers: [sanitizeScratchpadText(output, 140) || 'Validation failed'],
+        });
         addEvent(traceId, { type: 'validation', summary: 'Team validation failed', durationMs: Date.now() - startedAt.getTime() });
         await endTrace(traceId, 'error');
         Object.assign(parentTask, {
@@ -733,6 +902,12 @@ export async function runTeamOrchestrator(
         liveOutput: undefined,
       });
       writeCodeAgentTask(parentTask);
+      postScratchpadUpdate({
+        agent: 'team-coordinator',
+        phase: 'complete',
+        status: 'done',
+        summary: `Team run ${parentId} completed`,
+      });
       await notifyCodeAgentResult(parentTask, getCodeAgent);
       return;
     }
@@ -749,6 +924,12 @@ export async function runTeamOrchestrator(
       liveOutput: undefined,
     });
     writeCodeAgentTask(parentTask);
+    postScratchpadUpdate({
+      agent: 'team-coordinator',
+      phase: 'complete',
+      status: 'done',
+      summary: `Team run ${parentId} completed`,
+    });
     await notifyCodeAgentResult(parentTask, getCodeAgent);
   } catch (err) {
     // Clean up any remaining worktrees
@@ -775,6 +956,17 @@ export async function runTeamOrchestrator(
       liveOutput: undefined,
     });
     writeCodeAgentTask(parentTask);
+    postScratchpadUpdate({
+      agent: 'team-coordinator',
+      phase: 'complete',
+      status: 'blocked',
+      summary: `Team run ${parentId} ended with ${parentTask.status}`,
+      blockers: [sanitizeScratchpadText(errMsg, 140) || 'Team run failed'],
+    });
     if (parentTask.status !== 'cancelled') await notifyCodeAgentResult(parentTask, (id) => getCodeAgent(id) ?? null);
+  } finally {
+    // Best-effort final materialization; never block team completion on scratchpad tooling.
+    runScratchpadCommand(['summary', '--run-id', scratchpadRunId]);
+    runScratchpadCommand(['render-md', '--run-id', scratchpadRunId]);
   }
 }

@@ -10,7 +10,7 @@ import { homedir } from 'node:os';
 import { runAgentTurn } from './agent.js';
 import { startTrace, addEvent, endTrace } from './audit.js';
 import { sendActiveChannelProactiveMessage, sendActiveChannelProactiveVoice, getActiveChannelId } from './channels.js';
-import { sendToDiscordThread } from './channels/discord/index.js';
+import { sendToDiscordThread, sendToDiscordThreadWithVoice } from './channels/discord/index.js';
 import { parseAndSaveDigest } from './digests.js';
 import { synthesizeSpeech } from './voice.js';
 import { toErrorMessage } from './utils.js';
@@ -100,14 +100,43 @@ export function getCronRunStatus(): { running: string[]; recent: CronLogEntry[] 
 
 /**
  * Send a cron notification to the configured target.
- * If discordThreadId is set, routes to that thread; otherwise falls back to the active channel.
+ * If discordThreadId is set, only routes to that thread.
+ * Active-channel fallback only applies when no discordThreadId is configured.
+ * Optionally includes voice attachment if voiceBuffer and voiceFormat are provided.
  * Returns true if sent successfully.
  */
-async function sendCronNotification(config: Config, message: string, discordThreadId?: string): Promise<boolean> {
+async function sendCronNotification(
+  config: Config,
+  message: string,
+  discordThreadId?: string,
+  voiceBuffer?: Uint8Array,
+  voiceFormat?: string,
+): Promise<boolean> {
   if (discordThreadId) {
-    const sent = await sendToDiscordThread(discordThreadId, message);
-    if (sent) return true;
-    console.warn(`[cron] Failed to send to Discord thread ${discordThreadId}, falling back to active channel`);
+    try {
+      // Use voice-enabled sender for Discord threads if voice is provided
+      if (voiceBuffer && voiceFormat) {
+        const sent = await sendToDiscordThreadWithVoice(discordThreadId, message, voiceBuffer, voiceFormat);
+        if (sent) return true;
+        console.error(`[cron] Failed to send to Discord thread ${discordThreadId} with voice; active-channel fallback disabled for thread-targeted jobs`);
+        return false;
+      }
+
+      const sent = await sendToDiscordThread(discordThreadId, message);
+      if (sent) return true;
+      console.error(`[cron] Failed to send to Discord thread ${discordThreadId}; active-channel fallback disabled for thread-targeted jobs`);
+      return false;
+    } catch (err) {
+      const errorText = err instanceof Error ? err.message : String(err);
+      console.error(`[cron] Discord thread delivery failed for ${discordThreadId}; active-channel fallback disabled: ${errorText}`);
+      return false;
+    }
+  }
+
+  // Fallback to active channel for non-thread-targeted jobs
+  if (voiceBuffer && voiceFormat) {
+    // Send voice to active channel if provided
+    await sendActiveChannelProactiveVoice(config, voiceBuffer, voiceFormat);
   }
   return sendActiveChannelProactiveMessage(config, message);
 }
@@ -218,6 +247,9 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
   runningJobs.set(jobDef.id, logEntry);
   const discordThreadId = resolveDiscordThreadTarget(jobDef);
 
+  // Track synthesized voice for final notification
+  let synthesizedVoice: { buffer: Uint8Array; format: string } | null = null;
+
   // Log start immediately
   appendCronLogLine(jobDef.id, `=== STARTED: ${jobDef.name} (${jobDef.id}) ===`);
   appendCronLogLine(jobDef.id, `Model: ${jobDef.model || 'default'}`);
@@ -288,8 +320,14 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
         if (digest.articles.length > 0) {
           const digestMessage = digest.summary ?? textPortion;
           try {
-            await sendCronNotification(config, digestMessage, discordThreadId);
-            appendCronLogLine(jobDef.id, `Digest sent to chat (${digestMessage.length} chars)`);
+            const sent = await sendCronNotification(config, digestMessage, discordThreadId);
+            if (sent) {
+              appendCronLogLine(jobDef.id, `Digest sent to chat (${digestMessage.length} chars)`);
+            } else if (discordThreadId) {
+              appendCronLogLine(jobDef.id, `Digest thread delivery failed (threadId=${discordThreadId}); no active-channel fallback`);
+            } else {
+              appendCronLogLine(jobDef.id, 'Failed to send digest to chat');
+            }
           } catch {
             appendCronLogLine(jobDef.id, 'Failed to send digest to chat');
           }
@@ -299,7 +337,7 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
         appendCronLogLine(jobDef.id, `Failed to save digest: ${errMsg}`);
       }
 
-      // Synthesize and send voice if configured
+      // Synthesize voice if configured (stored for final notification)
       if (jobDef.payload.sendAsVoice && config.voice) {
         try {
           // Use voice portion if available, fall back to text
@@ -307,12 +345,9 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
           appendCronLogLine(jobDef.id, `Synthesizing voice (${voicePortion ? 'voice portion' : 'full text fallback'})...`);
           const speech = await synthesizeSpeech(voiceContent, config.voice);
           appendCronLogLine(jobDef.id, `Voice synthesized (${speech.format}, ${speech.provider}, ${speech.buffer.length} bytes)`);
-          const sent = await sendActiveChannelProactiveVoice(config, speech.buffer, speech.format);
-          if (sent) {
-            appendCronLogLine(jobDef.id, 'Voice message sent to active channel');
-          } else {
-            appendCronLogLine(jobDef.id, 'No active channel for voice message');
-          }
+          // Store for final notification instead of sending immediately
+          synthesizedVoice = { buffer: speech.buffer, format: speech.format };
+          appendCronLogLine(jobDef.id, 'Voice stored for final notification');
         } catch (voiceErr) {
           const errMsg = voiceErr instanceof Error ? voiceErr.message : String(voiceErr);
           appendCronLogLine(jobDef.id, `Voice synthesis failed: ${errMsg}`);
@@ -366,7 +401,7 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
     const elapsed = (logEntry.durationMs / 1000).toFixed(1);
     console.log(`[cron] Job ${jobDef.id} finished: ${logEntry.status} (${elapsed}s)`);
 
-    // Notify active channel
+    // Notify active channel with optional voice attachment
     try {
       const icon = logEntry.status === 'success' ? '✅' : logEntry.status === 'timeout' ? '⏰' : '❌';
       let notification = `${icon} Cron: ${jobDef.name} — ${logEntry.status} (${elapsed}s)`;
@@ -380,7 +415,26 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
           : logEntry.output;
         notification += `\n\n${output}`;
       }
-      await sendCronNotification(config, notification, discordThreadId);
+
+      // Include synthesized voice if available
+      if (synthesizedVoice) {
+        appendCronLogLine(jobDef.id, `Sending notification with voice (${synthesizedVoice.format})`);
+        const sent = await sendCronNotification(
+          config,
+          notification,
+          discordThreadId,
+          synthesizedVoice.buffer,
+          synthesizedVoice.format,
+        );
+        if (!sent && discordThreadId) {
+          appendCronLogLine(jobDef.id, `Final thread notification delivery failed (threadId=${discordThreadId}); no active-channel fallback`);
+        }
+      } else {
+        const sent = await sendCronNotification(config, notification, discordThreadId);
+        if (!sent && discordThreadId) {
+          appendCronLogLine(jobDef.id, `Final thread notification delivery failed (threadId=${discordThreadId}); no active-channel fallback`);
+        }
+      }
     } catch (notifyErr) {
       console.error(`[cron] Failed to send notification: ${notifyErr}`);
     }

@@ -11,7 +11,7 @@ import { onApprovalEvent } from '../../exec-approval.js';
 import { KNOWN_COMMANDS } from './types.js';
 import { handleCommand, handleIncomingMessage, handleInteraction, sendApprovalCard } from './handlers.js';
 import { splitToChunks, conversationKey } from './utils.js';
-import { sendToThread } from './threads.js';
+import { sendToThread, sendToThreadWithVoice } from './threads.js';
 
 let client: Client | null = null;
 let config: Config;
@@ -181,4 +181,19 @@ export async function sendDiscordProactiveVoice(target: string | number, buffer:
 export async function sendToDiscordThread(threadId: string, message: string): Promise<boolean> {
   if (!client) return false;
   return sendToThread(client, threadId, message);
+}
+
+/**
+ * Send a message with optional voice attachment to a Discord thread by ID.
+ * Used by cron jobs to route both text and voice output to the same thread.
+ * Returns true if sent successfully, false if client unavailable or thread not found.
+ */
+export async function sendToDiscordThreadWithVoice(
+  threadId: string,
+  message: string,
+  voiceBuffer?: Uint8Array,
+  voiceFormat?: string,
+): Promise<boolean> {
+  if (!client) return false;
+  return sendToThreadWithVoice(client, threadId, message, voiceBuffer, voiceFormat);
 }

@@ -100,6 +100,60 @@ export async function sendToThread(
 }
 
 /**
+ * Send a message with optional voice attachment to a Discord thread.
+ * Handles chunking for long text messages.
+ * Returns true if sent successfully.
+ */
+export async function sendToThreadWithVoice(
+  client: Client,
+  threadId: string,
+  text: string,
+  voiceBuffer?: Uint8Array,
+  voiceFormat?: string,
+): Promise<boolean> {
+  try {
+    const thread = await client.channels.fetch(threadId).catch(() => null);
+    if (!thread) {
+      console.warn(`[discord] Channel/thread ${threadId} not found`);
+      return false;
+    }
+
+    if (!('send' in thread) || typeof (thread as any).send !== 'function') {
+      console.warn(`[discord] Channel ${threadId} is not sendable (type=${thread.type})`);
+      return false;
+    }
+
+    // Import AttachmentBuilder dynamically to avoid circular deps
+    const { AttachmentBuilder } = await import('discord.js');
+
+    const chunks = splitToChunks(text, 1900);
+
+    // Send voice with first chunk if provided
+    if (voiceBuffer && voiceFormat) {
+      const attachment = new AttachmentBuilder(Buffer.from(voiceBuffer), {
+        name: `voice.${voiceFormat}`,
+        description: 'Voice message',
+      });
+      await (thread as any).send({ content: chunks[0], files: [attachment] });
+      // Send remaining chunks as text-only
+      for (let i = 1; i < chunks.length; i++) {
+        await (thread as any).send(chunks[i]);
+      }
+    } else {
+      // No voice - send all chunks as text
+      for (const chunk of chunks) {
+        await (thread as any).send(chunk);
+      }
+    }
+
+    return true;
+  } catch (err) {
+    console.error(`[discord] Failed to send to thread ${threadId} with voice:`, err);
+    return false;
+  }
+}
+
+/**
  * Clean up thread mapping for a task (e.g. after completion).
  * We keep the mapping around for a while since late notifications may arrive.
  */

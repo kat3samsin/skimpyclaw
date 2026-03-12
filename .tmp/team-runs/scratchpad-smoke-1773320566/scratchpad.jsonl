@@ -1,0 +1,2 @@
+{"ts": "2026-03-12T13:02:47Z", "run_id": "scratchpad-smoke-1773320566", "agent": "smoke-worker", "phase": "setup", "status": "start", "summary": "smoke started", "files": [], "blockers": [], "next": ""}
+{"ts": "2026-03-12T13:02:47Z", "run_id": "scratchpad-smoke-1773320566", "agent": "smoke-worker", "phase": "setup", "status": "done", "summary": "smoke done", "files": [], "blockers": [], "next": "render markdown"}

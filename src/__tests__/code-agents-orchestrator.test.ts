@@ -258,6 +258,24 @@ describe('orchestrator - per-wave validation and retry', () => {
   });
 });
 
+describe('orchestrator - team scratchpad integration', () => {
+  it('source includes automatic scratchpad lifecycle hooks', async () => {
+    const { readFileSync } = await vi.importActual<typeof import('fs')>('fs');
+    const src = readFileSync(
+      new URL('../../src/code-agents/orchestrator.ts', import.meta.url).pathname.replace('/.worktrees/hardening-code-agents/src/__tests__/../../', '/.worktrees/hardening-code-agents/'),
+      'utf-8',
+    );
+
+    expect(src).toContain('SKIMPYCLAW_TEAM_SCRATCHPAD');
+    expect(src).toContain('team_scratchpad.py');
+    expect(src).toContain("'init'");
+    expect(src).toContain("'post'");
+    expect(src).toContain("'summary'");
+    expect(src).toContain("'render-md'");
+    expect(src).toContain("const scratchpadRunId = `team-${parentId}`");
+  });
+});
+
 describe('orchestrator - timeout budgeting', () => {
   it('computes perChildTimeout based on wave count not team size', async () => {
     const { readFileSync } = await vi.importActual<typeof import('fs')>('fs');

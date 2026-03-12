@@ -4,12 +4,16 @@ const {
   runAgentTurnMock,
   sendActiveChannelProactiveMessageMock,
   sendToDiscordThreadMock,
+  sendToDiscordThreadWithVoiceMock,
   parseAndSaveDigestMock,
+  synthesizeSpeechMock,
 } = vi.hoisted(() => ({
   runAgentTurnMock: vi.fn(),
   sendActiveChannelProactiveMessageMock: vi.fn(async () => true),
   sendToDiscordThreadMock: vi.fn(async () => false),
+  sendToDiscordThreadWithVoiceMock: vi.fn(async () => false),
   parseAndSaveDigestMock: vi.fn(),
+  synthesizeSpeechMock: vi.fn(),
 }));
 
 vi.mock('../agent.js', () => ({
@@ -28,6 +32,7 @@ vi.mock('../digests.js', () => ({
 
 vi.mock('../channels/discord/index.js', () => ({
   sendToDiscordThread: sendToDiscordThreadMock,
+  sendToDiscordThreadWithVoice: sendToDiscordThreadWithVoiceMock,
 }));
 
 vi.mock('../config.js', () => ({
@@ -44,7 +49,7 @@ vi.mock('../audit.js', () => ({
 }));
 
 vi.mock('../voice.js', () => ({
-  synthesizeSpeech: vi.fn(),
+  synthesizeSpeech: synthesizeSpeechMock,
 }));
 
 vi.mock('../env-sanitizer.js', () => ({
@@ -121,7 +126,7 @@ describe('runCronJob digest chat output', () => {
     warnSpy.mockRestore();
   });
 
-  it('routes notifications to a configured Discord thread when delivery succeeds', async () => {
+  it('thread id set + successful send does not use active-channel send', async () => {
     const digestText = 'No links today';
     runAgentTurnMock.mockResolvedValue(digestText);
     parseAndSaveDigestMock.mockReturnValue({ summary: digestText, articles: [] });
@@ -148,13 +153,10 @@ describe('runCronJob digest chat output', () => {
     await runCronJob('tech-digest', threadConfig);
 
     expect(sendToDiscordThreadMock).toHaveBeenCalled();
-    expect(sendActiveChannelProactiveMessageMock).not.toHaveBeenCalledWith(
-      threadConfig,
-      expect.stringContaining('Cron: Tech Digest'),
-    );
+    expect(sendActiveChannelProactiveMessageMock).not.toHaveBeenCalled();
   });
 
-  it('falls back to active channel when Discord thread delivery fails', async () => {
+  it('thread id set + failed send does not fall back to active channel', async () => {
     const digestText = 'No links today';
     runAgentTurnMock.mockResolvedValue(digestText);
     parseAndSaveDigestMock.mockReturnValue({ summary: digestText, articles: [] });
@@ -181,10 +183,7 @@ describe('runCronJob digest chat output', () => {
     await runCronJob('tech-digest', threadConfig);
 
     expect(sendToDiscordThreadMock).toHaveBeenCalled();
-    expect(sendActiveChannelProactiveMessageMock).toHaveBeenCalledWith(
-      threadConfig,
-      expect.stringContaining('Cron: Tech Digest'),
-    );
+    expect(sendActiveChannelProactiveMessageMock).not.toHaveBeenCalled();
   });
 
   it('falls back to active channel when discordThreadId is invalid', async () => {
@@ -217,5 +216,105 @@ describe('runCronJob digest chat output', () => {
       threadConfig,
       expect.stringContaining('Cron: Tech Digest'),
     );
+  });
+
+  it('no thread id uses active-channel send', async () => {
+    const digestText = 'No links today';
+    runAgentTurnMock.mockResolvedValue(digestText);
+    parseAndSaveDigestMock.mockReturnValue({ summary: digestText, articles: [] });
+
+    await runCronJob('tech-digest', config);
+
+    expect(sendToDiscordThreadMock).not.toHaveBeenCalled();
+    expect(sendActiveChannelProactiveMessageMock).toHaveBeenCalledWith(
+      config,
+      expect.stringContaining('Cron: Tech Digest'),
+    );
+  });
+
+  it('sends voice attachment to Discord thread when sendAsVoice is enabled', async () => {
+    const digestText = 'No links today';
+    runAgentTurnMock.mockResolvedValue(digestText);
+    parseAndSaveDigestMock.mockReturnValue({ summary: digestText, articles: [] });
+    sendToDiscordThreadMock.mockResolvedValue(true); // Start notification succeeds
+    sendToDiscordThreadWithVoiceMock.mockResolvedValue(true); // Final notification with voice succeeds
+    synthesizeSpeechMock.mockResolvedValue({
+      buffer: new Uint8Array([1, 2, 3]),
+      format: 'mp3',
+      provider: 'test-provider',
+    });
+
+    const voiceConfig = {
+      ...config,
+      voice: {
+        provider: 'test-provider',
+        apiKey: 'test-key',
+      },
+      cron: {
+        jobs: [
+          {
+            id: 'tech-digest',
+            name: 'Tech Digest',
+            schedule: { kind: 'cron', expr: '* * * * *', tz: 'UTC' },
+            payload: {
+              kind: 'agentTurn',
+              message: 'digest please',
+              sendAsVoice: true,
+              discordThreadId: '123456789012345678',
+            },
+          },
+        ],
+      },
+    } as any;
+
+    await runCronJob('tech-digest', voiceConfig);
+
+    expect(synthesizeSpeechMock).toHaveBeenCalledWith(digestText, voiceConfig.voice);
+    expect(sendToDiscordThreadWithVoiceMock).toHaveBeenCalledWith(
+      '123456789012345678',
+      expect.stringContaining('Cron: Tech Digest'),
+      new Uint8Array([1, 2, 3]),
+      'mp3',
+    );
+    // Start notification goes to Discord thread, final notification goes to Discord thread with voice
+    expect(sendActiveChannelProactiveMessageMock).not.toHaveBeenCalled();
+  });
+
+  it('sends voice to active channel when Discord thread is not configured', async () => {
+    const digestText = 'No links today';
+    runAgentTurnMock.mockResolvedValue(digestText);
+    parseAndSaveDigestMock.mockReturnValue({ summary: digestText, articles: [] });
+    synthesizeSpeechMock.mockResolvedValue({
+      buffer: new Uint8Array([1, 2, 3]),
+      format: 'mp3',
+      provider: 'test-provider',
+    });
+
+    const voiceConfig = {
+      ...config,
+      voice: {
+        provider: 'test-provider',
+        apiKey: 'test-key',
+      },
+      cron: {
+        jobs: [
+          {
+            id: 'tech-digest',
+            name: 'Tech Digest',
+            schedule: { kind: 'cron', expr: '* * * * *', tz: 'UTC' },
+            payload: {
+              kind: 'agentTurn',
+              message: 'digest please',
+              sendAsVoice: true,
+            },
+          },
+        ],
+      },
+    } as any;
+
+    await runCronJob('tech-digest', voiceConfig);
+
+    expect(synthesizeSpeechMock).toHaveBeenCalledWith(digestText, voiceConfig.voice);
+    expect(sendActiveChannelProactiveMessageMock).toHaveBeenCalled();
   });
 });

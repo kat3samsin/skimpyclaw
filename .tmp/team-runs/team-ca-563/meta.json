@@ -1,0 +1,7 @@
+{
+  "run_id": "team-ca-563",
+  "task": "Smoke test `code_with_team` scratchpad integration with a minimal, safe coding task. Create a new temporary folder `.tmp/team-scratchpad-smoke/` and complete 3 independent subtasks in parallel: 1) Add `a.txt` with content `A ok`. 2) Add `b.txt` with content `B ok`. 3) Add `c.txt` with content `C ok`. Then have the coordinator verify all three files exist and contain expected content. Do not modify",
+  "base_branch": "trunk",
+  "repo": "/Users/katre/Sites/skimpyclaw",
+  "created_at": "2026-03-12T20:35:09Z"
+}

@@ -46,6 +46,19 @@ Implementation: `detectPackageManager()`, `buildMonorepoValidationCommand()`, an
 
 When `code_with_team` runs parallel agents in the same wave, each agent gets its own **git worktree** so they can't overwrite each other's files. After the wave completes, branches are merged back sequentially.
 
+## Team Scratchpad (Automatic)
+
+`code_with_team` now auto-integrates with `scripts/team_scratchpad.py`:
+
+- Initializes a run at team start using run ID `team-<parent_agent_id>`
+- Posts coordinator and worker lifecycle updates (start/progress/completion/failure)
+- Includes blockers on failure states when available
+- Automatically runs `summary` and `render-md` at team end
+
+This integration is best-effort and non-blocking: scratchpad failures only log warnings.
+
+Set `SKIMPYCLAW_TEAM_SCRATCHPAD=0` to disable automatic scratchpad updates.
+
 ### Flow
 1. Before each parallel wave: `git worktree add` creates `.skimpyclaw-worktrees/<childId>` on branch `skimpyclaw-team/<childId>`
 2. Each child agent runs in its own worktree directory

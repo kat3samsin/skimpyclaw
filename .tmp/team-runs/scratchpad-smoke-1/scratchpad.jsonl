@@ -1,0 +1,2 @@
+{"ts": "2026-03-11T22:57:45Z", "run_id": "scratchpad-smoke-1", "agent": "worker-a", "phase": "tests", "status": "red", "summary": "added failing tests", "files": ["a.py", "b.py"], "blockers": [], "next": "implement fix"}
+{"ts": "2026-03-11T22:57:50Z", "run_id": "scratchpad-smoke-1", "agent": "worker-b", "phase": "review", "status": "blocked", "summary": "waiting on API contract", "files": [], "blockers": ["api schema pending"], "next": "sync with backend"}

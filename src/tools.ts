@@ -73,6 +73,16 @@ export type { CodeAgentTask, DecomposedSubtask } from './code-agents/index.js';
 // --- MCP (mcporter) ---
 
 let mcpRuntime: any = null;
+let mcpHealthInterval: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * MCP health check — disabled (was reconnecting every 5 min even when healthy).
+ * Reconnection now happens lazily: only when an actual tool call fails with a
+ * retryable error (see callMcpToolWithRetry).
+ */
+function startMcpHealthCheck(): void {
+  // no-op — reconnect-on-failure is sufficient
+}
 
 async function getMcpRuntime(): Promise<any> {
   if (!mcpRuntime) {
@@ -80,6 +90,7 @@ async function getMcpRuntime(): Promise<any> {
     mcpRuntime = await createRuntime({
       configPath: join(homedir(), '.mcporter', 'mcporter.json'),
     });
+    startMcpHealthCheck();
   }
   return mcpRuntime;
 }
@@ -317,21 +328,39 @@ async function executeMcpToolGeneric(fullName: string, args: Record<string, any>
     toolName = parts.slice(2).join('__');
   }
 
-  try {
-    return await callMcpTool(server, toolName, args);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    // Retry once on connection/session errors
-    if (msg.includes('session') || msg.includes('Session') || msg.includes('ECONNR') || msg.includes('EPIPE') || msg.includes('closed') || msg.includes('close') || msg.includes('disconnected') || msg.includes('fetch failed') || msg.includes('timed out') || msg.includes('-32603') || msg.includes('-32001')) {
-      console.warn(`[mcp] Tool call failed (${msg}), reconnecting and retrying...`);
-      await reconnectMcp();
+  const isRetryableError = (msg: string) =>
+    msg.includes('session') || msg.includes('Session') || msg.includes('ECONNR') ||
+    msg.includes('EPIPE') || msg.includes('closed') || msg.includes('close') ||
+    msg.includes('disconnected') || msg.includes('fetch failed') ||
+    msg.includes('timed out') || msg.includes('Premature') ||
+    msg.includes('-32603') || msg.includes('-32001') || msg.includes('-32000');
+
+  const MAX_RETRIES = 2;
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
       return await callMcpTool(server, toolName, args);
+    } catch (err) {
+      lastErr = err;
+      const msg = err instanceof Error ? err.message : String(err);
+      if (attempt < MAX_RETRIES && isRetryableError(msg)) {
+        const delay = (attempt + 1) * 2000; // 2s, 4s
+        console.warn(`[mcp] Tool call failed (${msg}), reconnecting (attempt ${attempt + 1}/${MAX_RETRIES})...`);
+        await new Promise(r => setTimeout(r, delay));
+        await reconnectMcp();
+        continue;
+      }
+      throw err;
     }
-    throw err;
   }
+  throw lastErr;
 }
 
 export async function cleanupMcp(): Promise<void> {
+  if (mcpHealthInterval) {
+    clearInterval(mcpHealthInterval);
+    mcpHealthInterval = null;
+  }
   if (mcpRuntime) {
     await mcpRuntime.close().catch(() => {});
     mcpRuntime = null;
