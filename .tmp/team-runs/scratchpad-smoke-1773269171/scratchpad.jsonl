@@ -1,3 +1,0 @@
-{"ts": "2026-03-11T22:46:24Z", "run_id": "scratchpad-smoke-1773269171", "agent": "worker-a", "phase": "setup", "status": "start", "summary": "starting", "files": [], "blockers": [], "next": ""}
-{"ts": "2026-03-11T22:46:28Z", "run_id": "scratchpad-smoke-1773269171", "agent": "worker-a", "phase": "test", "status": "red", "summary": "tests failed", "files": [], "blockers": ["failing test"], "next": "fix tests"}
-{"ts": "2026-03-11T22:46:34Z", "run_id": "scratchpad-smoke-1773269171", "agent": "worker-b", "phase": "implement", "status": "in_progress", "summary": "working", "files": ["src/x.ts", "src/y.ts"], "blockers": [], "next": ""}

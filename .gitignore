@@ -16,3 +16,4 @@ docs/.vitepress/dist/
 .skimpyclaw-worktrees/
 .pnpm-store/
 backend-review-*.md
+.tmp/

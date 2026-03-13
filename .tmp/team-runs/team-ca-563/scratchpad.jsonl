@@ -1,3 +1,0 @@
-{"ts": "2026-03-12T20:35:10Z", "run_id": "team-ca-563", "agent": "team-coordinator", "phase": "orchestration", "status": "start", "summary": "Started team run ca-563 with 3 workers", "files": [], "blockers": [], "next": ""}
-{"ts": "2026-03-12T20:35:28Z", "run_id": "team-ca-563", "agent": "team-coordinator", "phase": "orchestration", "status": "in_progress", "summary": "Decomposed into 3 subtasks across 1 wave(s)", "files": [], "blockers": [], "next": "Start wave execution"}
-{"ts": "2026-03-12T20:35:28Z", "run_id": "team-ca-563", "agent": "team-coordinator", "phase": "execution", "status": "in_progress", "summary": "Starting wave 1/1 with 3 worker(s)", "files": [], "blockers": [], "next": ""}
