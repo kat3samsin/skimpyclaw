@@ -54,6 +54,6 @@ export function toCodexToolDefinitions(tools: any[]): any[] {
     type: 'function',
     name: t.name,
     description: t.description,
-    parameters: t.input_schema,
+    parameters: t.input_schema && t.input_schema.type ? t.input_schema : { type: 'object', properties: {} },
   }));
 }

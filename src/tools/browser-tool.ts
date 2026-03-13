@@ -121,6 +121,10 @@ async function ensureBrowser(config: ToolConfig, overrides?: Record<string, any>
 }
 
 export async function executeBrowser(input: Record<string, any>, config: ToolConfig): Promise<string> {
+  // Normalize short property names to full names
+  if (input.act && !input.action) input.action = input.act;
+  if (input.sel && !input.selector) input.selector = input.sel;
+  if (input.js && !input.script) input.script = input.js;
   if (!config.browser?.enabled) {
     return 'Error: Browser tool is disabled. Enable it in config (tools.browser.enabled).';
   }

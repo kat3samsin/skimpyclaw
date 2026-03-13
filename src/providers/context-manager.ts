@@ -30,8 +30,8 @@ export interface CompactionResult<T> {
 
 const DEFAULT_MAX_CONTEXT_TOKENS = 200_000;
 const KEEP_TAIL = 8;         // always keep last N messages/items untouched
-const RESULT_MAX_CHARS = 500; // fallback truncation length
-const SUMMARY_MAX_TOKENS = 2048; // max tokens for summary response
+const RESULT_MAX_CHARS = 200; // fallback truncation length
+const SUMMARY_MAX_TOKENS = 1024; // max tokens for summary response
 
 // Preferred compaction models in priority order (cheap & fast).
 // Can be overridden via contextManagement.compactionModel in config.
@@ -48,15 +48,10 @@ export function estimateTokens(data: any[]): number {
 
 // --- LLM Summarization ---
 
-const COMPACTION_SYSTEM_PROMPT = `You are a conversation summarizer for an AI coding assistant. Your job is to produce a concise summary of a conversation between a user and an assistant that used tools (file reads, bash commands, file writes, etc.).
-
-Rules:
-- Preserve ALL important context: file paths, variable names, error messages, decisions made, code changes
-- Summarize tool results (e.g. "Read package.json — found dependencies X, Y, Z") rather than reproducing full output
-- Keep the summary structured with bullet points or short paragraphs
-- Note any unresolved issues or ongoing tasks
-- Be concise but don't lose critical information that the assistant needs to continue working
-- Output ONLY the summary, no preamble`;
+const COMPACTION_SYSTEM_PROMPT = `Summarize this AI coding assistant conversation concisely.
+Preserve: file paths, variable names, error messages, decisions, code changes.
+Summarize tool results briefly. Note unresolved issues. Use bullet points.
+Output ONLY the summary.`;
 
 /**
  * Pick the best available compaction model from candidates.

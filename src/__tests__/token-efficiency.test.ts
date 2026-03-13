@@ -1,6 +1,7 @@
 import { describe, it, expect, afterAll, vi } from 'vitest';
 import { existsSync, readdirSync, unlinkSync } from 'fs';
 import { join } from 'path';
+import { homedir } from 'os';
 import { fileURLToPath } from 'url';
 
 const testHome = fileURLToPath(new URL('../..', import.meta.url));
@@ -10,7 +11,7 @@ vi.mock('os', async () => {
 });
 const { truncateToolResult, splitToolResult } = await import('../providers/utils.js');
 
-const scratchDir = join(testHome, '.skimpyclaw', 'scratch');
+const scratchDir = join(testHome, '.skimpyclaw', 's');
 
 // Clean up scratch files created during tests
 afterAll(() => {
@@ -31,27 +32,23 @@ describe('token efficiency', () => {
     });
 
     it('returns results under mask threshold unchanged', () => {
-      const result = 'x'.repeat(7_999);
+      const result = 'x'.repeat(799);
       expect(truncateToolResult(result)).toBe(result);
     });
 
-    it('masks large results to scratch file with summary', () => {
+    it('masks large results to scratch file with path only', () => {
       const result = 'START' + 'x'.repeat(10_000) + 'END';
       const masked = truncateToolResult(result);
       expect(masked.length).toBeLessThan(result.length);
-      expect(masked).toContain('[Full output');
-      expect(masked).toContain('saved to');
-      expect(masked).toContain('.skimpyclaw/scratch/');
-      expect(masked).toContain('use Read tool to access');
-      // Summary includes head and tail
-      expect(masked).toContain('START');
-      expect(masked).toContain('END');
+      expect(masked).toContain('→');
+      expect(masked).toContain('.skimpyclaw/s/');
     });
 
-    it('includes char count in masked output', () => {
+    it('produces minimal output for masked results', () => {
       const result = 'y'.repeat(20_000);
       const masked = truncateToolResult(result);
-      expect(masked).toContain('20000 chars');
+      expect(masked.startsWith('→')).toBe(true);
+      expect(masked).toContain('.skimpyclaw/s/');
     });
   });
 
@@ -62,7 +59,7 @@ describe('token efficiency', () => {
     });
 
     it('returns results at mask threshold unchanged', () => {
-      const result = 'x'.repeat(8_000);
+      const result = 'x'.repeat(800);
       expect(splitToolResult('Bash', { command: 'echo hi' }, result)).toBe(result);
     });
 
@@ -76,7 +73,7 @@ describe('token efficiency', () => {
 
       it('does not split reads from tilde scratch path', () => {
         const largeResult = 'y'.repeat(20_000);
-        const split = splitToolResult('Read', { file_path: '~/.skimpyclaw/scratch/test.txt' }, largeResult);
+        const split = splitToolResult('Read', { file_path: '~/.skimpyclaw/s/test.txt' }, largeResult);
         expect(split).toBe(largeResult);
       });
 
@@ -89,21 +86,13 @@ describe('token efficiency', () => {
     });
 
     describe('Read tool', () => {
-      it('produces file path, line count, and preview summary', () => {
+      it('produces scratch path for large read results', () => {
         const lines = Array.from({ length: 500 }, (_, i) => `line ${i + 1}: content here`);
         const result = lines.join('\n');
         const split = splitToolResult('Read', { file_path: '/src/app.ts' }, result);
 
-        expect(split).toContain('File: /src/app.ts');
-        expect(split).toContain('500 lines');
-        expect(split).toContain(`${result.length} bytes`);
-        // Preview: first 3 and last 3 lines
-        expect(split).toContain('line 1:');
-        expect(split).toContain('line 2:');
-        expect(split).toContain('line 3:');
-        expect(split).toContain('line 500:');
-        expect(split).toContain('.skimpyclaw/scratch/');
-        expect(split).toContain('use Read tool to access');
+        expect(split).toContain('→');
+        expect(split).toContain('.skimpyclaw/s/');
         // Much shorter than original
         expect(split.length).toBeLessThan(result.length);
       });
@@ -111,83 +100,70 @@ describe('token efficiency', () => {
       it('handles read_file tool name', () => {
         const result = 'x\n'.repeat(5000);
         const split = splitToolResult('read_file', { path: '/foo.txt' }, result);
-        expect(split).toContain('File: /foo.txt');
+        expect(split).toContain('→');
+        expect(split).toContain('.skimpyclaw/s/');
       });
     });
 
     describe('Bash tool', () => {
-      it('extracts command and line count', () => {
+      it('produces scratch path for large bash output', () => {
         const output = Array.from({ length: 400 }, (_, i) => `output line ${i}: ${'x'.repeat(20)}`).join('\n');
         const split = splitToolResult('Bash', { command: 'find . -name "*.ts"' }, output);
 
-        expect(split).toContain('Command: find . -name "*.ts"');
-        expect(split).toContain('400 lines output');
-        expect(split).toContain('.skimpyclaw/scratch/');
+        expect(split).toContain('→');
+        expect(split).toContain('.skimpyclaw/s/');
       });
 
       it('extracts exit code when present', () => {
         const output = 'x\n'.repeat(5000) + 'exit code: 1';
         const split = splitToolResult('bash', { command: 'make build' }, output);
-        expect(split).toContain('Exit: 1');
+        expect(split).toContain('exit=1');
       });
 
-      it('includes stderr lines when present', () => {
-        const lines = ['output1', 'error: something failed', 'output2', 'warning: deprecated API'];
+      it('includes error lines when present', () => {
+        const lines = ['output1', 'error: something failed', 'output2'];
         const result = lines.join('\n') + '\n' + 'x'.repeat(9000);
         const split = splitToolResult('Bash', { command: 'npm install' }, result);
-        expect(split).toContain('Stderr');
         expect(split).toContain('error: something failed');
-        expect(split).toContain('warning: deprecated API');
       });
     });
 
-    describe('Glob tool', () => {
-      it('produces entry count summary', () => {
+    describe('non-Bash tools', () => {
+      it('produces minimal scratch path for Glob', () => {
         const entries = Array.from({ length: 300 }, (_, i) => `src/components/deeply/nested/module${i}/file${i}.ts`).join('\n');
         const split = splitToolResult('Glob', { pattern: '**/*.ts' }, entries);
 
-        expect(split).toContain('Directory:');
-        expect(split).toContain('300 entries');
-        expect(split).toContain('.skimpyclaw/scratch/');
+        expect(split).toContain('→');
+        expect(split).toContain('.skimpyclaw/s/');
       });
-    });
 
-    describe('Fetch tool', () => {
-      it('includes URL and content length', () => {
+      it('produces minimal scratch path for Fetch', () => {
         const result = 'HTTP/1.1 200 OK\n' + 'x'.repeat(10_000);
         const split = splitToolResult('Fetch', { url: 'https://example.com/api' }, result);
 
-        expect(split).toContain('Fetched: https://example.com/api');
-        expect(split).toContain('200');
-        expect(split).toContain(`${result.length} chars`);
+        expect(split).toContain('→');
+        expect(split).toContain('.skimpyclaw/s/');
       });
-    });
 
-    describe('Browser tools', () => {
-      it('produces browser action summary', () => {
+      it('produces minimal scratch path for Browser', () => {
         const result = 'x\n'.repeat(5000);
         const split = splitToolResult('browser_snapshot', { action: 'snapshot' }, result);
-        expect(split).toContain('Browser action:');
-        expect(split).toContain('.skimpyclaw/scratch/');
+        expect(split).toContain('→');
+        expect(split).toContain('.skimpyclaw/s/');
       });
-    });
 
-    describe('MCP tools', () => {
-      it('produces MCP summary', () => {
+      it('produces minimal scratch path for MCP', () => {
         const result = 'x\n'.repeat(5000);
         const split = splitToolResult('mcp__context_a8c__search', {}, result);
-        expect(split).toContain('MCP mcp__context_a8c__search');
-        expect(split).toContain('lines output');
+        expect(split).toContain('→');
+        expect(split).toContain('.skimpyclaw/s/');
       });
-    });
 
-    describe('default fallback', () => {
-      it('produces char count summary for unknown tools', () => {
+      it('produces minimal scratch path for unknown tools', () => {
         const result = 'z'.repeat(10_000);
         const split = splitToolResult('custom_tool', {}, result);
-        expect(split).toContain('custom_tool:');
-        expect(split).toContain('10000 chars output');
-        expect(split).toContain('.skimpyclaw/scratch/');
+        expect(split).toContain('→');
+        expect(split).toContain('.skimpyclaw/s/');
       });
     });
 
@@ -195,10 +171,11 @@ describe('token efficiency', () => {
       const result = 'data'.repeat(3000);
       const split = splitToolResult('Read', { file_path: '/big.txt' }, result);
       // Extract scratch path from the result
-      const pathMatch = split.match(/saved to (.+\.txt)/);
+      const pathMatch = split.match(/→(.+\/.skimpyclaw\/s\/\S+)/);
       expect(pathMatch).not.toBeNull();
       if (pathMatch) {
-        expect(existsSync(pathMatch[1])).toBe(true);
+        const p = pathMatch[1].startsWith('~/') ? pathMatch[1].replace('~', homedir()) : pathMatch[1];
+        expect(existsSync(p)).toBe(true);
       }
     });
   });

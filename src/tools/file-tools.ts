@@ -1,10 +1,17 @@
 import { readFileSync, writeFileSync, readdirSync, existsSync, statSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
+import { homedir } from 'os';
 
 import type { ToolConfig } from '../types.js';
 import { isPathAllowed } from './path-utils.js';
 
+/** Expand ~ to home directory */
+function expandTilde(p: string): string {
+  return p.startsWith('~/') ? join(homedir(), p.slice(2)) : p;
+}
+
 export function executeReadFile(path: string, config: ToolConfig): string {
+  path = expandTilde(path);
   if (!isPathAllowed(path, config.allowedPaths)) {
     return `Error: Path not allowed. Permitted: ${config.allowedPaths.join(', ')}`;
   }
@@ -27,7 +34,7 @@ function executeWriteFile(path: string, content: string, config: ToolConfig): st
     mkdirSync(dir, { recursive: true });
   }
   writeFileSync(path, content, 'utf-8');
-  return `Written: ${path} (${content.length} bytes)`;
+  return `OK`;
 }
 
 /**

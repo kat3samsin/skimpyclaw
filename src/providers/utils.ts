@@ -8,17 +8,7 @@ import type { ChatMessage, ContentBlock, ChatOptions, Config } from '../types.js
 // Anti-hallucination instructions injected between the Claude Code identity
 // block and the actual system prompt. Prevents the model from roleplaying
 // Claude Code's full behavior (XML tool calls, fabricated output, etc.)
-export const TOOL_GUARD = `You are a personal assistant running inside SkimpyClaw.
-You are NOT the full Claude Code CLI. Do NOT roleplay as Claude Code.
-
-## Tool Rules
-- You have ONLY the tools provided via the API tool_use mechanism.
-- Tool names are case-sensitive. Call tools exactly as listed.
-- NEVER output tool calls as text/XML/JSON. Use the API tool_use mechanism only.
-- NEVER fabricate tool results or file contents. If you haven't read a file, say so.
-- NEVER invent tools that are not in your tool list (no str_replace_editor, no view, etc.)
-- If a Browser tool is available, you DO have web-browsing access via that tool. Use it instead of claiming you can't browse.
-- If you need information, use a tool to get it. Do not guess.`;
+export const TOOL_GUARD = `You are SkimpyClaw (NOT Claude Code CLI). Use only API tool_use — never text/XML tools. Never fabricate results.`;
 
 // Track if using OAuth (requires Claude Code identity)
 let usingOAuth = false;
@@ -97,7 +87,7 @@ export function toOpenAITools(toolDefs: any[]): any[] {
     function: {
       name: t.name,
       description: t.description,
-      parameters: t.input_schema,
+      parameters: t.input_schema && t.input_schema.type ? t.input_schema : { type: 'object' as const, properties: {} },
     },
   }));
 }
@@ -213,7 +203,7 @@ export function stripProvider(model: string, openaiClients?: Map<string, unknown
  * a scratch file and replaced with a compact summary + file path.
  * Outputs below this are returned inline (no file I/O overhead).
  */
-const MASK_THRESHOLD = 8_000; // ~2000 tokens
+const MASK_THRESHOLD = 800; // ~200 tokens
 
 /**
  * Mask large tool outputs by writing to scratch files.
@@ -224,20 +214,17 @@ export function truncateToolResult(result: string, _maxBytes: number = 10_240): 
   if (result.length <= MASK_THRESHOLD) return result;
 
   try {
-    const scratchDir = join(homedir(), '.skimpyclaw', 'scratch');
+    const scratchDir = join(homedir(), '.skimpyclaw', 's');
     if (!existsSync(scratchDir)) mkdirSync(scratchDir, { recursive: true });
 
-    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const filePath = join(scratchDir, `${id}.txt`);
+    const id = Math.random().toString(36).slice(2, 5);
+    const filePath = join(scratchDir, id);
     writeFileSync(filePath, result);
 
-    // Build a compact summary: first 500 chars + last 500 chars
-    const head = result.slice(0, 500);
-    const tail = result.slice(-500);
-    const summary = head + (result.length > 1000 ? '\n...\n' + tail : '');
-
+    const home = homedir().replace(/\/+$/, '');
+    const shortFP = filePath.startsWith(home) ? '~' + filePath.slice(home.length) : filePath;
     console.log(`[context-manager] Masked ${result.length} chars → ${filePath}`);
-    return `${summary}\n\n[Full output (${result.length} chars) saved to ${filePath} — use Read tool to access]`;
+    return `→${shortFP}`;
   } catch (err) {
     // Fallback: simple truncation
     console.warn(`[context-manager] Masking failed: ${err instanceof Error ? err.message : err}`);
@@ -250,10 +237,10 @@ export function truncateToolResult(result: string, _maxBytes: number = 10_240): 
  */
 function writeScratchFile(result: string): string | null {
   try {
-    const scratchDir = join(homedir(), '.skimpyclaw', 'scratch');
+    const scratchDir = join(homedir(), '.skimpyclaw', 's');
     if (!existsSync(scratchDir)) mkdirSync(scratchDir, { recursive: true });
-    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const filePath = join(scratchDir, `${id}.txt`);
+    const id = Math.random().toString(36).slice(2, 5);
+    const filePath = join(scratchDir, id);
     writeFileSync(filePath, result);
     return filePath;
   } catch {
@@ -276,8 +263,8 @@ export function splitToolResult(
   const nameLower0 = toolName.toLowerCase();
   if (nameLower0 === 'read' || nameLower0 === 'read_file') {
     const filePath = toolInput.file_path || toolInput.path || '';
-    const scratchPrefix = join(homedir(), '.skimpyclaw', 'scratch');
-    if (typeof filePath === 'string' && (filePath.startsWith(scratchPrefix) || filePath.startsWith('~/.skimpyclaw/scratch/'))) {
+    const scratchPrefix = join(homedir(), '.skimpyclaw', 's');
+    if (typeof filePath === 'string' && (filePath.startsWith(scratchPrefix) || filePath.startsWith('~/.skimpyclaw/s/') || filePath.startsWith('~/.skimpyclaw/scratch/'))) {
       return result;
     }
   }
@@ -290,66 +277,88 @@ export function splitToolResult(
     return truncateToolResult(result);
   }
 
+  // Use tilde-prefixed path in output to save tokens
+  const home = homedir().replace(/\/+$/, '');
+  const shortPath = scratchPath.startsWith(home) ? '~' + scratchPath.slice(home.length) : scratchPath;
+
   console.log(`[context-manager] Split ${result.length} chars (${toolName}) → ${scratchPath}`);
 
-  const lines = result.split('\n');
-  const lineCount = lines.length;
   const nameLower = toolName.toLowerCase();
 
-  // Read / read_file
-  if (nameLower === 'read' || nameLower === 'read_file') {
-    const filePath = toolInput.file_path || toolInput.path || 'unknown';
-    const first3 = lines.slice(0, 3).join('\n');
-    const last3 = lines.slice(-3).join('\n');
-    return `File: ${filePath} (${lineCount} lines, ${result.length} bytes). Preview:\n${first3}\n...\n${last3}\nFull content saved to ${scratchPath} — use Read tool to access.`;
-  }
-
-  // Bash / bash
+  // Bash: preserve exit code and error lines (critical for model)
   if (nameLower === 'bash') {
-    const cmd = toolInput.command || 'unknown';
-    // Try to extract exit code from the output (common pattern: "exit code: N" or trailing line)
+    const lines = result.split('\n');
     const exitMatch = result.match(/exit code[:\s]+(\d+)/i);
-    const exitCode = exitMatch ? exitMatch[1] : '0';
-    // Extract stderr lines if present (heuristic: lines starting with common error prefixes)
-    const stderrLines = lines.filter(l =>
-      /^(error|warning|fatal|stderr|ERR!|npm ERR)/i.test(l.trim())
-    );
-    const stderrNote = stderrLines.length > 0
-      ? ` Stderr (${stderrLines.length} lines):\n${stderrLines.slice(0, 5).join('\n')}`
-      : '';
-    return `Command: ${cmd} | Exit: ${exitCode} | ${lineCount} lines output.${stderrNote}\nFull output saved to ${scratchPath} — use Read tool to access.`;
+    const exitInfo = exitMatch && exitMatch[1] !== '0' ? ` exit=${exitMatch[1]}` : '';
+    const errLines = lines.filter(l => /^(error|fatal|ERR!)/i.test(l.trim()));
+    const errNote = errLines.length > 0 ? `\n${errLines.slice(0, 3).join('\n')}` : '';
+    return `${exitInfo}${errNote}\n→${shortPath}`.trimStart();
   }
 
-  // Glob / list_directory
-  if (nameLower === 'glob' || nameLower === 'list_directory' || nameLower === 'ls') {
-    const dirPath = toolInput.path || toolInput.pattern || 'unknown';
-    const entries = lines.filter(l => l.trim().length > 0);
-    const dirCount = entries.filter(l => l.endsWith('/') || l.includes('/')).length;
-    const fileCount = entries.length - dirCount;
-    return `Directory: ${dirPath} | ${entries.length} entries (${dirCount} dirs, ${fileCount} files). Full listing saved to ${scratchPath} — use Read tool to access.`;
+  // Everything else: just the scratch path
+  return `→${shortPath}`;
+}
+
+/**
+ * Compact old tool results in Anthropic-format messages.
+ * Replaces tool_result content with '✓' for all results except the last
+ * `keepRecent` messages. The model has already processed these results,
+ * so we only need to preserve the structure (tool_use_id matching).
+ *
+ * Mutates the messages array in place for efficiency.
+ */
+export function compactOldResults(messages: any[], keepRecent: number = 1): void {
+  // Also compact string content in all messages (even when no old messages to drop)
+  for (const msg of messages) {
+    if (msg && msg.role === 'user' && typeof msg.content === 'string' && msg.content.length > 2) {
+      msg.content = '·';
+    }
+  }
+  if (messages.length <= keepRecent) return;
+  const cutoff = messages.length - keepRecent;
+  let idCounter = 0;
+
+  // Count old tool calls and collect tool names
+  const toolNames = new Set<string>();
+  let hasInitialUserMsg = false;
+
+  for (let i = 0; i < cutoff; i++) {
+    const msg = messages[i];
+    if (!msg) continue;
+    if (typeof msg.content === 'string' && msg.role === 'user') {
+      hasInitialUserMsg = true;
+      continue;
+    }
+    if (!Array.isArray(msg.content)) continue;
+    for (const block of msg.content) {
+      if (block.type === 'tool_use') {
+        toolNames.add(block.name);
+        idCounter++;
+      }
+    }
   }
 
-  // Fetch / fetch
-  if (nameLower === 'fetch' || nameLower === 'web_fetch') {
-    const url = toolInput.url || 'unknown';
-    const statusMatch = result.match(/^HTTP[/\d.\s]+(\d{3})/m) || result.match(/status[:\s]+(\d{3})/i);
-    const status = statusMatch ? statusMatch[1] : 'unknown';
-    return `Fetched: ${url} | ${status} | ${result.length} chars. Content saved to ${scratchPath} — use Read tool to access.`;
+  // Remove old messages entirely — keep only recent
+  messages.splice(0, cutoff);
+
+  // Ensure first message is user role (API requirement)
+  if (messages.length > 0 && messages[0].role !== 'user') {
+    messages.unshift({ role: 'user', content: '·' });
   }
 
-  // Browser tools
-  if (nameLower.startsWith('browser') || nameLower.includes('browser')) {
-    const action = toolInput.action || toolName;
-    return `Browser action: ${action}. ${lineCount} lines output. Full output saved to ${scratchPath} — use Read tool to access.`;
+  // Compact tool_results in kept messages
+  for (const msg of messages) {
+    if (!msg || !Array.isArray(msg.content)) continue;
+    const trBlocks = msg.content.filter((b: any) => b.type === 'tool_result');
+    // Replace all but last tool_result content with '✓'
+    if (trBlocks.length > 1) {
+      for (let i = 0; i < trBlocks.length - 1; i++) {
+        trBlocks[i].content = '✓';
+      }
+    }
+    // Collapse all tool_results to minimal content
+    msg.content = '·';
   }
-
-  // MCP tools (context-a8c, etc.)
-  if (nameLower.startsWith('mcp') || nameLower.startsWith('mcp__')) {
-    return `MCP ${toolName}: ${lineCount} lines output. Full output saved to ${scratchPath} — use Read tool to access.`;
-  }
-
-  // Default
-  return `${toolName}: ${result.length} chars output. Full output saved to ${scratchPath} — use Read tool to access.`;
 }
 
 /**

@@ -426,8 +426,9 @@ export async function executeTool(
         'icalBuddy', 'shortcuts', 'caffeinate', 'networksetup', 'launchctl',
         'security', 'xattr', 'ditto', 'hdiutil', 'diskutil', 'sw_vers',
       ]);
-      const needsHost = normalized === 'bash' && input.command &&
-        MACOS_HOST_COMMANDS.has(input.command.trim().split(/[\s;|&]/)[0]);
+      const bashCmd = input.command || input.cmd;
+      const needsHost = normalized === 'bash' && bashCmd &&
+        MACOS_HOST_COMMANDS.has(bashCmd.trim().split(/[\s;|&]/)[0]);
       if (SANDBOXED_TOOLS.has(normalized) && !needsHost) {
         const sessionId = context?.sessionId || context?.chatId?.toString() || 'default';
         const merged = { ...SANDBOX_DEFAULTS, ...sandboxCfg };
@@ -465,7 +466,7 @@ export async function executeTool(
         };
         switch (normalized) {
           case 'bash': {
-            const translatedCmd = translateBashPaths(input.command);
+            const translatedCmd = translateBashPaths(bashCmd);
             // Apply hard safety blocks inside sandbox.
             // Sandbox provides filesystem isolation, so opaque script execution
             // (heredocs, -c, -e) is safe — only require approval for truly
@@ -536,7 +537,7 @@ export async function executeTool(
       case 'list_directory':
         return executeListDirectory(input.path, config);
       case 'bash':
-        return await executeBash(input.command, input.cwd, config, context);
+        return await executeBash(input.command || input.cmd, input.cwd, config, context);
       case 'browser':
         return await executeBrowser(input, config);
       case 'fetch':

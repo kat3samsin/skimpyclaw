@@ -158,8 +158,8 @@ export async function runAgentTurn(
   // Inject channel-specific formatting context
   if (context?.channel) {
     const channelHints: Record<string, string> = {
-      telegram: `\n\n## Output Channel: Telegram\nTelegram does NOT render markdown. Use plain text only.\n- No **bold**, _italic_, or \`code blocks\`\n- Use CAPS or spacing for emphasis\n- Use plain dashes for lists\n- Include full URLs as plain text (no markdown links)`,
-      discord: `\n\n## Output Channel: Discord\nDiscord renders markdown. Use it for formatting.\n- Use **bold**, *italic*, \`code\`, and \`\`\`code blocks\`\`\`\n- Use markdown links: [text](url)\n- Use bullet lists and headers`,
+      telegram: `\n\n## Channel: Telegram\nPlain text only. No markdown. Use CAPS for emphasis, plain URLs.`,
+      discord: `\n\n## Channel: Discord\nUse markdown: **bold**, *italic*, \`code\`, \`\`\`blocks\`\`\`, [links](url).`,
     };
     systemPrompt += channelHints[context.channel] || '';
   }
