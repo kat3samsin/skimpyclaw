@@ -27,15 +27,19 @@ export function toClaudeCodeName(name: string): string {
 export const BUILTIN_TOOL_DEFINITIONS = [
   {
     name: 'Read',
+    input_schema: { type: 'object' as const, properties: { path: {} } },
   },
   {
     name: 'Write',
+    input_schema: { type: 'object' as const, properties: { path: {}, content: {} }, required: ['path', 'content'] },
   },
   {
     name: 'Glob',
+    input_schema: { type: 'object' as const, properties: { pattern: {} } },
   },
   {
     name: 'Bash',
+    input_schema: { type: 'object' as const, properties: { cmd: {} } },
   },
 ];
 
@@ -46,6 +50,7 @@ export const BROWSER_TOOL_DEFINITION = {
 
 export const FETCH_TOOL_DEFINITION = {
   name: 'Fetch',
+  input_schema: { type: 'object' as const, properties: { url: {} } },
 };
 
 // Legacy export for backward compat — static list (built-ins + browser + no MCP)
