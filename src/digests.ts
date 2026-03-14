@@ -303,6 +303,7 @@ function extractUrls(text: string): string[] {
 
 function extractTitleForUrl(text: string, url: string): string {
   const lines = text.split('\n');
+  const isMarkdownHeading = (value: string): boolean => /^#{1,6}\s+\S/.test(value);
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (line.includes(url)) {
@@ -317,6 +318,8 @@ function extractTitleForUrl(text: string, url: string): string {
           // Skip lines with emoji prefix (stats lines like ⬆️, 💬, 🔥, etc)
           // eslint-disable-next-line no-misleading-character-class
           if (/^[\u2B06\uFE0F\u{1F4AC}\u{1F525}\u{1F504}\u2B50\u{1F517}]+/u.test(prev)) continue;
+          // Skip markdown section headers (e.g. "## World Headlines")
+          if (isMarkdownHeading(prev)) continue;
           // Skip lines that are just URLs
           if (/^https?:\/\//.test(prev)) continue;
           // Found a title line — strip numbering/bullets and emoji prefix
@@ -339,7 +342,7 @@ function extractTitleForUrl(text: string, url: string): string {
       if (i > 0) {
         const prevLine = lines[i - 1].trim();
         // eslint-disable-next-line no-misleading-character-class
-        if (prevLine && !prevLine.startsWith('http') && !/^[\u2B06\uFE0F\u{1F4AC}\u{1F525}\u{1F504}\u2B50\u{1F517}]+/u.test(prevLine)) {
+        if (prevLine && !prevLine.startsWith('http') && !isMarkdownHeading(prevLine) && !/^[\u2B06\uFE0F\u{1F4AC}\u{1F525}\u{1F504}\u2B50\u{1F517}]+/u.test(prevLine)) {
           const cleaned = prevLine.replace(/^\d+\.\s*/, '').replace(/^[-*•]\s*/, '').trim();
           if (cleaned.length > 0) return cleaned.slice(0, 150);
         }

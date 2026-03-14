@@ -102,6 +102,50 @@ export function gatherCodebaseContext(workdir: string): string {
 }
 
 /**
+ * Compute word-level similarity between two strings (Jaccard index on significant words).
+ * Returns 0–1 where 1 means identical word sets.
+ */
+function wordSimilarity(a: string, b: string): number {
+  const stopWords = new Set(['the', 'a', 'an', 'and', 'or', 'to', 'in', 'of', 'for', 'is', 'it', 'on', 'with', 'that', 'this', 'be', 'as', 'at', 'by', 'from']);
+  const tokenize = (s: string) => {
+    const words = s.toLowerCase().replace(/[^a-z0-9_\-/.]+/g, ' ').split(/\s+/).filter(w => w.length > 1 && !stopWords.has(w));
+    return new Set(words);
+  };
+  const setA = tokenize(a);
+  const setB = tokenize(b);
+  if (setA.size === 0 && setB.size === 0) return 1;
+  let intersection = 0;
+  for (const w of setA) if (setB.has(w)) intersection++;
+  const union = new Set([...setA, ...setB]).size;
+  return union === 0 ? 1 : intersection / union;
+}
+
+/**
+ * Remove near-duplicate subtasks (>60% word overlap).
+ * Keeps the first occurrence, remaps dependsOn indices.
+ */
+function deduplicateSubtasks(subtasks: DecomposedSubtask[]): DecomposedSubtask[] {
+  const SIMILARITY_THRESHOLD = 0.4;
+  const kept: number[] = []; // original indices that survived
+  for (let i = 0; i < subtasks.length; i++) {
+    const isDuplicate = kept.some(k => wordSimilarity(subtasks[k].description, subtasks[i].description) > SIMILARITY_THRESHOLD);
+    if (!isDuplicate) kept.push(i);
+  }
+  if (kept.length === subtasks.length) return subtasks;
+
+  // Build old→new index map
+  const indexMap = new Map<number, number>();
+  kept.forEach((oldIdx, newIdx) => indexMap.set(oldIdx, newIdx));
+
+  return kept.map(oldIdx => ({
+    description: subtasks[oldIdx].description,
+    dependsOn: subtasks[oldIdx].dependsOn
+      .map(d => indexMap.get(d))
+      .filter((d): d is number => d !== undefined),
+  }));
+}
+
+/**
  * Use a quick model call to decompose a complex task into N subtasks with optional dependency info.
  * Falls back to numbered subtask splitting on parse error.
  * Falls back to all-independent if dependency info is missing or invalid.
@@ -119,15 +163,17 @@ export async function decomposeTask(
       ? `\n\nProject structure:\n${codebaseContext}\n`
       : '';
 
-    const prompt = `You are a task decomposition expert. Split the following coding task into exactly ${teamSize} independent or dependent subtasks that can be assigned to separate coding agents.
+    const prompt = `You are a task decomposition expert. Split the following coding task into up to ${teamSize} subtasks for separate coding agents.
 
 Rules:
+- Each subtask MUST do different work — NEVER create multiple subtasks that fix/investigate the same bug or touch the same logic. If the task is a single focused fix, return just 1 subtask.
 - Each subtask should be self-contained with clear file scope
 - Each parallel agent gets its own git worktree (branch), so file overlap is OK but be aware changes are merged after
 - Use dependsOn to order subtasks that must run sequentially (e.g. create interface before implementation)
 - Be specific: mention exact files, functions, and expected changes
 - Return JSON only: {"subtasks":[{"description":"...","dependsOn":[]},...]}
 - Use 0-based indices for dependsOn
+- Return FEWER than ${teamSize} subtasks if the task doesn't naturally split into ${teamSize} distinct pieces of work
 ${contextBlock}
 Task: ${task}`;
 
@@ -155,11 +201,13 @@ Task: ${task}`;
           for (let i = 0; i < normalized.length; i++) {
             normalized[i].dependsOn = normalized[i].dependsOn.filter(d => d !== i);
           }
-          // Pad or trim to match teamSize
-          while (normalized.length < teamSize) {
-            normalized.push({ description: `Additional part of: ${task.slice(0, 200)}`, dependsOn: [] });
+          // Deduplicate: remove subtasks that are too similar to earlier ones
+          const deduped = deduplicateSubtasks(normalized);
+          if (deduped.length < normalized.length) {
+            console.log(`[team] Deduplication: ${normalized.length} → ${deduped.length} subtasks (removed ${normalized.length - deduped.length} near-duplicates)`);
           }
-          return normalized.slice(0, teamSize);
+          // Do NOT pad back to teamSize — fewer distinct subtasks is correct
+          return deduped;
         }
       }
     }

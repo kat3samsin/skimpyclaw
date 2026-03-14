@@ -11,7 +11,7 @@ vi.mock('../config.js', () => ({
   getLogsDir: () => testState.logsDir,
 }));
 
-import { saveDigest, getDigest, deleteDigest, getDigestsDir } from '../digests.js';
+import { saveDigest, getDigest, deleteDigest, getDigestsDir, parseAndSaveDigest } from '../digests.js';
 
 describe('digests index path resolution', () => {
   beforeEach(() => {
@@ -55,5 +55,20 @@ describe('digests index path resolution', () => {
 
     expect(getDigest('tech-digest-deadbeef')).toBeNull();
     expect(deleteDigest('tech-digest-deadbeef')).toBe(false);
+  });
+
+  it('does not use markdown section headers as article titles', () => {
+    const digest = parseAndSaveDigest(
+      'news-digest',
+      'News Digest',
+      [
+        '## World Headlines',
+        'https://example.com/world-one',
+        'https://example.com/world-two',
+      ].join('\n'),
+    );
+
+    expect(digest.articles).toHaveLength(2);
+    expect(digest.articles.map(a => a.title)).toEqual(['world one', 'world two']);
   });
 });
