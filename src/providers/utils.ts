@@ -203,7 +203,7 @@ export function stripProvider(model: string, openaiClients?: Map<string, unknown
  * a scratch file and replaced with a compact summary + file path.
  * Outputs below this are returned inline (no file I/O overhead).
  */
-const MASK_THRESHOLD = 800; // ~200 tokens
+const MASK_THRESHOLD = 4000; // ~1000 tokens — must be high enough for typical file reads
 
 /**
  * Mask large tool outputs by writing to scratch files.
