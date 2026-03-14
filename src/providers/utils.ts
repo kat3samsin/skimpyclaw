@@ -307,36 +307,9 @@ export function splitToolResult(
  *
  * Mutates the messages array in place for efficiency.
  */
-export function compactOldResults(messages: any[], keepRecent: number = 1): void {
-  // Also compact string content in all messages (even when no old messages to drop)
-  for (const msg of messages) {
-    if (msg && msg.role === 'user' && typeof msg.content === 'string' && msg.content.length > 2) {
-      msg.content = '·';
-    }
-  }
+export function compactOldResults(messages: any[], keepRecent: number = 2): void {
   if (messages.length <= keepRecent) return;
   const cutoff = messages.length - keepRecent;
-  let idCounter = 0;
-
-  // Count old tool calls and collect tool names
-  const toolNames = new Set<string>();
-  let hasInitialUserMsg = false;
-
-  for (let i = 0; i < cutoff; i++) {
-    const msg = messages[i];
-    if (!msg) continue;
-    if (typeof msg.content === 'string' && msg.role === 'user') {
-      hasInitialUserMsg = true;
-      continue;
-    }
-    if (!Array.isArray(msg.content)) continue;
-    for (const block of msg.content) {
-      if (block.type === 'tool_use') {
-        toolNames.add(block.name);
-        idCounter++;
-      }
-    }
-  }
 
   // Remove old messages entirely — keep only recent
   messages.splice(0, cutoff);
@@ -344,20 +317,6 @@ export function compactOldResults(messages: any[], keepRecent: number = 1): void
   // Ensure first message is user role (API requirement)
   if (messages.length > 0 && messages[0].role !== 'user') {
     messages.unshift({ role: 'user', content: '·' });
-  }
-
-  // Compact tool_results in kept messages
-  for (const msg of messages) {
-    if (!msg || !Array.isArray(msg.content)) continue;
-    const trBlocks = msg.content.filter((b: any) => b.type === 'tool_result');
-    // Replace all but last tool_result content with '✓'
-    if (trBlocks.length > 1) {
-      for (let i = 0; i < trBlocks.length - 1; i++) {
-        trBlocks[i].content = '✓';
-      }
-    }
-    // Collapse all tool_results to minimal content
-    msg.content = '·';
   }
 }
 
