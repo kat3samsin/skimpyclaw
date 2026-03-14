@@ -17,3 +17,5 @@ docs/.vitepress/dist/
 .pnpm-store/
 backend-review-*.md
 .tmp/
+__test_outside__/
+__test_sandbox__/

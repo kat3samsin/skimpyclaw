@@ -197,14 +197,14 @@ describe('write_file', () => {
   it('writes a new file', async () => {
     const path = join(TEST_DIR, 'new.txt');
     const result = await executeTool('Write', { path, content: 'new content' }, toolConfig);
-    expect(result).toContain('Written');
+    expect(result).toBe('OK');
     expect(readFileSync(path, 'utf-8')).toBe('new content');
   });
 
   it('creates parent directories', async () => {
     const path = join(TEST_DIR, 'sub', 'deep', 'file.txt');
     const result = await executeTool('Write', { path, content: 'deep' }, toolConfig);
-    expect(result).toContain('Written');
+    expect(result).toBe('OK');
     expect(readFileSync(path, 'utf-8')).toBe('deep');
   });
 
@@ -450,10 +450,7 @@ describe('code_with_agent', () => {
       const props = Object.keys(CODE_WITH_AGENT_TOOL.input_schema.properties);
       expect(props).toContain('task');
       expect(props).toContain('agent');
-      expect(props).toContain('workdir');
-      expect(props).toContain('model');
-      expect(props).toContain('max_turns');
-      expect(props).toContain('validate');
+      // workdir, model, max_turns, validate — omitted from schema to save tokens (executor still accepts them)
     });
 
     it('is included in getToolDefinitions when includeSpawnSubagent is true', async () => {
@@ -645,12 +642,7 @@ describe('code_with_team', () => {
       const props = Object.keys(CODE_WITH_TEAM_TOOL.input_schema.properties);
       expect(props).toContain('task');
       expect(props).toContain('team_size');
-      expect(props).toContain('workdir');
-      expect(props).toContain('agent');
-      expect(props).toContain('model');
-      expect(props).toContain('timeout_minutes');
-      expect(props).toContain('validate');
-      // max_turns removed — not relevant for parallel agents
+      // workdir, agent, model, timeout_minutes, validate — omitted from schema to save tokens
       expect(props).not.toContain('max_turns');
     });
 

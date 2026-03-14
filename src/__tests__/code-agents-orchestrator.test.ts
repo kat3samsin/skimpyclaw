@@ -90,7 +90,7 @@ describe('computeWaves', () => {
 });
 
 describe('decomposeTask', () => {
-  it('pads with "Additional part of:" when model returns fewer subtasks', async () => {
+  it('does not pad when model returns fewer subtasks (fewer distinct subtasks is correct)', async () => {
     mockRunAgentTurn.mockResolvedValueOnce(
       '{"subtasks": [{"description": "only one task", "dependsOn": []}]}'
     );
@@ -98,11 +98,41 @@ describe('decomposeTask', () => {
     const config = { providers: {} } as any;
     const result = await decomposeTask('Build a full app with tests', 3, config);
 
-    expect(result).toHaveLength(3);
+    // Should NOT pad to 3 — if the model says 1 task, use 1 task
+    expect(result).toHaveLength(1);
     expect(result[0].description).toBe('only one task');
-    // Padded entries should use "Additional part of:" not duplicate the last description
-    expect(result[1].description).toMatch(/^Additional part of:/);
-    expect(result[2].description).toMatch(/^Additional part of:/);
+  });
+
+  it('deduplicates near-identical subtasks from model', async () => {
+    mockRunAgentTurn.mockResolvedValueOnce(JSON.stringify({
+      subtasks: [
+        { description: 'Find and fix the broken World Headlines section in news-digest', dependsOn: [] },
+        { description: 'Fix the broken World Headlines in news-digest module', dependsOn: [] },
+        { description: 'Locate the World Headlines bug in news-digest and fix it', dependsOn: [] },
+      ],
+    }));
+
+    const config = { providers: {} } as any;
+    const result = await decomposeTask('Fix World Headlines in news-digest', 3, config);
+
+    // All 3 are near-duplicates — should collapse to 1
+    expect(result).toHaveLength(1);
+    expect(result[0].description).toContain('World Headlines');
+  });
+
+  it('keeps genuinely different subtasks', async () => {
+    mockRunAgentTurn.mockResolvedValueOnce(JSON.stringify({
+      subtasks: [
+        { description: 'Add the new User model in src/models/user.ts', dependsOn: [] },
+        { description: 'Create REST API endpoints in src/routes/users.ts', dependsOn: [0] },
+        { description: 'Write integration tests in src/__tests__/users.test.ts', dependsOn: [0, 1] },
+      ],
+    }));
+
+    const config = { providers: {} } as any;
+    const result = await decomposeTask('Build user management feature', 3, config);
+
+    expect(result).toHaveLength(3);
   });
 
   it('falls back to numbered splitting on parse error', async () => {

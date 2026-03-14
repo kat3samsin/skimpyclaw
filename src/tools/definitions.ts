@@ -27,114 +27,30 @@ export function toClaudeCodeName(name: string): string {
 export const BUILTIN_TOOL_DEFINITIONS = [
   {
     name: 'Read',
-    description: 'Read the contents of a file at the given absolute path.',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        file_path: { type: 'string', description: 'Absolute path to the file to read' },
-      },
-      required: ['file_path'],
-    },
+    input_schema: { type: 'object' as const, properties: { path: {} } },
   },
   {
     name: 'Write',
-    description: 'Write content to a file. Creates parent directories if needed. Overwrites existing files.',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        file_path: { type: 'string', description: 'Absolute path to the file to write' },
-        content: { type: 'string', description: 'Content to write to the file' },
-      },
-      required: ['file_path', 'content'],
-    },
+    input_schema: { type: 'object' as const, properties: { path: {}, content: {} }, required: ['path', 'content'] },
   },
   {
     name: 'Glob',
-    description: 'List files and directories at the given path. Returns name, type (file/dir), and size.',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        path: { type: 'string', description: 'Absolute path to the directory to list' },
-      },
-      required: ['path'],
-    },
+    input_schema: { type: 'object' as const, properties: { pattern: {} } },
   },
   {
     name: 'Bash',
-    description: 'Execute a shell command and return stdout/stderr. Use for CLI tools like gh, icalBuddy, date, etc.',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        command: { type: 'string', description: 'Shell command to execute' },
-        cwd: { type: 'string', description: 'Working directory (optional)' },
-      },
-      required: ['command'],
-    },
+    input_schema: { type: 'object' as const, properties: { cmd: {} } },
   },
 ];
 
 export const BROWSER_TOOL_DEFINITION = {
   name: 'Browser',
-  description: `Control a browser via Playwright. Actions (case-insensitive):
-- open: Navigate to URL. Required: url
-- click: Click element. Required: selector
-- type: Fill input. Required: selector, text
-- select: Pick dropdown option. Required: selector, text (value)
-- hover: Hover element. Required: selector
-- scroll: Scroll page. Optional: selector (scrollIntoView), direction (up/down), amount (pixels)
-- waitFor: Wait for element/text. Required: selector OR text
-- evaluate: Run JavaScript in page. Required: script. Returns JSON result.
-- getText: Get visible text. Optional: selector (defaults to full page body text)
-- screenshot: Capture page. Optional: file_path
-- wait: Delay. Required: timeMs
-- close: Close browser`,
-  input_schema: {
-    type: 'object' as const,
-    properties: {
-      action: { type: 'string', description: 'Action to perform (see description)' },
-      type: { type: 'string', description: 'Browser type: chromium | firefox | webkit (optional, config default)' },
-      url: { type: 'string', description: 'URL to open (open action)' },
-      selector: { type: 'string', description: 'CSS selector (click/type/waitFor/getText/scroll/select/hover)' },
-      text: { type: 'string', description: 'Text to type, wait for, or select value (type/waitFor/select)' },
-      script: { type: 'string', description: 'JavaScript code to evaluate in page (evaluate action)' },
-      direction: { type: 'string', description: 'Scroll direction: up or down (scroll action, default: down)' },
-      amount: { type: 'number', description: 'Pixels to scroll (scroll action, default: one viewport height)' },
-      file_path: { type: 'string', description: 'Absolute path to save screenshot (optional)' },
-      timeoutMs: { type: 'number', description: 'Timeout in ms (optional)' },
-      timeMs: { type: 'number', description: 'Time to wait in ms (wait action)' },
-      headless: { type: 'boolean', description: 'Override headless for open (optional)' },
-      slowMoMs: { type: 'number', description: 'Slow motion delay per action (ms) (optional)' },
-      userAgent: { type: 'string', description: 'Override user agent (optional)' },
-      viewport: {
-        type: 'object',
-        properties: {
-          width: { type: 'number' },
-          height: { type: 'number' },
-        },
-      },
-      // executablePath and profileDir are config-only for security (no model overrides)
-    },
-    required: ['action'],
-  },
+  input_schema: { type: 'object' as const, properties: {} },
 };
 
 export const FETCH_TOOL_DEFINITION = {
   name: 'Fetch',
-  description: 'Make an HTTP request and return the response. HTML is auto-converted to plain text. Use for APIs, web search (e.g. https://duckduckgo.com/html/?q=your+query), or fetching page content. Prefer over Browser for simple requests.',
-  input_schema: {
-    type: 'object' as const,
-    properties: {
-      url: { type: 'string', description: 'URL to fetch' },
-      method: { type: 'string', description: 'HTTP method (GET, POST, PUT, DELETE, PATCH). Default: GET' },
-      headers: {
-        type: 'object' as const,
-        description: 'Request headers (e.g. {"Authorization": "Bearer ..."})',
-        additionalProperties: { type: 'string' },
-      },
-      body: { type: 'string', description: 'Request body (for POST/PUT/PATCH)' },
-    },
-    required: ['url'],
-  },
+  input_schema: { type: 'object' as const, properties: { url: {} } },
 };
 
 // Legacy export for backward compat — static list (built-ins + browser + no MCP)
@@ -143,47 +59,47 @@ export const TOOL_DEFINITIONS = [...BUILTIN_TOOL_DEFINITIONS, BROWSER_TOOL_DEFIN
 
 export const CODE_WITH_AGENT_TOOL = {
   name: 'code_with_agent',
-  description: 'Delegate a coding task to a coding agent CLI (Claude Code or Codex). The agent will edit files, run commands, and return results. Always use this for code changes instead of writing code directly.',
-  input_schema: {
-    type: 'object' as const,
-    properties: {
-      task: { type: 'string', description: 'Detailed coding task. Be specific: what to change, why, which files, expected behavior.' },
-      agent: { type: 'string', enum: ['claude', 'codex', 'kimi'], description: 'Which coding CLI to use. Omit to use configured default.' },
-      workdir: { type: 'string', description: 'Working directory (default: SkimpyClaw repo root)' },
-      model: { type: 'string', description: 'Model override (e.g. opus, gpt-5.3-codex)' },
-      max_turns: { type: 'number', description: 'Max agentic turns, Claude only (default: 30)' },
-      timeout_minutes: { type: 'number', description: 'Timeout in minutes (default: 10, max: 30)' },
-      validate: { type: 'boolean', description: 'Run build && test after completion using the auto-detected package manager (default: true)' },
-    },
-    required: ['task'],
-  },
+  input_schema: { type: 'object' as const, properties: { task: { type: 'string' as const }, agent: { type: 'string' as const } }, required: ['task'] },
 };
 
 export const CODE_WITH_TEAM_TOOL = {
   name: 'code_with_team',
-  description: 'Decompose a complex task into subtasks and run multiple code_with_agent instances in parallel. SkimpyClaw manages coordination: decomposes the task, spawns N parallel agents, monitors progress, synthesizes results, and validates. Use for multi-file refactors, cross-layer changes, or tasks with independent subtasks.',
-  input_schema: {
-    type: 'object' as const,
-    properties: {
-      task: { type: 'string', description: 'Detailed task description. Be specific: what to change, why, which files, expected behavior.' },
-      team_size: { type: 'number', description: 'Number of parallel agents (2-5, default 3)' },
-      workdir: { type: 'string', description: 'Working directory or project name (default: SkimpyClaw repo root)' },
-      agent: { type: 'string', enum: ['claude', 'codex', 'kimi'], description: 'Which coding CLI to use for all team workers. Omit to use configured default.' },
-      model: { type: 'string', description: 'Model override (e.g. claude-sonnet-4-5, gpt-5.3-codex)' },
-      timeout_minutes: { type: 'number', description: 'Total timeout in minutes (default: 20, max: 60)' },
-      validate: { type: 'boolean', description: 'Run build && test after all agents complete using the auto-detected package manager (default: true)' },
-    },
-    required: ['task'],
-  },
+  input_schema: { type: 'object' as const, properties: { task: { type: 'string' as const }, team_size: { type: 'number' as const } }, required: ['task'] },
 };
 
 export const CHECK_CODE_AGENT_TOOL = {
   name: 'check_code_agent',
-  description: 'Check status of running coding agents. Call with no args to list all, or with id to get details.',
-  input_schema: {
-    type: 'object' as const,
-    properties: {
-      id: { type: 'string', description: 'Agent ID (e.g. ca-1). Omit to list all active agents.' },
-    },
-  },
+  input_schema: { type: 'object' as const, properties: { id: { type: 'string' as const } } },
 };
+
+// Glob tool reference for dynamic loading
+const GLOB_TOOL = BUILTIN_TOOL_DEFINITIONS.find(t => t.name === 'Glob')!;
+
+// Write tool reference for dynamic loading
+const WRITE_TOOL = BUILTIN_TOOL_DEFINITIONS.find(t => t.name === 'Write')!;
+
+// Core tools — always sent. Extended tools added when conversation references them.
+export const CORE_TOOL_DEFINITIONS = [...BUILTIN_TOOL_DEFINITIONS.filter(t => t.name !== 'Glob' && t.name !== 'Write')];
+export const EXTENDED_TOOL_DEFINITIONS = [WRITE_TOOL, GLOB_TOOL, FETCH_TOOL_DEFINITION, BROWSER_TOOL_DEFINITION, CODE_WITH_AGENT_TOOL, CODE_WITH_TEAM_TOOL, CHECK_CODE_AGENT_TOOL];
+
+// Keywords that trigger inclusion of extended tools
+const TOOL_TRIGGERS: Record<string, string[]> = {
+  Write: ['write', 'create file', 'save', 'update file', 'fix', 'edit', 'modify', 'change'],
+  Glob: ['glob', 'list_directory', 'find files', 'directory listing'],
+  Fetch: ['fetch', 'http://', 'https://', 'curl', 'api call'],
+  Browser: ['browser', 'browse', 'webpage', 'website', 'click', 'screenshot', 'playwright'],
+  code_with_agent: ['code_with_agent', 'delegate', 'subagent', 'sub-agent'],
+  code_with_team: ['code_with_team', 'parallel', 'team_size'],
+  check_code_agent: ['check_code_agent', 'agent status', 'agent_id'],
+};
+
+/** Return tool defs filtered by what's been used/mentioned in conversation */
+export function getActiveToolDefs(messages: any[]): any[] {
+  const msgStr = JSON.stringify(messages).toLowerCase();
+  const extra: any[] = [];
+  for (const t of EXTENDED_TOOL_DEFINITIONS) {
+    const triggers = TOOL_TRIGGERS[t.name] || [t.name.toLowerCase()];
+    if (triggers.some(kw => msgStr.includes(kw))) extra.push(t);
+  }
+  return [...CORE_TOOL_DEFINITIONS, ...extra];
+}
