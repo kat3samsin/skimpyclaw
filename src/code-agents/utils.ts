@@ -67,6 +67,22 @@ export function normalizeCodeAgent(agent: string | undefined): 'claude' | 'codex
  * If no agent is explicit and the model is a GPT/OpenAI model, auto-select codex.
  * If the model is a kimi model, auto-select kimi.
  */
+/**
+ * Check if a model string is compatible with a given agent CLI.
+ * e.g. gpt-5.3-codex is NOT compatible with 'claude', claude-opus IS.
+ */
+export function isModelCompatibleWithAgent(model: string, agent: 'claude' | 'codex' | 'kimi'): boolean {
+  const m = model.toLowerCase();
+  if (agent === 'codex') {
+    return /^(gpt|codex|o[134]|openai\/)/i.test(m);
+  }
+  if (agent === 'kimi') {
+    return m.includes('kimi');
+  }
+  // claude: compatible if NOT a known non-Claude model
+  return !/^(gpt|codex|kimi|o[134]|openai\/)/i.test(m);
+}
+
 export function resolveSelectedCodeAgent(
   requestedAgent: string | undefined,
   defaultAgent: string | undefined,
