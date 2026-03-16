@@ -1112,13 +1112,18 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
     return { sessions };
   });
 
-  fastify.post<{ Body: { project: string; name: string; metricName: string; metricUnit?: string; direction?: string; command: string; checksCommand?: string } }>(
+  fastify.get('/api/dashboard/projects', async () => {
+    const config = loadConfig();
+    return { projects: config.projects || {} };
+  });
+
+  fastify.post<{ Body: { project: string; goal: string; howToMeasure: string; constraints?: string } }>(
     '/api/dashboard/autoresearch/create',
     async (request) => {
-      const { project, name, metricName, metricUnit, direction, command, checksCommand } = request.body;
+      const { project, goal, howToMeasure, constraints } = request.body;
 
-      if (!project || !name || !metricName || !command) {
-        return { error: 'project, name, metricName, and command are required' };
+      if (!project || !goal || !howToMeasure) {
+        return { error: 'project, goal, and howToMeasure are required' };
       }
 
       const dir = resolve(project);
@@ -1126,31 +1131,54 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
         return { error: `Project directory not found: ${dir}` };
       }
 
-      // Create autoresearch.sh
-      const shContent = `#!/bin/bash\nset -euo pipefail\n${command}\n`;
-      writeFileSync(join(dir, 'autoresearch.sh'), shContent, { mode: 0o755 });
-
-      // Create autoresearch.checks.sh if provided
-      if (checksCommand?.trim()) {
-        const checksContent = `#!/bin/bash\nset -euo pipefail\n${checksCommand}\n`;
-        writeFileSync(join(dir, 'autoresearch.checks.sh'), checksContent, { mode: 0o755 });
+      // Build the prompt for the coding agent
+      const agentPrompt = [
+        `Run autoresearch in ${dir}.`,
+        ``,
+        `## Goal`,
+        goal,
+        ``,
+        `## How to Measure`,
+        howToMeasure,
+      ];
+      if (constraints?.trim()) {
+        agentPrompt.push(``, `## Constraints`, constraints);
       }
+      agentPrompt.push(
+        ``,
+        `Read the autoresearch skill instructions, then:`,
+        `1. Study the project source to understand the codebase`,
+        `2. Write autoresearch.md, autoresearch.sh, and optionally autoresearch.checks.sh`,
+        `3. Run a baseline measurement`,
+        `4. Start the experiment loop — never stop until interrupted`,
+      );
 
-      // Create autoresearch.md
-      const mdContent = `# Autoresearch: ${name}\n\n## Objective\n${name}\n\n## Metrics\n- **Primary**: ${metricName} (${metricUnit || 'unitless'}, ${direction || 'lower'} is better)\n\n## How to Run\n\`./autoresearch.sh\`\n\n## Files in Scope\n(to be filled)\n\n## Constraints\n(to be filled)\n\n## What's Been Tried\n(none yet)\n`;
-      writeFileSync(join(dir, 'autoresearch.md'), mdContent);
-
-      // Init the JSONL
-      const jsonlEntry = JSON.stringify({
-        type: 'config',
-        name,
-        metricName,
-        metricUnit: metricUnit || '',
-        bestDirection: direction || 'lower',
-      });
-      writeFileSync(join(dir, 'autoresearch.jsonl'), jsonlEntry + '\n');
-
-      return { created: true, project: dir };
+      // Spawn coding agent with the autoresearch task
+      try {
+        const { executeCodeWithAgent } = await import('./code-agents/index.js');
+        const config = loadConfig();
+        const toolConfig = {
+          enabled: true,
+          allowedPaths: config.allowedPaths || [dir],
+          maxIterations: 100,
+          bashTimeout: 30000,
+        };
+        const result = await executeCodeWithAgent(
+          {
+            task: agentPrompt.join('\n'),
+            project: dir,
+            timeout_minutes: 120,
+          },
+          toolConfig,
+          { fullConfig: config },
+        );
+        // Result is a string like "Started coding agent ca-XXX..."
+        const agentIdMatch = result.match(/ca-\d+/);
+        return { created: true, agentId: agentIdMatch?.[0] };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return { error: `Failed to start agent: ${msg}` };
+      }
     },
   );
 

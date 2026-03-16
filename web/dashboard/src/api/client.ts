@@ -251,15 +251,16 @@ export function getUsageRecords(params?: { limit?: number; offset?: number; mode
 export const getAutoresearchSessions = () => request<{ sessions: any[] }>('autoresearch');
 export const createAutoresearchSession = (params: {
   project: string;
-  name: string;
-  metricName: string;
-  metricUnit?: string;
-  direction?: string;
-  command: string;
-  checksCommand?: string;
-}) => request<{ created: boolean; project: string }>('autoresearch/create', {
+  goal: string;
+  howToMeasure: string;
+  constraints?: string;
+}) => request<{ created: boolean; agentId?: string }>('autoresearch/create', {
   method: 'POST',
   body: JSON.stringify(params),
 });
+
+// ── Projects ────────────────────────────────────────────────────
+
+export const getProjects = () => request<{ projects: Record<string, string> }>('projects');
 
 export { ApiError };

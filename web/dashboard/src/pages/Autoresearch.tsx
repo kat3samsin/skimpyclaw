@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'preact/hooks';
-import { getAutoresearchSessions, createAutoresearchSession } from '../api/client.js';
-import { LuFlaskConical, LuPlus, LuRefreshCw, LuTrendingDown, LuTrendingUp } from 'react-icons/lu';
+import { getAutoresearchSessions, createAutoresearchSession, getProjects } from '../api/client.js';
+import { LuFlaskConical, LuPlay, LuPlus, LuRefreshCw } from 'react-icons/lu';
 
 interface ExperimentResult {
   run: number;
@@ -23,6 +23,8 @@ interface Session {
   project: string;
   config: SessionConfig;
   results: ExperimentResult[];
+  agentId?: string;
+  agentStatus?: string;
 }
 
 interface AutoresearchProps {
@@ -34,7 +36,13 @@ interface AutoresearchProps {
 function MetricChart({ results, config }: { results: ExperimentResult[]; config: SessionConfig }) {
   const kept = results.filter(r => r.status === 'keep' && r.metric > 0);
   if (kept.length < 2) {
-    return <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '20px 0' }}>Need at least 2 kept results for chart</div>;
+    return (
+      <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '20px 0' }}>
+        {results.length === 0
+          ? 'No experiments yet — waiting for agent to start...'
+          : 'Need at least 2 kept results to show chart'}
+      </div>
+    );
   }
 
   const W = 600, H = 200, PAD = 40;
@@ -51,7 +59,6 @@ function MetricChart({ results, config }: { results: ExperimentResult[]; config:
 
   const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ');
 
-  // Best value
   const baseline = metrics[0];
   const best = config.bestDirection === 'lower' ? Math.min(...metrics) : Math.max(...metrics);
   const bestPct = baseline !== 0 ? ((best - baseline) / baseline * 100).toFixed(1) : '0';
@@ -71,7 +78,7 @@ function MetricChart({ results, config }: { results: ExperimentResult[]; config:
           </div>
         </div>
         <div class="stat-card" style={{ flex: '1 1 120px' }}>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Change</div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Improvement</div>
           <div style={{ fontSize: 18, fontWeight: 700, color: improved ? 'var(--success)' : 'var(--error)' }}>
             {improved ? '' : '+'}{bestPct}%
           </div>
@@ -83,33 +90,21 @@ function MetricChart({ results, config }: { results: ExperimentResult[]; config:
       </div>
 
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', maxWidth: W, height: 'auto', background: 'var(--surface-alt)', borderRadius: 'var(--radius-sm)' }}>
-        {/* Y-axis labels */}
         <text x={PAD - 4} y={PAD} fill="var(--text-muted)" fontSize="10" textAnchor="end" dominantBaseline="middle">{formatNum(max)}</text>
         <text x={PAD - 4} y={H - PAD} fill="var(--text-muted)" fontSize="10" textAnchor="end" dominantBaseline="middle">{formatNum(min)}</text>
-
-        {/* Grid lines */}
         <line x1={PAD} y1={PAD} x2={W - PAD} y2={PAD} stroke="var(--border)" strokeWidth="0.5" />
         <line x1={PAD} y1={H - PAD} x2={W - PAD} y2={H - PAD} stroke="var(--border)" strokeWidth="0.5" />
-
-        {/* Baseline reference line */}
         {(() => {
           const baseY = PAD + (1 - (baseline - min) / range) * (H - PAD * 2);
           return <line x1={PAD} y1={baseY} x2={W - PAD} y2={baseY} stroke="var(--text-muted)" strokeWidth="1" strokeDasharray="4,4" />;
         })()}
-
-        {/* Line */}
         <path d={linePath} fill="none" stroke="var(--accent)" strokeWidth="2" />
-
-        {/* Points */}
         {points.map((p, i) => (
           <circle key={i} cx={p.x} cy={p.y} r="4" fill="var(--accent)" stroke="var(--surface)" strokeWidth="2">
             <title>#{p.r.run}: {formatNum(p.r.metric)}{config.metricUnit} — {p.r.description}</title>
           </circle>
         ))}
-
-        {/* X-axis label */}
         <text x={W / 2} y={H - 6} fill="var(--text-muted)" fontSize="10" textAnchor="middle">Experiment #</text>
-        {/* Y-axis label */}
         <text x={10} y={H / 2} fill="var(--text-muted)" fontSize="10" textAnchor="middle" transform={`rotate(-90, 10, ${H / 2})`}>{config.metricName}</text>
       </svg>
     </div>
@@ -136,32 +131,44 @@ function statusIcon(status: string): string {
 
 // ── Setup Wizard ──────────────────────────────────────────────────
 
-function SetupWizard({ onCreated, showToast }: { onCreated: () => void; showToast: AutoresearchProps['showToast'] }) {
+function SetupWizard({ onCreated, showToast, projects }: {
+  onCreated: () => void;
+  showToast: AutoresearchProps['showToast'];
+  projects: Record<string, string>;
+}) {
   const [step, setStep] = useState(0);
   const [project, setProject] = useState('');
-  const [name, setName] = useState('');
-  const [metricName, setMetricName] = useState('');
-  const [metricUnit, setMetricUnit] = useState('');
-  const [direction, setDirection] = useState<'lower' | 'higher'>('lower');
-  const [command, setCommand] = useState('');
-  const [checksCommand, setChecksCommand] = useState('');
+  const [goal, setGoal] = useState('');
+  const [howToMeasure, setHowToMeasure] = useState('');
+  const [constraints, setConstraints] = useState('');
   const [creating, setCreating] = useState(false);
 
+  const projectEntries = Object.entries(projects);
+
   const steps = [
-    { title: 'What are you optimizing?', subtitle: 'Give your experiment a clear name and pick the project.' },
-    { title: 'How do you measure success?', subtitle: 'Define the metric and how to run the benchmark.' },
-    { title: 'Quality gates (optional)', subtitle: 'Add tests or checks that must pass for a result to be kept.' },
+    {
+      title: 'What do you want to improve?',
+      subtitle: 'Pick the project and describe your optimization goal.',
+    },
+    {
+      title: 'How should we measure it?',
+      subtitle: 'Describe how to test and score the result. The agent will figure out the commands.',
+    },
+    {
+      title: 'What must still work?',
+      subtitle: 'Describe quality gates — tests, builds, or constraints that must pass.',
+    },
   ];
 
   async function submit() {
-    if (!project || !name || !metricName || !command) {
-      showToast('Fill in all required fields', 'warning');
+    if (!project || !goal || !howToMeasure) {
+      showToast('Fill in the goal and how to measure it', 'warning');
       return;
     }
     setCreating(true);
     try {
-      await createAutoresearchSession({ project, name, metricName, metricUnit, direction, command, checksCommand });
-      showToast('Autoresearch session created!', 'success');
+      await createAutoresearchSession({ project, goal, howToMeasure, constraints });
+      showToast('Autoresearch session created! Agent is starting...', 'success');
       onCreated();
     } catch (err) {
       showToast(`Failed: ${err instanceof Error ? err.message : String(err)}`, 'error');
@@ -189,121 +196,102 @@ function SetupWizard({ onCreated, showToast }: { onCreated: () => void; showToas
       <p style={{ color: 'var(--text-muted)', fontSize: 13, margin: '0 0 20px' }}>{steps[step].subtitle}</p>
 
       {step === 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <label style={{ fontSize: 13, fontWeight: 600 }}>
-            Project directory <span style={{ color: 'var(--error)' }}>*</span>
-            <input
-              type="text"
-              value={project}
-              onInput={(e) => setProject((e.target as HTMLInputElement).value)}
-              placeholder="/path/to/your/project"
-              class="input"
-              style={{ marginTop: 4 }}
-            />
+            Project <span style={{ color: 'var(--error)' }}>*</span>
+            {projectEntries.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+                {projectEntries.map(([name, path]) => (
+                  <button
+                    key={name}
+                    class={`btn ${project === path ? 'btn-primary' : 'btn-secondary'}`}
+                    onClick={() => setProject(path)}
+                    style={{ textAlign: 'left', padding: '10px 14px' }}
+                  >
+                    <div style={{ fontWeight: 600 }}>{name}</div>
+                    <div style={{ fontSize: 11, opacity: 0.7, fontFamily: 'var(--mono)' }}>{path}</div>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <input
+                type="text"
+                value={project}
+                onInput={(e) => setProject((e.target as HTMLInputElement).value)}
+                placeholder="/path/to/project"
+                class="input"
+                style={{ marginTop: 4 }}
+              />
+            )}
           </label>
           <label style={{ fontSize: 13, fontWeight: 600 }}>
-            Experiment name <span style={{ color: 'var(--error)' }}>*</span>
-            <input
-              type="text"
-              value={name}
-              onInput={(e) => setName((e.target as HTMLInputElement).value)}
-              placeholder="e.g. Reduce test suite runtime"
+            What do you want to improve? <span style={{ color: 'var(--error)' }}>*</span>
+            <textarea
+              value={goal}
+              onInput={(e) => setGoal((e.target as HTMLTextAreaElement).value)}
+              placeholder="e.g. Make the test suite run faster&#10;e.g. Reduce the bundle size&#10;e.g. Improve the Lighthouse performance score"
               class="input"
-              style={{ marginTop: 4 }}
+              rows={3}
+              style={{ marginTop: 4, resize: 'vertical' }}
             />
           </label>
         </div>
       )}
 
       {step === 1 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ display: 'flex', gap: 12 }}>
-            <label style={{ fontSize: 13, fontWeight: 600, flex: 2 }}>
-              Metric name <span style={{ color: 'var(--error)' }}>*</span>
-              <input
-                type="text"
-                value={metricName}
-                onInput={(e) => setMetricName((e.target as HTMLInputElement).value)}
-                placeholder="e.g. seconds, KB, score"
-                class="input"
-                style={{ marginTop: 4 }}
-              />
-            </label>
-            <label style={{ fontSize: 13, fontWeight: 600, flex: 1 }}>
-              Unit
-              <input
-                type="text"
-                value={metricUnit}
-                onInput={(e) => setMetricUnit((e.target as HTMLInputElement).value)}
-                placeholder="s, KB, ..."
-                class="input"
-                style={{ marginTop: 4 }}
-              />
-            </label>
-          </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <label style={{ fontSize: 13, fontWeight: 600 }}>
-            Direction
-            <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-              <button
-                class={`btn ${direction === 'lower' ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={() => setDirection('lower')}
-                style={{ flex: 1 }}
-              >
-                {direction === 'lower' && <LuTrendingDown size={14} />}
-                Lower is better
-              </button>
-              <button
-                class={`btn ${direction === 'higher' ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={() => setDirection('higher')}
-                style={{ flex: 1 }}
-              >
-                {direction === 'higher' && <LuTrendingUp size={14} />}
-                Higher is better
-              </button>
-            </div>
-          </label>
-          <label style={{ fontSize: 13, fontWeight: 600 }}>
-            Benchmark command <span style={{ color: 'var(--error)' }}>*</span>
+            How should we test and score it? <span style={{ color: 'var(--error)' }}>*</span>
             <textarea
-              value={command}
-              onInput={(e) => setCommand((e.target as HTMLTextAreaElement).value)}
-              placeholder={'e.g. pnpm test 2>&1\necho "METRIC seconds=$SECONDS"'}
+              value={howToMeasure}
+              onInput={(e) => setHowToMeasure((e.target as HTMLTextAreaElement).value)}
+              placeholder="e.g. Run pnpm test and measure wall-clock time in seconds&#10;e.g. Build the project and check the output bundle size in KB&#10;e.g. Run Lighthouse on localhost:3000 and use the performance score"
               class="input"
-              rows={3}
-              style={{ marginTop: 4, fontFamily: 'var(--mono)', fontSize: 12, resize: 'vertical' }}
+              rows={4}
+              style={{ marginTop: 4, resize: 'vertical' }}
             />
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-              Must output <code>METRIC name=value</code> lines. Written to <code>autoresearch.sh</code>.
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+              Describe it naturally — the agent will write the benchmark script.
             </div>
           </label>
         </div>
       )}
 
       {step === 2 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <label style={{ fontSize: 13, fontWeight: 600 }}>
-            Quality checks (optional)
+            What must still work?
             <textarea
-              value={checksCommand}
-              onInput={(e) => setChecksCommand((e.target as HTMLTextAreaElement).value)}
-              placeholder={'e.g. pnpm test --run\npnpm typecheck'}
+              value={constraints}
+              onInput={(e) => setConstraints((e.target as HTMLTextAreaElement).value)}
+              placeholder="e.g. All tests must still pass&#10;e.g. The build must succeed and TypeScript must have no errors&#10;e.g. No new dependencies allowed"
               class="input"
-              rows={3}
-              style={{ marginTop: 4, fontFamily: 'var(--mono)', fontSize: 12, resize: 'vertical' }}
+              rows={4}
+              style={{ marginTop: 4, resize: 'vertical' }}
             />
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-              Runs after each passing benchmark. If this fails, the experiment can't be kept. Written to <code>autoresearch.checks.sh</code>.
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+              Optional — the agent will create quality checks from this.
             </div>
           </label>
 
           {/* Summary */}
           <div style={{ background: 'var(--surface-alt)', borderRadius: 'var(--radius-sm)', padding: 16, fontSize: 13 }}>
-            <div style={{ fontWeight: 700, marginBottom: 8 }}>Summary</div>
-            <div><strong>Project:</strong> {project || '—'}</div>
-            <div><strong>Name:</strong> {name || '—'}</div>
-            <div><strong>Metric:</strong> {metricName || '—'} ({metricUnit || 'unitless'}, {direction} is better)</div>
-            <div><strong>Command:</strong> <code>{command.split('\n')[0] || '—'}</code></div>
-            {checksCommand && <div><strong>Checks:</strong> <code>{checksCommand.split('\n')[0]}</code></div>}
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>The agent will:</div>
+            <ol style={{ margin: 0, paddingLeft: 20, lineHeight: 1.8 }}>
+              <li>Read the project source to understand the codebase</li>
+              <li>Write a benchmark script based on your measurement description</li>
+              {constraints && <li>Write quality checks based on your constraints</li>}
+              <li>Run a baseline measurement</li>
+              <li>Start the experiment loop — try ideas, keep what improves, discard what doesn't</li>
+            </ol>
+          </div>
+
+          <div style={{ background: 'var(--surface-alt)', borderRadius: 'var(--radius-sm)', padding: 16, fontSize: 13 }}>
+            <div style={{ fontWeight: 700, marginBottom: 4 }}>Summary</div>
+            <div><strong>Project:</strong> {project.split('/').pop() || project}</div>
+            <div><strong>Goal:</strong> {goal || '—'}</div>
+            <div><strong>Measure:</strong> {howToMeasure || '—'}</div>
+            {constraints && <div><strong>Constraints:</strong> {constraints}</div>}
           </div>
         </div>
       )}
@@ -319,7 +307,8 @@ function SetupWizard({ onCreated, showToast }: { onCreated: () => void; showToas
           </button>
         ) : (
           <button class="btn btn-primary" onClick={submit} disabled={creating}>
-            {creating ? 'Creating...' : 'Create Experiment'}
+            <LuPlay size={14} />
+            {creating ? 'Starting agent...' : 'Start Experiment'}
           </button>
         )}
       </div>
@@ -378,6 +367,7 @@ function ResultsTable({ results, config }: { results: ExperimentResult[]; config
 
 export function Autoresearch({ showToast }: AutoresearchProps) {
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [projects, setProjects] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [showWizard, setShowWizard] = useState(false);
   const [selectedIdx, setSelectedIdx] = useState(0);
@@ -387,11 +377,15 @@ export function Autoresearch({ showToast }: AutoresearchProps) {
   async function load() {
     setLoading(true);
     try {
-      const data = await getAutoresearchSessions();
-      setSessions(data.sessions ?? []);
-      if ((data.sessions ?? []).length === 0) setShowWizard(true);
+      const [sessData, projData] = await Promise.all([
+        getAutoresearchSessions(),
+        getProjects(),
+      ]);
+      setSessions(sessData.sessions ?? []);
+      setProjects(projData.projects ?? {});
+      if ((sessData.sessions ?? []).length === 0) setShowWizard(true);
     } catch {
-      showToast('Failed to load autoresearch sessions', 'error');
+      showToast('Failed to load autoresearch data', 'error');
     } finally {
       setLoading(false);
     }
@@ -410,7 +404,7 @@ export function Autoresearch({ showToast }: AutoresearchProps) {
             <button class="btn btn-secondary" onClick={() => setShowWizard(false)}>Cancel</button>
           )}
         </div>
-        <SetupWizard onCreated={() => { setShowWizard(false); load(); }} showToast={showToast} />
+        <SetupWizard onCreated={() => { setShowWizard(false); load(); }} showToast={showToast} projects={projects} />
       </div>
     );
   }
@@ -445,8 +439,19 @@ export function Autoresearch({ showToast }: AutoresearchProps) {
 
       {session && (
         <>
-          <div style={{ marginBottom: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
             <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--mono)' }}>{session.project}</span>
+            {session.agentId && (
+              <span style={{
+                fontSize: 11,
+                padding: '2px 8px',
+                borderRadius: 'var(--radius-sm)',
+                background: session.agentStatus === 'running' ? 'var(--success)' : 'var(--surface-alt)',
+                color: session.agentStatus === 'running' ? 'white' : 'var(--text-muted)',
+              }}>
+                {session.agentId} · {session.agentStatus || 'unknown'}
+              </span>
+            )}
           </div>
 
           {/* Chart */}
@@ -460,7 +465,9 @@ export function Autoresearch({ showToast }: AutoresearchProps) {
           </div>
 
           {/* Results table */}
-          <ResultsTable results={session.results} config={session.config} />
+          {session.results.length > 0 && (
+            <ResultsTable results={session.results} config={session.config} />
+          )}
         </>
       )}
     </div>
