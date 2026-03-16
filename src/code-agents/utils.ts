@@ -6,6 +6,7 @@ import { homedir } from 'os';
 import type { BuildCodeAgentArgsInput, CodeAgentTask, ChildResult } from './types.js';
 import type { Config } from '../types.js';
 import { buildValidationCommand } from './executor.js';
+import { getCodeAgent } from './registry.js';
 
 // Resolve CLI paths once at import time so spawn doesn't get ENOENT
 function resolveCliPath(name: string): string {
@@ -67,6 +68,22 @@ export function normalizeCodeAgent(agent: string | undefined): 'claude' | 'codex
  * If no agent is explicit and the model is a GPT/OpenAI model, auto-select codex.
  * If the model is a kimi model, auto-select kimi.
  */
+/**
+ * Check if a model string is compatible with a given agent CLI.
+ * e.g. gpt-5.3-codex is NOT compatible with 'claude', claude-opus IS.
+ */
+export function isModelCompatibleWithAgent(model: string, agent: 'claude' | 'codex' | 'kimi'): boolean {
+  const m = model.toLowerCase();
+  if (agent === 'codex') {
+    return /^(gpt|codex|o[134]|openai\/)/i.test(m);
+  }
+  if (agent === 'kimi') {
+    return m.includes('kimi');
+  }
+  // claude: compatible if NOT a known non-Claude model
+  return !/^(gpt|codex|kimi|o[134]|openai\/)/i.test(m);
+}
+
 export function resolveSelectedCodeAgent(
   requestedAgent: string | undefined,
   defaultAgent: string | undefined,
@@ -240,17 +257,32 @@ export function buildSoloNotification(task: CodeAgentTask): string {
 }
 
 /**
+ * Resolve the Discord thread ID for a task.
+ * If the task doesn't have one, check the parent task (for team children).
+ */
+function resolveDiscordThreadId(task: CodeAgentTask): string | undefined {
+  if (task.discordThreadId) return task.discordThreadId;
+  // Children inherit thread from parent
+  if (task.parentTaskId) {
+    const parent = getCodeAgent(task.parentTaskId);
+    if (parent?.discordThreadId) return parent.discordThreadId;
+  }
+  return undefined;
+}
+
+/**
  * Try to send a notification to a Discord thread associated with this task.
  * Returns true if successfully sent to thread.
  */
 async function trySendToDiscordThread(task: CodeAgentTask, message: string): Promise<boolean> {
-  if (!task.discordThreadId) return false;
+  const threadId = resolveDiscordThreadId(task);
+  if (!threadId) return false;
 
   try {
     const { sendToDiscordThread } = await import('../channels/discord/index.js');
-    const sent = await sendToDiscordThread(task.discordThreadId, message);
+    const sent = await sendToDiscordThread(threadId, message);
     if (sent) {
-      console.log(`[code-agent] Notification for ${task.id} sent to thread ${task.discordThreadId}`);
+      console.log(`[code-agent] Notification for ${task.id} sent to thread ${threadId}`);
     }
     return sent;
   } catch (err) {

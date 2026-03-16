@@ -26,6 +26,7 @@ import {
   getCodeAgentConfig,
   buildCodeAgentArgs,
   resolveSelectedCodeAgent,
+  isModelCompatibleWithAgent,
   resolveWorkdir,
   resolveModelAlias,
   readTeamState,
@@ -165,6 +166,13 @@ export async function executeCodeWithAgent(
     return `Error: Invalid agent "${requestedAgent}". Must be claude, codex, or kimi.`;
   }
 
+  // Don't pass a non-matching session model to a different agent CLI.
+  // e.g. if session is gpt-5.3-codex but agent is claude, let claude use its own default.
+  const isModelFromSession = !input.model;
+  const modelForAgent = (isModelFromSession && resolvedModel && !isModelCompatibleWithAgent(resolvedModel, agent))
+    ? undefined
+    : resolvedModel;
+
   const projects = context?.fullConfig?.projects ?? {};
   const rawWorkdir = input.workdir as string | undefined;
 
@@ -205,7 +213,7 @@ export async function executeCodeWithAgent(
     chatId: context?.chatId,
     startedAt: startedAt.toISOString(),
     workdir,
-    model: resolvedModel,
+    model: modelForAgent || resolvedModel,
   };
   storeCodeAgentTask(caTask);
   writeCodeAgentTask(caTask);
@@ -213,7 +221,7 @@ export async function executeCodeWithAgent(
   // Fire-and-forget: spawn background process
   const configTimeout = context?.fullConfig?.codeAgents?.timeoutMinutes ?? 30;
   const soloTimeout = Math.min(input.timeout_minutes || configTimeout, 60);
-  const resolvedInput = { ...input, model: resolvedModel, timeout_minutes: soloTimeout };
+  const resolvedInput = { ...input, model: modelForAgent, timeout_minutes: soloTimeout };
   runCodeAgentBackground(id, agent, task, workdir, validate, resolvedInput, startedAt, {
     defaultTimeoutMinutes: soloTimeout,
     maxTimeoutMinutes: 60,
