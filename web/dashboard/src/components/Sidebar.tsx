@@ -10,6 +10,7 @@ import {
   LuDatabase,
   LuDollarSign,
   LuFileText,
+  LuFlaskConical,
   LuHeartPulse,
   LuLayoutDashboard,
   LuLogs,
@@ -27,6 +28,7 @@ export type PageId =
   | 'memory'
   | 'model'
   | 'coding'
+  | 'autoresearch'
   | 'logs'
   | 'audit'
   | 'digests'
@@ -53,6 +55,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'audit', label: 'Audit', icon: LuSearch, section: 'dashboard' },
   { id: 'usage', label: 'Usage', icon: LuDollarSign, section: 'dashboard' },
   { id: 'coding', label: 'Coding Agent', icon: LuCode, section: 'dashboard' },
+  { id: 'autoresearch', label: 'Autoresearch', icon: LuFlaskConical, section: 'dashboard' },
   { id: 'memory', label: 'Memory', icon: LuDatabase, section: 'settings' },
   { id: 'templates', label: 'Templates', icon: LuFileText, section: 'settings' },
   { id: 'model', label: 'Model', icon: LuCpu, section: 'settings' },

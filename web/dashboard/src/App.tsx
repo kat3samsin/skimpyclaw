@@ -18,6 +18,7 @@ import {
   Health,
   Templates,
   Usage,
+  Autoresearch,
 } from './pages/index.js';
 import { getToken, onUnauthorized, setToken } from './api/client.js';
 import './styles/base.css';
@@ -29,6 +30,7 @@ const PAGE_IDS: PageId[] = [
   'memory',
   'model',
   'coding',
+  'autoresearch',
   'logs',
   'audit',
   'digests',
@@ -240,6 +242,8 @@ export function App() {
         return <Usage />;
       case 'coding':
         return <Coding />;
+      case 'autoresearch':
+        return <Autoresearch showToast={showToast} />;
       case 'audit':
         return <Audit />;
       case 'approvals':

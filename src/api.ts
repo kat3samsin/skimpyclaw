@@ -1066,6 +1066,94 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
     return { deleted: true, name };
   });
 
+  // ── Autoresearch ──────────────────────────────────────────────────
+
+  fastify.get('/api/dashboard/autoresearch', async () => {
+    // Scan all projects + cwd for autoresearch.jsonl files
+    const sessions: any[] = [];
+    const config = loadConfig();
+    const searchDirs = new Set<string>();
+
+    // Add project dirs
+    for (const [name, dir] of Object.entries(config.projects || {})) {
+      searchDirs.add(resolve(dir));
+    }
+
+    for (const dir of searchDirs) {
+      const jsonlPath = join(dir, 'autoresearch.jsonl');
+      if (!existsSync(jsonlPath)) continue;
+
+      try {
+        const lines = readFileSync(jsonlPath, 'utf-8').trim().split('\n').filter(Boolean);
+        let sessionConfig: any = null;
+        const results: any[] = [];
+
+        for (const line of lines) {
+          try {
+            const entry = JSON.parse(line);
+            if (entry.type === 'config') {
+              sessionConfig = entry;
+              continue;
+            }
+            results.push(entry);
+          } catch { /* skip malformed */ }
+        }
+
+        if (sessionConfig) {
+          sessions.push({
+            project: dir,
+            config: sessionConfig,
+            results,
+          });
+        }
+      } catch { /* skip unreadable */ }
+    }
+
+    return { sessions };
+  });
+
+  fastify.post<{ Body: { project: string; name: string; metricName: string; metricUnit?: string; direction?: string; command: string; checksCommand?: string } }>(
+    '/api/dashboard/autoresearch/create',
+    async (request) => {
+      const { project, name, metricName, metricUnit, direction, command, checksCommand } = request.body;
+
+      if (!project || !name || !metricName || !command) {
+        return { error: 'project, name, metricName, and command are required' };
+      }
+
+      const dir = resolve(project);
+      if (!existsSync(dir)) {
+        return { error: `Project directory not found: ${dir}` };
+      }
+
+      // Create autoresearch.sh
+      const shContent = `#!/bin/bash\nset -euo pipefail\n${command}\n`;
+      writeFileSync(join(dir, 'autoresearch.sh'), shContent, { mode: 0o755 });
+
+      // Create autoresearch.checks.sh if provided
+      if (checksCommand?.trim()) {
+        const checksContent = `#!/bin/bash\nset -euo pipefail\n${checksCommand}\n`;
+        writeFileSync(join(dir, 'autoresearch.checks.sh'), checksContent, { mode: 0o755 });
+      }
+
+      // Create autoresearch.md
+      const mdContent = `# Autoresearch: ${name}\n\n## Objective\n${name}\n\n## Metrics\n- **Primary**: ${metricName} (${metricUnit || 'unitless'}, ${direction || 'lower'} is better)\n\n## How to Run\n\`./autoresearch.sh\`\n\n## Files in Scope\n(to be filled)\n\n## Constraints\n(to be filled)\n\n## What's Been Tried\n(none yet)\n`;
+      writeFileSync(join(dir, 'autoresearch.md'), mdContent);
+
+      // Init the JSONL
+      const jsonlEntry = JSON.stringify({
+        type: 'config',
+        name,
+        metricName,
+        metricUnit: metricUnit || '',
+        bestDirection: direction || 'lower',
+      });
+      writeFileSync(join(dir, 'autoresearch.jsonl'), jsonlEntry + '\n');
+
+      return { created: true, project: dir };
+    },
+  );
+
 }
 
 /**

@@ -14,3 +14,4 @@ export { Skills } from './Skills.js';
 export { Health } from './Health.js';
 export { Templates } from './Templates.js';
 export { Usage } from './Usage.js';
+export { Autoresearch } from './Autoresearch.js';

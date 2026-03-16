@@ -246,4 +246,20 @@ export function getUsageRecords(params?: { limit?: number; offset?: number; mode
   return request<UsageRecordsResponse>(`usage/records${qs ? `?${qs}` : ''}`);
 }
 
+// ── Autoresearch ────────────────────────────────────────────────
+
+export const getAutoresearchSessions = () => request<{ sessions: any[] }>('autoresearch');
+export const createAutoresearchSession = (params: {
+  project: string;
+  name: string;
+  metricName: string;
+  metricUnit?: string;
+  direction?: string;
+  command: string;
+  checksCommand?: string;
+}) => request<{ created: boolean; project: string }>('autoresearch/create', {
+  method: 'POST',
+  body: JSON.stringify(params),
+});
+
 export { ApiError };
