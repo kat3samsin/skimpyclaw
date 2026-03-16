@@ -75,13 +75,54 @@ export type { CodeAgentTask, DecomposedSubtask } from './code-agents/index.js';
 let mcpRuntime: any = null;
 let mcpHealthInterval: ReturnType<typeof setInterval> | null = null;
 
+/** Last time MCP tools were successfully discovered (epoch ms) */
+let mcpLastDiscoveredAt = 0;
+/** How often to re-validate MCP tools (5 minutes) */
+const MCP_REDISCOVERY_INTERVAL_MS = 5 * 60 * 1000;
+
 /**
- * MCP health check — disabled (was reconnecting every 5 min even when healthy).
- * Reconnection now happens lazily: only when an actual tool call fails with a
- * retryable error (see callMcpToolWithRetry).
+ * MCP health check — periodically re-discovers tools to detect daemon restarts.
+ * Runs every 5 minutes. If the runtime is stale (daemon died), clears caches
+ * so the next getToolDefinitions() call triggers fresh discovery.
  */
 function startMcpHealthCheck(): void {
-  // no-op — reconnect-on-failure is sufficient
+  if (mcpHealthInterval) return;
+  mcpHealthInterval = setInterval(async () => {
+    try {
+      const runtime = await getMcpRuntime();
+      const servers = runtime.listServers();
+      if (servers.length === 0 && discoveredMcpTools && discoveredMcpTools.length > 0) {
+        // Runtime lost its servers — daemon likely died
+        console.warn('[mcp] Health check: runtime has no servers, triggering reconnect');
+        await reconnectMcp();
+        return;
+      }
+      // Verify we can actually list tools from at least one server
+      let healthy = false;
+      for (const server of servers) {
+        try {
+          await runtime.listTools(server, { includeSchema: false });
+          healthy = true;
+          break;
+        } catch {
+          // This server is unhealthy
+        }
+      }
+      if (!healthy && servers.length > 0) {
+        console.warn('[mcp] Health check: all servers unhealthy, triggering reconnect');
+        await reconnectMcp();
+      }
+    } catch {
+      // Runtime creation failed — trigger reconnect on next use
+      if (mcpRuntime) {
+        await mcpRuntime.close().catch(() => {});
+        mcpRuntime = null;
+      }
+      discoveredMcpTools = null;
+      mcpToolNameMap.clear();
+      toolDefsCache.clear();
+    }
+  }, MCP_REDISCOVERY_INTERVAL_MS);
 }
 
 async function getMcpRuntime(): Promise<any> {
@@ -134,7 +175,9 @@ function getMcpFallbackTools(server: string): Array<{ name: string; description:
 }
 
 export async function discoverMcpTools(): Promise<any[]> {
-  if (discoveredMcpTools !== null) return discoveredMcpTools;
+  // Re-discover if cache is older than the rediscovery interval
+  const stale = mcpLastDiscoveredAt > 0 && (Date.now() - mcpLastDiscoveredAt) > MCP_REDISCOVERY_INTERVAL_MS;
+  if (discoveredMcpTools !== null && !stale) return discoveredMcpTools;
 
   const tools: any[] = [];
   mcpToolNameMap.clear();
@@ -179,11 +222,13 @@ export async function discoverMcpTools(): Promise<any[]> {
   }
 
   discoveredMcpTools = tools;
+  mcpLastDiscoveredAt = Date.now();
   return tools;
 }
 
 export function clearMcpToolCache(): void {
   discoveredMcpTools = null;
+  mcpLastDiscoveredAt = 0;
 }
 
 const toolDefsCache = new TTLCache<any[]>(60_000);
