@@ -458,6 +458,23 @@ export async function executeTool(
       return executeCheckCodeAgent(input);
     }
 
+    // Route autoresearch tools
+    if (name === 'init_experiment') {
+      const { executeInitExperiment } = await import('./tools/autoresearch-tool.js');
+      const cwd = config.allowedPaths?.[0] || process.cwd();
+      return executeInitExperiment(input, cwd);
+    }
+    if (name === 'run_experiment') {
+      const { executeRunExperiment } = await import('./tools/autoresearch-tool.js');
+      const cwd = config.allowedPaths?.[0] || process.cwd();
+      return await executeRunExperiment(input, cwd);
+    }
+    if (name === 'log_experiment') {
+      const { executeLogExperiment } = await import('./tools/autoresearch-tool.js');
+      const cwd = config.allowedPaths?.[0] || process.cwd();
+      return executeLogExperiment(input, cwd);
+    }
+
     // Map Claude Code names to internal names for built-in tools
     const normalized = fromClaudeCodeName(name).toLowerCase().replace(/-/g, '_');
 

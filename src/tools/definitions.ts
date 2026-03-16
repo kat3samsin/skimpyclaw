@@ -72,6 +72,49 @@ export const CHECK_CODE_AGENT_TOOL = {
   input_schema: { type: 'object' as const, properties: { id: { type: 'string' as const } } },
 };
 
+// Autoresearch tools
+export const INIT_EXPERIMENT_TOOL = {
+  name: 'init_experiment',
+  input_schema: {
+    type: 'object' as const,
+    properties: {
+      name: { type: 'string' as const },
+      metric_name: { type: 'string' as const },
+      metric_unit: { type: 'string' as const },
+      direction: { type: 'string' as const },
+    },
+    required: ['name', 'metric_name'],
+  },
+};
+
+export const RUN_EXPERIMENT_TOOL = {
+  name: 'run_experiment',
+  input_schema: {
+    type: 'object' as const,
+    properties: {
+      command: { type: 'string' as const },
+      timeout_seconds: { type: 'number' as const },
+      checks_timeout_seconds: { type: 'number' as const },
+    },
+    required: ['command'],
+  },
+};
+
+export const LOG_EXPERIMENT_TOOL = {
+  name: 'log_experiment',
+  input_schema: {
+    type: 'object' as const,
+    properties: {
+      commit: { type: 'string' as const },
+      metric: { type: 'number' as const },
+      status: { type: 'string' as const },
+      description: { type: 'string' as const },
+      metrics: { type: 'object' as const },
+    },
+    required: ['metric', 'status', 'description'],
+  },
+};
+
 // Glob tool reference for dynamic loading
 const GLOB_TOOL = BUILTIN_TOOL_DEFINITIONS.find(t => t.name === 'Glob')!;
 
@@ -80,7 +123,7 @@ const WRITE_TOOL = BUILTIN_TOOL_DEFINITIONS.find(t => t.name === 'Write')!;
 
 // Core tools — always sent. Extended tools added when conversation references them.
 export const CORE_TOOL_DEFINITIONS = [...BUILTIN_TOOL_DEFINITIONS.filter(t => t.name !== 'Glob' && t.name !== 'Write')];
-export const EXTENDED_TOOL_DEFINITIONS = [WRITE_TOOL, GLOB_TOOL, FETCH_TOOL_DEFINITION, BROWSER_TOOL_DEFINITION, CODE_WITH_AGENT_TOOL, CODE_WITH_TEAM_TOOL, CHECK_CODE_AGENT_TOOL];
+export const EXTENDED_TOOL_DEFINITIONS = [WRITE_TOOL, GLOB_TOOL, FETCH_TOOL_DEFINITION, BROWSER_TOOL_DEFINITION, CODE_WITH_AGENT_TOOL, CODE_WITH_TEAM_TOOL, CHECK_CODE_AGENT_TOOL, INIT_EXPERIMENT_TOOL, RUN_EXPERIMENT_TOOL, LOG_EXPERIMENT_TOOL];
 
 // Keywords that trigger inclusion of extended tools
 const TOOL_TRIGGERS: Record<string, string[]> = {
@@ -91,6 +134,9 @@ const TOOL_TRIGGERS: Record<string, string[]> = {
   code_with_agent: ['code_with_agent', 'delegate', 'subagent', 'sub-agent'],
   code_with_team: ['code_with_team', 'parallel', 'team_size'],
   check_code_agent: ['check_code_agent', 'agent status', 'agent_id'],
+  init_experiment: ['init_experiment', 'autoresearch', 'experiment'],
+  run_experiment: ['run_experiment', 'autoresearch', 'experiment'],
+  log_experiment: ['log_experiment', 'autoresearch', 'experiment'],
 };
 
 /** Return tool defs filtered by what's been used/mentioned in conversation */

@@ -19,3 +19,4 @@ backend-review-*.md
 .tmp/
 __test_outside__/
 __test_sandbox__/
+__test_autoresearch__/
