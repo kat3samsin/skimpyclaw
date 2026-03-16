@@ -40,7 +40,7 @@ import {
   sendLongText,
   startTypingIndicator,
 } from './utils.js';
-import { detectCodeAgentStart, createTaskThread } from './threads.js';
+import { createTaskThread } from './threads.js';
 
 // ── Command handler ─────────────────────────────────────────────────
 
@@ -503,27 +503,24 @@ export async function handleIncomingMessage(message: Message, config: Config): P
     await addToHistory(key, text, response);
     await sendLongText(message, response);
 
-    // If the response started a coding agent, create a thread for status updates
+    // If the response started coding agent(s), create threads for status updates
     const useThreads = config.channels.discord?.threadedReplies !== false;
-    if (useThreads) {
-      const taskId = detectCodeAgentStart(response);
-      if (taskId) {
-        const taskPreview = text.length > 90 ? text.slice(0, 90) + '...' : text;
-        const threadId = await createTaskThread(message, taskId, taskPreview);
-        if (threadId) {
-          // Store thread ID on the code agent task for later notification routing
-          try {
-            const { getCodeAgent, writeCodeAgentTask } = await import('../../code-agents/registry.js');
-            const task = getCodeAgent(taskId);
-            if (task) {
-              task.discordThreadId = threadId;
-              task.discordChannelId = message.channelId;
-              writeCodeAgentTask(task);
-            }
-          } catch (err) {
-            console.error(`[discord] Failed to store thread ID on task ${taskId}:`, err);
+    if (useThreads && !message.channel.isDMBased()) {
+      try {
+        const { getUnthreadedTasksForChat, writeCodeAgentTask } = await import('../../code-agents/registry.js');
+        const chatId = Number(message.channel.id);
+        const unthreadedTasks = getUnthreadedTasksForChat(chatId);
+        for (const task of unthreadedTasks) {
+          const taskPreview = task.task.length > 90 ? task.task.slice(0, 90) + '...' : task.task;
+          const threadId = await createTaskThread(message, task.id, taskPreview);
+          if (threadId) {
+            task.discordThreadId = threadId;
+            task.discordChannelId = message.channelId;
+            writeCodeAgentTask(task);
           }
         }
+      } catch (err) {
+        console.error(`[discord] Failed to create threads for spawned tasks:`, err);
       }
     }
   } catch (error) {

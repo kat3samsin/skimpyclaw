@@ -72,6 +72,19 @@ export function storeCodeAgentTask(task: CodeAgentTask): void {
   codeAgentTasks.set(task.id, task);
 }
 
+/**
+ * Find tasks spawned from a specific chat/channel that don't have a discordThreadId yet.
+ * Used by Discord handler to retroactively assign threads after runAgentTurn.
+ */
+export function getUnthreadedTasksForChat(chatId: number): CodeAgentTask[] {
+  return Array.from(codeAgentTasks.values()).filter(t =>
+    t.chatId === chatId &&
+    t.status === 'running' &&
+    !t.discordThreadId &&
+    !t.parentTaskId  // only top-level tasks get threads
+  );
+}
+
 /** Get the canceller function for a task. */
 export function getCodeAgentCanceller(id: string): (() => void) | undefined {
   return codeAgentCancellers.get(id);
