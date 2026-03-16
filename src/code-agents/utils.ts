@@ -6,6 +6,7 @@ import { homedir } from 'os';
 import type { BuildCodeAgentArgsInput, CodeAgentTask, ChildResult } from './types.js';
 import type { Config } from '../types.js';
 import { buildValidationCommand } from './executor.js';
+import { getCodeAgent } from './registry.js';
 
 // Resolve CLI paths once at import time so spawn doesn't get ENOENT
 function resolveCliPath(name: string): string {
@@ -256,17 +257,32 @@ export function buildSoloNotification(task: CodeAgentTask): string {
 }
 
 /**
+ * Resolve the Discord thread ID for a task.
+ * If the task doesn't have one, check the parent task (for team children).
+ */
+function resolveDiscordThreadId(task: CodeAgentTask): string | undefined {
+  if (task.discordThreadId) return task.discordThreadId;
+  // Children inherit thread from parent
+  if (task.parentTaskId) {
+    const parent = getCodeAgent(task.parentTaskId);
+    if (parent?.discordThreadId) return parent.discordThreadId;
+  }
+  return undefined;
+}
+
+/**
  * Try to send a notification to a Discord thread associated with this task.
  * Returns true if successfully sent to thread.
  */
 async function trySendToDiscordThread(task: CodeAgentTask, message: string): Promise<boolean> {
-  if (!task.discordThreadId) return false;
+  const threadId = resolveDiscordThreadId(task);
+  if (!threadId) return false;
 
   try {
     const { sendToDiscordThread } = await import('../channels/discord/index.js');
-    const sent = await sendToDiscordThread(task.discordThreadId, message);
+    const sent = await sendToDiscordThread(threadId, message);
     if (sent) {
-      console.log(`[code-agent] Notification for ${task.id} sent to thread ${task.discordThreadId}`);
+      console.log(`[code-agent] Notification for ${task.id} sent to thread ${threadId}`);
     }
     return sent;
   } catch (err) {
