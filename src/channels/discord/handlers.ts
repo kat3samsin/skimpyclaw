@@ -510,13 +510,21 @@ export async function handleIncomingMessage(message: Message, config: Config): P
         const { getUnthreadedTasksForChat, writeCodeAgentTask } = await import('../../code-agents/registry.js');
         const chatId = Number(message.channel.id);
         const unthreadedTasks = getUnthreadedTasksForChat(chatId);
+        const isThread = message.channel.isThread();
         for (const task of unthreadedTasks) {
-          const taskPreview = task.task.length > 90 ? task.task.slice(0, 90) + '...' : task.task;
-          const threadId = await createTaskThread(message, task.id, taskPreview);
-          if (threadId) {
-            task.discordThreadId = threadId;
-            task.discordChannelId = message.channelId;
+          if (isThread) {
+            // Already in a thread — use it directly instead of creating a sub-thread
+            task.discordThreadId = message.channel.id;
+            task.discordChannelId = message.channel.parentId ?? message.channelId;
             writeCodeAgentTask(task);
+          } else {
+            const taskPreview = task.task.length > 90 ? task.task.slice(0, 90) + '...' : task.task;
+            const threadId = await createTaskThread(message, task.id, taskPreview);
+            if (threadId) {
+              task.discordThreadId = threadId;
+              task.discordChannelId = message.channelId;
+              writeCodeAgentTask(task);
+            }
           }
         }
       } catch (err) {
