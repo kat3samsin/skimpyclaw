@@ -50,7 +50,7 @@ export default withMermaid({
       { text: 'API', link: '/api/index.html' },
       { text: 'Reference', link: '/reference/index.html' },
       { 
-        text: 'v0.1',
+        text: 'v0.3',
         items: [
           { text: 'GitHub', link: 'https://github.com/kat3samsin/skimpyclaw' },
         ]
