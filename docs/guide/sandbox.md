@@ -1,12 +1,12 @@
 # Sandbox
 
-SkimpyClaw can run Bash tool commands inside a container instead of directly on the host. This isolates agent-executed commands from your system — the agent can install packages, compile code, and run scripts without risk to your machine.
+SkimpyClaw can run agent tool calls inside a container instead of directly on the host. This isolates agent-executed commands from your system — the agent can install packages, compile code, and run scripts without risk to your machine.
 
 ## How It Works
 
-When sandbox is enabled, every `Bash` tool call is routed to a container:
+When sandbox is enabled, tool calls are routed to a container:
 
-1. Agent calls `Bash` tool with a command
+1. Agent calls a tool (`Bash`, `Read`, `Write`, `Glob`, or `ListDir`)
 2. SkimpyClaw translates host paths to container mount paths
 3. Command executes inside the container
 4. Output is translated back to host paths and returned to the agent
@@ -64,11 +64,7 @@ After `sandbox init`, your config will include:
 "sandbox": {
   "enabled": true,
   "runtime": "container",
-  "image": "skimpyclaw-sbx",
-  "mounts": {
-    "/Users/you/.skimpyclaw": "/workspace/.skimpyclaw",
-    "/Users/you/Projects": "/workspace/Projects"
-  }
+  "image": "skimpyclaw-sandbox"
 }
 ```
 
@@ -76,20 +72,24 @@ After `sandbox init`, your config will include:
 
 | Field | Description |
 |-------|-------------|
-| `enabled` | Master switch — `false` runs Bash on host |
+| `enabled` | Master switch — `false` runs everything on host |
 | `runtime` | `container` (Apple Containers) or `docker` |
-| `image` | Image name used for containers |
-| `mounts` | Host → container path mappings |
+| `image` | Image name used for containers (default: `skimpyclaw-sandbox`) |
+| `cpus` | CPU limit per container (default: 2) |
+| `memory` | Memory limit (default: `2G`) |
+| `network` | Network mode (default: `none`) |
+| `idleTimeoutMs` | Idle container timeout in ms (default: 3600000 / 1h) |
+| `env` | Extra env vars injected into containers |
 
 ## Path Translation
 
-The agent sees host paths (e.g. `/Users/you/Projects/app`). SkimpyClaw transparently translates these to container paths (`/workspace/Projects/app`) before execution, and reverses the translation in output.
+The agent sees host paths (e.g. `/Users/you/Projects/app`). SkimpyClaw transparently translates these to container paths before execution, and reverses the translation in output.
 
-Only paths listed in `mounts` are accessible inside the container.
+Mounts are computed automatically from the configured `allowedPaths` in your tool config — there is no manual `mounts` field to configure. Only allowed paths are accessible inside the container.
 
 ## Exec Approval + Sandbox
 
-Sandbox and [exec approval](./tools.md#exec-approval) work together:
+Sandbox and [exec approval](./exec-approval.md) work together:
 
 - **Unattended contexts** (cron, heartbeat): Commands run in sandbox without approval
 - **Attended contexts** (Discord, Telegram): High-risk commands (tier 2-3) still require human approval before sandbox execution
@@ -108,16 +108,17 @@ skimpyclaw sandbox doctor       # Run targeted sandbox diagnostics
 | Component | Sandboxed? | Notes |
 |-----------|-----------|-------|
 | `Bash` tool | ✅ Yes | All Bash commands route through the container |
-| `Read` / `Write` / `Glob` | ❌ No | File tools run on host (path-validated) |
-| `Browser` tool | ❌ No | Playwright runs on host |
-| `code_with_agent` / `code_with_team` | ❌ No | Coding agents spawn CLI processes on host |
-| Cron `script` payloads | ❌ No | Scripts run on host |
+| `Read` / `Write` tool | ✅ Yes | File reads and writes execute inside the container |
+| `ListDir` / `Glob` tool | ✅ Yes | Directory listings and glob operations execute inside the container |
+| `Browser` tool | ❌ No | Playwright runs on host via MCP |
+| `code_with_agent` / `code_with_team` | ❌ No | Coding agents spawn CLI processes on host (plumbing exists but is not wired up) |
+| Cron `script` payloads | ✅ Yes | Scripts route through sandbox when enabled |
 
-Coding agents (`claude`, `codex`, `kimi`) manage their own execution environment. See [Coding Agents](./coding-agents.md#sandbox) for details.
+macOS-specific commands (`osascript`, `open`, `say`, `pbcopy`, `pbpaste`, `defaults`, etc.) bypass the sandbox and execute on the host, since they require macOS APIs unavailable in Linux containers.
 
-## Per-Job Sandbox
+### Coding Agents
 
-Cron jobs and coding agents can have independent sandbox settings. Each coding agent spawned via `code_with_agent` gets its own container instance.
+Coding agents (`claude`, `codex`, `kimi`) are **not** sandboxed. They spawn CLI processes directly on the host. The executor has sandbox plumbing (container wrapping in `executor.ts`), but `sandboxConfig` is not passed through from the tool dispatch layer. This is a known gap.
 
 ## Disabling Sandbox
 
