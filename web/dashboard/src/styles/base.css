@@ -386,12 +386,19 @@ textarea::placeholder {
 .stat-icon.amber { background: var(--warning-soft); color: var(--warning); }
 .stat-icon.blue { background: var(--info-soft); color: var(--info); }
 .stat-icon.rose { background: rgba(244, 63, 94, 0.08); color: #f43f5e; }
+.stat-icon.muted { background: var(--surface-alt); color: var(--text-muted); }
 .stats-grid-5 { grid-template-columns: repeat(5, 1fr); }
 .stats-grid-5 .stat-card { min-height: 120px; padding: 18px 20px; gap: 12px; }
 .stats-grid-5 .stat-icon { width: 42px; height: 42px; }
 .stats-grid-5 .stat-icon svg { width: 18px; height: 18px; }
 .stats-grid-5 .stat-value { font-size: 26px; }
 .stats-grid-5 .stat-value-md { font-size: 18px; }
+.stats-grid-6 { grid-template-columns: repeat(6, 1fr); }
+.stats-grid-6 .stat-card { min-height: 120px; padding: 16px 18px; gap: 10px; }
+.stats-grid-6 .stat-icon { width: 38px; height: 38px; }
+.stats-grid-6 .stat-icon svg { width: 16px; height: 16px; }
+.stats-grid-6 .stat-value { font-size: 24px; }
+.stats-grid-6 .stat-value-md { font-size: 16px; }
 .stat-body {
   display: flex;
   flex-direction: column;
@@ -2499,6 +2506,7 @@ textarea::placeholder {
   .split-list { max-height: 280px; }
   .stats-grid { grid-template-columns: 1fr 1fr; }
   .stats-grid-5 { grid-template-columns: 1fr 1fr; }
+  .stats-grid-6 { grid-template-columns: 1fr 1fr; }
   .usage-stats-grid { grid-template-columns: 1fr 1fr; }
   .stat-card { min-height: 116px; padding: 18px; gap: 12px; }
   .stat-icon { width: 44px; height: 44px; }

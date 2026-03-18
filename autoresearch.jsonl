@@ -1,0 +1,13 @@
+{"type":"config","name":"Optimize test suite runtime","metricName":"seconds","metricUnit":"s","bestDirection":"lower"}
+{"run":1,"commit":"a1b2c3d","metric":12.4,"metrics":{},"status":"keep","description":"baseline — full test suite","timestamp":1710300000}
+{"run":2,"commit":"b2c3d4e","metric":11.8,"metrics":{},"status":"keep","description":"parallelize independent test files","timestamp":1710300300}
+{"run":3,"commit":"c3d4e5f","metric":13.1,"metrics":{},"status":"discard","description":"lazy import vitest globals — slower due to repeated setup","timestamp":1710300600}
+{"run":4,"commit":"d4e5f6g","metric":10.2,"metrics":{},"status":"keep","description":"cache TypeScript compilation between runs","timestamp":1710300900}
+{"run":5,"commit":"e5f6g7h","metric":10.5,"metrics":{},"status":"discard","description":"split large test file — marginal regression from extra setup","timestamp":1710301200}
+{"run":6,"commit":"f6g7h8i","metric":0,"metrics":{},"status":"crash","description":"attempted esbuild transform — vitest config broke","timestamp":1710301500}
+{"run":7,"commit":"g7h8i9j","metric":9.1,"metrics":{},"status":"keep","description":"mock heavy fs operations in unit tests","timestamp":1710301800}
+{"run":8,"commit":"h8i9j0k","metric":9.3,"metrics":{},"status":"discard","description":"reduce test timeout — no speed gain, flakier","timestamp":1710302100}
+{"run":9,"commit":"i9j0k1l","metric":8.4,"metrics":{},"status":"keep","description":"use vitest workspace with isolated pools","timestamp":1710302400}
+{"run":10,"commit":"j0k1l2m","metric":8.6,"metrics":{},"status":"checks_failed","description":"skip type-checking in tests — checks caught regressions","timestamp":1710302700}
+{"run":11,"commit":"k1l2m3n","metric":7.9,"metrics":{},"status":"keep","description":"batch mock setup with shared fixtures","timestamp":1710303000}
+{"run":12,"commit":"l2m3n4o","metric":7.8,"metrics":{},"status":"keep","description":"eliminate redundant config reloads in test setup","timestamp":1710303300}

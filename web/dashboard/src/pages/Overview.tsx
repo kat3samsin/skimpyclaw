@@ -13,6 +13,7 @@ import {
   LuMessageSquare,
   LuSend,
   LuServer,
+  LuShield,
   LuShieldAlert,
 } from 'react-icons/lu';
 
@@ -230,7 +231,7 @@ export function Overview({ onNavigate, showToast }: OverviewProps) {
       )}
 
       {/* Stat cards */}
-      <div class="stats-grid stats-grid-5">
+      <div class="stats-grid stats-grid-6">
         <div class="stat-card">
           <div class="stat-icon sage"><LuClock3 size={16} /></div>
           <div class="stat-body">
@@ -257,6 +258,13 @@ export function Overview({ onNavigate, showToast }: OverviewProps) {
           <div class="stat-body">
             <div class="stat-value stat-value-md">{channelLabel(status?.activeChannel ?? null)}</div>
             <div class="stat-subtitle">Active channel</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class={`stat-icon ${status?.sandbox?.enabled ? 'green' : 'muted'}`}><LuShield size={16} /></div>
+          <div class="stat-body">
+            <div class="stat-value stat-value-md">{status?.sandbox?.enabled ? 'Active' : 'Off'}</div>
+            <div class="stat-subtitle">Sandbox{status?.sandbox?.enabled ? ` · ${status.sandbox.runtime}` : ''}</div>
           </div>
         </div>
         <div class="stat-card">
