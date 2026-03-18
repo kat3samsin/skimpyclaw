@@ -216,7 +216,7 @@ export function Coding() {
                   <div class="coding-task-content">
                     <div class="coding-task-pills">
                       <span class="coding-pill id">{task.id}</span>
-                      <span class="coding-pill">TEAM ({children.length})</span>
+                      <span class="coding-pill">{task.agent === 'team-coordinator' ? `TEAM (${children.length})` : task.agent?.toUpperCase() || 'CLAUDE'}</span>
                       <span class={`coding-pill status ${cls}`}>{task.status}</span>
                     </div>
                     <Markdown content={task.task} className="coding-task-title markdown-content" />

@@ -169,9 +169,8 @@ export async function executeCodeWithAgent(
   // Don't pass a non-matching session model to a different agent CLI.
   // e.g. if session is gpt-5.3-codex but agent is claude, let claude use its own default.
   const isModelFromSession = !input.model;
-  const modelForAgent = (isModelFromSession && resolvedModel && !isModelCompatibleWithAgent(resolvedModel, agent))
-    ? undefined
-    : resolvedModel;
+  const modelIncompatible = isModelFromSession && resolvedModel && !isModelCompatibleWithAgent(resolvedModel, agent);
+  const modelForAgent = modelIncompatible ? undefined : resolvedModel;
 
   const projects = context?.fullConfig?.projects ?? {};
   const rawWorkdir = input.workdir as string | undefined;
@@ -213,7 +212,7 @@ export async function executeCodeWithAgent(
     chatId: context?.chatId,
     startedAt: startedAt.toISOString(),
     workdir,
-    model: modelForAgent || resolvedModel,
+    model: modelForAgent,
   };
   storeCodeAgentTask(caTask);
   writeCodeAgentTask(caTask);
