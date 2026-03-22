@@ -14,6 +14,10 @@ import type { SkillConfig } from './skills-types.js';
 import { getLangfuseConfig, isLangfuseEnabled } from './langfuse.js';
 import { startActiveObservation, updateActiveTrace } from '@langfuse/tracing';
 import { TTLCache } from './cache.js';
+import { processUserTurn } from './personalization.js';
+import { convertSignalsToFeedbackEvent, recordFeedback } from './rl-feedback.js';
+import { retrieveRelevantCorrections, buildCorrectionsPrompt } from './rl-retrieval.js';
+import type { FeedbackSignal } from './types.js';
 
 // Import from providers module
 import {
@@ -162,6 +166,74 @@ export async function runAgentTurn(
       discord: `\n\n## Channel: Discord\nUse markdown: **bold**, *italic*, \`code\`, \`\`\`blocks\`\`\`, [links](url).`,
     };
     systemPrompt += channelHints[context.channel] || '';
+  }
+
+  // Extract user message text (needed by personalization + RL feedback)
+  const userMessageText = typeof userMessage === 'string'
+    ? userMessage
+    : (userMessage.find(b => b.type === 'text') as { type: 'text'; text: string } | undefined)?.text || '';
+
+  let feedbackSignals: FeedbackSignal[] = [];
+
+  // Inject learned user preferences (personalization)
+  if (context?.userId && config.personalization?.enabled !== false) {
+    const { promptSection, signals } = processUserTurn(
+      context.userId,
+      userMessageText,
+      history || [],
+      config.personalization,
+    );
+    feedbackSignals = signals;
+    if (promptSection) {
+      systemPrompt += promptSection;
+    }
+  }
+
+  // RL feedback: capture signals as durable events
+  if (
+    config.rlFeedback?.enableFeedbackCapture &&
+    feedbackSignals.length > 0 &&
+    context?.userId
+  ) {
+    const lastAssistant = (history || [])
+      .filter(m => m.role === 'assistant')
+      .pop();
+    const lastAssistantText = lastAssistant
+      ? (typeof lastAssistant.content === 'string'
+        ? lastAssistant.content
+        : (lastAssistant.content.find(b => b.type === 'text') as any)?.text || '')
+      : '';
+
+    const feedbackEvent = convertSignalsToFeedbackEvent(feedbackSignals, {
+      sessionId: context.sessionId || 'unknown',
+      userId: context.userId,
+      agentId,
+      userInput: userMessageText,
+      assistantOutput: lastAssistantText,
+      model: modelOverride || agentConfig.model,
+      trigger: context.trigger,
+    });
+    if (feedbackEvent) {
+      recordFeedback(feedbackEvent);
+    }
+  }
+
+  // RL retrieval: inject past corrections into prompt
+  if (
+    config.rlFeedback?.enableRetrieval &&
+    context?.userId
+  ) {
+    const corrections = retrieveRelevantCorrections({
+      userId: context.userId,
+      currentInput: userMessageText,
+      maxResults: config.rlFeedback.maxRetrievedCorrections ?? 5,
+    });
+    const correctionsPrompt = buildCorrectionsPrompt(corrections, {
+      maxTokens: config.rlFeedback.maxPromptTokens ?? 500,
+    });
+    if (correctionsPrompt) {
+      systemPrompt += correctionsPrompt;
+    }
   }
 
   // Build user content — support both string and content arrays (for images)
