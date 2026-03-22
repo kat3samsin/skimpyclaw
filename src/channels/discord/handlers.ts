@@ -41,6 +41,7 @@ import {
   startTypingIndicator,
 } from './utils.js';
 import { createTaskThread } from './threads.js';
+import { isDocumentAttachment, processAttachments, supportedExtensions } from './attachments.js';
 
 // ── Command handler ─────────────────────────────────────────────────
 
@@ -379,6 +380,68 @@ export async function handleIncomingMessage(message: Message, config: Config): P
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Unknown error';
       await message.reply(`Error processing image: ${msg}`);
+    } finally {
+      stopTyping();
+    }
+    return;
+  }
+
+  // Check for document attachments (txt, pdf, etc.)
+  const docAttachments = message.attachments.filter(a => isDocumentAttachment(a));
+
+  if (docAttachments.size > 0) {
+    const stopTyping = startTypingIndicator(message);
+
+    try {
+      const results = await processAttachments([...docAttachments.values()]);
+      const extracted: string[] = [];
+      const errors: string[] = [];
+
+      for (const r of results) {
+        if (r.ok && r.text) {
+          extracted.push(`--- ${r.filename} ---\n${r.text}`);
+        } else if (r.error) {
+          errors.push(r.error);
+        }
+      }
+
+      if (errors.length > 0 && extracted.length === 0) {
+        // All attachments failed
+        const supported = supportedExtensions().map(e => `.${e}`).join(', ');
+        await message.reply(
+          errors.join('\n') + `\n\nSupported file types: ${supported}`
+        );
+        return;
+      }
+
+      // Build context: extracted text + user's message (or default prompt)
+      const userText = message.content.trim() || 'Please read and summarize the attached file(s).';
+      const attachmentContext = extracted.join('\n\n');
+      const prompt = `The user uploaded the following file(s):\n\n${attachmentContext}\n\n${userText}`;
+
+      // Include any errors as a note
+      const errorNote = errors.length > 0
+        ? `\n\n(Note: some attachments could not be processed: ${errors.join('; ')})`
+        : '';
+
+      const key = conversationKey(message);
+      const history = await getHistory(key);
+      const response = await runAgentTurn(
+        config.agents.default,
+        prompt + errorNote,
+        config,
+        getCurrentModel(),
+        getDiscordToolConfig(config),
+        history,
+        getDiscordRunContext(message)
+      );
+
+      const filenames = results.map(r => r.filename).join(', ');
+      await addToHistory(key, `[Attachments: ${filenames}] ${userText}`, response);
+      await sendLongText(message, response);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      await message.reply(`Error processing attachment(s): ${msg}`);
     } finally {
       stopTyping();
     }
