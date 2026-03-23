@@ -4,7 +4,7 @@ import { randomUUID } from 'crypto';
 import { appendFileSync, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
-import { formatDate, readJsonlDir } from './utils.js';
+import { readJsonlDir } from './utils.js';
 import type { RLFeedbackEvent, FeedbackSignal } from './types.js';
 
 const FEEDBACK_DIR = join(homedir(), '.skimpyclaw', 'logs', 'rl-feedback');
@@ -136,8 +136,9 @@ export function readFeedbackEvents(
   const offset = options.offset ?? 0;
 
   const now = new Date();
-  const endDate = options.endDate ?? formatDate(now);
-  const startDate = options.startDate ?? formatDate(new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000));
+  // Use UTC dates to match file naming (event.timestamp is ISO/UTC, sliced to YYYY-MM-DD)
+  const endDate = options.endDate ?? now.toISOString().slice(0, 10);
+  const startDate = options.startDate ?? new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
   const { userId, feedbackType } = options;
 
