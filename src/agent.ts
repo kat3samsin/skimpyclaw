@@ -14,7 +14,6 @@ import type { SkillConfig } from './skills-types.js';
 import { getLangfuseConfig, isLangfuseEnabled } from './langfuse.js';
 import { startActiveObservation, updateActiveTrace } from '@langfuse/tracing';
 import { TTLCache } from './cache.js';
-import { processUserTurn } from './personalization.js';
 import { convertSignalsToFeedbackEvent, recordFeedback } from './rl-feedback.js';
 import { retrieveRelevantCorrections, buildCorrectionsPrompt } from './rl-retrieval.js';
 import type { FeedbackSignal } from './types.js';
@@ -173,21 +172,7 @@ export async function runAgentTurn(
     ? userMessage
     : (userMessage.find(b => b.type === 'text') as { type: 'text'; text: string } | undefined)?.text || '';
 
-  let feedbackSignals: FeedbackSignal[] = [];
-
-  // Inject learned user preferences (personalization)
-  if (context?.userId && config.personalization?.enabled !== false) {
-    const { promptSection, signals } = processUserTurn(
-      context.userId,
-      userMessageText,
-      history || [],
-      config.personalization,
-    );
-    feedbackSignals = signals;
-    if (promptSection) {
-      systemPrompt += promptSection;
-    }
-  }
+  const feedbackSignals: FeedbackSignal[] = [];
 
   // RL feedback: capture signals as durable events
   if (

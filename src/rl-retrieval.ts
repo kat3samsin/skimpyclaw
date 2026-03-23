@@ -1,7 +1,6 @@
 // RL Retrieval — rank and retrieve relevant correction events for prompt injection
 
 import { readFeedbackEvents } from './rl-feedback.js';
-import { computeWordOverlap } from './personalization.js';
 import type { RLFeedbackEvent } from './types.js';
 
 // --- Helpers ---
@@ -10,6 +9,19 @@ import type { RLFeedbackEvent } from './types.js';
 function truncate(s: string, maxLen: number): string {
   if (s.length <= maxLen) return s;
   return s.slice(0, maxLen - 3) + '...';
+}
+
+/**
+ * Compute word overlap between two strings (Jaccard similarity).
+ * Returns a value between 0 and 1.
+ */
+export function computeWordOverlap(a: string, b: string): number {
+  const wordsA = new Set(a.toLowerCase().split(/\s+/).filter(Boolean));
+  const wordsB = new Set(b.toLowerCase().split(/\s+/).filter(Boolean));
+  if (wordsA.size === 0 || wordsB.size === 0) return 0;
+  const intersection = [...wordsA].filter(w => wordsB.has(w)).length;
+  const union = new Set([...wordsA, ...wordsB]).size;
+  return union === 0 ? 0 : intersection / union;
 }
 
 // --- Ranking ---
