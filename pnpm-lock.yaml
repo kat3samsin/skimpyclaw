@@ -77,9 +77,6 @@ importers:
       '@types/node':
         specifier: ^20.11.0
         version: 20.19.32
-      '@types/pdf-parse':
-        specifier: ^1.1.5
-        version: 1.1.5
       eslint:
         specifier: ^9.39.2
         version: 9.39.2
@@ -879,9 +876,6 @@ packages:
 
   '@types/node@20.19.32':
     resolution: {integrity: sha512-Ez8QE4DMfhjjTsES9K2dwfV258qBui7qxUsoaixZDiTzbde4U12e1pXGNu/ECsUIOi5/zoCxAQxIhQnaUQ2VvA==}
-
-  '@types/pdf-parse@1.1.5':
-    resolution: {integrity: sha512-kBfrSXsloMnUJOKi25s3+hRmkycHfLK6A09eRGqF/N8BkQoPUmaCr+q8Cli5FnfohEz/rsv82zAiPz/LXtOGhA==}
 
   '@types/ws@8.18.1':
     resolution: {integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==}
@@ -2813,10 +2807,6 @@ snapshots:
   '@types/node@20.19.32':
     dependencies:
       undici-types: 6.21.0
-
-  '@types/pdf-parse@1.1.5':
-    dependencies:
-      '@types/node': 20.19.32
 
   '@types/ws@8.18.1':
     dependencies:
