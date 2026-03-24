@@ -255,13 +255,6 @@ export interface ChatMessage {
   content: string | ContentBlock[];
 }
 
-export interface FeedbackSignal {
-  type: 'correction' | 'acceptance';
-  reward: number;
-  confidence: number;
-  reason: string;
-  dimensions: Partial<Record<string, number>>;
-}
 
 export interface ChatOptions {
   model: string;
