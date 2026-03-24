@@ -11,7 +11,7 @@ const CORRECTION_PATTERNS: Array<{ pattern: RegExp; reward: number; confidence: 
   { pattern: /\bthat('?s|\s+is)\s+(not\s+)?(wrong|incorrect|inaccurate)\b/i, reward: -0.8, confidence: 0.85, reason: 'Marked assistant output as wrong' },
   { pattern: /\byou'?re\s+wrong\b/i, reward: -0.8, confidence: 0.9, reason: 'Direct correction' },
 
-  // Re-asking / rephrasing
+  // Re-asking / rephrasing (also emitted as 'reask' type below)
   { pattern: /\bi\s+(already\s+)?(said|told|asked|mentioned)\b/i, reward: -0.6, confidence: 0.8, reason: 'User re-stated prior instruction' },
   { pattern: /\bthat'?s?\s+not\s+what\s+i\s+(meant|wanted|asked)\b/i, reward: -0.7, confidence: 0.85, reason: 'User clarified misunderstood intent' },
   { pattern: /\bi\s+mean[t]?\b/i, reward: -0.4, confidence: 0.5, reason: 'User clarified meaning' },
@@ -28,10 +28,21 @@ const CORRECTION_PATTERNS: Array<{ pattern: RegExp; reward: number; confidence: 
   { pattern: /\bmore\s+(detail|specific|concise|brief)\b/i, reward: -0.3, confidence: 0.6, reason: 'User requested style adjustment' },
 ];
 
-/** Phrases that indicate approval / acceptance — only meaningful after assistant output */
-const APPROVAL_PATTERNS: Array<{ pattern: RegExp; reward: number; confidence: number; reason: string }> = [
+/** Patterns that indicate the user is re-asking because the assistant missed the point */
+const REASK_PATTERNS: Array<{ pattern: RegExp; reward: number; confidence: number; reason: string }> = [
+  { pattern: /\bcan\s+you\s+(just|actually|please)\s+(re-?do|redo|try\s+again|start\s+over)\b/i, reward: -0.6, confidence: 0.8, reason: 'User asked assistant to redo' },
+  { pattern: /\blet\s+me\s+(rephrase|clarify|try\s+again)\b/i, reward: -0.5, confidence: 0.75, reason: 'User rephrasing after misunderstanding' },
+  { pattern: /\bwhat\s+i\s+(actually\s+)?(want|need|meant)\s+(is|was)\b/i, reward: -0.5, confidence: 0.7, reason: 'User re-explaining intent' },
+  { pattern: /\bi('?ll|will)\s+(try|ask)\s+(again|differently)\b/i, reward: -0.5, confidence: 0.7, reason: 'User retrying after failed understanding' },
+];
+
+/** Phrases that indicate approval / acceptance — only meaningful after assistant output.
+ *  Short-message gate: single-word approval tokens only match messages under 30 chars
+ *  to reduce false positives from normal conversation. */
+const APPROVAL_PATTERNS: Array<{ pattern: RegExp; reward: number; confidence: number; reason: string; shortOnly?: boolean }> = [
   { pattern: /\bthat('?s|\s+is)\s+(exactly\s+)?(what\s+i\s+)?(wanted|needed|meant)\b/i, reward: 0.7, confidence: 0.7, reason: 'User confirmed intent match' },
-  { pattern: /\b(perfect|exactly|correct|right|good|great|thanks|thank\s+you)\b/i, reward: 0.5, confidence: 0.4, reason: 'Positive acknowledgment' },
+  { pattern: /\b(perfect|exactly|correct)\b/i, reward: 0.5, confidence: 0.5, reason: 'Positive acknowledgment', shortOnly: true },
+  { pattern: /\b(thanks|thank\s+you)\b/i, reward: 0.3, confidence: 0.3, reason: 'Gratitude (weak signal)', shortOnly: true },
 ];
 
 // --- Dimension extraction ---
@@ -85,9 +96,27 @@ export function detectFeedbackSignals(
     }
   }
 
-  // If no correction found, check for approval
+  // Check reask patterns (user re-explaining / retrying)
   if (signals.length === 0) {
-    for (const { pattern, reward, confidence, reason } of APPROVAL_PATTERNS) {
+    for (const { pattern, reward, confidence, reason } of REASK_PATTERNS) {
+      if (pattern.test(userMessage)) {
+        signals.push({
+          type: 'reask',
+          reward,
+          confidence,
+          reason,
+          dimensions: inferDimensions(userMessage),
+        });
+        break;
+      }
+    }
+  }
+
+  // If no correction or reask, check for approval
+  if (signals.length === 0) {
+    const isShort = userMessage.trim().length < 30;
+    for (const { pattern, reward, confidence, reason, shortOnly } of APPROVAL_PATTERNS) {
+      if (shortOnly && !isShort) continue;
       if (pattern.test(userMessage)) {
         signals.push({
           type: 'acceptance',

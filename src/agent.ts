@@ -16,6 +16,7 @@ import { startActiveObservation, updateActiveTrace } from '@langfuse/tracing';
 import { TTLCache } from './cache.js';
 import { convertSignalsToFeedbackEvent, recordFeedback } from './rl-feedback.js';
 import { retrieveRelevantCorrections, buildCorrectionsPrompt } from './rl-retrieval.js';
+import { detectFeedbackSignals } from './rl-signals.js';
 import type { FeedbackSignal } from './types.js';
 
 // Import from providers module
@@ -172,7 +173,10 @@ export async function runAgentTurn(
     ? userMessage
     : (userMessage.find(b => b.type === 'text') as { type: 'text'; text: string } | undefined)?.text || '';
 
-  const feedbackSignals: FeedbackSignal[] = [];
+  // RL feedback: detect correction/approval signals from the user message
+  const feedbackSignals: FeedbackSignal[] = config.rlFeedback?.enableFeedbackCapture
+    ? detectFeedbackSignals(userMessageText, history)
+    : [];
 
   // RL feedback: capture signals as durable events
   if (
@@ -217,7 +221,7 @@ export async function runAgentTurn(
       maxTokens: config.rlFeedback.maxPromptTokens ?? 500,
     });
     if (correctionsPrompt) {
-      systemPrompt += correctionsPrompt;
+      systemPrompt += '\n\n' + correctionsPrompt;
     }
   }
 

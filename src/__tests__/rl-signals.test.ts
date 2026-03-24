@@ -89,6 +89,43 @@ describe('detectFeedbackSignals', () => {
     expect(signals[0].confidence).toBeGreaterThanOrEqual(0.7);
   });
 
+  // --- Reask ---
+
+  it('detects "can you redo" as reask', () => {
+    const signals = detectFeedbackSignals('Can you actually redo that?', assistantHistory);
+    expect(signals).toHaveLength(1);
+    expect(signals[0].type).toBe('reask');
+    expect(signals[0].reward).toBeLessThan(0);
+  });
+
+  it('detects "let me rephrase" as reask', () => {
+    const signals = detectFeedbackSignals('Let me rephrase that.', assistantHistory);
+    expect(signals).toHaveLength(1);
+    expect(signals[0].type).toBe('reask');
+  });
+
+  it('detects "what I actually want is" as reask', () => {
+    const signals = detectFeedbackSignals('What I actually want is a simple function.', assistantHistory);
+    expect(signals).toHaveLength(1);
+    expect(signals[0].type).toBe('reask');
+  });
+
+  // --- Approval false-positive filtering ---
+
+  it('does not match "good" in a long message', () => {
+    const signals = detectFeedbackSignals(
+      "That's a good start, but I think we should also handle the edge case where the input is null.",
+      assistantHistory,
+    );
+    expect(signals).toHaveLength(0);
+  });
+
+  it('matches "perfect" in a short message', () => {
+    const signals = detectFeedbackSignals('Perfect.', assistantHistory);
+    expect(signals).toHaveLength(1);
+    expect(signals[0].type).toBe('acceptance');
+  });
+
   // --- No signal cases ---
 
   it('returns empty for neutral follow-up', () => {

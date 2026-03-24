@@ -69,13 +69,13 @@ export interface RetrieveCorrectionsOptions {
 /**
  * Retrieve the most relevant explicit_correction events for the given user and input.
  * Only returns events with feedbackType === 'explicit_correction'.
- * Reads the last lookbackDays (default 30) of events.
+ * Reads the last lookbackDays (default 7) of events.
  * Ranks via rankCorrections and returns the top maxResults (default 5).
  */
 export function retrieveRelevantCorrections(opts: RetrieveCorrectionsOptions): RLFeedbackEvent[] {
   const { userId, currentInput } = opts;
   const maxResults = opts.maxResults ?? 5;
-  const lookbackDays = opts.lookbackDays ?? 30;
+  const lookbackDays = opts.lookbackDays ?? 7;
 
   const now = new Date();
   const startDate = new Date(now.getTime() - lookbackDays * 24 * 60 * 60 * 1000);
