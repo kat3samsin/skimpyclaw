@@ -277,7 +277,15 @@ const DEFAULT_REQUIRE_FOR_TIERS = [2, 3];
 
 // --- Pending Approval Registry (in-memory MVP) ---
 
-export type ApprovalStatus = 'pending' | 'approved' | 'denied' | 'expired';
+export type ApprovalStatus = 'pending' | 'approved' | 'denied' | 'expired' | 'consumed';
+
+/** A single status transition record (append-only). */
+export interface ApprovalHistoryEntry {
+  from: ApprovalStatus;
+  to: ApprovalStatus;
+  at: Date;
+  by?: string;
+}
 
 export interface PendingApproval {
   id: string;
@@ -293,6 +301,8 @@ export interface PendingApproval {
   resolvedAt?: Date;
   /** Channel context metadata — where the request originated */
   channelMeta?: ApprovalChannelMeta;
+  /** Append-only history of status transitions */
+  history: ApprovalHistoryEntry[];
 }
 
 /** Metadata about the channel/chat where an approval request originated */
@@ -384,6 +394,7 @@ export function createApprovalRequest(
     expiresAt: new Date(now.getTime() + ttlMs),
     status: 'pending',
     channelMeta,
+    history: [],
   };
 
   approvals.set(approval.id, approval);
@@ -431,9 +442,11 @@ export function approveRequest(id: string, approvedBy?: string): boolean {
   const approval = approvals.get(id);
   if (!approval || approval.status !== 'pending') return false;
 
+  const now = new Date();
+  approval.history.push({ from: approval.status, to: 'approved', at: now, by: approvedBy });
   approval.status = 'approved';
   approval.approvedBy = approvedBy;
-  approval.resolvedAt = new Date();
+  approval.resolvedAt = now;
   emitEvent('approved', approval);
   return true;
 }
@@ -446,9 +459,11 @@ export function denyRequest(id: string, deniedBy?: string): boolean {
   const approval = approvals.get(id);
   if (!approval || approval.status !== 'pending') return false;
 
+  const now = new Date();
+  approval.history.push({ from: approval.status, to: 'denied', at: now, by: deniedBy });
   approval.status = 'denied';
   approval.deniedBy = deniedBy;
-  approval.resolvedAt = new Date();
+  approval.resolvedAt = now;
   emitEvent('denied', approval);
   return true;
 }
@@ -473,9 +488,13 @@ export function findApprovedRequest(command: string, cwd?: string): PendingAppro
 
 /**
  * Mark an approved request as consumed (after successful execution).
+ * Preserves the approval in the registry with status 'consumed' for history.
  */
 export function consumeApproval(id: string): void {
-  approvals.delete(id);
+  const approval = approvals.get(id);
+  if (!approval) return;
+  approval.history.push({ from: approval.status, to: 'consumed', at: new Date() });
+  approval.status = 'consumed';
 }
 
 /**
@@ -485,8 +504,10 @@ export function cleanupExpired(): void {
   const now = Date.now();
   for (const [id, approval] of approvals) {
     if (approval.status === 'pending' && approval.expiresAt.getTime() <= now) {
+      const resolvedAt = new Date(now);
+      approval.history.push({ from: 'pending', to: 'expired', at: resolvedAt });
       approval.status = 'expired';
-      approval.resolvedAt = new Date(now);
+      approval.resolvedAt = resolvedAt;
       emitEvent('expired', approval);
     }
   }
@@ -535,6 +556,7 @@ export function waitForApproval(id: string, timeoutMs: number): Promise<PendingA
           createdAt: new Date(),
           expiresAt: new Date(),
           status: 'expired',
+          history: [],
         });
       }
     }, timeoutMs);

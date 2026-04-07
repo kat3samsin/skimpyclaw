@@ -269,6 +269,16 @@ describe('approval registry', () => {
     expect(found).toBeUndefined();
   });
 
+  it('consumed approval is still retrievable by ID', () => {
+    const approval = createApprovalRequest('sudo apt update', undefined, { tier: 2, reason: 'test' });
+    approveRequest(approval.id);
+    consumeApproval(approval.id);
+
+    const fetched = getApproval(approval.id);
+    expect(fetched).toBeDefined();
+    expect(fetched?.status).toBe('consumed');
+  });
+
   it('expires pending approvals past TTL', () => {
     const approval = createApprovalRequest('sudo cmd', undefined, { tier: 2, reason: 'test' }, { ttlMs: 1 });
 
@@ -418,5 +428,71 @@ describe('approval events', () => {
 
     createApprovalRequest('sudo cmd2', undefined, { tier: 2, reason: 'test' });
     expect(events).toHaveLength(1); // No new event
+  });
+});
+
+describe('approval history', () => {
+  it('new approval starts with empty history', () => {
+    const approval = createApprovalRequest('sudo cmd', undefined, { tier: 2, reason: 'test' });
+    expect(approval.history).toEqual([]);
+  });
+
+  it('records a single transition on approve', () => {
+    const approval = createApprovalRequest('sudo cmd', undefined, { tier: 2, reason: 'test' });
+    approveRequest(approval.id, 'admin');
+
+    const fetched = getApproval(approval.id)!;
+    expect(fetched.history).toHaveLength(1);
+    expect(fetched.history[0].from).toBe('pending');
+    expect(fetched.history[0].to).toBe('approved');
+    expect(fetched.history[0].by).toBe('admin');
+    expect(fetched.history[0].at).toBeInstanceOf(Date);
+  });
+
+  it('records a single transition on deny', () => {
+    const approval = createApprovalRequest('sudo cmd', undefined, { tier: 2, reason: 'test' });
+    denyRequest(approval.id, 'security');
+
+    const fetched = getApproval(approval.id)!;
+    expect(fetched.history).toHaveLength(1);
+    expect(fetched.history[0].from).toBe('pending');
+    expect(fetched.history[0].to).toBe('denied');
+    expect(fetched.history[0].by).toBe('security');
+  });
+
+  it('records multiple transitions through full lifecycle', () => {
+    const approval = createApprovalRequest('sudo cmd', undefined, { tier: 2, reason: 'test' });
+    approveRequest(approval.id, 'admin');
+    consumeApproval(approval.id);
+
+    const fetched = getApproval(approval.id)!;
+    expect(fetched.history).toHaveLength(2);
+    expect(fetched.history[0]).toMatchObject({ from: 'pending', to: 'approved', by: 'admin' });
+    expect(fetched.history[1]).toMatchObject({ from: 'approved', to: 'consumed' });
+    expect(fetched.status).toBe('consumed');
+  });
+
+  it('no-op status update does not add history entries', () => {
+    const approval = createApprovalRequest('sudo cmd', undefined, { tier: 2, reason: 'test' });
+    approveRequest(approval.id, 'admin');
+
+    // Try to approve again — should fail, no history added
+    const result = approveRequest(approval.id, 'other');
+    expect(result).toBe(false);
+
+    const fetched = getApproval(approval.id)!;
+    expect(fetched.history).toHaveLength(1); // Only the first approve
+  });
+
+  it('records expiration transition in history', () => {
+    const approval = createApprovalRequest('sudo cmd', undefined, { tier: 2, reason: 'test' }, { ttlMs: 1 });
+
+    const start = Date.now();
+    while (Date.now() - start < 5) { /* spin for TTL */ }
+
+    cleanupExpired();
+    const fetched = getApproval(approval.id)!;
+    expect(fetched.history).toHaveLength(1);
+    expect(fetched.history[0]).toMatchObject({ from: 'pending', to: 'expired' });
   });
 });
