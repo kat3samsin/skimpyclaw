@@ -142,6 +142,10 @@ export function splitToChunks(text: string, maxLength: number): string[] {
 }
 
 export async function sendLongText(message: Message, text: string): Promise<void> {
+  if (!text || text.trim().length === 0) {
+    await message.reply('(No response generated.)');
+    return;
+  }
   const chunks = splitToChunks(text, 1900);
   for (const chunk of chunks) {
     await message.reply(chunk);

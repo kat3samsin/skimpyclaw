@@ -160,8 +160,13 @@ export function getTelegramDefaultChatId(cfg: Config): number | null {
 
 /** Send a long message by splitting it into chunks */
 export async function sendLongMessage(ctx: Context, text: string): Promise<void> {
+  if (!text || text.trim().length === 0) {
+    await ctx.reply('(No response generated.)');
+    return;
+  }
+
   const MAX_LENGTH = 4000;
-  
+
   if (text.length <= MAX_LENGTH) {
     await ctx.reply(text);
     return;
@@ -195,8 +200,13 @@ export async function sendLongMessage(ctx: Context, text: string): Promise<void>
 
 /** Send a long message with HTML formatting */
 export async function sendLongMessageHtml(ctx: Context, html: string): Promise<void> {
+  if (!html || html.trim().length === 0) {
+    await ctx.reply('(No response generated.)', { parse_mode: 'HTML' });
+    return;
+  }
+
   const MAX_LENGTH = 3500;
-  
+
   if (html.length <= MAX_LENGTH) {
     await ctx.reply(html, { parse_mode: 'HTML' });
     return;
