@@ -130,6 +130,7 @@ export function getDiscordDefaultTarget(cfg: Config): string | null {
 }
 
 async function sendChunked(target: { send: (content: string) => Promise<unknown> }, text: string): Promise<void> {
+  if (!text || !text.trim()) return;
   const chunks = splitToChunks(text, 1900);
   for (const chunk of chunks) {
     await target.send(chunk);

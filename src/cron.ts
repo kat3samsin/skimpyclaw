@@ -319,17 +319,21 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
         appendCronLogLine(jobDef.id, 'Digest saved');
         if (digest.articles.length > 0) {
           const digestMessage = digest.summary ?? textPortion;
-          try {
-            const sent = await sendCronNotification(config, digestMessage, discordThreadId);
-            if (sent) {
-              appendCronLogLine(jobDef.id, `Digest sent to chat (${digestMessage.length} chars)`);
-            } else if (discordThreadId) {
-              appendCronLogLine(jobDef.id, `Digest thread delivery failed (threadId=${discordThreadId}); no active-channel fallback`);
-            } else {
+          if (!digestMessage || !digestMessage.trim()) {
+            appendCronLogLine(jobDef.id, 'Digest message is empty, skipping send');
+          } else {
+            try {
+              const sent = await sendCronNotification(config, digestMessage, discordThreadId);
+              if (sent) {
+                appendCronLogLine(jobDef.id, `Digest sent to chat (${digestMessage.length} chars)`);
+              } else if (discordThreadId) {
+                appendCronLogLine(jobDef.id, `Digest thread delivery failed (threadId=${discordThreadId}); no active-channel fallback`);
+              } else {
+                appendCronLogLine(jobDef.id, 'Failed to send digest to chat');
+              }
+            } catch {
               appendCronLogLine(jobDef.id, 'Failed to send digest to chat');
             }
-          } catch {
-            appendCronLogLine(jobDef.id, 'Failed to send digest to chat');
           }
         }
       } catch (digestErr) {

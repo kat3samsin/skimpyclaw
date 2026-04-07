@@ -88,6 +88,10 @@ export async function sendToThread(
       return false;
     }
 
+    if (!text || !text.trim()) {
+      console.warn(`[discord] Skipping send to thread ${threadId}: message content is empty`);
+      return false;
+    }
     const chunks = splitToChunks(text, 1900);
     for (const chunk of chunks) {
       await (thread as any).send(chunk);
