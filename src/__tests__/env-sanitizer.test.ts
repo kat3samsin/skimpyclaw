@@ -30,6 +30,7 @@ describe('sanitizeExecEnv', () => {
 
   it('applies strict allowlist for cron environments', () => {
     process.env.OPENAI_API_KEY = 'secret';
+    process.env.GH_TOKEN = 'allowed-gh';
     process.env.SKIMPYCLAW_MODE = 'prod';
     process.env.CUSTOM_RANDOM_VAR = 'do-not-include';
     process.env.PATH = '/usr/bin:/bin';
@@ -39,8 +40,15 @@ describe('sanitizeExecEnv', () => {
 
     expect(env.OPENAI_API_KEY).toBeUndefined();
     expect(env.CUSTOM_RANDOM_VAR).toBeUndefined();
+    expect(env.GH_TOKEN).toBe('allowed-gh');
     expect(env.SKIMPYCLAW_MODE).toBe('prod');
     expect(env.HOME).toBe('/tmp/home');
     expect(env.PATH).toContain('/opt/homebrew/bin');
+
+    delete process.env.OPENAI_API_KEY;
+    delete process.env.GH_TOKEN;
+    delete process.env.SKIMPYCLAW_MODE;
+    delete process.env.CUSTOM_RANDOM_VAR;
+    delete process.env.HOME;
   });
 });

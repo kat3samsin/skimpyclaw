@@ -24,6 +24,7 @@ const CRON_ENV_ALLOWLIST = new Set([
   'TERM',
   'PWD',
   'SHLVL',
+  'GH_TOKEN',
 ]);
 
 export function sanitizeExecEnv(): Record<string, string | undefined> {
@@ -53,7 +54,7 @@ export function sanitizeCronEnv(): Record<string, string | undefined> {
   }
 
   for (const key of Object.keys(env)) {
-    if (SENSITIVE_ENV_PATTERNS.some(p => p.test(key))) {
+    if (!SENSITIVE_ENV_ALLOWLIST.has(key) && SENSITIVE_ENV_PATTERNS.some(p => p.test(key))) {
       delete env[key];
     }
   }
