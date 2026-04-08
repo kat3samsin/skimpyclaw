@@ -186,9 +186,11 @@ export async function discoverMcpTools(): Promise<any[]> {
     const runtime = await getMcpRuntime();
     const servers = runtime.listServers();
 
+    console.log(`[mcp] Servers found: ${servers.join(', ')}`);
     for (const server of servers) {
       try {
         const serverTools = await runtime.listTools(server, { includeSchema: true });
+        console.log(`[mcp] Server "${server}" returned ${serverTools.length} tools: ${serverTools.map((t: any) => t.name).join(', ')}`);
         const sanitizedServer = sanitizeToolName(server);
         for (const tool of serverTools) {
           const sanitizedTool = sanitizeToolName(tool.name);
@@ -223,6 +225,7 @@ export async function discoverMcpTools(): Promise<any[]> {
 
   discoveredMcpTools = tools;
   mcpLastDiscoveredAt = Date.now();
+  console.log(`[mcp] Discovered ${tools.length} tools: ${tools.map((t: any) => t.name).join(', ')}`);
   return tools;
 }
 

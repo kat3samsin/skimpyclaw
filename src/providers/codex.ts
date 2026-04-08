@@ -187,14 +187,48 @@ export function parseCodexSSE(text: string): { outputText: string; functionCalls
   let outputText = '';
   let completedResponse: any = null;
 
+  // Track streaming function calls and output items
+  const streamingFunctionCalls: Map<number, { callId: string; name: string; arguments: string }> = new Map();
+  const streamingOutputTexts: Map<number, string> = new Map();
+  let currentOutputIndex = -1;
+  let currentFcIndex = -1;
+
   for (const line of text.split('\n')) {
     if (!line.startsWith('data: ')) continue;
     const data = line.slice(6).trim();
     if (data === '[DONE]') break;
     try {
       const event = JSON.parse(data);
+
       if (event.type === 'response.output_text.delta') {
-        outputText += event.delta || '';
+        // Text delta — accumulate by output_index or globally
+        const idx = event.output_index ?? currentOutputIndex;
+        if (idx >= 0) {
+          streamingOutputTexts.set(idx, (streamingOutputTexts.get(idx) || '') + (event.delta || ''));
+        } else {
+          outputText += event.delta || '';
+        }
+      } else if (event.type === 'response.output_item.added') {
+        // New output item — track its type
+        const item = event.item;
+        const idx = event.output_index ?? -1;
+        if (item?.type === 'function_call') {
+          currentFcIndex = idx;
+          streamingFunctionCalls.set(idx, {
+            callId: item.call_id || item.id || `fc-${idx}`,
+            name: item.name || '',
+            arguments: '',
+          });
+        } else if (item?.type === 'output_text' || item?.type === 'message') {
+          currentOutputIndex = idx;
+        }
+      } else if (event.type === 'response.function_call_arguments.delta') {
+        // Function call argument delta
+        const idx = event.output_index ?? currentFcIndex;
+        const fc = streamingFunctionCalls.get(idx);
+        if (fc) {
+          fc.arguments += event.delta || '';
+        }
       } else if (event.type === 'response.completed' && event.response) {
         completedResponse = event.response;
         if (event.response.output_text) outputText = event.response.output_text;
@@ -202,9 +236,9 @@ export function parseCodexSSE(text: string): { outputText: string; functionCalls
     } catch { /* skip non-JSON lines */ }
   }
 
-  // Extract function calls and output_text items from completed response
+  // Build function calls — prefer completed response, fall back to streaming
   const functionCalls: any[] = [];
-  if (completedResponse?.output) {
+  if (completedResponse?.output?.length) {
     for (const item of completedResponse.output) {
       if (item.type === 'function_call') {
         functionCalls.push({
@@ -213,9 +247,39 @@ export function parseCodexSSE(text: string): { outputText: string; functionCalls
           arguments: item.arguments,
         });
       } else if (item.type === 'output_text' && item.text) {
-        // Capture output_text items that may not appear at top-level
         if (!outputText) outputText = item.text;
+      } else if (item.type === 'message' && item.content) {
+        for (const c of item.content) {
+          if (c.type === 'output_text' && c.text) {
+            outputText += c.text;
+          }
+        }
       }
+    }
+  } else {
+    // Completed response had empty output — use streaming data
+    // Also patch the rawResponse so appendAssistantResponse includes these items
+    const patchedOutput: any[] = [];
+    for (const [, fc] of streamingFunctionCalls) {
+      if (fc.name) {
+        functionCalls.push(fc);
+        patchedOutput.push({
+          type: 'function_call',
+          call_id: fc.callId,
+          name: fc.name,
+          arguments: fc.arguments,
+        });
+      }
+    }
+    for (const [, txt] of streamingOutputTexts) {
+      if (txt) {
+        if (!outputText) outputText = txt;
+        patchedOutput.push({ type: 'output_text', text: txt });
+      }
+    }
+    if (completedResponse && patchedOutput.length > 0) {
+      completedResponse.output = patchedOutput;
+      console.log(`[codex] Patched empty response.output with ${patchedOutput.length} streaming items`);
     }
   }
 
@@ -223,6 +287,22 @@ export function parseCodexSSE(text: string): { outputText: string; functionCalls
     console.log(`[codex] Usage: ${JSON.stringify(completedResponse.usage)}`);
   } else {
     console.log('[codex] No usage data in response');
+  }
+
+  // Fallback: Codex may put text in response.text instead of output_text or output[]
+  if (!outputText && completedResponse?.text) {
+    const textContent = typeof completedResponse.text === 'string'
+      ? completedResponse.text
+      : typeof completedResponse.text?.content === 'string'
+        ? completedResponse.text.content
+        : '';
+    if (textContent) outputText = textContent;
+  }
+
+  // Debug: log when output is empty despite having tokens
+  if (!outputText && completedResponse) {
+    const outputTypes = (completedResponse.output || []).map((item: any) => `${item.type}${item.content ? `[${(item.content || []).map((c: any) => c.type).join(',')}]` : ''}`);
+    console.warn(`[codex] Empty outputText! status: ${completedResponse.status}, output: ${JSON.stringify(completedResponse.output)?.slice(0, 1000)}, text: ${JSON.stringify(completedResponse.text)?.slice(0, 200)}, reasoning: ${JSON.stringify(completedResponse.reasoning)?.slice(0, 200)}`);
   }
 
   return { outputText, functionCalls, response: completedResponse };

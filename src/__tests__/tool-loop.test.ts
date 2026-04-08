@@ -469,7 +469,7 @@ describe('runToolLoop', () => {
 
       const result = await runToolLoop(adapter, messages, options, config, toolConfig);
 
-      expect(result.response).toBe('');
+      expect(result.response).toBe('[Model returned empty response — please try again]');
       expect(adapter.onEmptyFinalResponse).not.toHaveBeenCalled();
     });
 

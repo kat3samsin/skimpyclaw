@@ -142,21 +142,26 @@ export async function runToolLoop(
       // If no tool calls, we're done
       if (!response.hasToolCalls) {
         let responseText = response.textContent;
-        // Fallback when model did tool work but returned no text summary
-        if (!responseText && toolLog.length > 0) {
-          // Let adapter attempt a finalization pass (e.g. Codex re-asks without tools)
-          if (adapter.onEmptyFinalResponse) {
-            try {
-              const finalized = await adapter.onEmptyFinalResponse(
-                providerMessages, providerToolDefs, options, config,
-              );
-              if (finalized) responseText = finalized;
-            } catch (err) {
-              console.warn(`[${adapter.name}] finalization pass failed: ${toErrorMessage(err)}`);
+        // Fallback when model returned no text
+        if (!responseText) {
+          console.warn(`[${adapter.name}] empty text response (stop_reason: ${(response.rawResponse as any)?.stop_reason}, content blocks: ${JSON.stringify(((response.rawResponse as any)?.content || []).map((b: any) => b.type))})`);
+          if (toolLog.length > 0) {
+            // Let adapter attempt a finalization pass (e.g. Codex re-asks without tools)
+            if (adapter.onEmptyFinalResponse) {
+              try {
+                const finalized = await adapter.onEmptyFinalResponse(
+                  providerMessages, providerToolDefs, options, config,
+                );
+                if (finalized) responseText = finalized;
+              } catch (err) {
+                console.warn(`[${adapter.name}] finalization pass failed: ${toErrorMessage(err)}`);
+              }
             }
-          }
-          if (!responseText) {
-            responseText = `[Completed with ${toolLog.length} tool calls, no text response]`;
+            if (!responseText) {
+              responseText = `[Completed with ${toolLog.length} tool calls, no text response]`;
+            }
+          } else {
+            responseText = '[Model returned empty response — please try again]';
           }
         }
         return {
