@@ -152,11 +152,13 @@ describe('token efficiency', () => {
         expect(split).toContain('.skimpyclaw/s/');
       });
 
-      it('produces minimal scratch path for MCP', () => {
+      it('produces preview + scratch path for MCP', () => {
         const result = 'x\n'.repeat(5000);
         const split = splitToolResult('mcp__context_a8c__search', {}, result);
-        expect(split).toContain('→');
+        expect(split).toContain('Full output:');
         expect(split).toContain('.skimpyclaw/s/');
+        // MCP results include a preview of the first 800 chars
+        expect(split).toContain('x\n');
       });
 
       it('produces minimal scratch path for unknown tools', () => {
