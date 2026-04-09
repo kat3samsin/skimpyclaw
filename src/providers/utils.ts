@@ -285,20 +285,22 @@ export function splitToolResult(
 
   const nameLower = toolName.toLowerCase();
 
-  // Bash: preserve exit code and error lines (critical for model)
+  // Bash: include exit code, errors, and preview
   if (nameLower === 'bash') {
-    const lines = result.split('\n');
     const exitMatch = result.match(/exit code[:\s]+(\d+)/i);
-    const exitInfo = exitMatch && exitMatch[1] !== '0' ? ` exit=${exitMatch[1]}` : '';
+    const exitInfo = exitMatch && exitMatch[1] !== '0' ? `exit=${exitMatch[1]}\n` : '';
+    const lines = result.split('\n');
     const errLines = lines.filter(l => /^(error|fatal|ERR!)/i.test(l.trim()));
-    const errNote = errLines.length > 0 ? `\n${errLines.slice(0, 3).join('\n')}` : '';
-    return `${exitInfo}${errNote}\n→${shortPath}`.trimStart();
+    const errNote = errLines.length > 0 ? errLines.slice(0, 3).join('\n') + '\n' : '';
+    const preview = result.slice(0, 600);
+    const truncNote = result.length > 600 ? `\n... (${result.length} chars total)` : '';
+    return `${exitInfo}${errNote}${preview}${truncNote}\nFull output saved to ${scratchPath} — use Read tool to retrieve.`;
   }
 
-  // All non-Bash tools: include a preview so the model has usable data
+  // All other tools: include preview so the model has usable data
   const preview = result.slice(0, 800);
   const truncNote = result.length > 800 ? `\n... (${result.length} chars total)` : '';
-  return `${preview}${truncNote}\nFull output: Read({"path":"${scratchPath}"})`;
+  return `${preview}${truncNote}\nFull output saved to ${scratchPath} — use Read tool to retrieve.`;
 
 }
 

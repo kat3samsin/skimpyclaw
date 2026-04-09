@@ -91,7 +91,7 @@ describe('token efficiency', () => {
         const result = lines.join('\n');
         const split = splitToolResult('Read', { file_path: '/src/app.ts' }, result);
 
-        expect(split).toContain('Full output:');
+        expect(split).toContain('Full output saved to');
         expect(split).toContain('.skimpyclaw/s/');
         expect(split).toContain('line 1: content here');
         // Much shorter than original
@@ -101,18 +101,19 @@ describe('token efficiency', () => {
       it('handles read_file tool name', () => {
         const result = 'x\n'.repeat(5000);
         const split = splitToolResult('read_file', { path: '/foo.txt' }, result);
-        expect(split).toContain('Full output:');
+        expect(split).toContain('Full output saved to');
         expect(split).toContain('.skimpyclaw/s/');
       });
     });
 
     describe('Bash tool', () => {
-      it('produces scratch path for large bash output', () => {
+      it('produces preview + scratch path for large bash output', () => {
         const output = Array.from({ length: 400 }, (_, i) => `output line ${i}: ${'x'.repeat(20)}`).join('\n');
         const split = splitToolResult('Bash', { command: 'find . -name "*.ts"' }, output);
 
-        expect(split).toContain('→');
+        expect(split).toContain('Full output saved to');
         expect(split).toContain('.skimpyclaw/s/');
+        expect(split).toContain('output line 0');
       });
 
       it('extracts exit code when present', () => {
@@ -134,7 +135,7 @@ describe('token efficiency', () => {
         const entries = Array.from({ length: 300 }, (_, i) => `src/components/deeply/nested/module${i}/file${i}.ts`).join('\n');
         const split = splitToolResult('Glob', { pattern: '**/*.ts' }, entries);
 
-        expect(split).toContain('Full output:');
+        expect(split).toContain('Full output saved to');
         expect(split).toContain('.skimpyclaw/s/');
         expect(split).toContain('src/components');
       });
@@ -143,7 +144,7 @@ describe('token efficiency', () => {
         const result = 'HTTP/1.1 200 OK\n' + 'x'.repeat(10_000);
         const split = splitToolResult('Fetch', { url: 'https://example.com/api' }, result);
 
-        expect(split).toContain('Full output:');
+        expect(split).toContain('Full output saved to');
         expect(split).toContain('.skimpyclaw/s/');
         expect(split).toContain('HTTP/1.1 200 OK');
       });
@@ -151,14 +152,14 @@ describe('token efficiency', () => {
       it('produces preview + scratch path for Browser', () => {
         const result = 'x\n'.repeat(5000);
         const split = splitToolResult('browser_snapshot', { action: 'snapshot' }, result);
-        expect(split).toContain('Full output:');
+        expect(split).toContain('Full output saved to');
         expect(split).toContain('.skimpyclaw/s/');
       });
 
       it('produces preview + scratch path for MCP', () => {
         const result = 'x\n'.repeat(5000);
         const split = splitToolResult('mcp__context_a8c__search', {}, result);
-        expect(split).toContain('Full output:');
+        expect(split).toContain('Full output saved to');
         expect(split).toContain('.skimpyclaw/s/');
         expect(split).toContain('x\n');
       });
@@ -166,7 +167,7 @@ describe('token efficiency', () => {
       it('produces preview + scratch path for unknown tools', () => {
         const result = 'z'.repeat(10_000);
         const split = splitToolResult('custom_tool', {}, result);
-        expect(split).toContain('Full output:');
+        expect(split).toContain('Full output saved to');
         expect(split).toContain('.skimpyclaw/s/');
         expect(split).toContain('zzz');
       });
@@ -176,7 +177,7 @@ describe('token efficiency', () => {
       const result = 'data'.repeat(3000);
       const split = splitToolResult('Read', { file_path: '/big.txt' }, result);
       // Extract scratch path from the result
-      const pathMatch = split.match(/(?:→|"path":")((?:~|\/).*\/.skimpyclaw\/s\/\S+?)(?:"|$)/);
+      const pathMatch = split.match(/saved to (\S*\.skimpyclaw\/s\/\S+)/);
       expect(pathMatch).not.toBeNull();
       if (pathMatch) {
         const p = pathMatch[1].startsWith('~/') ? pathMatch[1].replace('~', homedir()) : pathMatch[1];
