@@ -51,7 +51,7 @@ Always run `pnpm build && pnpm test` after making changes. Do not submit work wi
 - **Provider routing is adapter-based** — both `chat` and `chatWithTools` route through `src/providers/index.ts`
 - **Tool loops are unified** — all providers use `runToolLoop`; do not add per-provider loop logic
 - **New providers implement `ProviderAdapter`** — include `isAvailable()`, `chat()`, and tool-loop adapter methods
-- **MCP is Anthropic-only** — Codex/OpenAI providers don't support MCP tools
+- **MCP works with Anthropic and Codex** — OpenAI-compatible providers (non-Codex) still exclude MCP tools
 - **Pass toolConfig to runAgentTurn** — without it, the model hallucinates XML tool calls
 - **Guard Codex SSE responses** — `fc.arguments` can be undefined
 - **Path validation** — all file/dir operations restricted to `ToolConfig.allowedPaths`

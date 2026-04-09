@@ -117,7 +117,7 @@ describe('Codex unified tool loop', () => {
     expect(mockCodexFetch).toHaveBeenCalledTimes(2);
   });
 
-  it('requests tool definitions with MCP disabled for Codex', async () => {
+  it('requests tool definitions with MCP enabled for Codex', async () => {
     mockCodexFetch.mockResolvedValueOnce('sse-1');
     mockParseCodexSSE.mockReturnValueOnce({
       outputText: 'Done',
@@ -129,7 +129,7 @@ describe('Codex unified tool loop', () => {
 
     expect(mockGetToolDefinitions).toHaveBeenCalledWith(
       toolConfig,
-      expect.objectContaining({ includeMcp: false }),
+      expect.objectContaining({ includeMcp: true }),
     );
   });
 });

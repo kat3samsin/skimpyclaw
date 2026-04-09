@@ -66,8 +66,8 @@ export class CodexAdapter implements ProviderAdapter {
   }
 
   getToolDefinitionOptions(_toolContext?: ExecuteToolContext, _config?: Config): { includeMcp?: boolean } {
-    // Codex/OpenAI-compatible providers do not support MCP tools.
-    return { includeMcp: false };
+    // MCP tools are standard function calls — Codex handles them fine.
+    return { includeMcp: true };
   }
 
   buildMessages(messages: ChatMessage[], _options: ChatOptions, _config: Config): ProviderMessages {

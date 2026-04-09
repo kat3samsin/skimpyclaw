@@ -90,8 +90,8 @@ describe('CodexAdapter', () => {
     });
   });
 
-  it('disables MCP tool discovery for Codex', () => {
-    expect(adapter.getToolDefinitionOptions()).toEqual({ includeMcp: false });
+  it('enables MCP tool discovery for Codex', () => {
+    expect(adapter.getToolDefinitionOptions()).toEqual({ includeMcp: true });
   });
 
   describe('onEmptyFinalResponse', () => {
