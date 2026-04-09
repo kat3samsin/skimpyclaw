@@ -86,13 +86,14 @@ describe('token efficiency', () => {
     });
 
     describe('Read tool', () => {
-      it('produces scratch path for large read results', () => {
+      it('produces preview + scratch path for large read results', () => {
         const lines = Array.from({ length: 500 }, (_, i) => `line ${i + 1}: content here`);
         const result = lines.join('\n');
         const split = splitToolResult('Read', { file_path: '/src/app.ts' }, result);
 
-        expect(split).toContain('→');
+        expect(split).toContain('Full output:');
         expect(split).toContain('.skimpyclaw/s/');
+        expect(split).toContain('line 1: content here');
         // Much shorter than original
         expect(split.length).toBeLessThan(result.length);
       });
@@ -100,7 +101,7 @@ describe('token efficiency', () => {
       it('handles read_file tool name', () => {
         const result = 'x\n'.repeat(5000);
         const split = splitToolResult('read_file', { path: '/foo.txt' }, result);
-        expect(split).toContain('→');
+        expect(split).toContain('Full output:');
         expect(split).toContain('.skimpyclaw/s/');
       });
     });
@@ -129,26 +130,28 @@ describe('token efficiency', () => {
     });
 
     describe('non-Bash tools', () => {
-      it('produces minimal scratch path for Glob', () => {
+      it('produces preview + scratch path for Glob', () => {
         const entries = Array.from({ length: 300 }, (_, i) => `src/components/deeply/nested/module${i}/file${i}.ts`).join('\n');
         const split = splitToolResult('Glob', { pattern: '**/*.ts' }, entries);
 
-        expect(split).toContain('→');
+        expect(split).toContain('Full output:');
         expect(split).toContain('.skimpyclaw/s/');
+        expect(split).toContain('src/components');
       });
 
-      it('produces minimal scratch path for Fetch', () => {
+      it('produces preview + scratch path for Fetch', () => {
         const result = 'HTTP/1.1 200 OK\n' + 'x'.repeat(10_000);
         const split = splitToolResult('Fetch', { url: 'https://example.com/api' }, result);
 
-        expect(split).toContain('→');
+        expect(split).toContain('Full output:');
         expect(split).toContain('.skimpyclaw/s/');
+        expect(split).toContain('HTTP/1.1 200 OK');
       });
 
-      it('produces minimal scratch path for Browser', () => {
+      it('produces preview + scratch path for Browser', () => {
         const result = 'x\n'.repeat(5000);
         const split = splitToolResult('browser_snapshot', { action: 'snapshot' }, result);
-        expect(split).toContain('→');
+        expect(split).toContain('Full output:');
         expect(split).toContain('.skimpyclaw/s/');
       });
 
@@ -157,15 +160,15 @@ describe('token efficiency', () => {
         const split = splitToolResult('mcp__context_a8c__search', {}, result);
         expect(split).toContain('Full output:');
         expect(split).toContain('.skimpyclaw/s/');
-        // MCP results include a preview of the first 800 chars
         expect(split).toContain('x\n');
       });
 
-      it('produces minimal scratch path for unknown tools', () => {
+      it('produces preview + scratch path for unknown tools', () => {
         const result = 'z'.repeat(10_000);
         const split = splitToolResult('custom_tool', {}, result);
-        expect(split).toContain('→');
+        expect(split).toContain('Full output:');
         expect(split).toContain('.skimpyclaw/s/');
+        expect(split).toContain('zzz');
       });
     });
 
@@ -173,7 +176,7 @@ describe('token efficiency', () => {
       const result = 'data'.repeat(3000);
       const split = splitToolResult('Read', { file_path: '/big.txt' }, result);
       // Extract scratch path from the result
-      const pathMatch = split.match(/→(.+\/.skimpyclaw\/s\/\S+)/);
+      const pathMatch = split.match(/(?:→|"path":")((?:~|\/).*\/.skimpyclaw\/s\/\S+?)(?:"|$)/);
       expect(pathMatch).not.toBeNull();
       if (pathMatch) {
         const p = pathMatch[1].startsWith('~/') ? pathMatch[1].replace('~', homedir()) : pathMatch[1];

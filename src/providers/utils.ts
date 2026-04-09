@@ -295,16 +295,11 @@ export function splitToolResult(
     return `${exitInfo}${errNote}\n→${shortPath}`.trimStart();
   }
 
-  // MCP tools: include a preview so the model knows the call succeeded
-  if (nameLower.startsWith('mcp__')) {
-    // Try to extract a useful preview (first few hundred chars, or JSON summary)
-    const preview = result.slice(0, 800);
-    const truncNote = result.length > 800 ? `\n... (${result.length} chars total)` : '';
-    return `${preview}${truncNote}\nFull output: Read({"path":"${scratchPath}"})`;
-  }
+  // All non-Bash tools: include a preview so the model has usable data
+  const preview = result.slice(0, 800);
+  const truncNote = result.length > 800 ? `\n... (${result.length} chars total)` : '';
+  return `${preview}${truncNote}\nFull output: Read({"path":"${scratchPath}"})`;
 
-  // Everything else: just the scratch path
-  return `→${shortPath}`;
 }
 
 /**
