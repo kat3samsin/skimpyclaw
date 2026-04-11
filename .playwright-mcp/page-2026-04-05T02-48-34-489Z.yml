@@ -1,0 +1,2436 @@
+- generic [active] [ref=e1]:
+  - link "Skip to main content" [ref=e2] [cursor=pointer]:
+    - /url: "#main-content"
+    - generic [ref=e4]: Skip to main content
+  - generic [ref=e6]:
+    - generic:
+      - generic [ref=e7]:
+        - generic: LocalLlama
+      - banner [ref=e10]:
+        - navigation [ref=e11]:
+          - link "Home" [ref=e15] [cursor=pointer]:
+            - /url: /
+            - img [ref=e17]
+          - search [ref=e34]:
+            - generic [ref=e36]:
+              - img [ref=e39]
+              - generic "Remove r/LocalLLaMA filter and expand search to all of Reddit" [ref=e42] [cursor=pointer]:
+                - button [pressed] [ref=e43]:
+                  - generic [ref=e47]: r/LocalLLaMA
+                - img [ref=e49]
+              - textbox "Remove r/LocalLLaMA filter and expand search to all of Reddit" [ref=e52]:
+                - /placeholder: Search in r/LocalLLaMA
+          - generic [ref=e53]:
+            - button "Get App" [ref=e58] [cursor=pointer]:
+              - generic [ref=e59]:
+                - img [ref=e61]
+                - generic [ref=e63]: Get App
+            - link "Log In" [ref=e67] [cursor=pointer]:
+              - /url: https://www.reddit.com/login/
+              - generic [ref=e69]: Log In
+            - button "Expand user menu" [ref=e74] [cursor=pointer]:
+              - img [ref=e77]
+              - generic [ref=e79]:
+                - generic: Expand user menu
+      - generic [ref=e80]:
+        - generic [ref=e81]:
+          - region "Community actions" [ref=e85]:
+            - generic [ref=e86]:
+              - 'heading "r/LocalLLaMA Community status: https://x.com/localllamasub" [level=1] [ref=e92]':
+                - text: r/LocalLLaMA
+                - 'generic "Community status: https://x.com/localllamasub" [ref=e93]':
+                  - button "Llama" [ref=e97] [cursor=pointer]:
+                    - img "Llama" [ref=e98]
+              - generic [ref=e99]:
+                - button "Create Post" [ref=e103] [cursor=pointer]:
+                  - generic [ref=e104]:
+                    - img [ref=e106]
+                    - generic [ref=e108]: Create Post
+                - button "Join" [ref=e113] [cursor=pointer]
+          - generic [ref=e114]:
+            - generic:
+              - generic:
+                - link "Skip to Navigation" [ref=e115] [cursor=pointer]:
+                  - /url: "#left-sidebar-container"
+                - link "Skip to Right Sidebar" [ref=e116] [cursor=pointer]:
+                  - /url: "#right-sidebar-container"
+          - generic [ref=e117]:
+            - main [ref=e118]:
+              - generic [ref=e121]:
+                - generic "Sort by" [ref=e125]:
+                  - 'button "Sort by: Hot" [ref=e127] [cursor=pointer]':
+                    - generic [ref=e129]: Hot
+                - generic "View" [ref=e135]:
+                  - 'button "View: Card" [ref=e137] [cursor=pointer]'
+              - generic [ref=e143]:
+                - button "collapse/expand community highlights" [ref=e144] [cursor=pointer]:
+                  - heading "Community highlights" [level=3] [ref=e145]:
+                    - img [ref=e146]
+                    - generic [ref=e148]: Community highlights
+                  - button "collapse/expand community highlights" [ref=e150]:
+                    - img [ref=e153]
+                - list [ref=e157]:
+                  - listitem [ref=e158]:
+                    - link "Announcing LocalLlama discord server & bot! 147 votes • 93 comments Announcement" [ref=e159] [cursor=pointer]:
+                      - /url: /r/LocalLLaMA/comments/1mpk2va/announcing_localllama_discord_server_bot/
+                      - generic [ref=e165]:
+                        - generic [ref=e166]:
+                          - heading "Announcing LocalLlama discord server & bot!" [level=2] [ref=e169]
+                          - generic [ref=e172]:
+                            - generic [ref=e173]: "147"
+                            - text: votes •
+                            - generic [ref=e174]: "93"
+                            - text: comments
+                        - generic [ref=e178]:
+                          - img [ref=e179]
+                          - generic [ref=e181]: Announcement
+              - generic [ref=e182]:
+                - generic "LocalLlama"
+                - separator [ref=e183]
+                - generic [ref=e184]:
+                  - heading "Feed" [level=1] [ref=e186]
+                  - generic:
+                    - article "Gemma 4 31B beats several frontier models on the FoodTruck Bench" [ref=e187]:
+                      - generic [ref=e188] [cursor=pointer]:
+                        - link "Gemma 4 31B beats several frontier models on the FoodTruck Bench" [ref=e189]:
+                          - /url: /r/LocalLLaMA/comments/1sci5h6/gemma_4_31b_beats_several_frontier_models_on_the/
+                          - generic [ref=e190]:
+                            - generic: Gemma 4 31B beats several frontier models on the FoodTruck Bench
+                        - generic [ref=e191]:
+                          - generic [ref=e192]:
+                            - 'link "Author: u/Nindaleth" [ref=e197]':
+                              - /url: /user/Nindaleth/
+                              - generic [ref=e198]:
+                                - img "u/Nindaleth avatar" [ref=e201]
+                                - generic [ref=e202]: u/Nindaleth
+                            - generic [ref=e203]: •
+                            - time [ref=e205]: 7 hr. ago
+                          - button "Open user actions" [ref=e210]:
+                            - img [ref=e213]
+                        - generic [ref=e216]:
+                          - heading "Gemma 4 31B beats several frontier models on the FoodTruck Bench" [level=2] [ref=e217]:
+                            - link "Gemma 4 31B beats several frontier models on the FoodTruck Bench" [ref=e218]:
+                              - /url: /r/LocalLLaMA/comments/1sci5h6/gemma_4_31b_beats_several_frontier_models_on_the/
+                          - 'link "Flair: Discussion" [ref=e221]':
+                            - /url: /r/LocalLLaMA/?f=flair_name%3A%22Discussion%22
+                            - 'generic "Flair: Discussion" [ref=e223]': Discussion
+                        - img "r/LocalLLaMA - Gemma 4 31B beats several frontier models on the FoodTruck Bench" [ref=e229]
+                        - generic "Actions available for this post" [ref=e230]:
+                          - generic [ref=e233]:
+                            - button "Upvote" [ref=e234]:
+                              - img [ref=e236]
+                              - generic [ref=e238]:
+                                - generic: Upvote
+                            - generic [ref=e240]: "326"
+                            - button "Downvote" [ref=e241]:
+                              - img [ref=e243]
+                              - generic [ref=e245]:
+                                - generic: Downvote
+                          - link "73 Go to comments" [ref=e246]:
+                            - /url: /r/LocalLLaMA/comments/1sci5h6/gemma_4_31b_beats_several_frontier_models_on_the/
+                            - generic [ref=e247]:
+                              - img [ref=e249]
+                              - generic [ref=e252]: "73"
+                            - generic [ref=e253]:
+                              - generic: Go to comments
+                          - button "Give award" [ref=e255]:
+                            - img [ref=e258]
+                          - button "Share" [ref=e263]:
+                            - generic [ref=e264]:
+                              - img [ref=e266]
+                              - generic [ref=e268]: Share
+                    - separator [ref=e269]
+                    - generic [ref=e270]:
+                      - 'generic "Advertisement: What''s the most powerfully useful underground website that most people don''t know about?" [ref=e271]':
+                        - 'link "Advertisement: What''s the most powerfully useful underground website that most people don''t know about?" [ref=e272] [cursor=pointer]':
+                          - /url: /user/powerfulsites/comments/1lxcms0/whats_the_most_powerfully_useful_underground/?p=1&impressionid=5520069628782459905
+                      - generic [ref=e273]:
+                        - generic [ref=e274]:
+                          - link "u/powerfulsites avatar u/powerfulsites" [ref=e277] [cursor=pointer]:
+                            - /url: /user/powerfulsites/
+                            - img "u/powerfulsites avatar" [ref=e282]
+                            - generic [ref=e283]: u/powerfulsites
+                          - generic [ref=e284]: •
+                          - link "Promoted" [ref=e286] [cursor=pointer]:
+                            - /url: /user/powerfulsites/
+                            - generic [ref=e287]: Promoted
+                          - link [ref=e289] [cursor=pointer]:
+                            - /url: /user/powerfulsites/comments/1lxcms0/whats_the_most_powerfully_useful_underground/?p=1&impressionid=5520069628782459905
+                        - button "Open user actions" [ref=e294] [cursor=pointer]:
+                          - img [ref=e297]
+                      - generic [ref=e300]:
+                        - heading "What's the most powerfully useful underground website that most people don't know about?" [level=2] [ref=e301]:
+                          - link "What's the most powerfully useful underground website that most people don't know about?" [ref=e304] [cursor=pointer]:
+                            - /url: /user/powerfulsites/comments/1lxcms0/whats_the_most_powerfully_useful_underground/?p=1&impressionid=5520069628782459905
+                            - generic: What's the most powerfully useful underground website that most people don't know about?
+                        - 'link "My favorites: Gutenberg.org - 70k free ebooks StopOverpaying.org - saved me a stupid amount of money ($1,300 last year). It checks your car insurance bill and tries to find a cheaper provider for you. Remove.bg - a free background remover for images. Khan Academy - free lessons for basically everything (quality is actually amazing). Libbyapp.com - borrow ebooks + audiobooks free with your library card. Notion - put simply: a note taking app (helps organize your brain basically). Pluto.tv - Free movies + TV. Yes, ads. But sometimes gems." [ref=e306] [cursor=pointer]':
+                          - /url: /user/powerfulsites/comments/1lxcms0/whats_the_most_powerfully_useful_underground/?p=1&impressionid=5520069628782459905
+                          - generic [ref=e307]:
+                            - paragraph [ref=e308]: "My favorites:"
+                            - list [ref=e309]:
+                              - listitem [ref=e310]:
+                                - paragraph [ref=e311]: Gutenberg.org - 70k free ebooks
+                              - listitem [ref=e312]:
+                                - paragraph [ref=e313]: StopOverpaying.org - saved me a stupid amount of money ($1,300 last year). It checks your car insurance bill and tries to find a cheaper provider for you.
+                              - listitem [ref=e314]:
+                                - paragraph [ref=e315]: Remove.bg - a free background remover for images.
+                              - listitem [ref=e316]:
+                                - paragraph [ref=e317]: Khan Academy - free lessons for basically everything (quality is actually amazing).
+                              - listitem [ref=e318]:
+                                - paragraph [ref=e319]: Libbyapp.com - borrow ebooks + audiobooks free with your library card.
+                              - listitem [ref=e320]:
+                                - paragraph [ref=e321]: "Notion - put simply: a note taking app (helps organize your brain basically)."
+                              - listitem [ref=e322]:
+                                - paragraph [ref=e323]: Pluto.tv - Free movies + TV. Yes, ads. But sometimes gems.
+                      - generic "Actions available for this post" [ref=e324]:
+                        - generic [ref=e327]:
+                          - button "Upvote" [ref=e328] [cursor=pointer]:
+                            - img [ref=e330]
+                            - generic [ref=e332]:
+                              - generic: Upvote
+                          - generic [ref=e334]: 15K
+                          - button "Downvote" [ref=e335] [cursor=pointer]:
+                            - img [ref=e337]
+                            - generic [ref=e339]:
+                              - generic: Downvote
+                        - link "3.2K Go to comments" [ref=e340] [cursor=pointer]:
+                          - /url: /user/powerfulsites/comments/1lxcms0/whats_the_most_powerfully_useful_underground/?p=1&impressionid=5520069628782459905
+                          - generic [ref=e341]:
+                            - img [ref=e343]
+                            - generic [ref=e346]: 3.2K
+                          - generic [ref=e347]:
+                            - generic: Go to comments
+                        - button "Share" [ref=e351] [cursor=pointer]:
+                          - generic [ref=e352]:
+                            - img [ref=e354]
+                            - generic [ref=e356]: Share
+                        - link [ref=e358] [cursor=pointer]:
+                          - /url: /user/powerfulsites/comments/1lxcms0/whats_the_most_powerfully_useful_underground/?p=1&impressionid=5520069628782459905
+                    - separator [ref=e359]
+                    - 'article "Don’t buy the DGX Spark: NVFP4 Still Missing After 6 Months" [ref=e360]':
+                      - generic [ref=e361] [cursor=pointer]:
+                        - 'link "Don’t buy the DGX Spark: NVFP4 Still Missing After 6 Months" [ref=e362]':
+                          - /url: /r/LocalLLaMA/comments/1scf1x8/dont_buy_the_dgx_spark_nvfp4_still_missing_after/
+                          - generic [ref=e363]:
+                            - generic: "Don’t buy the DGX Spark: NVFP4 Still Missing After 6 Months"
+                        - generic [ref=e364]:
+                          - generic [ref=e365]:
+                            - 'link "Author: u/Secure_Archer_1529" [ref=e370]':
+                              - /url: /user/Secure_Archer_1529/
+                              - generic [ref=e371]:
+                                - img "u/Secure_Archer_1529 avatar" [ref=e374]
+                                - generic [ref=e375]: u/Secure_Archer_1529
+                            - generic [ref=e376]: •
+                            - time [ref=e378]: 9 hr. ago
+                          - button "Open user actions" [ref=e383]:
+                            - img [ref=e386]
+                        - generic [ref=e389]:
+                          - 'heading "Don’t buy the DGX Spark: NVFP4 Still Missing After 6 Months" [level=2] [ref=e390]':
+                            - 'link "Don’t buy the DGX Spark: NVFP4 Still Missing After 6 Months" [ref=e391]':
+                              - /url: /r/LocalLLaMA/comments/1scf1x8/dont_buy_the_dgx_spark_nvfp4_still_missing_after/
+                          - generic [ref=e392]:
+                            - generic:
+                              - link:
+                                - /url: /r/LocalLLaMA/comments/1scf1x8/dont_buy_the_dgx_spark_nvfp4_still_missing_after/
+                                - generic:
+                                  - generic:
+                                    - paragraph: This post was written in my own words, but with AI assistance.
+                                    - paragraph: I own two DGX Sparks myself, and the lack of NVFP4 has been a real pain in the ass.
+                                    - paragraph: The reason the product made sense in the first place was the Blackwell + NVFP4 combo on a local AI machine with a proper NVIDIA software stack around it. Without that, Spark becomes much harder to justify, especially given the bandwidth limitations and the compromises that comes with it.
+                                    - paragraph: The DGX Spark was presented like a finished, premium system where NVFP4 was supposed to work out of the box. It was not marketed like an experimental dev kit where buyers should expect to spend months switching backends, testing builds, setting flags, and relying on community or hardcore fan fixes just to make a core feature work properly.
+                                    - paragraph: More than six months in, NVFP4 is still not properly delivered on the Spark. Yes, you can get things somewhat running. But there is a big difference between a feature technically existing and a feature being delivered as a mature, stable, and supported experience.
+                                    - paragraph: Right now, NVFP4 on Spark is much closer to the first than the second.
+                                    - paragraph: The hardware itself is not the main issue. Spark has potential, and in some scenarios it can perform well. But the overall experience does not match what was implied. At this point, it no longer feels like normal early friction. It feels like NVIDIA pushed the story before the software was actually ready.
+                                    - paragraph: "So the takeaway is simple:"
+                                    - paragraph: Do not buy DGX Spark assuming NVFP4 is already delivered as a polished, mature, supported feature.
+                                    - paragraph: NVIDIA overpromised and underdelivered on DGX Spark.
+                                    - paragraph: Rant over and out.
+                          - 'link "Flair: Discussion" [ref=e395]':
+                            - /url: /r/LocalLLaMA/?f=flair_name%3A%22Discussion%22
+                            - 'generic "Flair: Discussion" [ref=e397]': Discussion
+                        - generic "Actions available for this post" [ref=e398]:
+                          - generic [ref=e401]:
+                            - button "Upvote" [ref=e402]:
+                              - img [ref=e404]
+                              - generic [ref=e406]:
+                                - generic: Upvote
+                            - generic [ref=e408]: "199"
+                            - button "Downvote" [ref=e409]:
+                              - img [ref=e411]
+                              - generic [ref=e413]:
+                                - generic: Downvote
+                          - link "131 Go to comments" [ref=e414]:
+                            - /url: /r/LocalLLaMA/comments/1scf1x8/dont_buy_the_dgx_spark_nvfp4_still_missing_after/
+                            - generic [ref=e415]:
+                              - img [ref=e417]
+                              - generic [ref=e420]: "131"
+                            - generic [ref=e421]:
+                              - generic: Go to comments
+                          - button "Give award" [ref=e423]:
+                            - img [ref=e426]
+                          - button "Share" [ref=e431]:
+                            - generic [ref=e432]:
+                              - img [ref=e434]
+                              - generic [ref=e436]: Share
+                    - separator [ref=e437]
+                    - 'article "Apple: Embarrassingly Simple Self-Distillation Improves Code Generation" [ref=e438]':
+                      - generic [ref=e439] [cursor=pointer]:
+                        - 'link "Apple: Embarrassingly Simple Self-Distillation Improves Code Generation" [ref=e440]':
+                          - /url: /r/LocalLLaMA/comments/1sc7uwa/apple_embarrassingly_simple_selfdistillation/
+                          - generic [ref=e441]:
+                            - generic: "Apple: Embarrassingly Simple Self-Distillation Improves Code Generation"
+                        - generic [ref=e442]:
+                          - generic [ref=e444]:
+                            - generic [ref=e445]:
+                              - 'link "Author: u/Mike_mi" [ref=e450]':
+                                - /url: /user/Mike_mi/
+                                - generic [ref=e451]:
+                                  - img [ref=e456]
+                                  - generic [ref=e458]: u/Mike_mi
+                              - generic [ref=e459]: •
+                              - time [ref=e461]: 14 hr. ago
+                            - button "Open user actions" [ref=e466]:
+                              - img [ref=e469]
+                          - generic [ref=e471]:
+                            - 'link "Apple: Embarrassingly Simple Self-Distillation Improves Code Generation" [ref=e473]':
+                              - /url: /r/LocalLLaMA/comments/1sc7uwa/apple_embarrassingly_simple_selfdistillation/
+                            - 'link "Flair: Resources" [ref=e476]':
+                              - /url: /r/LocalLLaMA/?f=flair_name%3A%22Resources%22
+                              - 'generic "Flair: Resources" [ref=e478]': Resources
+                            - link "https://arxiv.org/abs/2604.01193" [ref=e481]:
+                              - /url: https://arxiv.org/abs/2604.01193
+                        - generic "Actions available for this post" [ref=e483]:
+                          - generic [ref=e486]:
+                            - button "Upvote" [ref=e487]:
+                              - img [ref=e489]
+                              - generic [ref=e491]:
+                                - generic: Upvote
+                            - generic [ref=e493]: "462"
+                            - button "Downvote" [ref=e494]:
+                              - img [ref=e496]
+                              - generic [ref=e498]:
+                                - generic: Downvote
+                          - link "53 Go to comments" [ref=e499]:
+                            - /url: /r/LocalLLaMA/comments/1sc7uwa/apple_embarrassingly_simple_selfdistillation/
+                            - generic [ref=e500]:
+                              - img [ref=e502]
+                              - generic [ref=e505]: "53"
+                            - generic [ref=e506]:
+                              - generic: Go to comments
+                          - button "Give award" [ref=e508]:
+                            - img [ref=e511]
+                          - button "Share" [ref=e516]:
+                            - generic [ref=e517]:
+                              - img [ref=e519]
+                              - generic [ref=e521]: Share
+                    - separator [ref=e522]
+                    - generic [ref=e523]:
+                      - generic:
+                        - article "One year ago DeepSeek R1 was 25 times bigger than Gemma 4" [ref=e524]:
+                          - generic [ref=e525] [cursor=pointer]:
+                            - link "One year ago DeepSeek R1 was 25 times bigger than Gemma 4" [ref=e526]:
+                              - /url: /r/LocalLLaMA/comments/1scovb5/one_year_ago_deepseek_r1_was_25_times_bigger_than/
+                              - generic [ref=e527]:
+                                - generic: One year ago DeepSeek R1 was 25 times bigger than Gemma 4
+                            - generic [ref=e528]:
+                              - generic [ref=e529]:
+                                - 'link "Author: u/rinaldo23" [ref=e534]':
+                                  - /url: /user/rinaldo23/
+                                  - generic [ref=e535]:
+                                    - img "u/rinaldo23 avatar" [ref=e538]
+                                    - generic [ref=e539]: u/rinaldo23
+                                - generic [ref=e540]: •
+                                - time [ref=e542]: 3 hr. ago
+                              - button "Open user actions" [ref=e547]:
+                                - img [ref=e550]
+                            - generic [ref=e553]:
+                              - heading "One year ago DeepSeek R1 was 25 times bigger than Gemma 4" [level=2] [ref=e554]:
+                                - link "One year ago DeepSeek R1 was 25 times bigger than Gemma 4" [ref=e555]:
+                                  - /url: /r/LocalLLaMA/comments/1scovb5/one_year_ago_deepseek_r1_was_25_times_bigger_than/
+                              - generic [ref=e556]:
+                                - generic:
+                                  - link "I'm mind blown by the fact that about a year ago DeepSeek R1 came out with a MoE architecture at 671B parameters and today Gemma 4 MoE is only 26B and is genuinely impressive. It's 25 times smaller, but is it 25 times worse? I'm exited about the future of local LLMs.":
+                                    - /url: /r/LocalLLaMA/comments/1scovb5/one_year_ago_deepseek_r1_was_25_times_bigger_than/
+                                    - generic:
+                                      - generic:
+                                        - paragraph: I'm mind blown by the fact that about a year ago DeepSeek R1 came out with a MoE architecture at 671B parameters and today Gemma 4 MoE is only 26B and is genuinely impressive. It's 25 times smaller, but is it 25 times worse?
+                                        - paragraph: I'm exited about the future of local LLMs.
+                              - 'link "Flair: Discussion" [ref=e559]':
+                                - /url: /r/LocalLLaMA/?f=flair_name%3A%22Discussion%22
+                                - 'generic "Flair: Discussion" [ref=e561]': Discussion
+                            - generic "Actions available for this post" [ref=e562]:
+                              - generic [ref=e565]:
+                                - button "Upvote" [ref=e566]:
+                                  - img [ref=e568]
+                                  - generic [ref=e570]:
+                                    - generic: Upvote
+                                - generic [ref=e572]: "51"
+                                - button "Downvote" [ref=e573]:
+                                  - img [ref=e575]
+                                  - generic [ref=e577]:
+                                    - generic: Downvote
+                              - link "12 Go to comments" [ref=e578]:
+                                - /url: /r/LocalLLaMA/comments/1scovb5/one_year_ago_deepseek_r1_was_25_times_bigger_than/
+                                - generic [ref=e579]:
+                                  - img [ref=e581]
+                                  - generic [ref=e584]: "12"
+                                - generic [ref=e585]:
+                                  - generic: Go to comments
+                              - button "Give award" [ref=e587]:
+                                - img [ref=e590]
+                              - button "Share" [ref=e595]:
+                                - generic [ref=e596]:
+                                  - img [ref=e598]
+                                  - generic [ref=e600]: Share
+                        - separator [ref=e601]
+                        - separator [ref=e602]
+                        - article "We absolutely need Qwen3.6-397B-A17B to be open source" [ref=e603]:
+                          - generic [ref=e604] [cursor=pointer]:
+                            - link "We absolutely need Qwen3.6-397B-A17B to be open source" [ref=e605]:
+                              - /url: /r/LocalLLaMA/comments/1sccpbj/we_absolutely_need_qwen36397ba17b_to_be_open/
+                              - generic [ref=e606]:
+                                - generic: We absolutely need Qwen3.6-397B-A17B to be open source
+                            - generic [ref=e607]:
+                              - generic [ref=e608]:
+                                - 'link "Author: u/True_Requirement_891" [ref=e613]':
+                                  - /url: /user/True_Requirement_891/
+                                  - generic [ref=e614]:
+                                    - img [ref=e619]
+                                    - generic [ref=e621]: u/True_Requirement_891
+                                - generic [ref=e622]: •
+                                - time [ref=e624]: 11 hr. ago
+                              - button "Open user actions" [ref=e629]:
+                                - img [ref=e632]
+                            - generic [ref=e635]:
+                              - heading "We absolutely need Qwen3.6-397B-A17B to be open source" [level=2] [ref=e636]:
+                                - link "We absolutely need Qwen3.6-397B-A17B to be open source" [ref=e637]:
+                                  - /url: /r/LocalLLaMA/comments/1sccpbj/we_absolutely_need_qwen36397ba17b_to_be_open/
+                              - generic [ref=e638]:
+                                - generic:
+                                  - link:
+                                    - /url: /r/LocalLLaMA/comments/1sccpbj/we_absolutely_need_qwen36397ba17b_to_be_open/
+                                    - generic:
+                                      - generic:
+                                        - paragraph: The benchmarks may not show it but it's a substantial improvement over 3.5 for real world tasks. This model is performing better than GLM-5.1 and Kimi-k2.5 for me, and the biggest area of improvement has been reliability.
+                                        - paragraph: It feels as reliable as claude in getting shit done end to end and not mess up half way and waste hours. This is the first OS model that has actually felt like I can compare it to Claude Sonnet.
+                                        - paragraph: We have been comparing OS models with claude sonnet and opus left and right months now, they do show that they are close in benchmarks but fall apart in the real world, the models that are claimed to be close to opus haven't even been able to achieve Sonnet level quality in my real world usage.
+                                        - paragraph:
+                                          - text: This is the first model I can confidently say very closely matches Sonnet.
+                                          - text: And before some of you come at me that nobody will be able to run it locally yes, most of us might not be able to run it on our laptops, but
+                                        - paragraph: "- there are us who rent gpus in the cloud to do things we would never be able to with the closed models"
+                                        - paragraph: "- you get 50 other inference providers hosting the model for dirt cheap prices"
+                                        - paragraph: "- Removing censorship and freedom to use this mode and modify it however you want"
+                                        - paragraph: "- and many other things"
+                                        - paragraph: Big open source models that are actually decent are necessary.
+                              - 'link "Flair: Discussion" [ref=e641]':
+                                - /url: /r/LocalLLaMA/?f=flair_name%3A%22Discussion%22
+                                - 'generic "Flair: Discussion" [ref=e643]': Discussion
+                            - generic "Actions available for this post" [ref=e644]:
+                              - generic [ref=e647]:
+                                - button "Upvote" [ref=e648]:
+                                  - img [ref=e650]
+                                  - generic [ref=e652]:
+                                    - generic: Upvote
+                                - generic [ref=e654]: "182"
+                                - button "Downvote" [ref=e655]:
+                                  - img [ref=e657]
+                                  - generic [ref=e659]:
+                                    - generic: Downvote
+                              - link "38 Go to comments" [ref=e660]:
+                                - /url: /r/LocalLLaMA/comments/1sccpbj/we_absolutely_need_qwen36397ba17b_to_be_open/
+                                - generic [ref=e661]:
+                                  - img [ref=e663]
+                                  - generic [ref=e666]: "38"
+                                - generic [ref=e667]:
+                                  - generic: Go to comments
+                              - button "Give award" [ref=e669]:
+                                - img [ref=e672]
+                              - button "Share" [ref=e677]:
+                                - generic [ref=e678]:
+                                  - img [ref=e680]
+                                  - generic [ref=e682]: Share
+                        - separator [ref=e683]
+                        - article "Are ocr engines like tesseract still valid or do people just use image recognition models now." [ref=e684]:
+                          - generic [ref=e685] [cursor=pointer]:
+                            - link "Are ocr engines like tesseract still valid or do people just use image recognition models now." [ref=e686]:
+                              - /url: /r/LocalLLaMA/comments/1scpwa5/are_ocr_engines_like_tesseract_still_valid_or_do/
+                              - generic [ref=e687]:
+                                - generic: Are ocr engines like tesseract still valid or do people just use image recognition models now.
+                            - generic [ref=e688]:
+                              - generic [ref=e689]:
+                                - 'link "Author: u/optipuss" [ref=e694]':
+                                  - /url: /user/optipuss/
+                                  - generic [ref=e695]:
+                                    - img [ref=e700]
+                                    - generic [ref=e702]: u/optipuss
+                                - generic [ref=e703]: •
+                                - time [ref=e705]: 2 hr. ago
+                              - button "Open user actions" [ref=e710]:
+                                - img [ref=e713]
+                            - generic [ref=e716]:
+                              - heading "Are ocr engines like tesseract still valid or do people just use image recognition models now." [level=2] [ref=e717]:
+                                - link "Are ocr engines like tesseract still valid or do people just use image recognition models now." [ref=e718]:
+                                  - /url: /r/LocalLLaMA/comments/1scpwa5/are_ocr_engines_like_tesseract_still_valid_or_do/
+                              - generic [ref=e719]:
+                                - generic:
+                                  - link "had this thought when someone just used qwen3.5 to read the content of a pdf file very accurately even the signature. so this question arose in my mind.":
+                                    - /url: /r/LocalLLaMA/comments/1scpwa5/are_ocr_engines_like_tesseract_still_valid_or_do/
+                                    - generic:
+                                      - generic:
+                                        - paragraph: had this thought when someone just used qwen3.5 to read the content of a pdf file very accurately even the signature. so this question arose in my mind.
+                              - 'link "Flair: Discussion" [ref=e722]':
+                                - /url: /r/LocalLLaMA/?f=flair_name%3A%22Discussion%22
+                                - 'generic "Flair: Discussion" [ref=e724]': Discussion
+                            - generic "Actions available for this post" [ref=e725]:
+                              - generic [ref=e728]:
+                                - button "Upvote" [ref=e729]:
+                                  - img [ref=e731]
+                                  - generic [ref=e733]:
+                                    - generic: Upvote
+                                - generic [ref=e735]: "27"
+                                - button "Downvote" [ref=e736]:
+                                  - img [ref=e738]
+                                  - generic [ref=e740]:
+                                    - generic: Downvote
+                              - link "25 Go to comments" [ref=e741]:
+                                - /url: /r/LocalLLaMA/comments/1scpwa5/are_ocr_engines_like_tesseract_still_valid_or_do/
+                                - generic [ref=e742]:
+                                  - img [ref=e744]
+                                  - generic [ref=e747]: "25"
+                                - generic [ref=e748]:
+                                  - generic: Go to comments
+                              - button "Give award" [ref=e750]:
+                                - img [ref=e753]
+                              - button "Share" [ref=e758]:
+                                - generic [ref=e759]:
+                                  - img [ref=e761]
+                                  - generic [ref=e763]: Share
+                        - separator [ref=e764]
+                        - article "Gemma 4 vs Qwen3.5 on SVG style" [ref=e765]:
+                          - generic [ref=e766] [cursor=pointer]:
+                            - link "Gemma 4 vs Qwen3.5 on SVG style" [ref=e767]:
+                              - /url: /r/LocalLLaMA/comments/1scr78z/gemma_4_vs_qwen35_on_svg_style/
+                              - generic [ref=e768]:
+                                - generic: Gemma 4 vs Qwen3.5 on SVG style
+                            - generic [ref=e769]:
+                              - generic [ref=e770]:
+                                - 'link "Author: u/iChrist" [ref=e775]':
+                                  - /url: /user/iChrist/
+                                  - generic [ref=e776]:
+                                    - img "u/iChrist avatar" [ref=e779]
+                                    - generic [ref=e780]: u/iChrist
+                                - generic [ref=e781]: •
+                                - time [ref=e783]: 52 min. ago
+                              - button "Open user actions" [ref=e788]:
+                                - img [ref=e791]
+                            - generic [ref=e794]:
+                              - heading "Gemma 4 vs Qwen3.5 on SVG style" [level=2] [ref=e795]:
+                                - link "Gemma 4 vs Qwen3.5 on SVG style" [ref=e796]:
+                                  - /url: /r/LocalLLaMA/comments/1scr78z/gemma_4_vs_qwen35_on_svg_style/
+                              - 'link "Flair: Discussion" [ref=e799]':
+                                - /url: /r/LocalLLaMA/?f=flair_name%3A%22Discussion%22
+                                - 'generic "Flair: Discussion" [ref=e801]': Discussion
+                            - generic [ref=e806]:
+                              - generic [ref=e807]:
+                                - generic [ref=e808]:
+                                  - list [ref=e810]:
+                                    - listitem [ref=e811]:
+                                      - figure [ref=e812]:
+                                        - img "r/LocalLLaMA - Gemma 4 vs Qwen3.5 on SVG style" [ref=e813]
+                                  - group [ref=e818]:
+                                    - button "Page 1 (Current page)" [ref=e820]:
+                                      - generic [ref=e821]:
+                                        - generic: Page 1 (Current page)
+                                    - button "Page 2" [ref=e822]:
+                                      - generic [ref=e823]:
+                                        - generic: Page 2
+                                    - button [ref=e824]
+                                    - button [ref=e826]
+                                    - button [ref=e828]
+                                    - button [ref=e830]
+                                - generic [ref=e833]:
+                                  - button "Previous page" [disabled]:
+                                    - generic:
+                                      - generic:
+                                        - img
+                                - button "Next page" [ref=e836]:
+                                  - img [ref=e839]
+                              - generic [ref=e841]:
+                                - generic: Item 1 of 6
+                            - generic "Actions available for this post" [ref=e842]:
+                              - generic [ref=e845]:
+                                - button "Upvote" [ref=e846]:
+                                  - img [ref=e848]
+                                  - generic [ref=e850]:
+                                    - generic: Upvote
+                                - generic [ref=e852]: "21"
+                                - button "Downvote" [ref=e853]:
+                                  - img [ref=e855]
+                                  - generic [ref=e857]:
+                                    - generic: Downvote
+                              - link "13 Go to comments" [ref=e858]:
+                                - /url: /r/LocalLLaMA/comments/1scr78z/gemma_4_vs_qwen35_on_svg_style/
+                                - generic [ref=e859]:
+                                  - img [ref=e861]
+                                  - generic [ref=e864]: "13"
+                                - generic [ref=e865]:
+                                  - generic: Go to comments
+                              - button "Give award" [ref=e867]:
+                                - img [ref=e870]
+                              - button "Share" [ref=e875]:
+                                - generic [ref=e876]:
+                                  - img [ref=e878]
+                                  - generic [ref=e880]: Share
+                        - separator [ref=e881]
+                        - article "Unnoticed Gemma-4 Feature - it admits that it does not now..." [ref=e882]:
+                          - generic [ref=e883] [cursor=pointer]:
+                            - link "Unnoticed Gemma-4 Feature - it admits that it does not now..." [ref=e884]:
+                              - /url: /r/LocalLLaMA/comments/1sck9g8/unnoticed_gemma4_feature_it_admits_that_it_does/
+                              - generic [ref=e885]:
+                                - generic: Unnoticed Gemma-4 Feature - it admits that it does not now...
+                            - generic [ref=e886]:
+                              - generic [ref=e887]:
+                                - 'link "Author: u/mtomas7" [ref=e892]':
+                                  - /url: /user/mtomas7/
+                                  - generic [ref=e893]:
+                                    - img [ref=e898]
+                                    - generic [ref=e900]: u/mtomas7
+                                - generic [ref=e901]: •
+                                - time [ref=e903]: 6 hr. ago
+                              - button "Open user actions" [ref=e908]:
+                                - img [ref=e911]
+                            - generic [ref=e914]:
+                              - heading "Unnoticed Gemma-4 Feature - it admits that it does not now..." [level=2] [ref=e915]:
+                                - link "Unnoticed Gemma-4 Feature - it admits that it does not now..." [ref=e916]:
+                                  - /url: /r/LocalLLaMA/comments/1sck9g8/unnoticed_gemma4_feature_it_admits_that_it_does/
+                              - generic [ref=e917]:
+                                - generic:
+                                  - 'link "Edit: \"it admits that it does not know\" (sorry for the TYPO!) Although Qwen3.5 is a great series of models, it is prone to make very broad assumptions/hallucinate stuff and it does it with a great confidence, so you may believe what it says. In contrast, Gemma-4 (specifically I tested E4b Q8 version) admits that it does not know right at the start of conversation: Therefore, I cannot confirm familiarity with a single, specific research study by that name. However, I am generally familiar with the factors that researchers and military trainers study regarding attrition in elite training programs... That is very important feature and it may hint to changing model training routine, where admitting to not know stuff is penalized less than trying to guess and then fail."':
+                                    - /url: /r/LocalLLaMA/comments/1sck9g8/unnoticed_gemma4_feature_it_admits_that_it_does/
+                                    - generic:
+                                      - generic:
+                                        - paragraph: "Edit: \"it admits that it does not know\" (sorry for the TYPO!) Although Qwen3.5 is a great series of models, it is prone to make very broad assumptions/hallucinate stuff and it does it with a great confidence, so you may believe what it says."
+                                        - paragraph: "In contrast, Gemma-4 (specifically I tested E4b Q8 version) admits that it does not know right at the start of conversation:"
+                                        - text: Therefore, I cannot confirm familiarity with a single, specific research study by that name. However, I am generally familiar with the factors that researchers and military trainers study regarding attrition in elite training programs...
+                                        - paragraph: That is very important feature and it may hint to changing model training routine, where admitting to not know stuff is penalized less than trying to guess and then fail.
+                              - 'link "Flair: Discussion" [ref=e920]':
+                                - /url: /r/LocalLLaMA/?f=flair_name%3A%22Discussion%22
+                                - 'generic "Flair: Discussion" [ref=e922]': Discussion
+                            - generic "Actions available for this post" [ref=e923]:
+                              - generic [ref=e926]:
+                                - button "Upvote" [ref=e927]:
+                                  - img [ref=e929]
+                                  - generic [ref=e931]:
+                                    - generic: Upvote
+                                - generic [ref=e933]: "49"
+                                - button "Downvote" [ref=e934]:
+                                  - img [ref=e936]
+                                  - generic [ref=e938]:
+                                    - generic: Downvote
+                              - link "22 Go to comments" [ref=e939]:
+                                - /url: /r/LocalLLaMA/comments/1sck9g8/unnoticed_gemma4_feature_it_admits_that_it_does/
+                                - generic [ref=e940]:
+                                  - img [ref=e942]
+                                  - generic [ref=e945]: "22"
+                                - generic [ref=e946]:
+                                  - generic: Go to comments
+                              - button "Give award" [ref=e948]:
+                                - img [ref=e951]
+                              - button "Share" [ref=e956]:
+                                - generic [ref=e957]:
+                                  - img [ref=e959]
+                                  - generic [ref=e961]: Share
+                        - separator [ref=e962]
+                        - article "Gemma4 26B A4B runs easily on 16GB Macs" [ref=e963]:
+                          - generic [ref=e964] [cursor=pointer]:
+                            - link "Gemma4 26B A4B runs easily on 16GB Macs" [ref=e965]:
+                              - /url: /r/LocalLLaMA/comments/1scjoox/gemma4_26b_a4b_runs_easily_on_16gb_macs/
+                              - generic [ref=e966]:
+                                - generic: Gemma4 26B A4B runs easily on 16GB Macs
+                            - generic [ref=e967]:
+                              - generic [ref=e968]:
+                                - 'link "Author: u/FenderMoon" [ref=e973]':
+                                  - /url: /user/FenderMoon/
+                                  - generic [ref=e974]:
+                                    - img [ref=e979]
+                                    - generic [ref=e981]: u/FenderMoon
+                                - generic [ref=e982]: •
+                                - time [ref=e984]: 6 hr. ago
+                              - button "Open user actions" [ref=e989]:
+                                - img [ref=e992]
+                            - generic [ref=e995]:
+                              - heading "Gemma4 26B A4B runs easily on 16GB Macs" [level=2] [ref=e996]:
+                                - link "Gemma4 26B A4B runs easily on 16GB Macs" [ref=e997]:
+                                  - /url: /r/LocalLLaMA/comments/1scjoox/gemma4_26b_a4b_runs_easily_on_16gb_macs/
+                              - generic [ref=e998]:
+                                - generic:
+                                  - link:
+                                    - /url: /r/LocalLLaMA/comments/1scjoox/gemma4_26b_a4b_runs_easily_on_16gb_macs/
+                                    - generic:
+                                      - generic:
+                                        - paragraph: Typically, models in the 26B-class range are difficult to run on 16GB macs because any GPU acceleration requires the accelerated layers to sit entirely within wired memory. It's possible with aggressive quants (2 bits, or maybe a very lightweight IQ3_XXS), but quality degrades significantly by doing so.
+                                        - paragraph: However, if run entirely on the CPU instead (which is much more feasible with MoE models), it's possible to run really good quants even when the models end up being larger than the entire available system RAM. There is some performance loss from swapping in and out experts, but I find that the performance loss is much less than I would have expected.
+                                        - paragraph: I was able to easily achieve 6-10 tps with a context window of 8-16K on my M2 Macbook Pro (tested using various 4 and 5 bit quants, Unsloth's IQ4_NL works best). Far from fast, but good enough to be perfectly usable for folks used to running on this kind of hardware.
+                                        - paragraph: Just set the number of GPU layers to 0, uncheck "keep model in memory", and set the batch size to 64 or something light. Everything else can be left at the default (KV cache quantization is optional, but Q8_0 might improve performance a little bit).
+                                        - paragraph:
+                                          - strong: "Thinking fix for LMStudio:"
+                                        - paragraph: Also, for fellow LMstudio users, none of the currently published ones have thinking enabled by default, even though the model supports it. To enable it, you have to go into the model settings, and add the following line at the very top of the JINGA prompt template (under the inference tab).
+                                        - paragraph: "{% set enable_thinking=true %}"
+                                        - paragraph: "Also change the reasoning parsing strings:"
+                                        - paragraph: "Start string: <|channel>thought"
+                                        - paragraph: "End string: <channel|>"
+                                        - paragraph:
+                                          - text: (
+                                          - link "Credit for this @Guilty_Rooster_6708":
+                                            - /url: https://www.reddit.com/r/LocalLLaMA/comments/1satwy5/comment/odzd2t1/?utm_source=share&utm_medium=web3x&utm_name=web3xcss&utm_term=1&utm_content=share_button
+                                          - text: ) -
+                                          - emphasis: I didn't come up with this fix, I've linked to the post I got it from.
+                                        - paragraph:
+                                          - strong: "Update/TLDR:"
+                                          - text: For folks on 16GB systems, just use the Unsloth IQ4_NL variant and follow the instructions above to set it up to run on the CPU only. I've tested a bunch of them. IQ4_NL is the best one. It's what you want. It performs really well, better than you'd expect for a 4 bit quant on 16GB.
+                              - 'link "Flair: Discussion" [ref=e1001]':
+                                - /url: /r/LocalLLaMA/?f=flair_name%3A%22Discussion%22
+                                - 'generic "Flair: Discussion" [ref=e1003]': Discussion
+                            - generic "Actions available for this post" [ref=e1004]:
+                              - generic [ref=e1007]:
+                                - button "Upvote" [ref=e1008]:
+                                  - img [ref=e1010]
+                                  - generic [ref=e1012]:
+                                    - generic: Upvote
+                                - generic [ref=e1014]: "48"
+                                - button "Downvote" [ref=e1015]:
+                                  - img [ref=e1017]
+                                  - generic [ref=e1019]:
+                                    - generic: Downvote
+                              - link "32 Go to comments" [ref=e1020]:
+                                - /url: /r/LocalLLaMA/comments/1scjoox/gemma4_26b_a4b_runs_easily_on_16gb_macs/
+                                - generic [ref=e1021]:
+                                  - img [ref=e1023]
+                                  - generic [ref=e1026]: "32"
+                                - generic [ref=e1027]:
+                                  - generic: Go to comments
+                              - button "Give award" [ref=e1029]:
+                                - img [ref=e1032]
+                              - button "Share" [ref=e1037]:
+                                - generic [ref=e1038]:
+                                  - img [ref=e1040]
+                                  - generic [ref=e1042]: Share
+                        - separator [ref=e1043]
+                        - generic [ref=e1044]:
+                          - 'generic "Advertisement: Turn PDFs into usable data (finally). Scans, handwriting, complex tables, and more. Try it on your messiest documents →" [ref=e1045]':
+                            - 'link "Advertisement: Turn PDFs into usable data (finally). Scans, handwriting, complex tables, and more. Try it on your messiest documents →" [ref=e1046] [cursor=pointer]':
+                              - /url: https://alb.reddit.com/cr?za=RKbGmAQSA9CqgbGHCOqhJfNXoNvw-NQn3JeV_MpGlrDEjL_rqKzMu17WZ_aSrmE_hCP6t5XdTh1pBACYtvP3oC5oX2KB9zd4jt7tqk6ov3rL8P67G-I9ouDntjru5igd8EK4xb9U45GKoqRWVXeMJe_FruJkH5ffmvgi7P0XLbgb3Lb0EmxjwITjzk5214AUyf1AtVXS_0OEPP7qtXddPdLKLsOwSQMpPUTKhMLoQFFG0aeULAGmm_wjFnAOdDUCWiOQcc_ONFl_eZa04-TcpXUU0joWxKczqNfxeIArFGERdsOgmuzfTVt-gEG7oDjioRwaZy-YHZgtEbzsNDCFHSYbbs6l0ZDFyOp7EpM4qpGyuuD1cTJX46iFn_N3RTunvPyYc1iFb2qCIlz1PMHYDlaCtsnEahd7QyX8nQvH-rUIcoSrEyg26JK27JHn_dRuyHoma_oySHp_eZUtNhnU1HLhDEQhbo1IxXsUxtDJBLu81_K9AT-63ICNHc8FfLX620V3Q91u4c67DSDge0j8j_Y30n6CF3umF0w9vhDG-pJHflbVWx4bMPlI2k1WKkn0_9afdoPfRlHizCiLeUwJpUYrXAROFK99ryLLQ2AN2FBBeQVv_pTYZ9B2z_CGYBDwbzT9VGQ-0slnxkbv4cMoLAE53a8bAs83ag4ZD7MQrgG9qFOJHV6fmz4CR4l5p9rjLhObkDlkS1e0yWqKKCFa9NQiEQ&zp=mrSedX2UyWa7HJSJ4aCQwsC4VViGtnbk6HxvMrzw_jPcBzOYB5kJQcIx2y_3vRi3NaiCj6jbB2UQGjBSZv9_KZhkmYaM1ukVO-9c7MxMiLHN35tNBK-4XX3Ruy51P1_76jQTW5a3CX-G_xvHZVIa0pDZREBz3DId5IL64tb8qEVYjAoOMesssCc-FAPMDx09ds8Gzh6swE4ztgvEjjQqRbhiwR2bByvHtbdmdNAcRdBguG8d0msj2ps8Pq4Iti8FAMJb98Zh5y4nMeMkn7CJkKEXiyjVE2WtNG409gYJP-7scSZA
+                          - generic [ref=e1047]:
+                            - generic [ref=e1048]:
+                              - link "u/reductoai avatar u/reductoai" [ref=e1051] [cursor=pointer]:
+                                - /url: /user/reductoai/
+                                - generic [ref=e1055]:
+                                  - img "u/reductoai avatar"
+                                - generic [ref=e1056]: u/reductoai
+                              - generic [ref=e1057]: •
+                              - link "Promoted" [ref=e1059] [cursor=pointer]:
+                                - /url: /user/reductoai/
+                                - generic [ref=e1060]: Promoted
+                              - link [ref=e1062] [cursor=pointer]:
+                                - /url: https://alb.reddit.com/cr?za=RKbGmAQSA9CqgbGHCOqhJfNXoNvw-NQn3JeV_MpGlrDEjL_rqKzMu17WZ_aSrmE_hCP6t5XdTh1pBACYtvP3oC5oX2KB9zd4jt7tqk6ov3rL8P67G-I9ouDntjru5igd8EK4xb9U45GKoqRWVXeMJe_FruJkH5ffmvgi7P0XLbgb3Lb0EmxjwITjzk5214AUyf1AtVXS_0OEPP7qtXddPdLKLsOwSQMpPUTKhMLoQFFG0aeULAGmm_wjFnAOdDUCWiOQcc_ONFl_eZa04-TcpXUU0joWxKczqNfxeIArFGERdsOgmuzfTVt-gEG7oDjioRwaZy-YHZgtEbzsNDCFHSYbbs6l0ZDFyOp7EpM4qpGyuuD1cTJX46iFn_N3RTunvPyYc1iFb2qCIlz1PMHYDlaCtsnEahd7QyX8nQvH-rUIcoSrEyg26JK27JHn_dRuyHoma_oySHp_eZUtNhnU1HLhDEQhbo1IxXsUxtDJBLu81_K9AT-63ICNHc8FfLX620V3Q91u4c67DSDge0j8j_Y30n6CF3umF0w9vhDG-pJHflbVWx4bMPlI2k1WKkn0_9afdoPfRlHizCiLeUwJpUYrXAROFK99ryLLQ2AN2FBBeQVv_pTYZ9B2z_CGYBDwbzT9VGQ-0slnxkbv4cMoLAE53a8bAs83ag4ZD7MQrgG9qFOJHV6fmz4CR4l5p9rjLhObkDlkS1e0yWqKKCFa9NQiEQ&zp=mrSedX2UyWa7HJSJ4aCQwsC4VViGtnbk6HxvMrzw_jPcBzOYB5kJQcIx2y_3vRi3NaiCj6jbB2UQGjBSZv9_KZhkmYaM1ukVO-9c7MxMiLHN35tNBK-4XX3Ruy51P1_76jQTW5a3CX-G_xvHZVIa0pDZREBz3DId5IL64tb8qEVYjAoOMesssCc-FAPMDx09ds8Gzh6swE4ztgvEjjQqRbhiwR2bByvHtbdmdNAcRdBguG8d0msj2ps8Pq4Iti8FAMJb98Zh5y4nMeMkn7CJkKEXiyjVE2WtNG409gYJP-7scSZA
+                            - button "Open user actions" [ref=e1067] [cursor=pointer]:
+                              - img [ref=e1070]
+                          - heading "Turn PDFs into usable data (finally). Scans, handwriting, complex tables, and more. Try it on your messiest documents →" [level=2] [ref=e1074]:
+                            - link "Turn PDFs into usable data (finally). Scans, handwriting, complex tables, and more. Try it on your messiest documents →" [ref=e1077] [cursor=pointer]:
+                              - /url: https://alb.reddit.com/cr?za=RKbGmAQSA9CqgbGHCOqhJfNXoNvw-NQn3JeV_MpGlrDEjL_rqKzMu17WZ_aSrmE_hCP6t5XdTh1pBACYtvP3oC5oX2KB9zd4jt7tqk6ov3rL8P67G-I9ouDntjru5igd8EK4xb9U45GKoqRWVXeMJe_FruJkH5ffmvgi7P0XLbgb3Lb0EmxjwITjzk5214AUyf1AtVXS_0OEPP7qtXddPdLKLsOwSQMpPUTKhMLoQFFG0aeULAGmm_wjFnAOdDUCWiOQcc_ONFl_eZa04-TcpXUU0joWxKczqNfxeIArFGERdsOgmuzfTVt-gEG7oDjioRwaZy-YHZgtEbzsNDCFHSYbbs6l0ZDFyOp7EpM4qpGyuuD1cTJX46iFn_N3RTunvPyYc1iFb2qCIlz1PMHYDlaCtsnEahd7QyX8nQvH-rUIcoSrEyg26JK27JHn_dRuyHoma_oySHp_eZUtNhnU1HLhDEQhbo1IxXsUxtDJBLu81_K9AT-63ICNHc8FfLX620V3Q91u4c67DSDge0j8j_Y30n6CF3umF0w9vhDG-pJHflbVWx4bMPlI2k1WKkn0_9afdoPfRlHizCiLeUwJpUYrXAROFK99ryLLQ2AN2FBBeQVv_pTYZ9B2z_CGYBDwbzT9VGQ-0slnxkbv4cMoLAE53a8bAs83ag4ZD7MQrgG9qFOJHV6fmz4CR4l5p9rjLhObkDlkS1e0yWqKKCFa9NQiEQ&zp=mrSedX2UyWa7HJSJ4aCQwsC4VViGtnbk6HxvMrzw_jPcBzOYB5kJQcIx2y_3vRi3NaiCj6jbB2UQGjBSZv9_KZhkmYaM1ukVO-9c7MxMiLHN35tNBK-4XX3Ruy51P1_76jQTW5a3CX-G_xvHZVIa0pDZREBz3DId5IL64tb8qEVYjAoOMesssCc-FAPMDx09ds8Gzh6swE4ztgvEjjQqRbhiwR2bByvHtbdmdNAcRdBguG8d0msj2ps8Pq4Iti8FAMJb98Zh5y4nMeMkn7CJkKEXiyjVE2WtNG409gYJP-7scSZA
+                              - generic: Turn PDFs into usable data (finally). Scans, handwriting, complex tables, and more. Try it on your messiest documents →
+                          - generic [ref=e1078]:
+                            - link "Turn PDFs into usable data (finally). Scans, handwriting, complex tables, and more. Try it on your messiest documents →" [ref=e1082] [cursor=pointer]:
+                              - /url: https://alb.reddit.com/cr?za=RKbGmAQSA9CqgbGHCOqhJfNXoNvw-NQn3JeV_MpGlrDEjL_rqKzMu17WZ_aSrmE_hCP6t5XdTh1pBACYtvP3oC5oX2KB9zd4jt7tqk6ov3rL8P67G-I9ouDntjru5igd8EK4xb9U45GKoqRWVXeMJe_FruJkH5ffmvgi7P0XLbgb3Lb0EmxjwITjzk5214AUyf1AtVXS_0OEPP7qtXddPdLKLsOwSQMpPUTKhMLoQFFG0aeULAGmm_wjFnAOdDUCWiOQcc_ONFl_eZa04-TcpXUU0joWxKczqNfxeIArFGERdsOgmuzfTVt-gEG7oDjioRwaZy-YHZgtEbzsNDCFHSYbbs6l0ZDFyOp7EpM4qpGyuuD1cTJX46iFn_N3RTunvPyYc1iFb2qCIlz1PMHYDlaCtsnEahd7QyX8nQvH-rUIcoSrEyg26JK27JHn_dRuyHoma_oySHp_eZUtNhnU1HLhDEQhbo1IxXsUxtDJBLu81_K9AT-63ICNHc8FfLX620V3Q91u4c67DSDge0j8j_Y30n6CF3umF0w9vhDG-pJHflbVWx4bMPlI2k1WKkn0_9afdoPfRlHizCiLeUwJpUYrXAROFK99ryLLQ2AN2FBBeQVv_pTYZ9B2z_CGYBDwbzT9VGQ-0slnxkbv4cMoLAE53a8bAs83ag4ZD7MQrgG9qFOJHV6fmz4CR4l5p9rjLhObkDlkS1e0yWqKKCFa9NQiEQ&zp=mrSedX2UyWa7HJSJ4aCQwsC4VViGtnbk6HxvMrzw_jPcBzOYB5kJQcIx2y_3vRi3NaiCj6jbB2UQGjBSZv9_KZhkmYaM1ukVO-9c7MxMiLHN35tNBK-4XX3Ruy51P1_76jQTW5a3CX-G_xvHZVIa0pDZREBz3DId5IL64tb8qEVYjAoOMesssCc-FAPMDx09ds8Gzh6swE4ztgvEjjQqRbhiwR2bByvHtbdmdNAcRdBguG8d0msj2ps8Pq4Iti8FAMJb98Zh5y4nMeMkn7CJkKEXiyjVE2WtNG409gYJP-7scSZA
+                              - img "Turn PDFs into usable data (finally). Scans, handwriting, complex tables, and more. Try it on your messiest documents →" [ref=e1084]
+                            - separator [ref=e1085]
+                            - generic [ref=e1086]:
+                              - link [ref=e1088] [cursor=pointer]:
+                                - /url: https://alb.reddit.com/cr?za=RKbGmAQSA9CqgbGHCOqhJfNXoNvw-NQn3JeV_MpGlrDEjL_rqKzMu17WZ_aSrmE_hCP6t5XdTh1pBACYtvP3oC5oX2KB9zd4jt7tqk6ov3rL8P67G-I9ouDntjru5igd8EK4xb9U45GKoqRWVXeMJe_FruJkH5ffmvgi7P0XLbgb3Lb0EmxjwITjzk5214AUyf1AtVXS_0OEPP7qtXddPdLKLsOwSQMpPUTKhMLoQFFG0aeULAGmm_wjFnAOdDUCWiOQcc_ONFl_eZa04-TcpXUU0joWxKczqNfxeIArFGERdsOgmuzfTVt-gEG7oDjioRwaZy-YHZgtEbzsNDCFHSYbbs6l0ZDFyOp7EpM4qpGyuuD1cTJX46iFn_N3RTunvPyYc1iFb2qCIlz1PMHYDlaCtsnEahd7QyX8nQvH-rUIcoSrEyg26JK27JHn_dRuyHoma_oySHp_eZUtNhnU1HLhDEQhbo1IxXsUxtDJBLu81_K9AT-63ICNHc8FfLX620V3Q91u4c67DSDge0j8j_Y30n6CF3umF0w9vhDG-pJHflbVWx4bMPlI2k1WKkn0_9afdoPfRlHizCiLeUwJpUYrXAROFK99ryLLQ2AN2FBBeQVv_pTYZ9B2z_CGYBDwbzT9VGQ-0slnxkbv4cMoLAE53a8bAs83ag4ZD7MQrgG9qFOJHV6fmz4CR4l5p9rjLhObkDlkS1e0yWqKKCFa9NQiEQ&zp=mrSedX2UyWa7HJSJ4aCQwsC4VViGtnbk6HxvMrzw_jPcBzOYB5kJQcIx2y_3vRi3NaiCj6jbB2UQGjBSZv9_KZhkmYaM1ukVO-9c7MxMiLHN35tNBK-4XX3Ruy51P1_76jQTW5a3CX-G_xvHZVIa0pDZREBz3DId5IL64tb8qEVYjAoOMesssCc-FAPMDx09ds8Gzh6swE4ztgvEjjQqRbhiwR2bByvHtbdmdNAcRdBguG8d0msj2ps8Pq4Iti8FAMJb98Zh5y4nMeMkn7CJkKEXiyjVE2WtNG409gYJP-7scSZA
+                              - generic [ref=e1089]:
+                                - link "reducto.ai" [ref=e1092] [cursor=pointer]:
+                                  - /url: https://alb.reddit.com/cr?za=RKbGmAQSA9CqgbGHCOqhJfNXoNvw-NQn3JeV_MpGlrDEjL_rqKzMu17WZ_aSrmE_hCP6t5XdTh1pBACYtvP3oC5oX2KB9zd4jt7tqk6ov3rL8P67G-I9ouDntjru5igd8EK4xb9U45GKoqRWVXeMJe_FruJkH5ffmvgi7P0XLbgb3Lb0EmxjwITjzk5214AUyf1AtVXS_0OEPP7qtXddPdLKLsOwSQMpPUTKhMLoQFFG0aeULAGmm_wjFnAOdDUCWiOQcc_ONFl_eZa04-TcpXUU0joWxKczqNfxeIArFGERdsOgmuzfTVt-gEG7oDjioRwaZy-YHZgtEbzsNDCFHSYbbs6l0ZDFyOp7EpM4qpGyuuD1cTJX46iFn_N3RTunvPyYc1iFb2qCIlz1PMHYDlaCtsnEahd7QyX8nQvH-rUIcoSrEyg26JK27JHn_dRuyHoma_oySHp_eZUtNhnU1HLhDEQhbo1IxXsUxtDJBLu81_K9AT-63ICNHc8FfLX620V3Q91u4c67DSDge0j8j_Y30n6CF3umF0w9vhDG-pJHflbVWx4bMPlI2k1WKkn0_9afdoPfRlHizCiLeUwJpUYrXAROFK99ryLLQ2AN2FBBeQVv_pTYZ9B2z_CGYBDwbzT9VGQ-0slnxkbv4cMoLAE53a8bAs83ag4ZD7MQrgG9qFOJHV6fmz4CR4l5p9rjLhObkDlkS1e0yWqKKCFa9NQiEQ&zp=mrSedX2UyWa7HJSJ4aCQwsC4VViGtnbk6HxvMrzw_jPcBzOYB5kJQcIx2y_3vRi3NaiCj6jbB2UQGjBSZv9_KZhkmYaM1ukVO-9c7MxMiLHN35tNBK-4XX3Ruy51P1_76jQTW5a3CX-G_xvHZVIa0pDZREBz3DId5IL64tb8qEVYjAoOMesssCc-FAPMDx09ds8Gzh6swE4ztgvEjjQqRbhiwR2bByvHtbdmdNAcRdBguG8d0msj2ps8Pq4Iti8FAMJb98Zh5y4nMeMkn7CJkKEXiyjVE2WtNG409gYJP-7scSZA
+                                  - generic: reducto.ai
+                                - link "Learn More" [ref=e1094] [cursor=pointer]:
+                                  - /url: https://alb.reddit.com/cr?za=RKbGmAQSA9CqgbGHCOqhJfNXoNvw-NQn3JeV_MpGlrDEjL_rqKzMu17WZ_aSrmE_hCP6t5XdTh1pBACYtvP3oC5oX2KB9zd4jt7tqk6ov3rL8P67G-I9ouDntjru5igd8EK4xb9U45GKoqRWVXeMJe_FruJkH5ffmvgi7P0XLbgb3Lb0EmxjwITjzk5214AUyf1AtVXS_0OEPP7qtXddPdLKLsOwSQMpPUTKhMLoQFFG0aeULAGmm_wjFnAOdDUCWiOQcc_ONFl_eZa04-TcpXUU0joWxKczqNfxeIArFGERdsOgmuzfTVt-gEG7oDjioRwaZy-YHZgtEbzsNDCFHSYbbs6l0ZDFyOp7EpM4qpGyuuD1cTJX46iFn_N3RTunvPyYc1iFb2qCIlz1PMHYDlaCtsnEahd7QyX8nQvH-rUIcoSrEyg26JK27JHn_dRuyHoma_oySHp_eZUtNhnU1HLhDEQhbo1IxXsUxtDJBLu81_K9AT-63ICNHc8FfLX620V3Q91u4c67DSDge0j8j_Y30n6CF3umF0w9vhDG-pJHflbVWx4bMPlI2k1WKkn0_9afdoPfRlHizCiLeUwJpUYrXAROFK99ryLLQ2AN2FBBeQVv_pTYZ9B2z_CGYBDwbzT9VGQ-0slnxkbv4cMoLAE53a8bAs83ag4ZD7MQrgG9qFOJHV6fmz4CR4l5p9rjLhObkDlkS1e0yWqKKCFa9NQiEQ&zp=mrSedX2UyWa7HJSJ4aCQwsC4VViGtnbk6HxvMrzw_jPcBzOYB5kJQcIx2y_3vRi3NaiCj6jbB2UQGjBSZv9_KZhkmYaM1ukVO-9c7MxMiLHN35tNBK-4XX3Ruy51P1_76jQTW5a3CX-G_xvHZVIa0pDZREBz3DId5IL64tb8qEVYjAoOMesssCc-FAPMDx09ds8Gzh6swE4ztgvEjjQqRbhiwR2bByvHtbdmdNAcRdBguG8d0msj2ps8Pq4Iti8FAMJb98Zh5y4nMeMkn7CJkKEXiyjVE2WtNG409gYJP-7scSZA
+                                  - generic [ref=e1096]:
+                                    - generic: Learn More
+                          - generic "Actions available for this post" [ref=e1097]:
+                            - generic [ref=e1100]:
+                              - button "Upvote" [ref=e1101] [cursor=pointer]:
+                                - img [ref=e1103]
+                                - generic [ref=e1105]:
+                                  - generic: Upvote
+                              - text: Vote
+                              - button "Downvote" [ref=e1106] [cursor=pointer]:
+                                - img [ref=e1108]
+                                - generic [ref=e1110]:
+                                  - generic: Downvote
+                            - link "0 Go to comments" [ref=e1111] [cursor=pointer]:
+                              - /url: /user/reductoai/comments/1r1iyvj/turn_pdfs_into_usable_data_finally_scans/?p=1&impressionid=5333140422745185008
+                              - generic [ref=e1112]:
+                                - img [ref=e1114]
+                                - generic [ref=e1117]: "0"
+                              - generic [ref=e1118]:
+                                - generic: Go to comments
+                            - button "Share" [ref=e1122] [cursor=pointer]:
+                              - generic [ref=e1123]:
+                                - img [ref=e1125]
+                                - generic [ref=e1127]: Share
+                            - link [ref=e1129] [cursor=pointer]:
+                              - /url: https://alb.reddit.com/cr?za=RKbGmAQSA9CqgbGHCOqhJfNXoNvw-NQn3JeV_MpGlrDEjL_rqKzMu17WZ_aSrmE_hCP6t5XdTh1pBACYtvP3oC5oX2KB9zd4jt7tqk6ov3rL8P67G-I9ouDntjru5igd8EK4xb9U45GKoqRWVXeMJe_FruJkH5ffmvgi7P0XLbgb3Lb0EmxjwITjzk5214AUyf1AtVXS_0OEPP7qtXddPdLKLsOwSQMpPUTKhMLoQFFG0aeULAGmm_wjFnAOdDUCWiOQcc_ONFl_eZa04-TcpXUU0joWxKczqNfxeIArFGERdsOgmuzfTVt-gEG7oDjioRwaZy-YHZgtEbzsNDCFHSYbbs6l0ZDFyOp7EpM4qpGyuuD1cTJX46iFn_N3RTunvPyYc1iFb2qCIlz1PMHYDlaCtsnEahd7QyX8nQvH-rUIcoSrEyg26JK27JHn_dRuyHoma_oySHp_eZUtNhnU1HLhDEQhbo1IxXsUxtDJBLu81_K9AT-63ICNHc8FfLX620V3Q91u4c67DSDge0j8j_Y30n6CF3umF0w9vhDG-pJHflbVWx4bMPlI2k1WKkn0_9afdoPfRlHizCiLeUwJpUYrXAROFK99ryLLQ2AN2FBBeQVv_pTYZ9B2z_CGYBDwbzT9VGQ-0slnxkbv4cMoLAE53a8bAs83ag4ZD7MQrgG9qFOJHV6fmz4CR4l5p9rjLhObkDlkS1e0yWqKKCFa9NQiEQ&zp=mrSedX2UyWa7HJSJ4aCQwsC4VViGtnbk6HxvMrzw_jPcBzOYB5kJQcIx2y_3vRi3NaiCj6jbB2UQGjBSZv9_KZhkmYaM1ukVO-9c7MxMiLHN35tNBK-4XX3Ruy51P1_76jQTW5a3CX-G_xvHZVIa0pDZREBz3DId5IL64tb8qEVYjAoOMesssCc-FAPMDx09ds8Gzh6swE4ztgvEjjQqRbhiwR2bByvHtbdmdNAcRdBguG8d0msj2ps8Pq4Iti8FAMJb98Zh5y4nMeMkn7CJkKEXiyjVE2WtNG409gYJP-7scSZA
+                        - separator [ref=e1130]
+                        - article "I made a 35% REAP of 397B with potentially usable quality in 96GB GPU" [ref=e1131]:
+                          - generic [ref=e1132] [cursor=pointer]:
+                            - link "I made a 35% REAP of 397B with potentially usable quality in 96GB GPU" [ref=e1133]:
+                              - /url: /r/LocalLLaMA/comments/1scrksf/i_made_a_35_reap_of_397b_with_potentially_usable/
+                              - generic [ref=e1134]:
+                                - generic: I made a 35% REAP of 397B with potentially usable quality in 96GB GPU
+                            - generic [ref=e1135]:
+                              - generic [ref=e1137]:
+                                - generic [ref=e1138]:
+                                  - 'link "Author: u/Goldkoron" [ref=e1143]':
+                                    - /url: /user/Goldkoron/
+                                    - generic [ref=e1144]:
+                                      - img "u/Goldkoron avatar" [ref=e1147]
+                                      - generic [ref=e1148]: u/Goldkoron
+                                  - generic [ref=e1149]: •
+                                  - time [ref=e1151]: 33 min. ago
+                                - button "Open user actions" [ref=e1156]:
+                                  - img [ref=e1159]
+                              - generic [ref=e1161]:
+                                - link "I made a 35% REAP of 397B with potentially usable quality in 96GB GPU" [ref=e1163]:
+                                  - /url: /r/LocalLLaMA/comments/1scrksf/i_made_a_35_reap_of_397b_with_potentially_usable/
+                                - 'link "Flair: New Model" [ref=e1166]':
+                                  - /url: /r/LocalLLaMA/?f=flair_name%3A%22New%20Model%22
+                                  - 'generic "Flair: New Model" [ref=e1168]': New Model
+                                - link "https://huggingface.co/Goldkoron/Qwen3.5-397B-A17B-REAP35" [ref=e1171]:
+                                  - /url: https://huggingface.co/Goldkoron/Qwen3.5-397B-A17B-REAP35
+                              - generic [ref=e1173]:
+                                - link "r/LocalLLaMA - I made a 35% REAP of 397B with potentially usable quality in 96GB GPU" [ref=e1174]:
+                                  - /url: https://huggingface.co/Goldkoron/Qwen3.5-397B-A17B-REAP35
+                                  - img "r/LocalLLaMA - I made a 35% REAP of 397B with potentially usable quality in 96GB GPU" [ref=e1175]
+                                - generic:
+                                  - generic:
+                                    - img
+                            - generic "Actions available for this post" [ref=e1177]:
+                              - generic [ref=e1180]:
+                                - button "Upvote" [ref=e1181]:
+                                  - img [ref=e1183]
+                                  - generic [ref=e1185]:
+                                    - generic: Upvote
+                                - generic [ref=e1187]: "14"
+                                - button "Downvote" [ref=e1188]:
+                                  - img [ref=e1190]
+                                  - generic [ref=e1192]:
+                                    - generic: Downvote
+                              - link "5 Go to comments" [ref=e1193]:
+                                - /url: /r/LocalLLaMA/comments/1scrksf/i_made_a_35_reap_of_397b_with_potentially_usable/
+                                - generic [ref=e1194]:
+                                  - img [ref=e1196]
+                                  - generic [ref=e1199]: "5"
+                                - generic [ref=e1200]:
+                                  - generic: Go to comments
+                              - button "Give award" [ref=e1202]:
+                                - img [ref=e1205]
+                              - button "Share" [ref=e1210]:
+                                - generic [ref=e1211]:
+                                  - img [ref=e1213]
+                                  - generic [ref=e1215]: Share
+                        - separator [ref=e1216]
+                        - article "Running Gemma4 26B A4B on the Rockchip NPU using a custom llama.cpp fork. Impressive results for just 4W of power usage!" [ref=e1217]:
+                          - generic [ref=e1218] [cursor=pointer]:
+                            - link "Running Gemma4 26B A4B on the Rockchip NPU using a custom llama.cpp fork. Impressive results for just 4W of power usage!" [ref=e1219]:
+                              - /url: /r/LocalLLaMA/comments/1sc8kdg/running_gemma4_26b_a4b_on_the_rockchip_npu_using/
+                              - generic [ref=e1220]:
+                                - generic: Running Gemma4 26B A4B on the Rockchip NPU using a custom llama.cpp fork. Impressive results for just 4W of power usage!
+                            - generic [ref=e1221]:
+                              - generic [ref=e1222]:
+                                - 'link "Author: u/Inv1si" [ref=e1227]':
+                                  - /url: /user/Inv1si/
+                                  - generic [ref=e1228]:
+                                    - generic [ref=e1230]:
+                                      - img [ref=e1232]
+                                      - img [ref=e1236]
+                                      - img [ref=e1239]
+                                    - generic [ref=e1241]: u/Inv1si
+                                - generic [ref=e1242]: •
+                                - time [ref=e1244]: 14 hr. ago
+                              - button "Open user actions" [ref=e1249]:
+                                - img [ref=e1252]
+                            - generic [ref=e1255]:
+                              - heading "Running Gemma4 26B A4B on the Rockchip NPU using a custom llama.cpp fork. Impressive results for just 4W of power usage!" [level=2] [ref=e1256]:
+                                - link "Running Gemma4 26B A4B on the Rockchip NPU using a custom llama.cpp fork. Impressive results for just 4W of power usage!" [ref=e1257]:
+                                  - /url: /r/LocalLLaMA/comments/1sc8kdg/running_gemma4_26b_a4b_on_the_rockchip_npu_using/
+                              - 'link "Flair: Resources" [ref=e1260]':
+                                - /url: /r/LocalLLaMA/?f=flair_name%3A%22Resources%22
+                                - 'generic "Flair: Resources" [ref=e1262]': Resources
+                            - generic [ref=e3233]:
+                              - generic [ref=e3234]:
+                                - button "Toggle playback" [ref=e3235]:
+                                  - img [ref=e3236]
+                                - generic "Media time" [ref=e3238]
+                                - generic [ref=e3244]:
+                                  - generic [ref=e3245]: 0:00
+                                  - generic [ref=e3246]: / 0:00
+                                - button "Toggle captions" [ref=e3247]:
+                                  - img [ref=e3248]
+                                - generic [ref=e3251]:
+                                  - button "Settings" [ref=e3252]:
+                                    - img [ref=e3253]
+                                  - generic:
+                                    - button:
+                                      - generic:
+                                        - img
+                                      - generic: Auto
+                                - button "Toggle fullscreen" [ref=e3255]:
+                                  - img [ref=e3256]
+                              - button "Toggle volume" [ref=e3261]:
+                                - img [ref=e3262]
+                            - generic "Actions available for this post" [ref=e1274]:
+                              - generic [ref=e1277]:
+                                - button "Upvote" [ref=e1278]:
+                                  - img [ref=e1280]
+                                  - generic [ref=e1282]:
+                                    - generic: Upvote
+                                - generic [ref=e1284]: "143"
+                                - button "Downvote" [ref=e1285]:
+                                  - img [ref=e1287]
+                                  - generic [ref=e1289]:
+                                    - generic: Downvote
+                              - link "15 Go to comments" [ref=e1290]:
+                                - /url: /r/LocalLLaMA/comments/1sc8kdg/running_gemma4_26b_a4b_on_the_rockchip_npu_using/
+                                - generic [ref=e1291]:
+                                  - img [ref=e1293]
+                                  - generic [ref=e1296]: "15"
+                                - generic [ref=e1297]:
+                                  - generic: Go to comments
+                              - button "Give award" [ref=e1299]:
+                                - img [ref=e1302]
+                              - button "Share" [ref=e1307]:
+                                - generic [ref=e1308]:
+                                  - img [ref=e1310]
+                                  - generic [ref=e1312]: Share
+                        - separator [ref=e1313]
+                        - article "so…. Qwen3.5 or Gemma 4?" [ref=e1314]:
+                          - generic [ref=e1315] [cursor=pointer]:
+                            - link "so…. Qwen3.5 or Gemma 4?" [ref=e1316]:
+                              - /url: /r/LocalLLaMA/comments/1scbpmo/so_qwen35_or_gemma_4/
+                              - generic [ref=e1317]:
+                                - generic: so…. Qwen3.5 or Gemma 4?
+                            - generic [ref=e1318]:
+                              - generic [ref=e1319]:
+                                - 'link "Author: u/MLExpert000" [ref=e1324]':
+                                  - /url: /user/MLExpert000/
+                                  - generic [ref=e1325]:
+                                    - img [ref=e1330]
+                                    - generic [ref=e1332]: u/MLExpert000
+                                - generic [ref=e1333]: •
+                                - time [ref=e1335]: 12 hr. ago
+                              - button "Open user actions" [ref=e1340]:
+                                - img [ref=e1343]
+                            - generic [ref=e1346]:
+                              - heading "so…. Qwen3.5 or Gemma 4?" [level=2] [ref=e1347]:
+                                - link "so…. Qwen3.5 or Gemma 4?" [ref=e1348]:
+                                  - /url: /r/LocalLLaMA/comments/1scbpmo/so_qwen35_or_gemma_4/
+                              - generic [ref=e1349]:
+                                - generic:
+                                  - link "Is there a winner yet?":
+                                    - /url: /r/LocalLLaMA/comments/1scbpmo/so_qwen35_or_gemma_4/
+                                    - generic:
+                                      - generic:
+                                        - paragraph: Is there a winner yet?
+                              - 'link "Flair: Discussion" [ref=e1352]':
+                                - /url: /r/LocalLLaMA/?f=flair_name%3A%22Discussion%22
+                                - 'generic "Flair: Discussion" [ref=e1354]': Discussion
+                            - generic "Actions available for this post" [ref=e1355]:
+                              - generic [ref=e1358]:
+                                - button "Upvote" [ref=e1359]:
+                                  - img [ref=e1361]
+                                  - generic [ref=e1363]:
+                                    - generic: Upvote
+                                - generic [ref=e1365]: "70"
+                                - button "Downvote" [ref=e1366]:
+                                  - img [ref=e1368]
+                                  - generic [ref=e1370]:
+                                    - generic: Downvote
+                              - link "86 Go to comments" [ref=e1371]:
+                                - /url: /r/LocalLLaMA/comments/1scbpmo/so_qwen35_or_gemma_4/
+                                - generic [ref=e1372]:
+                                  - img [ref=e1374]
+                                  - generic [ref=e1377]: "86"
+                                - generic [ref=e1378]:
+                                  - generic: Go to comments
+                              - button "Give award" [ref=e1380]:
+                                - img [ref=e1383]
+                              - button "Share" [ref=e1388]:
+                                - generic [ref=e1389]:
+                                  - img [ref=e1391]
+                                  - generic [ref=e1393]: Share
+                        - separator [ref=e1394]
+                        - article "Gemma 4 fixes in llama.cpp" [ref=e1395]:
+                          - generic [ref=e1396] [cursor=pointer]:
+                            - link "Gemma 4 fixes in llama.cpp" [ref=e1397]:
+                              - /url: /r/LocalLLaMA/comments/1sc4gui/gemma_4_fixes_in_llamacpp/
+                              - generic [ref=e1398]:
+                                - generic: Gemma 4 fixes in llama.cpp
+                            - generic [ref=e1399]:
+                              - generic [ref=e1400]:
+                                - 'link "Author: u/jacek2023" [ref=e1405]':
+                                  - /url: /user/jacek2023/
+                                  - generic [ref=e1406]:
+                                    - img [ref=e1411]
+                                    - generic [ref=e1413]: u/jacek2023
+                                - generic [ref=e1414]: •
+                                - time [ref=e1416]: 18 hr. ago
+                              - button "Open user actions" [ref=e1421]:
+                                - img [ref=e1424]
+                            - generic [ref=e1427]:
+                              - heading "Gemma 4 fixes in llama.cpp" [level=2] [ref=e1428]:
+                                - link "Gemma 4 fixes in llama.cpp" [ref=e1429]:
+                                  - /url: /r/LocalLLaMA/comments/1sc4gui/gemma_4_fixes_in_llamacpp/
+                              - generic [ref=e1430]:
+                                - generic:
+                                  - 'link "There have already been opinions that Gemma is bad because it doesn’t work well, but you probably aren’t using the transformers implementation, you’re using llama.cpp. After a model is released, you have to wait at least a few days for all the fixes in llama.cpp, for example: https://github.com/ggml-org/llama.cpp/pull/21418 https://github.com/ggml-org/llama.cpp/pull/21390 https://github.com/ggml-org/llama.cpp/pull/21406 https://github.com/ggml-org/llama.cpp/pull/21327 https://github.com/ggml-org/llama.cpp/pull/21343 ...and maybe there will be more? I had a looping problem in chat, but I also tried doing some stuff in OpenCode (it wasn’t even coding), and there were zero problems. So, probably just like with GLM Flash, a better prompt somehow fixes the overthinking/looping."':
+                                    - /url: /r/LocalLLaMA/comments/1sc4gui/gemma_4_fixes_in_llamacpp/
+                                    - generic:
+                                      - generic:
+                                        - paragraph: There have already been opinions that Gemma is bad because it doesn’t work well, but you probably aren’t using the transformers implementation, you’re using llama.cpp.
+                                        - paragraph: "After a model is released, you have to wait at least a few days for all the fixes in llama.cpp, for example:"
+                                        - paragraph:
+                                          - link "https://github.com/ggml-org/llama.cpp/pull/21418":
+                                            - /url: https://github.com/ggml-org/llama.cpp/pull/21418
+                                        - paragraph:
+                                          - link "https://github.com/ggml-org/llama.cpp/pull/21390":
+                                            - /url: https://github.com/ggml-org/llama.cpp/pull/21390
+                                        - paragraph:
+                                          - link "https://github.com/ggml-org/llama.cpp/pull/21406":
+                                            - /url: https://github.com/ggml-org/llama.cpp/pull/21406
+                                        - paragraph:
+                                          - link "https://github.com/ggml-org/llama.cpp/pull/21327":
+                                            - /url: https://github.com/ggml-org/llama.cpp/pull/21327
+                                        - paragraph:
+                                          - link "https://github.com/ggml-org/llama.cpp/pull/21343":
+                                            - /url: https://github.com/ggml-org/llama.cpp/pull/21343
+                                        - paragraph: ...and maybe there will be more?
+                                        - paragraph: I had a looping problem in chat, but I also tried doing some stuff in OpenCode (it wasn’t even coding), and there were zero problems. So, probably just like with GLM Flash, a better prompt somehow fixes the overthinking/looping.
+                              - 'link "Flair: Discussion" [ref=e1433]':
+                                - /url: /r/LocalLLaMA/?f=flair_name%3A%22Discussion%22
+                                - 'generic "Flair: Discussion" [ref=e1435]': Discussion
+                            - generic "Actions available for this post" [ref=e1436]:
+                              - generic [ref=e1439]:
+                                - button "Upvote" [ref=e1440]:
+                                  - img [ref=e1442]
+                                  - generic [ref=e1444]:
+                                    - generic: Upvote
+                                - generic [ref=e1446]: "193"
+                                - button "Downvote" [ref=e1447]:
+                                  - img [ref=e1449]
+                                  - generic [ref=e1451]:
+                                    - generic: Downvote
+                              - link "97 Go to comments" [ref=e1452]:
+                                - /url: /r/LocalLLaMA/comments/1sc4gui/gemma_4_fixes_in_llamacpp/
+                                - generic [ref=e1453]:
+                                  - img [ref=e1455]
+                                  - generic [ref=e1458]: "97"
+                                - generic [ref=e1459]:
+                                  - generic: Go to comments
+                              - button "Give award" [ref=e1461]:
+                                - img [ref=e1464]
+                              - button "Share" [ref=e1469]:
+                                - generic [ref=e1470]:
+                                  - img [ref=e1472]
+                                  - generic [ref=e1474]: Share
+                        - separator [ref=e1475]
+                        - article "Running OpenClaw with Gemma 4 TurboQuant on MacAir 16GB" [ref=e1476]:
+                          - generic [ref=e1477] [cursor=pointer]:
+                            - link "Running OpenClaw with Gemma 4 TurboQuant on MacAir 16GB" [ref=e1478]:
+                              - /url: /r/LocalLLaMA/comments/1sciyfg/running_openclaw_with_gemma_4_turboquant_on/
+                              - generic [ref=e1479]:
+                                - generic: Running OpenClaw with Gemma 4 TurboQuant on MacAir 16GB
+                            - generic [ref=e1480]:
+                              - generic [ref=e1481]:
+                                - 'link "Author: u/gladkos" [ref=e1486]':
+                                  - /url: /user/gladkos/
+                                  - generic [ref=e1487]:
+                                    - img "u/gladkos avatar" [ref=e1490]
+                                    - generic [ref=e1491]: u/gladkos
+                                - generic [ref=e1492]: •
+                                - time [ref=e1494]: 7 hr. ago
+                              - button "Open user actions" [ref=e1499]:
+                                - img [ref=e1502]
+                            - generic [ref=e1505]:
+                              - heading "Running OpenClaw with Gemma 4 TurboQuant on MacAir 16GB" [level=2] [ref=e1506]:
+                                - link "Running OpenClaw with Gemma 4 TurboQuant on MacAir 16GB" [ref=e1507]:
+                                  - /url: /r/LocalLLaMA/comments/1sciyfg/running_openclaw_with_gemma_4_turboquant_on/
+                              - 'link "Flair: Discussion" [ref=e1510]':
+                                - /url: /r/LocalLLaMA/?f=flair_name%3A%22Discussion%22
+                                - 'generic "Flair: Discussion" [ref=e1512]': Discussion
+                            - generic [ref=e3266]:
+                              - generic [ref=e3267]:
+                                - button "Toggle playback" [ref=e3268]:
+                                  - img [ref=e3269]
+                                - generic "Media time" [ref=e3271]
+                                - generic [ref=e3277]:
+                                  - generic [ref=e3278]: 0:00
+                                  - generic [ref=e3279]: / 0:00
+                                - button "Toggle captions" [ref=e3280]:
+                                  - img [ref=e3281]
+                                - generic [ref=e3284]:
+                                  - button "Settings" [ref=e3285]:
+                                    - img [ref=e3286]
+                                  - generic:
+                                    - button:
+                                      - generic:
+                                        - img
+                                      - generic: Auto
+                                - button "Toggle fullscreen" [ref=e3288]:
+                                  - img [ref=e3289]
+                              - button "Toggle volume" [ref=e3294]:
+                                - img [ref=e3295]
+                            - generic "Actions available for this post" [ref=e1524]:
+                              - generic [ref=e1527]:
+                                - button "Upvote" [ref=e1528]:
+                                  - img [ref=e1530]
+                                  - generic [ref=e1532]:
+                                    - generic: Upvote
+                                - generic [ref=e1534]: "23"
+                                - button "Downvote" [ref=e1535]:
+                                  - img [ref=e1537]
+                                  - generic [ref=e1539]:
+                                    - generic: Downvote
+                              - link "3 Go to comments" [ref=e1540]:
+                                - /url: /r/LocalLLaMA/comments/1sciyfg/running_openclaw_with_gemma_4_turboquant_on/
+                                - generic [ref=e1541]:
+                                  - img [ref=e1543]
+                                  - generic [ref=e1546]: "3"
+                                - generic [ref=e1547]:
+                                  - generic: Go to comments
+                              - button "Give award" [ref=e1549]:
+                                - img [ref=e1552]
+                              - button "Share" [ref=e1557]:
+                                - generic [ref=e1558]:
+                                  - img [ref=e1560]
+                                  - generic [ref=e1562]: Share
+                        - separator [ref=e1563]
+                        - 'article "Extended NYT Connections Benchmark scores: MiniMax-M2.7 34.4, Gemma 4 31B 30.1, Arcee Trinity Large Thinking 29.5" [ref=e1564]':
+                          - generic [ref=e1565] [cursor=pointer]:
+                            - 'link "Extended NYT Connections Benchmark scores: MiniMax-M2.7 34.4, Gemma 4 31B 30.1, Arcee Trinity Large Thinking 29.5" [ref=e1566]':
+                              - /url: /r/LocalLLaMA/comments/1scl7pl/extended_nyt_connections_benchmark_scores/
+                              - generic [ref=e1567]:
+                                - generic: "Extended NYT Connections Benchmark scores: MiniMax-M2.7 34.4, Gemma 4 31B 30.1, Arcee Trinity Large Thinking 29.5"
+                            - generic [ref=e1568]:
+                              - generic [ref=e1569]:
+                                - 'link "Author: u/zero0_one1" [ref=e1574]':
+                                  - /url: /user/zero0_one1/
+                                  - generic [ref=e1575]:
+                                    - img "u/zero0_one1 avatar" [ref=e1578]
+                                    - generic [ref=e1579]: u/zero0_one1
+                                - generic [ref=e1580]: •
+                                - time [ref=e1582]: 5 hr. ago
+                              - button "Open user actions" [ref=e1587]:
+                                - img [ref=e1590]
+                            - generic [ref=e1593]:
+                              - 'heading "Extended NYT Connections Benchmark scores: MiniMax-M2.7 34.4, Gemma 4 31B 30.1, Arcee Trinity Large Thinking 29.5" [level=2] [ref=e1594]':
+                                - 'link "Extended NYT Connections Benchmark scores: MiniMax-M2.7 34.4, Gemma 4 31B 30.1, Arcee Trinity Large Thinking 29.5" [ref=e1595]':
+                                  - /url: /r/LocalLLaMA/comments/1scl7pl/extended_nyt_connections_benchmark_scores/
+                              - 'link "Flair: News" [ref=e1598]':
+                                - /url: /r/LocalLLaMA/?f=flair_name%3A%22News%22
+                                - 'generic "Flair: News" [ref=e1600]': News
+                            - generic [ref=e1605]:
+                              - generic [ref=e1606]:
+                                - generic [ref=e1607]:
+                                  - list [ref=e1609]:
+                                    - listitem [ref=e1610]:
+                                      - figure [ref=e1611]:
+                                        - 'img "r/LocalLLaMA - Extended NYT Connections Benchmark scores: MiniMax-M2.7 34.4, Gemma 4 31B 30.1, Arcee Trinity Large Thinking 29.5" [ref=e1612]'
+                                  - group [ref=e1617]:
+                                    - button "Page 1 (Current page)" [ref=e1619]:
+                                      - generic [ref=e1620]:
+                                        - generic: Page 1 (Current page)
+                                    - button "Page 2" [ref=e1621]:
+                                      - generic [ref=e1622]:
+                                        - generic: Page 2
+                                - generic [ref=e1624]:
+                                  - button "Previous page" [disabled]:
+                                    - generic:
+                                      - generic:
+                                        - img
+                                - button "Next page" [ref=e1627]:
+                                  - img [ref=e1630]
+                              - generic [ref=e1632]:
+                                - generic: Item 1 of 2
+                            - generic "Actions available for this post" [ref=e1633]:
+                              - generic [ref=e1636]:
+                                - button "Upvote" [ref=e1637]:
+                                  - img [ref=e1639]
+                                  - generic [ref=e1641]:
+                                    - generic: Upvote
+                                - generic [ref=e1643]: "14"
+                                - button "Downvote" [ref=e1644]:
+                                  - img [ref=e1646]
+                                  - generic [ref=e1648]:
+                                    - generic: Downvote
+                              - link "7 Go to comments" [ref=e1649]:
+                                - /url: /r/LocalLLaMA/comments/1scl7pl/extended_nyt_connections_benchmark_scores/
+                                - generic [ref=e1650]:
+                                  - img [ref=e1652]
+                                  - generic [ref=e1655]: "7"
+                                - generic [ref=e1656]:
+                                  - generic: Go to comments
+                              - button "Give award" [ref=e1658]:
+                                - img [ref=e1661]
+                              - button "Share" [ref=e1666]:
+                                - generic [ref=e1667]:
+                                  - img [ref=e1669]
+                                  - generic [ref=e1671]: Share
+                        - separator [ref=e1672]
+                        - article "FINALLY GEMMA 4 KV CACHE IS FIXED" [ref=e1673]:
+                          - generic [ref=e1674] [cursor=pointer]:
+                            - link "FINALLY GEMMA 4 KV CACHE IS FIXED" [ref=e1675]:
+                              - /url: /r/LocalLLaMA/comments/1sbwkou/finally_gemma_4_kv_cache_is_fixed/
+                              - generic [ref=e1676]:
+                                - generic: FINALLY GEMMA 4 KV CACHE IS FIXED
+                            - generic [ref=e1677]:
+                              - generic [ref=e1678]:
+                                - 'link "Author: u/FusionCow" [ref=e1683]':
+                                  - /url: /user/FusionCow/
+                                  - generic [ref=e1684]:
+                                    - img "u/FusionCow avatar" [ref=e1687]
+                                    - generic [ref=e1688]: u/FusionCow
+                                - generic [ref=e1689]: •
+                                - time [ref=e1691]: 1 day ago
+                              - button "Open user actions" [ref=e1696]:
+                                - img [ref=e1699]
+                            - generic [ref=e1702]:
+                              - heading "FINALLY GEMMA 4 KV CACHE IS FIXED" [level=2] [ref=e1703]:
+                                - link "FINALLY GEMMA 4 KV CACHE IS FIXED" [ref=e1704]:
+                                  - /url: /r/LocalLLaMA/comments/1sbwkou/finally_gemma_4_kv_cache_is_fixed/
+                              - generic [ref=e1705]:
+                                - generic:
+                                  - link "YESSS LLAMA.CPP IS UPDATED AND IT DOESN'T TAKE UP PETABYTES OF VRAM":
+                                    - /url: /r/LocalLLaMA/comments/1sbwkou/finally_gemma_4_kv_cache_is_fixed/
+                                    - generic:
+                                      - generic:
+                                        - paragraph: YESSS LLAMA.CPP IS UPDATED AND IT DOESN'T TAKE UP PETABYTES OF VRAM
+                              - 'link "Flair: Discussion" [ref=e1708]':
+                                - /url: /r/LocalLLaMA/?f=flair_name%3A%22Discussion%22
+                                - 'generic "Flair: Discussion" [ref=e1710]': Discussion
+                            - generic "Actions available for this post" [ref=e1711]:
+                              - generic [ref=e1714]:
+                                - button "Upvote" [ref=e1715]:
+                                  - img [ref=e1717]
+                                  - generic [ref=e1719]:
+                                    - generic: Upvote
+                                - generic [ref=e1721]: "485"
+                                - button "Downvote" [ref=e1722]:
+                                  - img [ref=e1724]
+                                  - generic [ref=e1726]:
+                                    - generic: Downvote
+                              - link "95 Go to comments" [ref=e1727]:
+                                - /url: /r/LocalLLaMA/comments/1sbwkou/finally_gemma_4_kv_cache_is_fixed/
+                                - generic [ref=e1728]:
+                                  - img [ref=e1730]
+                                  - generic [ref=e1733]: "95"
+                                - generic [ref=e1734]:
+                                  - generic: Go to comments
+                              - button "Give award" [ref=e1736]:
+                                - img [ref=e1739]
+                              - button "Share" [ref=e1744]:
+                                - generic [ref=e1745]:
+                                  - img [ref=e1747]
+                                  - generic [ref=e1749]: Share
+                        - separator [ref=e1750]
+                        - article "We gave 12 LLMs a startup to run for a year. GLM-5 nearly matched Claude Opus 4.6 at 11× lower cost." [ref=e1751]:
+                          - generic [ref=e1752] [cursor=pointer]:
+                            - link "We gave 12 LLMs a startup to run for a year. GLM-5 nearly matched Claude Opus 4.6 at 11× lower cost." [ref=e1753]:
+                              - /url: /r/LocalLLaMA/comments/1sbyte4/we_gave_12_llms_a_startup_to_run_for_a_year_glm5/
+                              - generic [ref=e1754]:
+                                - generic: We gave 12 LLMs a startup to run for a year. GLM-5 nearly matched Claude Opus 4.6 at 11× lower cost.
+                            - generic [ref=e1755]:
+                              - generic [ref=e1756]:
+                                - 'link "Author: u/DreadMutant" [ref=e1761]':
+                                  - /url: /user/DreadMutant/
+                                  - generic [ref=e1762]:
+                                    - img [ref=e1767]
+                                    - generic [ref=e1769]: u/DreadMutant
+                                - generic [ref=e1770]: •
+                                - time [ref=e1772]: 23 hr. ago
+                              - button "Open user actions" [ref=e1777]:
+                                - img [ref=e1780]
+                            - generic [ref=e1783]:
+                              - heading "We gave 12 LLMs a startup to run for a year. GLM-5 nearly matched Claude Opus 4.6 at 11× lower cost." [level=2] [ref=e1784]:
+                                - link "We gave 12 LLMs a startup to run for a year. GLM-5 nearly matched Claude Opus 4.6 at 11× lower cost." [ref=e1785]:
+                                  - /url: /r/LocalLLaMA/comments/1sbyte4/we_gave_12_llms_a_startup_to_run_for_a_year_glm5/
+                              - 'link "Flair: Resources" [ref=e1788]':
+                                - /url: /r/LocalLLaMA/?f=flair_name%3A%22Resources%22
+                                - 'generic "Flair: Resources" [ref=e1790]': Resources
+                            - generic [ref=e1795]:
+                              - generic [ref=e1796]:
+                                - generic [ref=e1797]:
+                                  - list [ref=e1799]:
+                                    - listitem [ref=e1800]:
+                                      - figure [ref=e1801]:
+                                        - img "r/LocalLLaMA - We gave 12 LLMs a startup to run for a year. GLM-5 nearly matched Claude Opus 4.6 at 11× lower cost." [ref=e1802]
+                                  - group [ref=e1807]:
+                                    - button "Page 1 (Current page)" [ref=e1809]:
+                                      - generic [ref=e1810]:
+                                        - generic: Page 1 (Current page)
+                                    - button "Page 2" [ref=e1811]:
+                                      - generic [ref=e1812]:
+                                        - generic: Page 2
+                                - generic [ref=e1814]:
+                                  - button "Previous page" [disabled]:
+                                    - generic:
+                                      - generic:
+                                        - img
+                                - button "Next page" [ref=e1817]:
+                                  - img [ref=e1820]
+                              - generic [ref=e1822]:
+                                - generic: Item 1 of 2
+                            - generic "Actions available for this post" [ref=e1823]:
+                              - generic [ref=e1826]:
+                                - button "Upvote" [ref=e1827]:
+                                  - img [ref=e1829]
+                                  - generic [ref=e1831]:
+                                    - generic: Upvote
+                                - generic [ref=e1833]: "311"
+                                - button "Downvote" [ref=e1834]:
+                                  - img [ref=e1836]
+                                  - generic [ref=e1838]:
+                                    - generic: Downvote
+                              - link "74 Go to comments" [ref=e1839]:
+                                - /url: /r/LocalLLaMA/comments/1sbyte4/we_gave_12_llms_a_startup_to_run_for_a_year_glm5/
+                                - generic [ref=e1840]:
+                                  - img [ref=e1842]
+                                  - generic [ref=e1845]: "74"
+                                - generic [ref=e1846]:
+                                  - generic: Go to comments
+                              - button "Give award" [ref=e1848]:
+                                - img [ref=e1851]
+                              - button "Share" [ref=e1856]:
+                                - generic [ref=e1857]:
+                                  - img [ref=e1859]
+                                  - generic [ref=e1861]: Share
+                        - separator [ref=e1862]
+                        - article "Harmonic-9B - Two-stage Qwen3.5-9B fine-tune (Stage 2 still training)" [ref=e1863]:
+                          - generic [ref=e1864] [cursor=pointer]:
+                            - link "Harmonic-9B - Two-stage Qwen3.5-9B fine-tune (Stage 2 still training)" [ref=e1865]:
+                              - /url: /r/LocalLLaMA/comments/1schgvs/harmonic9b_twostage_qwen359b_finetune_stage_2/
+                              - generic [ref=e1866]:
+                                - generic: Harmonic-9B - Two-stage Qwen3.5-9B fine-tune (Stage 2 still training)
+                            - generic [ref=e1867]:
+                              - generic [ref=e1868]:
+                                - 'link "Author: u/Crampappydime" [ref=e1873]':
+                                  - /url: /user/Crampappydime/
+                                  - generic [ref=e1874]:
+                                    - img "u/Crampappydime avatar" [ref=e1877]
+                                    - generic [ref=e1878]: u/Crampappydime
+                                - generic [ref=e1879]: •
+                                - time [ref=e1881]: 8 hr. ago
+                              - button "Open user actions" [ref=e1886]:
+                                - img [ref=e1889]
+                            - generic [ref=e1892]:
+                              - heading "Harmonic-9B - Two-stage Qwen3.5-9B fine-tune (Stage 2 still training)" [level=2] [ref=e1893]:
+                                - link "Harmonic-9B - Two-stage Qwen3.5-9B fine-tune (Stage 2 still training)" [ref=e1894]:
+                                  - /url: /r/LocalLLaMA/comments/1schgvs/harmonic9b_twostage_qwen359b_finetune_stage_2/
+                              - generic [ref=e1895]:
+                                - generic:
+                                  - link:
+                                    - /url: /r/LocalLLaMA/comments/1schgvs/harmonic9b_twostage_qwen359b_finetune_stage_2/
+                                    - generic:
+                                      - generic:
+                                        - paragraph:
+                                          - text: Hey
+                                          - link "r/LocalLLaMA":
+                                            - /url: /r/LocalLLaMA/
+                                          - text: ","
+                                        - paragraph: I just uploaded Harmonic-9B, my latest Qwen3.5-9B fine-tune aimed at agent use.
+                                        - paragraph: "Current status:"
+                                        - paragraph: • Stage 1 (heavy reasoning training) is complete
+                                        - paragraph: • Stage 2 (light tool-calling / agent fine-tune) is still training right now
+                                        - paragraph: The plan is to combine strong structured reasoning with clean, reliable tool use while trying to avoid making normal chat feel stiff or overly verbose.
+                                        - paragraph: "Filtered dataset for Stage 2: I open-sourced the filtered version of the Hermes agent traces I’m using for the second stage:"
+                                        - paragraph:
+                                          - link "https://huggingface.co/datasets/DJLougen/hermes-agent-traces-filtered":
+                                            - /url: https://huggingface.co/datasets/DJLougen/hermes-agent-traces-filtered
+                                        - paragraph: "Key improvements after filtering:"
+                                        - paragraph: "• Self-correction: 6% → 63%"
+                                        - paragraph: "• Verification steps: 26% → 96%"
+                                        - paragraph: "• Thinking depth: +40%"
+                                        - paragraph: "• Valid JSON/tool calls: 100%"
+                                        - paragraph: "GGUF quants are already available here:"
+                                        - paragraph:
+                                          - link "https://huggingface.co/DJLougen/Harmonic-9B-GGUF":
+                                            - /url: https://huggingface.co/DJLougen/Harmonic-9B-GGUF
+                                        - paragraph: I haven’t run proper benchmarks yet because Stage 2 is still training. Early checks on the Stage 1 checkpoint looked good for reasoning structure. Will share numbers once Stage 2 finishes and I can do real agent evals.
+                                        - paragraph: If you give it a spin, I’d appreciate any feedback — especially how it behaves in agent harnesses (OpenClaw, LangGraph, ReAct, etc.).
+                                        - paragraph: This is part of my ongoing work on high-signal data curation and staged fine-tuning. More updates coming soon.
+                              - 'link "Flair: New Model" [ref=e1898]':
+                                - /url: /r/LocalLLaMA/?f=flair_name%3A%22New%20Model%22
+                                - 'generic "Flair: New Model" [ref=e1900]': New Model
+                            - generic "Actions available for this post" [ref=e1901]:
+                              - generic [ref=e1904]:
+                                - button "Upvote" [ref=e1905]:
+                                  - img [ref=e1907]
+                                  - generic [ref=e1909]:
+                                    - generic: Upvote
+                                - generic [ref=e1911]: "15"
+                                - button "Downvote" [ref=e1912]:
+                                  - img [ref=e1914]
+                                  - generic [ref=e1916]:
+                                    - generic: Downvote
+                              - link "7 Go to comments" [ref=e1917]:
+                                - /url: /r/LocalLLaMA/comments/1schgvs/harmonic9b_twostage_qwen359b_finetune_stage_2/
+                                - generic [ref=e1918]:
+                                  - img [ref=e1920]
+                                  - generic [ref=e1923]: "7"
+                                - generic [ref=e1924]:
+                                  - generic: Go to comments
+                              - button "Give award" [ref=e1926]:
+                                - img [ref=e1929]
+                              - button "Share" [ref=e1934]:
+                                - generic [ref=e1935]:
+                                  - img [ref=e1937]
+                                  - generic [ref=e1939]: Share
+                        - separator [ref=e1940]
+                        - generic [ref=e1941]:
+                          - 'generic "Advertisement: Dominate the competition with the new Galaxy S26 Ultra. Our mightiest processor yet piles on the power for a gaming beast that makes every moment epic. Experience lightning-fast responsiveness and next-level graphics on a powerful device that fits comfortably in your pocket." [ref=e1942]':
+                            - 'link "Advertisement: Dominate the competition with the new Galaxy S26 Ultra. Our mightiest processor yet piles on the power for a gaming beast that makes every moment epic. Experience lightning-fast responsiveness and next-level graphics on a powerful device that fits comfortably in your pocket." [ref=e1943] [cursor=pointer]':
+                              - /url: https://alb.reddit.com/cr?za=gRP3uSd8qsvMebqhxSM0FSAb7mmyQu2HPvNBDuUMHfMU0rAFpbfg9GJBD9aWr1HoGIqavM2ham2mmaXSIVguwkT4yTLqA-nlG9PmjF3_GJDM4b3Ok4scpyuMpEbn1-3XkSYgp1vPLWD8S1DEYb3whbd0UvoscMhlqpb-yk_KkU-LgZL9_bGWPxLPIFsOm1cREO-VF8e5pWOGc7aIkGvq8q3cnt-3jzhxWkDzHO4v1sdQ5Nf3SjNfE3nTOpJI4ruSOA2dFbjB5TYorEsAt398vIboc8uCtiwJQO3T4msIycb_jB5vg8M4YDpHr-G40hZjqJBwp8ab5kZiwO0gfhLyPdv5NRBA3HHzDtMxy1qOo9Lqz0uWZoBJC_KDL5nxBzbtOqq9dk4FaWPCluTsMjjiiGyPjAu4-k3wbs51WZB_YPkgtCw2c8IkdkipjFWatRON376w_ftlKLQr6010uj9xNXkJU-nnBtZPTjpItMMxeu-FflGdCrh-w4qjb6BtGABgoXn7Y0DvJggfPgUPkWRsxR7cuRuOqJS2CMVF3UKAkKMx1bsoWsTGg6TnMVjMFs5BlWbl1FBJoVQvck3fJ409Egh0UxbpWfevS9FdcuRTr7vcP3fbSPBNAZm758y9u59DkTezjOsiU0_81-ZazK5CVzeudLo9EssEmFkpR7NzJ5lcItRvl5TuRroPKCULZbjj1TxcH7FR-CldGxGewwCVsx8&zp=X9lEEG6vNn-T3vQkC-xE8Zxr9VIBdjGj6GScPufkikPlL9CbADJIaxJBDF99abPW33SoyMUE-KOJo8eakKukPkTbTYCahAkQ5K4HghDmtZBuTGpeyWi6CRuRhNOrTv4XjoyyfDjZRfDapynMlO_4sXyKfnp92lTyQ55NAjJT2OTiY0Pxh3RDwdl8DcnH0ID3mWWc3-9x2sDP55dh_f9gdHZC1QV-0BPbALc3lm59ztTBuMXqlbAVRoOJnL0PRaDwMZ2QqeKG2V9KFZ5LGihagRJucGUsiQXbv2zF-Z4K59w7YKk6-l_s4ouOcVq9beDjo3-GQumbx59RzXR2RejcrCI-c7-leMhe6HMk3d5P4I2bWVmFaQ9GTxDc57qdotCNvBsGTrgtYY0yz3T8tQ1wTrmWruYPoYEds_e-WyUoBH-_Zkh5WUCqL5obXObUgJt8DbzQmyWRWpu7zzg5CaZ3ZBz0IEbumysKlRoCdAhDcsFaI_Q
+                          - generic [ref=e1944]:
+                            - generic [ref=e1945]:
+                              - link "u/SamsungMobileUS avatar u/SamsungMobileUS" [ref=e1948] [cursor=pointer]:
+                                - /url: /user/SamsungMobileUS/
+                                - generic [ref=e1952]:
+                                  - img "u/SamsungMobileUS avatar"
+                                - generic [ref=e1953]: u/SamsungMobileUS
+                              - generic [ref=e1954]: •
+                              - link "Promoted" [ref=e1956] [cursor=pointer]:
+                                - /url: /user/SamsungMobileUS/
+                                - generic [ref=e1957]: Promoted
+                              - link [ref=e1959] [cursor=pointer]:
+                                - /url: https://alb.reddit.com/cr?za=gRP3uSd8qsvMebqhxSM0FSAb7mmyQu2HPvNBDuUMHfMU0rAFpbfg9GJBD9aWr1HoGIqavM2ham2mmaXSIVguwkT4yTLqA-nlG9PmjF3_GJDM4b3Ok4scpyuMpEbn1-3XkSYgp1vPLWD8S1DEYb3whbd0UvoscMhlqpb-yk_KkU-LgZL9_bGWPxLPIFsOm1cREO-VF8e5pWOGc7aIkGvq8q3cnt-3jzhxWkDzHO4v1sdQ5Nf3SjNfE3nTOpJI4ruSOA2dFbjB5TYorEsAt398vIboc8uCtiwJQO3T4msIycb_jB5vg8M4YDpHr-G40hZjqJBwp8ab5kZiwO0gfhLyPdv5NRBA3HHzDtMxy1qOo9Lqz0uWZoBJC_KDL5nxBzbtOqq9dk4FaWPCluTsMjjiiGyPjAu4-k3wbs51WZB_YPkgtCw2c8IkdkipjFWatRON376w_ftlKLQr6010uj9xNXkJU-nnBtZPTjpItMMxeu-FflGdCrh-w4qjb6BtGABgoXn7Y0DvJggfPgUPkWRsxR7cuRuOqJS2CMVF3UKAkKMx1bsoWsTGg6TnMVjMFs5BlWbl1FBJoVQvck3fJ409Egh0UxbpWfevS9FdcuRTr7vcP3fbSPBNAZm758y9u59DkTezjOsiU0_81-ZazK5CVzeudLo9EssEmFkpR7NzJ5lcItRvl5TuRroPKCULZbjj1TxcH7FR-CldGxGewwCVsx8&zp=X9lEEG6vNn-T3vQkC-xE8Zxr9VIBdjGj6GScPufkikPlL9CbADJIaxJBDF99abPW33SoyMUE-KOJo8eakKukPkTbTYCahAkQ5K4HghDmtZBuTGpeyWi6CRuRhNOrTv4XjoyyfDjZRfDapynMlO_4sXyKfnp92lTyQ55NAjJT2OTiY0Pxh3RDwdl8DcnH0ID3mWWc3-9x2sDP55dh_f9gdHZC1QV-0BPbALc3lm59ztTBuMXqlbAVRoOJnL0PRaDwMZ2QqeKG2V9KFZ5LGihagRJucGUsiQXbv2zF-Z4K59w7YKk6-l_s4ouOcVq9beDjo3-GQumbx59RzXR2RejcrCI-c7-leMhe6HMk3d5P4I2bWVmFaQ9GTxDc57qdotCNvBsGTrgtYY0yz3T8tQ1wTrmWruYPoYEds_e-WyUoBH-_Zkh5WUCqL5obXObUgJt8DbzQmyWRWpu7zzg5CaZ3ZBz0IEbumysKlRoCdAhDcsFaI_Q
+                            - button "Open user actions" [ref=e1964] [cursor=pointer]:
+                              - img [ref=e1967]
+                          - heading "Dominate the competition with the new Galaxy S26 Ultra. Our mightiest processor yet piles on the power for a gaming beast that makes every moment epic. Experience lightning-fast responsiveness and next-level graphics on a powerful device that fits comfortably in your pocket." [level=2] [ref=e1971]:
+                            - link "Dominate the competition with the new Galaxy S26 Ultra. Our mightiest processor yet piles on the power for a gaming beast that makes every moment epic. Experience lightning-fast responsiveness and next-level graphics on a powerful device that fits comfortably in your pocket." [ref=e1974] [cursor=pointer]:
+                              - /url: https://alb.reddit.com/cr?za=gRP3uSd8qsvMebqhxSM0FSAb7mmyQu2HPvNBDuUMHfMU0rAFpbfg9GJBD9aWr1HoGIqavM2ham2mmaXSIVguwkT4yTLqA-nlG9PmjF3_GJDM4b3Ok4scpyuMpEbn1-3XkSYgp1vPLWD8S1DEYb3whbd0UvoscMhlqpb-yk_KkU-LgZL9_bGWPxLPIFsOm1cREO-VF8e5pWOGc7aIkGvq8q3cnt-3jzhxWkDzHO4v1sdQ5Nf3SjNfE3nTOpJI4ruSOA2dFbjB5TYorEsAt398vIboc8uCtiwJQO3T4msIycb_jB5vg8M4YDpHr-G40hZjqJBwp8ab5kZiwO0gfhLyPdv5NRBA3HHzDtMxy1qOo9Lqz0uWZoBJC_KDL5nxBzbtOqq9dk4FaWPCluTsMjjiiGyPjAu4-k3wbs51WZB_YPkgtCw2c8IkdkipjFWatRON376w_ftlKLQr6010uj9xNXkJU-nnBtZPTjpItMMxeu-FflGdCrh-w4qjb6BtGABgoXn7Y0DvJggfPgUPkWRsxR7cuRuOqJS2CMVF3UKAkKMx1bsoWsTGg6TnMVjMFs5BlWbl1FBJoVQvck3fJ409Egh0UxbpWfevS9FdcuRTr7vcP3fbSPBNAZm758y9u59DkTezjOsiU0_81-ZazK5CVzeudLo9EssEmFkpR7NzJ5lcItRvl5TuRroPKCULZbjj1TxcH7FR-CldGxGewwCVsx8&zp=X9lEEG6vNn-T3vQkC-xE8Zxr9VIBdjGj6GScPufkikPlL9CbADJIaxJBDF99abPW33SoyMUE-KOJo8eakKukPkTbTYCahAkQ5K4HghDmtZBuTGpeyWi6CRuRhNOrTv4XjoyyfDjZRfDapynMlO_4sXyKfnp92lTyQ55NAjJT2OTiY0Pxh3RDwdl8DcnH0ID3mWWc3-9x2sDP55dh_f9gdHZC1QV-0BPbALc3lm59ztTBuMXqlbAVRoOJnL0PRaDwMZ2QqeKG2V9KFZ5LGihagRJucGUsiQXbv2zF-Z4K59w7YKk6-l_s4ouOcVq9beDjo3-GQumbx59RzXR2RejcrCI-c7-leMhe6HMk3d5P4I2bWVmFaQ9GTxDc57qdotCNvBsGTrgtYY0yz3T8tQ1wTrmWruYPoYEds_e-WyUoBH-_Zkh5WUCqL5obXObUgJt8DbzQmyWRWpu7zzg5CaZ3ZBz0IEbumysKlRoCdAhDcsFaI_Q
+                              - generic: Dominate the competition with the new Galaxy S26 Ultra. Our mightiest processor yet piles on the power for a gaming beast that makes every moment epic. Experience lightning-fast responsiveness and next-level graphics on a powerful device that fits comfortably in your pocket.
+                          - generic [ref=e1975]:
+                            - button "Play" [ref=e3299] [cursor=pointer]:
+                              - img [ref=e3300]
+                            - separator [ref=e1986]
+                            - generic [ref=e1987]:
+                              - link [ref=e1989] [cursor=pointer]:
+                                - /url: https://alb.reddit.com/cr?za=gRP3uSd8qsvMebqhxSM0FSAb7mmyQu2HPvNBDuUMHfMU0rAFpbfg9GJBD9aWr1HoGIqavM2ham2mmaXSIVguwkT4yTLqA-nlG9PmjF3_GJDM4b3Ok4scpyuMpEbn1-3XkSYgp1vPLWD8S1DEYb3whbd0UvoscMhlqpb-yk_KkU-LgZL9_bGWPxLPIFsOm1cREO-VF8e5pWOGc7aIkGvq8q3cnt-3jzhxWkDzHO4v1sdQ5Nf3SjNfE3nTOpJI4ruSOA2dFbjB5TYorEsAt398vIboc8uCtiwJQO3T4msIycb_jB5vg8M4YDpHr-G40hZjqJBwp8ab5kZiwO0gfhLyPdv5NRBA3HHzDtMxy1qOo9Lqz0uWZoBJC_KDL5nxBzbtOqq9dk4FaWPCluTsMjjiiGyPjAu4-k3wbs51WZB_YPkgtCw2c8IkdkipjFWatRON376w_ftlKLQr6010uj9xNXkJU-nnBtZPTjpItMMxeu-FflGdCrh-w4qjb6BtGABgoXn7Y0DvJggfPgUPkWRsxR7cuRuOqJS2CMVF3UKAkKMx1bsoWsTGg6TnMVjMFs5BlWbl1FBJoVQvck3fJ409Egh0UxbpWfevS9FdcuRTr7vcP3fbSPBNAZm758y9u59DkTezjOsiU0_81-ZazK5CVzeudLo9EssEmFkpR7NzJ5lcItRvl5TuRroPKCULZbjj1TxcH7FR-CldGxGewwCVsx8&zp=X9lEEG6vNn-T3vQkC-xE8Zxr9VIBdjGj6GScPufkikPlL9CbADJIaxJBDF99abPW33SoyMUE-KOJo8eakKukPkTbTYCahAkQ5K4HghDmtZBuTGpeyWi6CRuRhNOrTv4XjoyyfDjZRfDapynMlO_4sXyKfnp92lTyQ55NAjJT2OTiY0Pxh3RDwdl8DcnH0ID3mWWc3-9x2sDP55dh_f9gdHZC1QV-0BPbALc3lm59ztTBuMXqlbAVRoOJnL0PRaDwMZ2QqeKG2V9KFZ5LGihagRJucGUsiQXbv2zF-Z4K59w7YKk6-l_s4ouOcVq9beDjo3-GQumbx59RzXR2RejcrCI-c7-leMhe6HMk3d5P4I2bWVmFaQ9GTxDc57qdotCNvBsGTrgtYY0yz3T8tQ1wTrmWruYPoYEds_e-WyUoBH-_Zkh5WUCqL5obXObUgJt8DbzQmyWRWpu7zzg5CaZ3ZBz0IEbumysKlRoCdAhDcsFaI_Q
+                              - generic [ref=e1990]:
+                                - link "samsung.com" [ref=e1993] [cursor=pointer]:
+                                  - /url: https://alb.reddit.com/cr?za=gRP3uSd8qsvMebqhxSM0FSAb7mmyQu2HPvNBDuUMHfMU0rAFpbfg9GJBD9aWr1HoGIqavM2ham2mmaXSIVguwkT4yTLqA-nlG9PmjF3_GJDM4b3Ok4scpyuMpEbn1-3XkSYgp1vPLWD8S1DEYb3whbd0UvoscMhlqpb-yk_KkU-LgZL9_bGWPxLPIFsOm1cREO-VF8e5pWOGc7aIkGvq8q3cnt-3jzhxWkDzHO4v1sdQ5Nf3SjNfE3nTOpJI4ruSOA2dFbjB5TYorEsAt398vIboc8uCtiwJQO3T4msIycb_jB5vg8M4YDpHr-G40hZjqJBwp8ab5kZiwO0gfhLyPdv5NRBA3HHzDtMxy1qOo9Lqz0uWZoBJC_KDL5nxBzbtOqq9dk4FaWPCluTsMjjiiGyPjAu4-k3wbs51WZB_YPkgtCw2c8IkdkipjFWatRON376w_ftlKLQr6010uj9xNXkJU-nnBtZPTjpItMMxeu-FflGdCrh-w4qjb6BtGABgoXn7Y0DvJggfPgUPkWRsxR7cuRuOqJS2CMVF3UKAkKMx1bsoWsTGg6TnMVjMFs5BlWbl1FBJoVQvck3fJ409Egh0UxbpWfevS9FdcuRTr7vcP3fbSPBNAZm758y9u59DkTezjOsiU0_81-ZazK5CVzeudLo9EssEmFkpR7NzJ5lcItRvl5TuRroPKCULZbjj1TxcH7FR-CldGxGewwCVsx8&zp=X9lEEG6vNn-T3vQkC-xE8Zxr9VIBdjGj6GScPufkikPlL9CbADJIaxJBDF99abPW33SoyMUE-KOJo8eakKukPkTbTYCahAkQ5K4HghDmtZBuTGpeyWi6CRuRhNOrTv4XjoyyfDjZRfDapynMlO_4sXyKfnp92lTyQ55NAjJT2OTiY0Pxh3RDwdl8DcnH0ID3mWWc3-9x2sDP55dh_f9gdHZC1QV-0BPbALc3lm59ztTBuMXqlbAVRoOJnL0PRaDwMZ2QqeKG2V9KFZ5LGihagRJucGUsiQXbv2zF-Z4K59w7YKk6-l_s4ouOcVq9beDjo3-GQumbx59RzXR2RejcrCI-c7-leMhe6HMk3d5P4I2bWVmFaQ9GTxDc57qdotCNvBsGTrgtYY0yz3T8tQ1wTrmWruYPoYEds_e-WyUoBH-_Zkh5WUCqL5obXObUgJt8DbzQmyWRWpu7zzg5CaZ3ZBz0IEbumysKlRoCdAhDcsFaI_Q
+                                  - generic: samsung.com
+                                - link "Learn More" [ref=e1995] [cursor=pointer]:
+                                  - /url: https://alb.reddit.com/cr?za=gRP3uSd8qsvMebqhxSM0FSAb7mmyQu2HPvNBDuUMHfMU0rAFpbfg9GJBD9aWr1HoGIqavM2ham2mmaXSIVguwkT4yTLqA-nlG9PmjF3_GJDM4b3Ok4scpyuMpEbn1-3XkSYgp1vPLWD8S1DEYb3whbd0UvoscMhlqpb-yk_KkU-LgZL9_bGWPxLPIFsOm1cREO-VF8e5pWOGc7aIkGvq8q3cnt-3jzhxWkDzHO4v1sdQ5Nf3SjNfE3nTOpJI4ruSOA2dFbjB5TYorEsAt398vIboc8uCtiwJQO3T4msIycb_jB5vg8M4YDpHr-G40hZjqJBwp8ab5kZiwO0gfhLyPdv5NRBA3HHzDtMxy1qOo9Lqz0uWZoBJC_KDL5nxBzbtOqq9dk4FaWPCluTsMjjiiGyPjAu4-k3wbs51WZB_YPkgtCw2c8IkdkipjFWatRON376w_ftlKLQr6010uj9xNXkJU-nnBtZPTjpItMMxeu-FflGdCrh-w4qjb6BtGABgoXn7Y0DvJggfPgUPkWRsxR7cuRuOqJS2CMVF3UKAkKMx1bsoWsTGg6TnMVjMFs5BlWbl1FBJoVQvck3fJ409Egh0UxbpWfevS9FdcuRTr7vcP3fbSPBNAZm758y9u59DkTezjOsiU0_81-ZazK5CVzeudLo9EssEmFkpR7NzJ5lcItRvl5TuRroPKCULZbjj1TxcH7FR-CldGxGewwCVsx8&zp=X9lEEG6vNn-T3vQkC-xE8Zxr9VIBdjGj6GScPufkikPlL9CbADJIaxJBDF99abPW33SoyMUE-KOJo8eakKukPkTbTYCahAkQ5K4HghDmtZBuTGpeyWi6CRuRhNOrTv4XjoyyfDjZRfDapynMlO_4sXyKfnp92lTyQ55NAjJT2OTiY0Pxh3RDwdl8DcnH0ID3mWWc3-9x2sDP55dh_f9gdHZC1QV-0BPbALc3lm59ztTBuMXqlbAVRoOJnL0PRaDwMZ2QqeKG2V9KFZ5LGihagRJucGUsiQXbv2zF-Z4K59w7YKk6-l_s4ouOcVq9beDjo3-GQumbx59RzXR2RejcrCI-c7-leMhe6HMk3d5P4I2bWVmFaQ9GTxDc57qdotCNvBsGTrgtYY0yz3T8tQ1wTrmWruYPoYEds_e-WyUoBH-_Zkh5WUCqL5obXObUgJt8DbzQmyWRWpu7zzg5CaZ3ZBz0IEbumysKlRoCdAhDcsFaI_Q
+                                  - generic [ref=e1997]:
+                                    - generic: Learn More
+                          - generic "Actions available for this post" [ref=e1998]:
+                            - generic [ref=e2001]:
+                              - button "Upvote" [ref=e2002] [cursor=pointer]:
+                                - img [ref=e2004]
+                                - generic [ref=e2006]:
+                                  - generic: Upvote
+                              - text: Vote
+                              - button "Downvote" [ref=e2007] [cursor=pointer]:
+                                - img [ref=e2009]
+                                - generic [ref=e2011]:
+                                  - generic: Downvote
+                            - link "0 Go to comments" [ref=e2012] [cursor=pointer]:
+                              - /url: /user/SamsungMobileUS/comments/1s8tljp/dominate_the_competition_with_the_new_galaxy_s26/?p=1&impressionid=5333140422745250544
+                              - generic [ref=e2013]:
+                                - img [ref=e2015]
+                                - generic [ref=e2018]: "0"
+                              - generic [ref=e2019]:
+                                - generic: Go to comments
+                            - button "Share" [ref=e2023] [cursor=pointer]:
+                              - generic [ref=e2024]:
+                                - img [ref=e2026]
+                                - generic [ref=e2028]: Share
+                            - link [ref=e2030] [cursor=pointer]:
+                              - /url: https://alb.reddit.com/cr?za=gRP3uSd8qsvMebqhxSM0FSAb7mmyQu2HPvNBDuUMHfMU0rAFpbfg9GJBD9aWr1HoGIqavM2ham2mmaXSIVguwkT4yTLqA-nlG9PmjF3_GJDM4b3Ok4scpyuMpEbn1-3XkSYgp1vPLWD8S1DEYb3whbd0UvoscMhlqpb-yk_KkU-LgZL9_bGWPxLPIFsOm1cREO-VF8e5pWOGc7aIkGvq8q3cnt-3jzhxWkDzHO4v1sdQ5Nf3SjNfE3nTOpJI4ruSOA2dFbjB5TYorEsAt398vIboc8uCtiwJQO3T4msIycb_jB5vg8M4YDpHr-G40hZjqJBwp8ab5kZiwO0gfhLyPdv5NRBA3HHzDtMxy1qOo9Lqz0uWZoBJC_KDL5nxBzbtOqq9dk4FaWPCluTsMjjiiGyPjAu4-k3wbs51WZB_YPkgtCw2c8IkdkipjFWatRON376w_ftlKLQr6010uj9xNXkJU-nnBtZPTjpItMMxeu-FflGdCrh-w4qjb6BtGABgoXn7Y0DvJggfPgUPkWRsxR7cuRuOqJS2CMVF3UKAkKMx1bsoWsTGg6TnMVjMFs5BlWbl1FBJoVQvck3fJ409Egh0UxbpWfevS9FdcuRTr7vcP3fbSPBNAZm758y9u59DkTezjOsiU0_81-ZazK5CVzeudLo9EssEmFkpR7NzJ5lcItRvl5TuRroPKCULZbjj1TxcH7FR-CldGxGewwCVsx8&zp=X9lEEG6vNn-T3vQkC-xE8Zxr9VIBdjGj6GScPufkikPlL9CbADJIaxJBDF99abPW33SoyMUE-KOJo8eakKukPkTbTYCahAkQ5K4HghDmtZBuTGpeyWi6CRuRhNOrTv4XjoyyfDjZRfDapynMlO_4sXyKfnp92lTyQ55NAjJT2OTiY0Pxh3RDwdl8DcnH0ID3mWWc3-9x2sDP55dh_f9gdHZC1QV-0BPbALc3lm59ztTBuMXqlbAVRoOJnL0PRaDwMZ2QqeKG2V9KFZ5LGihagRJucGUsiQXbv2zF-Z4K59w7YKk6-l_s4ouOcVq9beDjo3-GQumbx59RzXR2RejcrCI-c7-leMhe6HMk3d5P4I2bWVmFaQ9GTxDc57qdotCNvBsGTrgtYY0yz3T8tQ1wTrmWruYPoYEds_e-WyUoBH-_Zkh5WUCqL5obXObUgJt8DbzQmyWRWpu7zzg5CaZ3ZBz0IEbumysKlRoCdAhDcsFaI_Q
+                        - separator [ref=e2031]
+                        - article "Is Turboquant really a game changer?" [ref=e2032]:
+                          - generic [ref=e2033] [cursor=pointer]:
+                            - link "Is Turboquant really a game changer?" [ref=e2034]:
+                              - /url: /r/LocalLLaMA/comments/1sccjq2/is_turboquant_really_a_game_changer/
+                              - generic [ref=e2035]:
+                                - generic: Is Turboquant really a game changer?
+                            - generic [ref=e2036]:
+                              - generic [ref=e2037]:
+                                - 'link "Author: u/Interesting-Print366" [ref=e2042]':
+                                  - /url: /user/Interesting-Print366/
+                                  - generic [ref=e2043]:
+                                    - img "u/Interesting-Print366 avatar" [ref=e2046]
+                                    - generic [ref=e2047]: u/Interesting-Print366
+                                - generic [ref=e2048]: •
+                                - time [ref=e2050]: 11 hr. ago
+                              - button "Open user actions" [ref=e2055]:
+                                - img [ref=e2058]
+                            - generic [ref=e2061]:
+                              - heading "Is Turboquant really a game changer?" [level=2] [ref=e2062]:
+                                - link "Is Turboquant really a game changer?" [ref=e2063]:
+                                  - /url: /r/LocalLLaMA/comments/1sccjq2/is_turboquant_really_a_game_changer/
+                              - generic [ref=e2064]:
+                                - generic:
+                                  - link "I am currently utilizing qwen3.5 and Gemma 4 model. Realized Gemma 4 requires 2x ram for same context length. As far as I understand, what turbo quant gives is quantizing kv cache into about 4 bit and minimize the loses But Q8 still not lose the context that much so isn't kv cache ram for qwen 3.5 q8 and Gemma 4 truboquant is the same? Is turboquant also applicable in qwen's cache architecture? because as far as I know they didn't tested it in qwen3.5 style kv cache in their paper. Just curious, I started to learn local LLM recently":
+                                    - /url: /r/LocalLLaMA/comments/1sccjq2/is_turboquant_really_a_game_changer/
+                                    - generic:
+                                      - generic:
+                                        - paragraph: I am currently utilizing qwen3.5 and Gemma 4 model.
+                                        - paragraph: Realized Gemma 4 requires 2x ram for same context length.
+                                        - paragraph: As far as I understand, what turbo quant gives is quantizing kv cache into about 4 bit and minimize the loses
+                                        - paragraph: But Q8 still not lose the context that much so isn't kv cache ram for qwen 3.5 q8 and Gemma 4 truboquant is the same?
+                                        - paragraph: Is turboquant also applicable in qwen's cache architecture? because as far as I know they didn't tested it in qwen3.5 style kv cache in their paper.
+                                        - paragraph: Just curious, I started to learn local LLM recently
+                              - 'link "Flair: Discussion" [ref=e2067]':
+                                - /url: /r/LocalLLaMA/?f=flair_name%3A%22Discussion%22
+                                - 'generic "Flair: Discussion" [ref=e2069]': Discussion
+                            - generic "Actions available for this post" [ref=e2070]:
+                              - generic [ref=e2073]:
+                                - button "Upvote" [ref=e2074]:
+                                  - img [ref=e2076]
+                                  - generic [ref=e2078]:
+                                    - generic: Upvote
+                                - generic [ref=e2080]: "26"
+                                - button "Downvote" [ref=e2081]:
+                                  - img [ref=e2083]
+                                  - generic [ref=e2085]:
+                                    - generic: Downvote
+                              - link "53 Go to comments" [ref=e2086]:
+                                - /url: /r/LocalLLaMA/comments/1sccjq2/is_turboquant_really_a_game_changer/
+                                - generic [ref=e2087]:
+                                  - img [ref=e2089]
+                                  - generic [ref=e2092]: "53"
+                                - generic [ref=e2093]:
+                                  - generic: Go to comments
+                              - button "Give award" [ref=e2095]:
+                                - img [ref=e2098]
+                              - button "Share" [ref=e2103]:
+                                - generic [ref=e2104]:
+                                  - img [ref=e2106]
+                                  - generic [ref=e2108]: Share
+                        - separator [ref=e2109]
+                        - article "Running Gemma 4 e4b (9.6GB RAM req) on RPi 5 8GB! Stable 2.8GHz Overclock & Custom Cooling" [ref=e2110]:
+                          - generic [ref=e2111] [cursor=pointer]:
+                            - link "Running Gemma 4 e4b (9.6GB RAM req) on RPi 5 8GB! Stable 2.8GHz Overclock & Custom Cooling" [ref=e2112]:
+                              - /url: /r/LocalLLaMA/comments/1sc87tk/running_gemma_4_e4b_96gb_ram_req_on_rpi_5_8gb/
+                              - generic [ref=e2113]:
+                                - generic: Running Gemma 4 e4b (9.6GB RAM req) on RPi 5 8GB! Stable 2.8GHz Overclock & Custom Cooling
+                            - generic [ref=e2114]:
+                              - generic [ref=e2115]:
+                                - 'link "Author: u/AncientWin9492" [ref=e2120]':
+                                  - /url: /user/AncientWin9492/
+                                  - generic [ref=e2121]:
+                                    - img "u/AncientWin9492 avatar" [ref=e2124]
+                                    - generic [ref=e2125]: u/AncientWin9492
+                                - generic [ref=e2126]: •
+                                - time [ref=e2128]: 14 hr. ago
+                              - button "Open user actions" [ref=e2133]:
+                                - img [ref=e2136]
+                            - generic [ref=e2139]:
+                              - heading "Running Gemma 4 e4b (9.6GB RAM req) on RPi 5 8GB! Stable 2.8GHz Overclock & Custom Cooling" [level=2] [ref=e2140]:
+                                - link "Running Gemma 4 e4b (9.6GB RAM req) on RPi 5 8GB! Stable 2.8GHz Overclock & Custom Cooling" [ref=e2141]:
+                                  - /url: /r/LocalLLaMA/comments/1sc87tk/running_gemma_4_e4b_96gb_ram_req_on_rpi_5_8gb/
+                              - 'link "Flair: New Model" [ref=e2144]':
+                                - /url: /r/LocalLLaMA/?f=flair_name%3A%22New%20Model%22
+                                - 'generic "Flair: New Model" [ref=e2146]': New Model
+                            - generic [ref=e3303]:
+                              - generic [ref=e3304]:
+                                - button "Toggle playback" [ref=e3305]:
+                                  - img [ref=e3306]
+                                - generic "Media time" [ref=e3308]
+                                - generic [ref=e3314]:
+                                  - generic [ref=e3315]: 0:00
+                                  - generic [ref=e3316]: / 0:00
+                                - button "Toggle captions" [ref=e3317]:
+                                  - img [ref=e3318]
+                                - generic [ref=e3321]:
+                                  - button "Settings" [ref=e3322]:
+                                    - img [ref=e3323]
+                                  - generic:
+                                    - button:
+                                      - generic:
+                                        - img
+                                      - generic: Auto
+                                - button "Toggle fullscreen" [ref=e3325]:
+                                  - img [ref=e3326]
+                              - button "Toggle volume" [ref=e3331]:
+                                - img [ref=e3332]
+                            - generic "Actions available for this post" [ref=e2158]:
+                              - generic [ref=e2161]:
+                                - button "Upvote" [ref=e2162]:
+                                  - img [ref=e2164]
+                                  - generic [ref=e2166]:
+                                    - generic: Upvote
+                                - generic [ref=e2168]: "45"
+                                - button "Downvote" [ref=e2169]:
+                                  - img [ref=e2171]
+                                  - generic [ref=e2173]:
+                                    - generic: Downvote
+                              - link "15 Go to comments" [ref=e2174]:
+                                - /url: /r/LocalLLaMA/comments/1sc87tk/running_gemma_4_e4b_96gb_ram_req_on_rpi_5_8gb/
+                                - generic [ref=e2175]:
+                                  - img [ref=e2177]
+                                  - generic [ref=e2180]: "15"
+                                - generic [ref=e2181]:
+                                  - generic: Go to comments
+                              - button "Give award" [ref=e2183]:
+                                - img [ref=e2186]
+                              - button "Share" [ref=e2191]:
+                                - generic [ref=e2192]:
+                                  - img [ref=e2194]
+                                  - generic [ref=e2196]: Share
+                        - separator [ref=e2197]
+                        - article "Qwen 3.5 397B vs Qwen 3.6-Plus" [ref=e2198]:
+                          - generic [ref=e2199] [cursor=pointer]:
+                            - link "Qwen 3.5 397B vs Qwen 3.6-Plus" [ref=e2200]:
+                              - /url: /r/LocalLLaMA/comments/1sc371c/qwen_35_397b_vs_qwen_36plus/
+                              - generic [ref=e2201]:
+                                - generic: Qwen 3.5 397B vs Qwen 3.6-Plus
+                            - generic [ref=e2202]:
+                              - generic [ref=e2203]:
+                                - 'link "Author: u/LegacyRemaster" [ref=e2208]':
+                                  - /url: /user/LegacyRemaster/
+                                  - generic [ref=e2209]:
+                                    - img "u/LegacyRemaster avatar" [ref=e2212]
+                                    - generic [ref=e2213]: u/LegacyRemaster
+                                - generic [ref=e2214]: •
+                                - time [ref=e2216]: 19 hr. ago
+                              - button "Open user actions" [ref=e2221]:
+                                - img [ref=e2224]
+                            - generic [ref=e2227]:
+                              - heading "Qwen 3.5 397B vs Qwen 3.6-Plus" [level=2] [ref=e2228]:
+                                - link "Qwen 3.5 397B vs Qwen 3.6-Plus" [ref=e2229]:
+                                  - /url: /r/LocalLLaMA/comments/1sc371c/qwen_35_397b_vs_qwen_36plus/
+                              - 'link "Flair: Discussion" [ref=e2232]':
+                                - /url: /r/LocalLLaMA/?f=flair_name%3A%22Discussion%22
+                                - 'generic "Flair: Discussion" [ref=e2234]': Discussion
+                            - img "r/LocalLLaMA - Qwen 3.5 397B vs Qwen 3.6-Plus" [ref=e2240]
+                            - generic "Actions available for this post" [ref=e2241]:
+                              - generic [ref=e2244]:
+                                - button "Upvote" [ref=e2245]:
+                                  - img [ref=e2247]
+                                  - generic [ref=e2249]:
+                                    - generic: Upvote
+                                - generic [ref=e2251]: "100"
+                                - button "Downvote" [ref=e2252]:
+                                  - img [ref=e2254]
+                                  - generic [ref=e2256]:
+                                    - generic: Downvote
+                              - link "60 Go to comments" [ref=e2257]:
+                                - /url: /r/LocalLLaMA/comments/1sc371c/qwen_35_397b_vs_qwen_36plus/
+                                - generic [ref=e2258]:
+                                  - img [ref=e2260]
+                                  - generic [ref=e2263]: "60"
+                                - generic [ref=e2264]:
+                                  - generic: Go to comments
+                              - button "Give award" [ref=e2266]:
+                                - img [ref=e2269]
+                              - button "Share" [ref=e2274]:
+                                - generic [ref=e2275]:
+                                  - img [ref=e2277]
+                                  - generic [ref=e2279]: Share
+                        - separator [ref=e2280]
+                        - article "Gemma 4 26B A4B Single Page ASCII Chatbot Design" [ref=e2281]:
+                          - generic [ref=e2282] [cursor=pointer]:
+                            - link "Gemma 4 26B A4B Single Page ASCII Chatbot Design" [ref=e2283]:
+                              - /url: /r/LocalLLaMA/comments/1scq6mb/gemma_4_26b_a4b_single_page_ascii_chatbot_design/
+                              - generic [ref=e2284]:
+                                - generic: Gemma 4 26B A4B Single Page ASCII Chatbot Design
+                            - generic [ref=e2285]:
+                              - generic [ref=e2286]:
+                                - 'link "Author: u/Reaper_9382" [ref=e2291]':
+                                  - /url: /user/Reaper_9382/
+                                  - generic [ref=e2292]:
+                                    - img [ref=e2297]
+                                    - generic [ref=e2299]: u/Reaper_9382
+                                - generic [ref=e2300]: •
+                                - time [ref=e2302]: 2 hr. ago
+                              - button "Open user actions" [ref=e2307]:
+                                - img [ref=e2310]
+                            - generic [ref=e2313]:
+                              - heading "Gemma 4 26B A4B Single Page ASCII Chatbot Design" [level=2] [ref=e2314]:
+                                - link "Gemma 4 26B A4B Single Page ASCII Chatbot Design" [ref=e2315]:
+                                  - /url: /r/LocalLLaMA/comments/1scq6mb/gemma_4_26b_a4b_single_page_ascii_chatbot_design/
+                              - 'link "Flair: Generation" [ref=e2318]':
+                                - /url: /r/LocalLLaMA/?f=flair_name%3A%22Generation%22
+                                - 'generic "Flair: Generation" [ref=e2320]': Generation
+                            - generic [ref=e3336]:
+                              - generic [ref=e3337]:
+                                - button "Toggle playback" [ref=e3338]:
+                                  - img [ref=e3339]
+                                - generic "Media time" [ref=e3341]
+                                - generic [ref=e3347]:
+                                  - generic [ref=e3348]: 0:00
+                                  - generic [ref=e3349]: / 0:00
+                                - button "Toggle captions" [ref=e3350]:
+                                  - img [ref=e3351]
+                                - generic [ref=e3354]:
+                                  - button "Settings" [ref=e3355]:
+                                    - img [ref=e3356]
+                                  - generic:
+                                    - button:
+                                      - generic:
+                                        - img
+                                      - generic: Auto
+                                - button "Toggle fullscreen" [ref=e3358]:
+                                  - img [ref=e3359]
+                              - button "Toggle volume" [ref=e3364]:
+                                - img [ref=e3365]
+                            - generic "Actions available for this post" [ref=e2332]:
+                              - generic [ref=e2335]:
+                                - button "Upvote" [ref=e2336]:
+                                  - img [ref=e2338]
+                                  - generic [ref=e2340]:
+                                    - generic: Upvote
+                                - generic [ref=e2342]: "4"
+                                - button "Downvote" [ref=e2343]:
+                                  - img [ref=e2345]
+                                  - generic [ref=e2347]:
+                                    - generic: Downvote
+                              - link "1 Go to comments" [ref=e2348]:
+                                - /url: /r/LocalLLaMA/comments/1scq6mb/gemma_4_26b_a4b_single_page_ascii_chatbot_design/
+                                - generic [ref=e2349]:
+                                  - img [ref=e2351]
+                                  - generic [ref=e2354]: "1"
+                                - generic [ref=e2355]:
+                                  - generic: Go to comments
+                              - button "Give award" [ref=e2357]:
+                                - img [ref=e2360]
+                              - button "Share" [ref=e2365]:
+                                - generic [ref=e2366]:
+                                  - img [ref=e2368]
+                                  - generic [ref=e2370]: Share
+                        - separator [ref=e2371]
+                        - article "running gemma 4 on my macbook air from 2020" [ref=e2372]:
+                          - generic [ref=e2373] [cursor=pointer]:
+                            - link "running gemma 4 on my macbook air from 2020" [ref=e2374]:
+                              - /url: /r/LocalLLaMA/comments/1sbwdxr/running_gemma_4_on_my_macbook_air_from_2020/
+                              - generic [ref=e2375]:
+                                - generic: running gemma 4 on my macbook air from 2020
+                            - generic [ref=e2376]:
+                              - generic [ref=e2377]:
+                                - 'link "Author: u/redilaify" [ref=e2382]':
+                                  - /url: /user/redilaify/
+                                  - generic [ref=e2383]:
+                                    - img [ref=e2388]
+                                    - generic [ref=e2390]: u/redilaify
+                                - generic [ref=e2391]: •
+                                - time [ref=e2393]: 1 day ago
+                              - button "Open user actions" [ref=e2398]:
+                                - img [ref=e2401]
+                            - generic [ref=e2404]:
+                              - heading "running gemma 4 on my macbook air from 2020" [level=2] [ref=e2405]:
+                                - link "running gemma 4 on my macbook air from 2020" [ref=e2406]:
+                                  - /url: /r/LocalLLaMA/comments/1sbwdxr/running_gemma_4_on_my_macbook_air_from_2020/
+                              - 'link "Flair: Other" [ref=e2409]':
+                                - /url: /r/LocalLLaMA/?f=flair_name%3A%22Other%22
+                                - 'generic "Flair: Other" [ref=e2411]': Other
+                            - img "r/LocalLLaMA - running gemma 4 on my macbook air from 2020" [ref=e2417]
+                            - generic "Actions available for this post" [ref=e2418]:
+                              - generic [ref=e2421]:
+                                - button "Upvote" [ref=e2422]:
+                                  - img [ref=e2424]
+                                  - generic [ref=e2426]:
+                                    - generic: Upvote
+                                - generic [ref=e2428]: "291"
+                                - button "Downvote" [ref=e2429]:
+                                  - img [ref=e2431]
+                                  - generic [ref=e2433]:
+                                    - generic: Downvote
+                              - link "60 Go to comments" [ref=e2434]:
+                                - /url: /r/LocalLLaMA/comments/1sbwdxr/running_gemma_4_on_my_macbook_air_from_2020/
+                                - generic [ref=e2435]:
+                                  - img [ref=e2437]
+                                  - generic [ref=e2440]: "60"
+                                - generic [ref=e2441]:
+                                  - generic: Go to comments
+                              - button "Give award" [ref=e2443]:
+                                - img [ref=e2446]
+                              - button "Share" [ref=e2451]:
+                                - generic [ref=e2452]:
+                                  - img [ref=e2454]
+                                  - generic [ref=e2456]: Share
+                        - separator [ref=e2457]
+                        - article "Found how to toggle reasoning mode for Gemma in LM-Studio!" [ref=e2458]:
+                          - generic [ref=e2459] [cursor=pointer]:
+                            - link "Found how to toggle reasoning mode for Gemma in LM-Studio!" [ref=e2460]:
+                              - /url: /r/LocalLLaMA/comments/1sc9ucc/found_how_to_toggle_reasoning_mode_for_gemma_in/
+                              - generic [ref=e2461]:
+                                - generic: Found how to toggle reasoning mode for Gemma in LM-Studio!
+                            - generic [ref=e2462]:
+                              - generic [ref=e2463]:
+                                - 'link "Author: u/Adventurous-Paper566" [ref=e2468]':
+                                  - /url: /user/Adventurous-Paper566/
+                                  - generic [ref=e2469]:
+                                    - img [ref=e2474]
+                                    - generic [ref=e2476]: u/Adventurous-Paper566
+                                - generic [ref=e2477]: •
+                                - time [ref=e2479]: 13 hr. ago
+                              - button "Open user actions" [ref=e2484]:
+                                - img [ref=e2487]
+                            - generic [ref=e2490]:
+                              - heading "Found how to toggle reasoning mode for Gemma in LM-Studio!" [level=2] [ref=e2491]:
+                                - link "Found how to toggle reasoning mode for Gemma in LM-Studio!" [ref=e2492]:
+                                  - /url: /r/LocalLLaMA/comments/1sc9ucc/found_how_to_toggle_reasoning_mode_for_gemma_in/
+                              - 'link "Flair: Resources" [ref=e2495]':
+                                - /url: /r/LocalLLaMA/?f=flair_name%3A%22Resources%22
+                                - 'generic "Flair: Resources" [ref=e2497]': Resources
+                            - img "r/LocalLLaMA - Found how to toggle reasoning mode for Gemma in LM-Studio!" [ref=e2503]
+                            - generic "Actions available for this post" [ref=e2504]:
+                              - generic [ref=e2507]:
+                                - button "Upvote" [ref=e2508]:
+                                  - img [ref=e2510]
+                                  - generic [ref=e2512]:
+                                    - generic: Upvote
+                                - generic [ref=e2514]: "30"
+                                - button "Downvote" [ref=e2515]:
+                                  - img [ref=e2517]
+                                  - generic [ref=e2519]:
+                                    - generic: Downvote
+                              - link "11 Go to comments" [ref=e2520]:
+                                - /url: /r/LocalLLaMA/comments/1sc9ucc/found_how_to_toggle_reasoning_mode_for_gemma_in/
+                                - generic [ref=e2521]:
+                                  - img [ref=e2523]
+                                  - generic [ref=e2526]: "11"
+                                - generic [ref=e2527]:
+                                  - generic: Go to comments
+                              - button "Give award" [ref=e2529]:
+                                - img [ref=e2532]
+                              - button "Share" [ref=e2537]:
+                                - generic [ref=e2538]:
+                                  - img [ref=e2540]
+                                  - generic [ref=e2542]: Share
+                        - separator [ref=e2543]
+                        - article "Local Claude Code with Qwen3.5 27B" [ref=e2544]:
+                          - generic [ref=e2545] [cursor=pointer]:
+                            - link "Local Claude Code with Qwen3.5 27B" [ref=e2546]:
+                              - /url: /r/LocalLLaMA/comments/1scrnzm/local_claude_code_with_qwen35_27b/
+                              - generic [ref=e2547]:
+                                - generic: Local Claude Code with Qwen3.5 27B
+                            - generic [ref=e2548]:
+                              - generic [ref=e2549]:
+                                - 'link "Author: u/FeiX7" [ref=e2554]':
+                                  - /url: /user/FeiX7/
+                                  - generic [ref=e2555]:
+                                    - img "u/FeiX7 avatar" [ref=e2558]
+                                    - generic [ref=e2559]: u/FeiX7
+                                - generic [ref=e2560]: •
+                                - time [ref=e2562]: 29 min. ago
+                              - button "Open user actions" [ref=e2567]:
+                                - img [ref=e2570]
+                            - generic [ref=e2573]:
+                              - heading "Local Claude Code with Qwen3.5 27B" [level=2] [ref=e2574]:
+                                - link "Local Claude Code with Qwen3.5 27B" [ref=e2575]:
+                                  - /url: /r/LocalLLaMA/comments/1scrnzm/local_claude_code_with_qwen35_27b/
+                              - generic [ref=e2576]:
+                                - generic:
+                                  - link:
+                                    - /url: /r/LocalLLaMA/comments/1scrnzm/local_claude_code_with_qwen35_27b/
+                                    - generic:
+                                      - generic:
+                                        - paragraph:
+                                          - text: after long research, finding best alternative for
+                                          - link "Using a local LLM in OpenCode with llama.cpp":
+                                            - /url: https://aayushgarg.dev/posts/2026-03-29-local-llm-opencode/
+                                          - text: to use totally local environment for coding tasks
+                                          - text: I found this article
+                                          - link "How to connect Claude Code CLI to a local llama.cpp server":
+                                            - /url: https://www.reddit.com/r/LocalLLaMA/comments/1s8l1ef/how_to_connect_claude_code_cli_to_a_local/
+                                          - text: how to disable telemetry and make claude code totally offline.
+                                        - paragraph:
+                                          - text: model used - Qwen3.5 27B
+                                          - text: Quant used - unsloth/UD-Q4_K_XL
+                                          - text: inference engine - llama.cpp
+                                          - text: Operating Systems - Arch Linux
+                                          - text: Hardware - Strix Halo
+                                        - paragraph: I have separated my setups into sessions to run iterative cycle how I managed to improve CC (claude code) and llama.cpp model parameters.
+                                        - heading "First Session" [level=1]
+                                        - paragraph: as guide stated, I used option 1 to disable telemetry
+                                        - paragraph:
+                                          - code: ~/.bashrc
+                                          - text: config;
+                                        - text: export ANTHROPIC_BASE_URL="http://127.0.0.1:8001" export ANTHROPIC_API_KEY="not-set" export ANTHROPIC_AUTH_TOKEN="not-set" export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 export CLAUDE_CODE_ENABLE_TELEMETRY=0 export DISABLE_AUTOUPDATER=1 export DISABLE_TELEMETRY=1 export CLAUDE_CODE_DISABLE_1M_CONTEXT=1 export CLAUDE_CODE_MAX_OUTPUT_TOKENS=4096 export CLAUDE_CODE_AUTO_COMPACT_WINDOW=32768
+                                        - paragraph:
+                                          - text: "Spoiler: better to use"
+                                          - code: claude/settings.json
+                                          - text: it is more stable and controllable.
+                                        - paragraph:
+                                          - text: and in
+                                          - code: ~/.claude.json
+                                        - text: "\"hasCompletedOnboarding\": true"
+                                        - paragraph: "llama.cpp config:"
+                                        - text: ROCBLAS_USE_HIPBLASLT=1 ./build/bin/llama-server \ --model models/Qwen3.5-27B-Q4_K_M.gguf \ --alias "qwen3.5-27b" \ --port 8001 --ctx-size 65536 --n-gpu-layers 999 \ --flash-attn on --jinja --threads 8 \ --temp 0.6 --top-p 0.95 --top-k 20 --min-p 0.00 \ --cache-type-k q8_0 --cache-type-v q8_0
+                                        - paragraph:
+                                          - text: I am using Strix Halo so I need to setup ROCBLAS_USE_HIPBLASLT=1
+                                          - text: research your concrete hardware to specialize llama.cpp setup
+                                          - text: everything else might be same.
+                                        - paragraph: "Results for 7 Runs:"
+                                        - table:
+                                          - rowgroup:
+                                            - row "Run Task Type Duration Gen Speed Peak Context Quality Key Finding":
+                                              - columnheader "Run"
+                                              - columnheader "Task Type"
+                                              - columnheader "Duration"
+                                              - columnheader "Gen Speed"
+                                              - columnheader "Peak Context"
+                                              - columnheader "Quality"
+                                              - columnheader "Key Finding"
+                                            - row
+                                          - rowgroup:
+                                            - 'row "1 File ops (ls, cat) 1m44s 9.71 t/s 23K Correct Baseline: fast at low context"':
+                                              - cell "1"
+                                              - cell "File ops (ls, cat)"
+                                              - cell "1m44s"
+                                              - cell "9.71 t/s"
+                                              - cell "23K"
+                                              - cell "Correct"
+                                              - 'cell "Baseline: fast at low context"'
+                                            - row "2 Git clone + code read 2m31s 9.56 t/s 32.5K Excellent Tool chaining works well":
+                                              - cell "2"
+                                              - cell "Git clone + code read"
+                                              - cell "2m31s"
+                                              - cell "9.56 t/s"
+                                              - cell "32.5K"
+                                              - cell "Excellent"
+                                              - cell "Tool chaining works well"
+                                            - row "3 7-day plan + guide 4m57s 8.37 t/s 37.9K Excellent Long-form generation quality":
+                                              - cell "3"
+                                              - cell "7-day plan + guide"
+                                              - cell "4m57s"
+                                              - cell "8.37 t/s"
+                                              - cell "37.9K"
+                                              - cell "Excellent"
+                                              - cell "Long-form generation quality"
+                                            - row "4 Skills assessment 4m36s 8.46 t/s 40K Very good Web search broken (needs Anthropic)":
+                                              - cell "4"
+                                              - cell "Skills assessment"
+                                              - cell "4m36s"
+                                              - cell "8.46 t/s"
+                                              - cell "40K"
+                                              - cell "Very good"
+                                              - cell "Web search broken (needs Anthropic)":
+                                                - strong: Web search broken
+                                                - text: (needs Anthropic)
+                                            - row "5 Write Python script 10m25s 7.54 t/s 60.4K Good (7/10)":
+                                              - cell "5"
+                                              - cell "Write Python script"
+                                              - cell "10m25s"
+                                              - cell "7.54 t/s"
+                                              - cell "60.4K"
+                                              - cell "Good (7/10)"
+                                              - cell
+                                            - row "6 Code review + fix 9m29s 7.42 t/s 65,535 CRASH Very good (8.5/10) Context wall hit, no auto-compact":
+                                              - cell "6"
+                                              - cell "Code review + fix"
+                                              - cell "9m29s"
+                                              - cell "7.42 t/s"
+                                              - cell "65,535 CRASH"
+                                              - cell "Very good (8.5/10)"
+                                              - cell "Context wall hit, no auto-compact"
+                                            - row "7 /compact command ~10m ~8.07 t/s 66,680 (failed) N/A Output token limit too low for compaction":
+                                              - cell "7"
+                                              - cell "/compact command"
+                                              - cell "~10m"
+                                              - cell "~8.07 t/s"
+                                              - cell "66,680 (failed)"
+                                              - cell "N/A"
+                                              - cell "Output token limit too low for compaction"
+                                        - paragraph: Lessons
+                                        - list:
+                                          - listitem:
+                                            - paragraph:
+                                              - strong: Generation speed degrades ~24% across context range
+                                              - text: ": 9.71 t/s (23K) down to 7.42 t/s (65K)"
+                                          - listitem:
+                                            - paragraph:
+                                              - strong: Claude Code System prompt = 22,870 tokens
+                                              - text: (35% of 65K budget)
+                                          - listitem:
+                                            - paragraph:
+                                              - strong: Auto-compaction was completely broken
+                                              - text: ": Claude Code assumed 200K context, so 95% threshold = 190K. 65K limit was hit at 33% of what Claude Code thought was the window."
+                                          - listitem:
+                                            - paragraph:
+                                              - code: /compact
+                                              - strong: needs output headroom
+                                              - text: ": At 4096 max output, the compaction summary can't fit. Needs 16K+."
+                                          - listitem:
+                                            - paragraph:
+                                              - strong: Web search is dead without Anthropic
+                                              - text: "(Run 4): Solution is"
+                                              - link "SearXNG via MCP":
+                                                - /url: https://github.com/ihor/mcp-searxng
+                                              - text: or if someone has better solution, please suggest.
+                                          - listitem:
+                                            - paragraph:
+                                              - strong: LCP prefix caching works great
+                                              - text: ":"
+                                              - code: sim_best = 0.980
+                                              - text: means the system prompt is cached across turns
+                                          - listitem:
+                                            - paragraph:
+                                              - strong: Code quality is solid but instructions need precision
+                                              - text: ": I plan to add second reviewer agent to suggest fixes."
+                                        - paragraph:
+                                          - text: VRAM Consumed - 22GB
+                                          - text: RAM Consumed (by CC) - 7GB (CC is super heavy)
+                                        - heading "Second Session" [level=1]
+                                        - paragraph:
+                                          - code: claude/settings.json
+                                          - text: "config:"
+                                        - text: "{ \"env\": { \"ANTHROPIC_BASE_URL\": \"http://127.0.0.1:8001\", \"ANTHROPIC_MODEL\": \"qwen3.5-27b\", \"ANTHROPIC_SMALL_FAST_MODEL\": \"qwen3.5-27b\", \"ANTHROPIC_API_KEY\": \"sk-no-key-required\", \"ANTHROPIC_AUTH_TOKEN\": \"\", \"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC\": \"1\", \"DISABLE_COST_WARNINGS\": \"1\", \"CLAUDE_CODE_ATTRIBUTION_HEADER\": \"0\", \"CLAUDE_CODE_DISABLE_1M_CONTEXT\": \"1\", \"CLAUDE_CODE_MAX_OUTPUT_TOKENS\": \"32768\", \"CLAUDE_CODE_AUTO_COMPACT_WINDOW\": \"65536\", \"CLAUDE_AUTOCOMPACT_PCT_OVERRIDE\": \"90\", \"DISABLE_PROMPT_CACHING\": \"1\", \"CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS\": \"1\", \"CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING\": \"1\", \"MAX_THINKING_TOKENS\": \"0\", \"CLAUDE_CODE_DISABLE_FAST_MODE\": \"1\", \"DISABLE_INTERLEAVED_THINKING\": \"1\", \"CLAUDE_CODE_MAX_RETRIES\": \"3\", \"CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY\": \"1\", \"DISABLE_TELEMETRY\": \"1\", \"CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY\": \"1\", \"ENABLE_TOOL_SEARCH\": \"auto\", \"DISABLE_AUTOUPDATER\": \"1\", \"DISABLE_ERROR_REPORTING\": \"1\", \"DISABLE_FEEDBACK_COMMAND\": \"1\" } }"
+                                        - paragraph:
+                                          - code: llama.cpp
+                                          - text: "run:"
+                                        - text: ROCBLAS_USE_HIPBLASLT=1 ./build/bin/llama-server \ --model models/Qwen3.5-27B-GGUF/Qwen3.5-27B-UD-Q4_K_XL.gguf \ --alias "qwen3.5-27b" \ --port 8001 \ --ctx-size 65536 \ --n-gpu-layers 999 \ --flash-attn on \ --jinja \ --threads 8 \ --temp 0.6 \ --top-p 0.95 \ --top-k 20 \ --min-p 0.00 \ --cache-type-k q8_0 \ --cache-type-v q8_0
+                                        - paragraph:
+                                          - code: claude --model qwen3.5-27b --verbose
+                                        - paragraph:
+                                          - text: VRAM Consumed - 22GB
+                                          - text: RAM Consumed (by CC) - 7GB
+                                          - text: nothing changed.
+                                        - paragraph: all the errors from first session were fixed )
+                                        - heading "Third Session (Vision)" [level=1]
+                                        - paragraph: To turn on vision for qwen, you are required to use mmproj, which was included with gguf.
+                                        - paragraph: "setup:"
+                                        - text: ROCBLAS_USE_HIPBLASLT=1 ./build/bin/llama-server \ --model models/Qwen3.5-27B-GGUF/Qwen3.5-27B-UD-Q4_K_XL.gguf \ --alias "qwen3.5-27b" \ --port 8001 \ --ctx-size 65536 \ --n-gpu-layers 999 \ --flash-attn on \ --jinja \ --threads 8 \ --temp 0.6 \ --top-p 0.95 \ --top-k 20 \ --min-p 0.00 \ --cache-type-k q8_0 \ --cache-type-v q8_0 \ --mmproj models/Qwen3.5-27B-GGUF/mmproj-F32.gguf
+                                        - paragraph: and its only added 1-2 ram usage.
+                                        - paragraph:
+                                          - text: tested with 8 Images and quality of vision was WOW to me.
+                                          - text: if you look at
+                                          - link "Artificial Analysis":
+                                            - /url: https://artificialanalysis.ai/models/multimodal/vision
+                                          - text: Vision Benchmark, qwen is on Claude 4.6 Opus level which makes it superior for vision tasks.
+                                        - paragraph: My tests showed that it can really good understand context of image and handwritten diagrams.
+                                        - heading "Verdict" [level=1]
+                                        - list:
+                                          - listitem:
+                                            - paragraph: system prompt is too big and takes too much time to load. but this is only first time, then caching makes everything for you.
+                                          - listitem:
+                                            - paragraph: CC is worth using with local models and local models nowadays are good for coding tasks. and I found it most "offline" coding agent CLI compared to Opencode, why I should use less "performant" alternative, when I can use SOTA )
+                                        - paragraph:
+                                          - text: "Future Experiments:"
+                                          - text: "- I want to use bigger Mixture of Experts model from Qwen3.5 Family, but will it give me better 2x performance for 2x size?"
+                                          - text: "- want to try CC with Zed editor, and check how offline zed will behave with local CC."
+                                          - text: "- How long compaction will hold agents reasoning and how quality gonna degrade, with codex or CC I had 10M context chats with decent quality compared to size."
+                              - 'link "Flair: Discussion" [ref=e2579]':
+                                - /url: /r/LocalLLaMA/?f=flair_name%3A%22Discussion%22
+                                - 'generic "Flair: Discussion" [ref=e2581]': Discussion
+                            - generic "Actions available for this post" [ref=e2582]:
+                              - generic [ref=e2585]:
+                                - button "Upvote" [ref=e2586]:
+                                  - img [ref=e2588]
+                                  - generic [ref=e2590]:
+                                    - generic: Upvote
+                                - generic [ref=e2592]: "4"
+                                - button "Downvote" [ref=e2593]:
+                                  - img [ref=e2595]
+                                  - generic [ref=e2597]:
+                                    - generic: Downvote
+                              - link "3 Go to comments" [ref=e2598]:
+                                - /url: /r/LocalLLaMA/comments/1scrnzm/local_claude_code_with_qwen35_27b/
+                                - generic [ref=e2599]:
+                                  - img [ref=e2601]
+                                  - generic [ref=e2604]: "3"
+                                - generic [ref=e2605]:
+                                  - generic: Go to comments
+                              - button "Give award" [ref=e2607]:
+                                - img [ref=e2610]
+                              - button "Share" [ref=e2615]:
+                                - generic [ref=e2616]:
+                                  - img [ref=e2618]
+                                  - generic [ref=e2620]: Share
+                        - separator [ref=e2621]
+                        - article "Best LLM for Mac Mini M4 Pro (64GB RAM) – Focus on Agents, RAG, and Automation?" [ref=e2622]:
+                          - generic [ref=e2623] [cursor=pointer]:
+                            - link "Best LLM for Mac Mini M4 Pro (64GB RAM) – Focus on Agents, RAG, and Automation?" [ref=e2624]:
+                              - /url: /r/LocalLLaMA/comments/1scqs9w/best_llm_for_mac_mini_m4_pro_64gb_ram_focus_on/
+                              - generic [ref=e2625]:
+                                - generic: Best LLM for Mac Mini M4 Pro (64GB RAM) – Focus on Agents, RAG, and Automation?
+                            - generic [ref=e2626]:
+                              - generic [ref=e2627]:
+                                - 'link "Author: u/farmatex" [ref=e2632]':
+                                  - /url: /user/farmatex/
+                                  - generic [ref=e2633]:
+                                    - img [ref=e2638]
+                                    - generic [ref=e2640]: u/farmatex
+                                - generic [ref=e2641]: •
+                                - time [ref=e2643]: 1 hr. ago
+                              - button "Open user actions" [ref=e2648]:
+                                - img [ref=e2651]
+                            - generic [ref=e2654]:
+                              - heading "Best LLM for Mac Mini M4 Pro (64GB RAM) – Focus on Agents, RAG, and Automation?" [level=2] [ref=e2655]:
+                                - link "Best LLM for Mac Mini M4 Pro (64GB RAM) – Focus on Agents, RAG, and Automation?" [ref=e2656]:
+                                  - /url: /r/LocalLLaMA/comments/1scqs9w/best_llm_for_mac_mini_m4_pro_64gb_ram_focus_on/
+                              - generic [ref=e2657]:
+                                - generic:
+                                  - 'link "Hi everyone! I just got my hands on a Mac Mini M4 Pro with 64GB. My goal is to replace ChatGPT on my phone and desktop with a local setup. I’m specifically looking for models that excel at: Web Search & RAG: High context window and accuracy for retrieving info. AI Agents: Good instruction following for multi-step tasks. Automation: Reliable tool-calling and JSON output for process automation. Mobile Access: I plan to use it as a backend for my phone (via Tailscale/OpenWebUI). What would be the sweet spot model for this hardware that feels snappy but remains smart enough for complex agents? Also, which backend would you recommend for the best performance on M4 Pro? (Ollama, LM Studio, or maybe vLLM/MLX?) Thanks!"':
+                                    - /url: /r/LocalLLaMA/comments/1scqs9w/best_llm_for_mac_mini_m4_pro_64gb_ram_focus_on/
+                                    - generic:
+                                      - generic:
+                                        - paragraph: Hi everyone!
+                                        - paragraph:
+                                          - text: I just got my hands on a
+                                          - strong: Mac Mini M4 Pro with 64GB
+                                          - text: . My goal is to replace ChatGPT on my phone and desktop with a local setup.
+                                        - paragraph: "I’m specifically looking for models that excel at:"
+                                        - list:
+                                          - listitem:
+                                            - paragraph: "Web Search & RAG: High context window and accuracy for retrieving info."
+                                          - listitem:
+                                            - paragraph: "AI Agents: Good instruction following for multi-step tasks."
+                                          - listitem:
+                                            - paragraph: "Automation: Reliable tool-calling and JSON output for process automation."
+                                          - listitem:
+                                            - paragraph: "Mobile Access: I plan to use it as a backend for my phone (via Tailscale/OpenWebUI)."
+                                        - paragraph: What would be the sweet spot model for this hardware that feels snappy but remains smart enough for complex agents? Also, which backend would you recommend for the best performance on M4 Pro? (Ollama, LM Studio, or maybe vLLM/MLX?)
+                                        - paragraph: Thanks!
+                              - 'link "Flair: Question | Help" [ref=e2660]':
+                                - /url: /r/LocalLLaMA/?f=flair_name%3A%22Question%20%7C%20Help%22
+                                - 'generic "Flair: Question | Help" [ref=e2662]': Question | Help
+                            - generic "Actions available for this post" [ref=e2663]:
+                              - generic [ref=e2666]:
+                                - button "Upvote" [ref=e2667]:
+                                  - img [ref=e2669]
+                                  - generic [ref=e2671]:
+                                    - generic: Upvote
+                                - generic [ref=e2673]: "3"
+                                - button "Downvote" [ref=e2674]:
+                                  - img [ref=e2676]
+                                  - generic [ref=e2678]:
+                                    - generic: Downvote
+                              - link "4 Go to comments" [ref=e2679]:
+                                - /url: /r/LocalLLaMA/comments/1scqs9w/best_llm_for_mac_mini_m4_pro_64gb_ram_focus_on/
+                                - generic [ref=e2680]:
+                                  - img [ref=e2682]
+                                  - generic [ref=e2685]: "4"
+                                - generic [ref=e2686]:
+                                  - generic: Go to comments
+                              - button "Give award" [ref=e2688]:
+                                - img [ref=e2691]
+                              - button "Share" [ref=e2696]:
+                                - generic [ref=e2697]:
+                                  - img [ref=e2699]
+                                  - generic [ref=e2701]: Share
+                        - separator [ref=e2702]
+                        - article "Recently I did a little performance test of several LLMs on PC with 16GB VRAM" [ref=e2703]:
+                          - generic [ref=e2704] [cursor=pointer]:
+                            - link "Recently I did a little performance test of several LLMs on PC with 16GB VRAM" [ref=e2705]:
+                              - /url: /r/LocalLLaMA/comments/1sc8mwc/recently_i_did_a_little_performance_test_of/
+                              - generic [ref=e2706]:
+                                - generic: Recently I did a little performance test of several LLMs on PC with 16GB VRAM
+                            - generic [ref=e2707]:
+                              - generic [ref=e2708]:
+                                - 'link "Author: u/rosaccord" [ref=e2713]':
+                                  - /url: /user/rosaccord/
+                                  - generic [ref=e2714]:
+                                    - img [ref=e2719]
+                                    - generic [ref=e2721]: u/rosaccord
+                                - generic [ref=e2722]: •
+                                - time [ref=e2724]: 14 hr. ago
+                              - button "Open user actions" [ref=e2729]:
+                                - img [ref=e2732]
+                            - generic [ref=e2735]:
+                              - heading "Recently I did a little performance test of several LLMs on PC with 16GB VRAM" [level=2] [ref=e2736]:
+                                - link "Recently I did a little performance test of several LLMs on PC with 16GB VRAM" [ref=e2737]:
+                                  - /url: /r/LocalLLaMA/comments/1sc8mwc/recently_i_did_a_little_performance_test_of/
+                              - generic [ref=e2738]:
+                                - generic:
+                                  - link "Qwen 3.5, Gemma-4, Nemotron Cascade 2 and GLM 4.7 flash. Tested to see how performance (speed) degrades with the context increase. used llama.cpp and some nice quants better fitting for 16GB VRAM in my RTX 4080. Here is a result comparison table. Hope you find it useful.":
+                                    - /url: /r/LocalLLaMA/comments/1sc8mwc/recently_i_did_a_little_performance_test_of/
+                                    - generic:
+                                      - generic:
+                                        - paragraph: Qwen 3.5, Gemma-4, Nemotron Cascade 2 and GLM 4.7 flash.
+                                        - paragraph: Tested to see how performance (speed) degrades with the context increase.
+                                        - paragraph: used llama.cpp and some nice quants better fitting for 16GB VRAM in my RTX 4080.
+                                        - paragraph: Here is a result comparison table. Hope you find it useful.
+                              - 'link "Flair: Other" [ref=e2741]':
+                                - /url: /r/LocalLLaMA/?f=flair_name%3A%22Other%22
+                                - 'generic "Flair: Other" [ref=e2743]': Other
+                            - generic "Actions available for this post" [ref=e2744]:
+                              - generic [ref=e2747]:
+                                - button "Upvote" [ref=e2748]:
+                                  - img [ref=e2750]
+                                  - generic [ref=e2752]:
+                                    - generic: Upvote
+                                - generic [ref=e2754]: "29"
+                                - button "Downvote" [ref=e2755]:
+                                  - img [ref=e2757]
+                                  - generic [ref=e2759]:
+                                    - generic: Downvote
+                              - link "25 Go to comments" [ref=e2760]:
+                                - /url: /r/LocalLLaMA/comments/1sc8mwc/recently_i_did_a_little_performance_test_of/
+                                - generic [ref=e2761]:
+                                  - img [ref=e2763]
+                                  - generic [ref=e2766]: "25"
+                                - generic [ref=e2767]:
+                                  - generic: Go to comments
+                              - button "Give award" [ref=e2769]:
+                                - img [ref=e2772]
+                              - button "Share" [ref=e2777]:
+                                - generic [ref=e2778]:
+                                  - img [ref=e2780]
+                                  - generic [ref=e2782]: Share
+                        - separator [ref=e2783]
+                  - img [ref=e2789]
+            - generic [ref=e2802]:
+              - complementary "Community information" [ref=e2806]:
+                - generic [ref=e2807]:
+                  - generic [ref=e2809]:
+                    - heading "Community Info Section" [level=1] [ref=e2810]
+                    - generic [ref=e2811]:
+                      - generic [ref=e2812]: LocalLlama
+                      - generic [ref=e2813]: Subreddit to discuss locally hostable AI
+                      - generic [ref=e2814]:
+                        - generic [ref=e2816]:
+                          - img [ref=e2817]
+                          - text: Created Mar 10, 2023
+                        - generic [ref=e2820]:
+                          - img [ref=e2821]
+                          - text: Public
+                    - generic [ref=e2823]:
+                      - generic [ref=e2824]:
+                        - strong [ref=e2826]:
+                          - generic: 1M
+                        - generic [ref=e2827]: Llamas
+                      - generic [ref=e2828]:
+                        - strong [ref=e2830]:
+                          - generic: 20K
+                        - generic [ref=e2831]: Weekly contributions
+                  - separator [ref=e2832]
+                  - generic [ref=e2833]:
+                    - heading "Community Bookmarks" [level=2] [ref=e2835]:
+                      - generic [ref=e2836]: Community Bookmarks
+                    - generic [ref=e2837]:
+                      - link "Wiki" [ref=e2839] [cursor=pointer]:
+                        - /url: /r/LocalLLaMA/wiki/index/
+                        - generic [ref=e2842]: Wiki
+                      - link "Best LLMs Megathread" [ref=e2844] [cursor=pointer]:
+                        - /url: https://www.reddit.com/r/LocalLLaMA/comments/1pwh0q9/best_local_llms_2025/
+                        - generic [ref=e2847]: Best LLMs Megathread
+                      - link "Best VLMs Megathread" [ref=e2849] [cursor=pointer]:
+                        - /url: https://www.reddit.com/r/LocalLLaMA/comments/1p5retd/best_local_vlms_november_2025/
+                        - generic [ref=e2852]: Best VLMs Megathread
+                      - link "Best TTS/STT Models" [ref=e2854] [cursor=pointer]:
+                        - /url: https://www.reddit.com/r/LocalLLaMA/comments/1r7bsfd/best_audio_models_feb_2026/
+                        - generic [ref=e2857]: Best TTS/STT Models
+                  - separator [ref=e2858]
+                  - generic [ref=e2859]:
+                    - heading "r/LocalLLaMA Rules" [level=2] [ref=e2861]:
+                      - generic [ref=e2862]: r/LocalLLaMA Rules
+                    - generic [ref=e2863]:
+                      - group [ref=e2865]:
+                        - generic "1 Please search before asking" [ref=e2866] [cursor=pointer]:
+                          - generic [ref=e2868]:
+                            - generic [ref=e2869]:
+                              - generic [ref=e2871]: "1"
+                              - heading "Please search before asking" [level=2] [ref=e2875]
+                            - img [ref=e2878]
+                      - group [ref=e2881]:
+                        - generic "2 Off-Topic Posts" [ref=e2882] [cursor=pointer]:
+                          - generic [ref=e2884]:
+                            - generic [ref=e2885]:
+                              - generic [ref=e2887]: "2"
+                              - heading "Off-Topic Posts" [level=2] [ref=e2891]
+                            - img [ref=e2894]
+                      - group [ref=e2897]:
+                        - generic "3 Low Effort Posts" [ref=e2898] [cursor=pointer]:
+                          - generic [ref=e2900]:
+                            - generic [ref=e2901]:
+                              - generic [ref=e2903]: "3"
+                              - heading "Low Effort Posts" [level=2] [ref=e2907]
+                            - img [ref=e2910]
+                      - group [ref=e2913]:
+                        - generic "4 Limit Self-Promotion" [ref=e2914] [cursor=pointer]:
+                          - generic [ref=e2916]:
+                            - generic [ref=e2917]:
+                              - generic [ref=e2919]: "4"
+                              - heading "Limit Self-Promotion" [level=2] [ref=e2923]
+                            - img [ref=e2926]
+                      - group [ref=e2929]:
+                        - generic "5 Follow Reddit's Content Policy" [ref=e2930] [cursor=pointer]:
+                          - generic [ref=e2932]:
+                            - generic [ref=e2933]:
+                              - generic [ref=e2935]: "5"
+                              - heading "Follow Reddit's Content Policy" [level=2] [ref=e2939]
+                            - img [ref=e2942]
+                  - separator [ref=e2944]
+                  - generic [ref=e2945]:
+                    - heading "Socials" [level=2] [ref=e2947]:
+                      - generic [ref=e2948]: Socials
+                    - link [ref=e2949] [cursor=pointer]:
+                      - /url: https://discord.gg/ru9RYpx6Gp
+                  - separator [ref=e2950]
+                  - generic [ref=e2951]:
+                    - heading "AMA" [level=2] [ref=e2953]:
+                      - generic [ref=e2954]: AMA
+                    - link:
+                      - /url: https://www.reddit.com/r/LocalLLaMA/comments/1r3t775/ama_with_minimax_ask_us_anything/
+                  - separator [ref=e2955]
+                  - generic [ref=e2956]:
+                    - heading "Moderators" [level=2] [ref=e2958]:
+                      - generic [ref=e2959]: Moderators
+                    - generic [ref=e2960]:
+                      - text: Moderator list hidden.
+                      - link "Learn More" [ref=e2961] [cursor=pointer]:
+                        - /url: https://support.reddithelp.com/hc/articles/360049499032
+                    - link "View all moderators" [ref=e2962] [cursor=pointer]:
+                      - /url: /mod/LocalLLaMA/moderators/
+                      - generic [ref=e2964]: View all moderators
+                  - separator [ref=e2965]
+                  - generic [ref=e2966]:
+                    - heading "Installed Apps" [level=2] [ref=e2968]:
+                      - generic [ref=e2969]: Installed Apps
+                    - link "Admin Tattler" [ref=e2970] [cursor=pointer]:
+                      - /url: https://developers.reddit.com/apps/admin-tattler
+                      - generic [ref=e2973]: Admin Tattler
+                      - img [ref=e2976]
+                    - link "Bot Bouncer" [ref=e2978] [cursor=pointer]:
+                      - /url: https://developers.reddit.com/apps/bot-bouncer
+                      - generic [ref=e2981]: Bot Bouncer
+                      - img [ref=e2984]
+              - generic [ref=e2987]:
+                - link "Reddit Rules" [ref=e2990] [cursor=pointer]:
+                  - /url: https://www.redditinc.com/policies/content-policy
+                - link "Privacy Policy" [ref=e2993] [cursor=pointer]:
+                  - /url: https://www.reddit.com/policies/privacy-policy
+                - link "User Agreement" [ref=e2996] [cursor=pointer]:
+                  - /url: https://www.redditinc.com/policies/user-agreement
+                - link "Your Privacy Choices" [ref=e2999] [cursor=pointer]:
+                  - /url: https://support.reddithelp.com/hc/articles/43980704794004
+                - link "Accessibility" [ref=e3002] [cursor=pointer]:
+                  - /url: https://support.reddithelp.com/hc/sections/38303584022676-Accessibility
+                - link "Reddit, Inc. © 2026. All rights reserved." [ref=e3004] [cursor=pointer]:
+                  - /url: https://redditinc.com
+        - generic [ref=e3006]:
+          - button "Collapse Navigation" [ref=e3009] [cursor=pointer]:
+            - img [ref=e3012]
+            - generic [ref=e3014]:
+              - generic: Collapse Navigation
+          - navigation "Primary" [ref=e3019]:
+            - generic [ref=e3021]:
+              - link "Home" [ref=e3023] [cursor=pointer]:
+                - /url: /?feed=home
+                - generic [ref=e3024]:
+                  - img [ref=e3026]
+                  - generic [ref=e3029]: Home
+              - link "Popular" [ref=e3031] [cursor=pointer]:
+                - /url: /r/popular/
+                - generic [ref=e3032]:
+                  - img [ref=e3034]
+                  - generic [ref=e3037]: Popular
+              - link "News" [ref=e3038] [cursor=pointer]:
+                - /url: /news/
+                - generic [ref=e3039]:
+                  - img [ref=e3041]
+                  - generic [ref=e3045]: News
+              - link "Explore" [ref=e3047] [cursor=pointer]:
+                - /url: /explore/
+                - generic [ref=e3048]:
+                  - img [ref=e3050]
+                  - generic [ref=e3053]: Explore
+            - separator [ref=e3054]
+            - generic [ref=e3056]:
+              - group [ref=e3058]:
+                - generic "RECENT" [ref=e3059]:
+                  - generic [ref=e3061] [cursor=pointer]:
+                    - generic [ref=e3065]: RECENT
+                    - img [ref=e3068]
+                - link "r/ArtificialInteligence" [ref=e3072] [cursor=pointer]:
+                  - /url: /r/ArtificialInteligence/
+                  - generic [ref=e3073]:
+                    - img [ref=e3078]
+                    - generic [ref=e3081]: r/ArtificialInteligence
+              - separator [ref=e3082]
+            - navigation "Reddit resources" [ref=e3083]:
+              - group [ref=e3085]:
+                - generic "RESOURCES" [ref=e3086] [cursor=pointer]:
+                  - generic [ref=e3088]:
+                    - generic [ref=e3091]: RESOURCES
+                    - img [ref=e3094]
+                - generic [ref=e3097]:
+                  - link "About Reddit" [ref=e3099] [cursor=pointer]:
+                    - /url: https://www.redditinc.com
+                    - generic [ref=e3100]:
+                      - img [ref=e3102]
+                      - generic [ref=e3106]: About Reddit
+                  - link "Advertise" [ref=e3108] [cursor=pointer]:
+                    - /url: https://ads.reddit.com/register?utm_source=web3x_consumer&utm_name=left_nav_cta
+                    - generic [ref=e3109]:
+                      - img [ref=e3111]
+                      - generic [ref=e3115]: Advertise
+                  - link "Developer Platform" [ref=e3117] [cursor=pointer]:
+                    - /url: https://developers.reddit.com/?utm_source=reddit&utm_medium=left_nav_resources
+                    - generic [ref=e3118]:
+                      - img [ref=e3120]
+                      - generic [ref=e3124]: Developer Platform
+                  - link "Reddit Pro BETA" [ref=e3126] [cursor=pointer]:
+                    - /url: /reddit-pro?utm_source=reddit&utm_medium=left_nav_resources
+                    - generic [ref=e3127]:
+                      - img [ref=e3129]
+                      - generic [ref=e3133]:
+                        - generic [ref=e3134]: Reddit Pro
+                        - generic [ref=e3135]: BETA
+                  - link "Help" [ref=e3137] [cursor=pointer]:
+                    - /url: https://support.reddithelp.com/hc?utm_source=reddit&utm_medium=footer&utm_campaign=evergreen
+                    - generic [ref=e3138]:
+                      - img [ref=e3140]
+                      - generic [ref=e3144]: Help
+                  - link "Blog" [ref=e3146] [cursor=pointer]:
+                    - /url: https://redditblog.com/
+                    - generic [ref=e3147]:
+                      - img [ref=e3149]
+                      - generic [ref=e3153]: Blog
+                  - link "Careers" [ref=e3155] [cursor=pointer]:
+                    - /url: https://www.redditinc.com/careers
+                    - generic [ref=e3156]:
+                      - img [ref=e3158]
+                      - generic [ref=e3162]: Careers
+                  - link "Press" [ref=e3164] [cursor=pointer]:
+                    - /url: https://www.redditinc.com/press
+                    - generic [ref=e3165]:
+                      - img [ref=e3167]
+                      - generic [ref=e3171]: Press
+                  - separator [ref=e3172]
+                  - link "Best of Reddit" [ref=e3174] [cursor=pointer]:
+                    - /url: https://www.reddit.com/posts/2026/global/
+                    - generic [ref=e3175]:
+                      - img [ref=e3177]
+                      - generic [ref=e3182]: Best of Reddit
+                  - separator [ref=e3183]
+                  - link "Reddit Rules" [ref=e3185] [cursor=pointer]:
+                    - /url: https://www.redditinc.com/policies/content-policy
+                    - generic [ref=e3186]:
+                      - img [ref=e3188]
+                      - generic [ref=e3192]: Reddit Rules
+                  - link "Privacy Policy" [ref=e3194] [cursor=pointer]:
+                    - /url: https://www.reddit.com/policies/privacy-policy
+                    - generic [ref=e3195]:
+                      - img [ref=e3197]
+                      - generic [ref=e3201]: Privacy Policy
+                  - link "User Agreement" [ref=e3203] [cursor=pointer]:
+                    - /url: https://www.redditinc.com/policies/user-agreement
+                    - generic [ref=e3204]:
+                      - img [ref=e3206]
+                      - generic [ref=e3210]: User Agreement
+                  - link "Your Privacy Choices" [ref=e3212] [cursor=pointer]:
+                    - /url: https://support.reddithelp.com/hc/articles/43980704794004
+                    - generic [ref=e3213]:
+                      - img [ref=e3215]
+                      - generic [ref=e3219]: Your Privacy Choices
+                  - link "Accessibility" [ref=e3221] [cursor=pointer]:
+                    - /url: https://support.reddithelp.com/hc/sections/38303584022676-Accessibility
+                    - generic [ref=e3222]:
+                      - img [ref=e3224]
+                      - generic [ref=e3229]: Accessibility
+            - link "Reddit, Inc. © 2026. All rights reserved." [ref=e3231] [cursor=pointer]:
+              - /url: https://redditinc.com

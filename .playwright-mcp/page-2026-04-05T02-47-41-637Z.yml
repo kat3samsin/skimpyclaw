@@ -1,0 +1,472 @@
+- generic [ref=e2]:
+  - generic:
+    - generic:
+      - heading "To view keyboard shortcuts, press question mark View keyboard shortcuts" [level=2] [ref=e7]:
+        - generic [ref=e8]: To view keyboard shortcuts, press question mark
+        - link "View keyboard shortcuts" [ref=e9] [cursor=pointer]:
+          - /url: /i/keyboard_shortcuts
+      - generic:
+        - generic:
+          - button [ref=e12] [cursor=pointer]:
+            - img [ref=e13]
+          - img [ref=e20] [cursor=pointer]
+      - generic [ref=e22]:
+        - button "Skip to home timeline" [ref=e23] [cursor=pointer]
+        - button "Skip to trending" [ref=e25] [cursor=pointer]
+        - banner [ref=e27]:
+          - generic [ref=e29]:
+            - generic [ref=e30]:
+              - heading "X" [level=1] [ref=e32] [cursor=pointer]:
+                - link "X" [ref=e33]:
+                  - /url: /home
+                  - img [ref=e35]
+              - navigation "Primary" [ref=e39]:
+                - link "Home" [ref=e40] [cursor=pointer]:
+                  - /url: /home
+                  - img [ref=e43]
+                - link "Search and explore" [ref=e46] [cursor=pointer]:
+                  - /url: /explore
+                  - img [ref=e49]
+                - link "Notifications (1 unread notification)" [ref=e52] [cursor=pointer]:
+                  - /url: /notifications
+                  - generic [ref=e54]:
+                    - img [ref=e55]
+                    - generic "1 unread items" [ref=e58]:
+                      - generic [ref=e59]: "1"
+                - link "Follow" [ref=e60] [cursor=pointer]:
+                  - /url: /i/connect_people
+                  - img [ref=e63]
+                - link "Direct Messages" [ref=e66] [cursor=pointer]:
+                  - /url: /i/chat
+                  - img [ref=e69]
+                - link "Grok" [ref=e72] [cursor=pointer]:
+                  - /url: /i/grok
+                  - generic [ref=e74]:
+                    - img [ref=e75]
+                    - generic "undefined unread items" [ref=e78]
+                - link "Profile" [ref=e79] [cursor=pointer]:
+                  - /url: /its_katriiina
+                  - img [ref=e82]
+                - button "More menu items" [ref=e85] [cursor=pointer]:
+                  - img [ref=e88]
+              - link "Post" [ref=e92] [cursor=pointer]:
+                - /url: /compose/post
+                - img [ref=e94]
+            - button "Account menu" [ref=e99] [cursor=pointer]:
+              - generic [ref=e107]:
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic "K":
+                        - img "K"
+        - main [ref=e110]:
+          - generic [ref=e113]:
+            - generic "Home timeline" [ref=e115]:
+              - generic [ref=e116]:
+                - generic [ref=e117]:
+                  - generic [ref=e122]:
+                    - button "Back" [ref=e124] [cursor=pointer]:
+                      - img [ref=e126]
+                    - search "Search" [ref=e134]:
+                      - generic [ref=e139]:
+                        - img [ref=e141]
+                        - combobox "Search query" [ref=e146]: AI lang:en
+                    - button "More" [ref=e148] [cursor=pointer]:
+                      - img [ref=e150]
+                  - navigation [ref=e154]:
+                    - generic [ref=e155]:
+                      - generic:
+                        - button "Previous" [disabled]:
+                          - generic:
+                            - img
+                      - tablist [ref=e157]:
+                        - tab "Top" [selected] [ref=e158] [cursor=pointer]:
+                          - generic [ref=e161]: Top
+                        - tab "Latest" [ref=e163] [cursor=pointer]:
+                          - generic [ref=e166]: Latest
+                        - tab "People" [ref=e167] [cursor=pointer]:
+                          - generic [ref=e170]: People
+                        - tab "Media" [ref=e171] [cursor=pointer]:
+                          - generic [ref=e174]: Media
+                        - tab "Lists" [ref=e175] [cursor=pointer]:
+                          - generic [ref=e178]: Lists
+                      - generic:
+                        - button "Next" [disabled]:
+                          - generic:
+                            - img
+                - generic:
+                  - generic:
+                    - status:
+                      - button:
+                        - generic:
+                          - img
+                          - generic: See new posts
+              - region "Search timeline" [ref=e180]:
+                - heading "Search timeline" [level=1] [ref=e181]
+                - 'generic "Timeline: Search timeline" [ref=e182]':
+                  - generic [ref=e183]:
+                    - heading "People" [level=2] [ref=e188]:
+                      - generic [ref=e189]: People
+                    - button "Aiah Arceta Verified account @bini_aiah Following @bini_aiah Stream 'Unang Kilig' and 'Honey Honey' on all music platforms! | 📩 biniph.official@gmail.com" [ref=e193] [cursor=pointer]:
+                      - generic [ref=e194]:
+                        - link [ref=e204]:
+                          - /url: /bini_aiah
+                        - generic [ref=e207]:
+                          - generic [ref=e208]:
+                            - generic [ref=e210]:
+                              - link "Aiah Arceta Verified account" [ref=e212]:
+                                - /url: /bini_aiah
+                                - generic [ref=e213]:
+                                  - generic [ref=e215]: Aiah Arceta
+                                  - img "Verified account" [ref=e218]
+                              - link "@bini_aiah" [ref=e223]:
+                                - /url: /bini_aiah
+                                - generic [ref=e225]: "@bini_aiah"
+                            - button "Following @bini_aiah" [ref=e227]:
+                              - generic [ref=e230]: Following
+                          - generic [ref=e231]:
+                            - text: Stream 'Unang Kilig' and 'Honey Honey' on all music platforms! |
+                            - img "📩" [ref=e232]
+                            - text: biniph.official@gmail.com
+                    - button "Stability AI Verified account @StabilityAI Following @StabilityAI We’ll help you make it like nobody’s business. Multimodal media generation and editing tools to get your idea to production. Self-deploy? 👍 Need a partner? 🤝" [ref=e236] [cursor=pointer]:
+                      - generic [ref=e237]:
+                        - link [ref=e247]:
+                          - /url: /StabilityAI
+                        - generic [ref=e250]:
+                          - generic [ref=e251]:
+                            - generic [ref=e253]:
+                              - link "Stability AI Verified account" [ref=e255]:
+                                - /url: /StabilityAI
+                                - generic [ref=e256]:
+                                  - generic [ref=e258]: Stability AI
+                                  - img "Verified account" [ref=e261]
+                              - link "@StabilityAI" [ref=e266]:
+                                - /url: /StabilityAI
+                                - generic [ref=e268]: "@StabilityAI"
+                            - button "Following @StabilityAI" [ref=e270]:
+                              - generic [ref=e273]: Following
+                          - generic [ref=e274]:
+                            - text: We’ll help you make it like nobody’s business. Multimodal media generation and editing tools to get your idea to production. Self-deploy?
+                            - img "👍" [ref=e275]
+                            - text: Need a partner?
+                            - img "🤝" [ref=e276]
+                    - link "View all" [ref=e280] [cursor=pointer]:
+                      - /url: /search?q=AI%20lang%3Aen&src=typed_query&f=user
+                      - generic [ref=e281]: View all
+                    - 'article "JUMPERZ Verified account @jumperz Apr 2 karpathy is showing one of the simplest AI architectures that actually works.. dump research into a folder, let the model organise it into a wiki, ask questions, then file the answers back in. the real insight is the loop...every query makes the wiki better. it compounds.. now Image Quote Andrej Karpathy Verified account @karpathy Apr 2 LLM Knowledge Bases Something I''m finding very useful recently: using LLMs to build personal knowledge bases for various topics of research interest. In this way, a large fraction of my recent token throughput is going less into manipulating code, and more into manipulating 124 replies, 738 reposts, 8047 likes, 14823 bookmarks, 869708 views" [ref=e288] [cursor=pointer]':
+                      - generic [ref=e294]:
+                        - link [ref=e306]:
+                          - /url: /jumperz
+                        - generic [ref=e309]:
+                          - generic [ref=e311]:
+                            - generic [ref=e314]:
+                              - link "JUMPERZ Verified account" [ref=e317]:
+                                - /url: /jumperz
+                                - generic [ref=e318]:
+                                  - generic [ref=e320]: JUMPERZ
+                                  - generic [ref=e322]:
+                                    - img "Verified account" [ref=e323]
+                                    - link [ref=e326]
+                              - generic [ref=e334]:
+                                - link "@jumperz" [ref=e336]:
+                                  - /url: /jumperz
+                                  - generic [ref=e337]: "@jumperz"
+                                - generic [ref=e338]: ·
+                                - link "Apr 2" [ref=e341]:
+                                  - /url: /jumperz/status/2039826228224430323
+                                  - time [ref=e342]: Apr 2
+                            - generic [ref=e344]:
+                              - button "Grok actions" [ref=e346]:
+                                - img [ref=e351]
+                              - button "More" [ref=e357]:
+                                - img [ref=e361]
+                          - generic [ref=e364]:
+                            - generic [ref=e365]: karpathy is showing one of the simplest AI architectures that actually works.. dump research into a folder, let the model organise it into a wiki, ask questions, then file the answers back in. the real insight is the loop...every query makes the wiki better. it compounds.. now
+                            - button "Show more" [ref=e366]
+                          - 'generic "Quote Andrej Karpathy Verified account @karpathy Apr 2 LLM Knowledge Bases Something I''m finding very useful recently: using LLMs to build personal knowledge bases for various topics of research interest. In this way, a large fraction of my recent token throughput is going less into manipulating code, and more into manipulating" [ref=e367]':
+                            - link "Image" [ref=e374]:
+                              - /url: /jumperz/status/2039826228224430323/photo/1
+                              - generic "Image" [ref=e378]:
+                                - img "Image" [ref=e380]
+                            - generic [ref=e381]:
+                              - generic [ref=e382]: Quote
+                              - 'link "Andrej Karpathy Verified account @karpathy Apr 2 LLM Knowledge Bases Something I''m finding very useful recently: using LLMs to build personal knowledge bases for various topics of research interest. In this way, a large fraction of my recent token throughput is going less into manipulating code, and more into manipulating" [ref=e383]':
+                                - generic [ref=e384]:
+                                  - generic [ref=e402]:
+                                    - generic [ref=e406]:
+                                      - generic [ref=e408]: Andrej Karpathy
+                                      - img "Verified account" [ref=e411]
+                                    - generic [ref=e415]:
+                                      - generic [ref=e418]: "@karpathy"
+                                      - generic [ref=e419]: ·
+                                      - generic "Apr 2" [ref=e422]:
+                                        - time [ref=e423]: Apr 2
+                                  - generic [ref=e427]: "LLM Knowledge Bases Something I'm finding very useful recently: using LLMs to build personal knowledge bases for various topics of research interest. In this way, a large fraction of my recent token throughput is going less into manipulating code, and more into manipulating"
+                          - group "124 replies, 738 reposts, 8047 likes, 14823 bookmarks, 869708 views" [ref=e430]:
+                            - button "124 Replies. Reply" [ref=e432]:
+                              - generic [ref=e433]:
+                                - img [ref=e436]
+                                - generic [ref=e441]: "124"
+                            - button "738 reposts. Repost" [ref=e443]:
+                              - generic [ref=e444]:
+                                - img [ref=e447]
+                                - generic [ref=e452]: "738"
+                            - button "8047 Likes. Like" [ref=e454]:
+                              - generic [ref=e455]:
+                                - img [ref=e458]
+                                - generic [ref=e463]: 8K
+                            - link "869708 views. View post analytics" [ref=e465]:
+                              - /url: /jumperz/status/2039826228224430323/analytics
+                              - generic [ref=e466]:
+                                - img [ref=e469]
+                                - generic [ref=e474]: 869K
+                            - button "Bookmark" [ref=e476]:
+                              - img [ref=e480]
+                            - button "Share post" [ref=e485]:
+                              - img [ref=e489]
+                    - article "Machina Verified account @EXM7777 Mar 19 bro just dropped a masterclass on how to make it without understanding a single thing about AI Embedded video Play Video Quote Amir D Verified account @starks_arq Mar 19 Article cover image Article I don't understand AI, yet I built a million dollar business with it Three years ago I was in Morocco with my 16-year-old brother and $500 a month... and today I run an AI film studio that works with billion-dollar companies, and governments are putting our films into... 17 replies, 222 reposts, 2700 likes, 4521 bookmarks, 403510 views" [ref=e495] [cursor=pointer]:
+                      - generic [ref=e501]:
+                        - link [ref=e513]:
+                          - /url: /EXM7777
+                        - generic [ref=e516]:
+                          - generic [ref=e518]:
+                            - generic [ref=e521]:
+                              - link "Machina Verified account" [ref=e524]:
+                                - /url: /EXM7777
+                                - generic [ref=e525]:
+                                  - generic [ref=e527]: Machina
+                                  - img "Verified account" [ref=e530]
+                              - generic [ref=e534]:
+                                - link "@EXM7777" [ref=e536]:
+                                  - /url: /EXM7777
+                                  - generic [ref=e537]: "@EXM7777"
+                                - generic [ref=e538]: ·
+                                - link "Mar 19" [ref=e540]:
+                                  - /url: /EXM7777/status/2034664182017315290
+                                  - time [ref=e541]: Mar 19
+                            - generic [ref=e543]:
+                              - button "Grok actions" [ref=e545]:
+                                - img [ref=e550]
+                              - button "More" [ref=e556]:
+                                - img [ref=e560]
+                          - generic [ref=e564]: bro just dropped a masterclass on how to make it without understanding a single thing about AI
+                          - generic "Quote Amir D Verified account @starks_arq Mar 19 Article cover image Article I don't understand AI, yet I built a million dollar business with it Three years ago I was in Morocco with my 16-year-old brother and $500 a month... and today I run an AI film studio that works with billion-dollar companies, and governments are putting our films into..." [ref=e565]:
+                            - generic [ref=e581]:
+                              - generic "Embedded video" [ref=e584]
+                              - button "Play Video" [ref=e591]:
+                                - img [ref=e592]
+                            - generic [ref=e596]:
+                              - generic [ref=e597]: Quote
+                              - link "Amir D Verified account @starks_arq Mar 19 Article cover image Article I don't understand AI, yet I built a million dollar business with it Three years ago I was in Morocco with my 16-year-old brother and $500 a month... and today I run an AI film studio that works with billion-dollar companies, and governments are putting our films into..." [ref=e598]:
+                                - generic [ref=e599]:
+                                  - generic [ref=e617]:
+                                    - generic [ref=e621]:
+                                      - generic [ref=e623]: Amir D
+                                      - img "Verified account" [ref=e626]
+                                    - generic [ref=e630]:
+                                      - generic [ref=e633]: "@starks_arq"
+                                      - generic [ref=e634]: ·
+                                      - generic "Mar 19" [ref=e637]:
+                                        - time [ref=e638]: Mar 19
+                                  - generic [ref=e641]:
+                                    - generic [ref=e642]:
+                                      - generic "Article cover image" [ref=e646]:
+                                        - img "Article cover image" [ref=e648]
+                                      - generic:
+                                        - generic:
+                                          - img "Article":
+                                            - generic:
+                                              - img
+                                              - text: Article
+                                    - generic [ref=e649]:
+                                      - generic [ref=e650]: I don't understand AI, yet I built a million dollar business with it
+                                      - generic [ref=e651]: Three years ago I was in Morocco with my 16-year-old brother and $500 a month... and today I run an AI film studio that works with billion-dollar companies, and governments are putting our films into...
+                          - group "17 replies, 222 reposts, 2700 likes, 4521 bookmarks, 403510 views" [ref=e654]:
+                            - button "17 Replies. Reply" [ref=e656]:
+                              - generic [ref=e657]:
+                                - img [ref=e660]
+                                - generic [ref=e665]: "17"
+                            - button "222 reposts. Repost" [ref=e667]:
+                              - generic [ref=e668]:
+                                - img [ref=e671]
+                                - generic [ref=e676]: "222"
+                            - button "2700 Likes. Like" [ref=e678]:
+                              - generic [ref=e679]:
+                                - img [ref=e682]
+                                - generic [ref=e687]: 2.7K
+                            - link "403510 views. View post analytics" [ref=e689]:
+                              - /url: /EXM7777/status/2034664182017315290/analytics
+                              - generic [ref=e690]:
+                                - img [ref=e693]
+                                - generic [ref=e698]: 403K
+                            - button "Bookmark" [ref=e700]:
+                              - img [ref=e704]
+                            - button "Share post" [ref=e709]:
+                              - img [ref=e713]
+            - generic "Trending" [ref=e720]:
+              - generic [ref=e721]:
+                - heading "Search filters" [level=2] [ref=e724]:
+                  - generic [ref=e725]: Search filters
+                - generic [ref=e727]:
+                  - generic [ref=e728]:
+                    - radiogroup "People" [ref=e730]:
+                      - generic [ref=e732]: People
+                      - generic [ref=e734] [cursor=pointer]:
+                        - generic [ref=e735]: From anyone
+                        - generic [ref=e736]:
+                          - img [ref=e739]
+                          - radio "From anyone" [checked] [ref=e742]
+                      - generic [ref=e744] [cursor=pointer]:
+                        - generic [ref=e745]: People you follow
+                        - radio "People you follow" [ref=e749]
+                    - radiogroup "Location" [ref=e751]:
+                      - generic [ref=e753]: Location
+                      - generic [ref=e755] [cursor=pointer]:
+                        - generic [ref=e756]: Anywhere
+                        - generic [ref=e757]:
+                          - img [ref=e760]
+                          - radio "Anywhere" [checked] [ref=e763]
+                      - generic [ref=e765] [cursor=pointer]:
+                        - generic [ref=e766]: Near you
+                        - radio "Near you" [ref=e770]
+                  - link "Advanced search" [ref=e772] [cursor=pointer]:
+                    - /url: /search-advanced?f=top
+                    - generic [ref=e773]: Advanced search
+                - generic [ref=e777]:
+                  - heading "Today’s News Close" [level=2] [ref=e779]:
+                    - generic [ref=e780]: Today’s News
+                    - button "Close" [ref=e783] [cursor=pointer]:
+                      - img [ref=e785]
+                  - generic [ref=e788]:
+                    - link "Karpathy's Simple LLM Workflow Builds Personal Knowledge Bases 2 days ago · Other · 26.9K posts" [ref=e789] [cursor=pointer]:
+                      - generic [ref=e792]:
+                        - generic [ref=e793]: Karpathy's Simple LLM Workflow Builds Personal Knowledge Bases
+                        - generic [ref=e832]: 2 days ago · Other · 26.9K posts
+                    - link "Farza creates Farzapedia, a personal Wikipedia built by LLM from diary entries, Apple Notes, and iMessage conversations for agent use 16 hours ago · Other · 1,230 posts" [ref=e833] [cursor=pointer]:
+                      - generic [ref=e836]:
+                        - generic [ref=e837]: Farza creates Farzapedia, a personal Wikipedia built by LLM from diary entries, Apple Notes, and iMessage conversations for agent use
+                        - generic [ref=e876]: 16 hours ago · Other · 1,230 posts
+                    - link "Anthropic Blocks Claude Subscriptions from Third-Party Tools Like OpenClaw 1 day ago · News · 38.8K posts" [ref=e877] [cursor=pointer]:
+                      - generic [ref=e880]:
+                        - generic [ref=e881]: Anthropic Blocks Claude Subscriptions from Third-Party Tools Like OpenClaw
+                        - generic [ref=e920]: 1 day ago · News · 38.8K posts
+                - region "Trending now" [ref=e922]:
+                  - heading "Trending now" [level=1] [ref=e923]
+                  - 'generic "Timeline: Trending now" [ref=e924]':
+                    - generic [ref=e925]:
+                      - heading "What’s happening" [level=2] [ref=e929]:
+                        - generic [ref=e930]: What’s happening
+                      - 'link "Trending in United States Yaxel Trending with #FinalFour, Chainsmokers More" [ref=e933] [cursor=pointer]':
+                        - generic [ref=e934]:
+                          - generic [ref=e936]: Trending in United States
+                          - generic [ref=e937]: Yaxel
+                          - generic [ref=e938]:
+                            - text: Trending with
+                            - link "#FinalFour" [ref=e939]:
+                              - /url: /search?q=%23FinalFour&src=trend_click&vertical=trends
+                              - generic [ref=e940]: "#FinalFour"
+                            - text: ","
+                            - link "Chainsmokers" [ref=e941]:
+                              - /url: /search?q=Chainsmokers&src=trend_click&vertical=trends
+                          - button "More" [ref=e944]:
+                            - img [ref=e948]
+                      - link "Reality stars · Trending Timmay More" [ref=e953] [cursor=pointer]:
+                        - generic [ref=e954]:
+                          - generic [ref=e956]: Reality stars · Trending
+                          - generic [ref=e957]: Timmay
+                          - button "More" [ref=e960]:
+                            - img [ref=e964]
+                      - link "Sports · Trending Jazz Chisholm More" [ref=e969] [cursor=pointer]:
+                        - generic [ref=e970]:
+                          - generic [ref=e972]: Sports · Trending
+                          - generic [ref=e973]: Jazz Chisholm
+                          - button "More" [ref=e976]:
+                            - img [ref=e980]
+                      - link "Politics · Trending Walter Reed More" [ref=e985] [cursor=pointer]:
+                        - generic [ref=e986]:
+                          - generic [ref=e988]: Politics · Trending
+                          - generic [ref=e989]: Walter Reed
+                          - button "More" [ref=e992]:
+                            - img [ref=e996]
+                      - link "Show more" [ref=e1001] [cursor=pointer]:
+                        - /url: /explore/tabs/for-you
+                        - generic [ref=e1002]: Show more
+                - complementary "Who to follow" [ref=e1005]:
+                  - heading "Who to follow" [level=2] [ref=e1007]:
+                    - generic [ref=e1008]: Who to follow
+                  - list [ref=e1009]:
+                    - listitem [ref=e1010] [cursor=pointer]:
+                      - generic [ref=e1011]:
+                        - link [ref=e1021]:
+                          - /url: /drawio
+                        - generic [ref=e1025]:
+                          - generic [ref=e1027]:
+                            - link "draw.io" [ref=e1029]:
+                              - /url: /drawio
+                              - generic [ref=e1032]: draw.io
+                            - link "@drawio" [ref=e1035]:
+                              - /url: /drawio
+                              - generic [ref=e1037]: "@drawio"
+                          - button "Follow @drawio" [ref=e1039]:
+                            - generic [ref=e1042]: Follow
+                    - listitem [ref=e1043] [cursor=pointer]:
+                      - generic [ref=e1044]:
+                        - link [ref=e1054]:
+                          - /url: /rryssf_
+                        - generic [ref=e1058]:
+                          - generic [ref=e1060]:
+                            - link "Robert Youssef Verified account" [ref=e1062]:
+                              - /url: /rryssf_
+                              - generic [ref=e1063]:
+                                - generic [ref=e1065]: Robert Youssef
+                                - img "Verified account" [ref=e1068]
+                            - link "@rryssf_" [ref=e1073]:
+                              - /url: /rryssf_
+                              - generic [ref=e1075]: "@rryssf_"
+                          - button "Follow @rryssf_" [ref=e1077]:
+                            - generic [ref=e1080]: Follow
+                    - listitem [ref=e1081] [cursor=pointer]:
+                      - generic [ref=e1082]:
+                        - link [ref=e1092]:
+                          - /url: /_kaitodev
+                        - generic [ref=e1096]:
+                          - generic [ref=e1098]:
+                            - link "Kaito | 海斗 Verified account" [ref=e1100]:
+                              - /url: /_kaitodev
+                              - generic [ref=e1101]:
+                                - generic [ref=e1103]: Kaito | 海斗
+                                - img "Verified account" [ref=e1106]
+                            - link "@_kaitodev" [ref=e1111]:
+                              - /url: /_kaitodev
+                              - generic [ref=e1113]: "@_kaitodev"
+                          - button "Follow @_kaitodev" [ref=e1115]:
+                            - generic [ref=e1118]: Follow
+                  - link "Show more" [ref=e1119] [cursor=pointer]:
+                    - /url: /i/connect_people?user_id=45587829
+                    - generic [ref=e1120]: Show more
+                - navigation "Footer" [ref=e1122]:
+                  - generic [ref=e1123]:
+                    - link "Terms of Service" [ref=e1124] [cursor=pointer]:
+                      - /url: https://x.com/tos
+                    - generic [ref=e1125]: "|"
+                  - generic [ref=e1126]:
+                    - link "Privacy Policy" [ref=e1127] [cursor=pointer]:
+                      - /url: https://x.com/privacy
+                    - generic [ref=e1128]: "|"
+                  - generic [ref=e1129]:
+                    - link "Cookie Policy" [ref=e1130] [cursor=pointer]:
+                      - /url: https://support.x.com/articles/20170514
+                    - generic [ref=e1131]: "|"
+                  - generic [ref=e1132]:
+                    - link "Accessibility" [ref=e1133] [cursor=pointer]:
+                      - /url: https://help.x.com/resources/accessibility
+                    - generic [ref=e1134]: "|"
+                  - generic [ref=e1135]:
+                    - link "Ads info" [ref=e1136] [cursor=pointer]:
+                      - /url: https://business.x.com/en/help/troubleshooting/how-twitter-ads-work.html?ref=web-twc-ao-gbl-adsinfo&utm_source=twc&utm_medium=web&utm_campaign=ao&utm_content=adsinfo
+                    - generic [ref=e1137]: "|"
+                  - button "More" [ref=e1138] [cursor=pointer]:
+                    - generic [ref=e1139]:
+                      - text: More
+                      - img [ref=e1140]
+                  - generic [ref=e1143]: © 2026 X Corp.

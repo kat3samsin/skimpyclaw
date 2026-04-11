@@ -1,0 +1,456 @@
+- generic [ref=e2]:
+  - region
+  - generic [ref=e3]:
+    - link "Skip to content" [ref=e4] [cursor=pointer]:
+      - /url: "#start-of-content"
+    - banner [ref=e6]:
+      - heading "Navigation Menu" [level=2] [ref=e7]
+      - generic [ref=e8]:
+        - link "Homepage" [ref=e10] [cursor=pointer]:
+          - /url: /
+          - img [ref=e11]
+        - generic [ref=e13]:
+          - navigation "Global" [ref=e16]:
+            - list [ref=e17]:
+              - listitem [ref=e18]:
+                - button "Platform" [ref=e20] [cursor=pointer]:
+                  - text: Platform
+                  - img [ref=e21]
+              - listitem [ref=e23]:
+                - button "Solutions" [ref=e25] [cursor=pointer]:
+                  - text: Solutions
+                  - img [ref=e26]
+              - listitem [ref=e28]:
+                - button "Resources" [ref=e30] [cursor=pointer]:
+                  - text: Resources
+                  - img [ref=e31]
+              - listitem [ref=e33]:
+                - button "Open Source" [ref=e35] [cursor=pointer]:
+                  - text: Open Source
+                  - img [ref=e36]
+              - listitem [ref=e38]:
+                - button "Enterprise" [ref=e40] [cursor=pointer]:
+                  - text: Enterprise
+                  - img [ref=e41]
+              - listitem [ref=e43]:
+                - link "Pricing" [ref=e44] [cursor=pointer]:
+                  - /url: https://github.com/pricing
+                  - generic [ref=e45]: Pricing
+          - generic [ref=e46]:
+            - button "Search or jump to…" [ref=e49] [cursor=pointer]:
+              - img [ref=e51]
+            - link "Sign in" [ref=e54] [cursor=pointer]:
+              - /url: /login?return_to=https%3A%2F%2Fgithub.com%2Ftrending%3Fsince%3Ddaily
+            - link "Sign up" [ref=e55] [cursor=pointer]:
+              - /url: /signup?ref_cta=Sign+up&ref_loc=header+logged+out&ref_page=%2Ftrending&source=header
+            - button "Appearance settings" [ref=e58] [cursor=pointer]:
+              - img
+  - main [ref=e61]:
+    - navigation "Explore navigation" [ref=e63]:
+      - generic [ref=e64]:
+        - link "Explore" [ref=e65] [cursor=pointer]:
+          - /url: /explore
+        - link "Topics" [ref=e66] [cursor=pointer]:
+          - /url: /topics
+        - link "Trending" [ref=e67] [cursor=pointer]:
+          - /url: /trending
+        - link "Collections" [ref=e68] [cursor=pointer]:
+          - /url: /collections
+        - link "Events" [ref=e69] [cursor=pointer]:
+          - /url: /events
+        - link "GitHub Sponsors" [ref=e70] [cursor=pointer]:
+          - /url: /sponsors/explore
+    - generic [ref=e72]:
+      - heading "Trending" [level=1] [ref=e73]
+      - paragraph [ref=e74]: See what the GitHub community is most excited about today.
+    - generic [ref=e76]:
+      - generic [ref=e77]:
+        - navigation "Trending" [ref=e78]:
+          - link "Repositories" [ref=e79] [cursor=pointer]:
+            - /url: /trending
+          - link "Developers" [ref=e80] [cursor=pointer]:
+            - /url: /trending/developers
+        - generic [ref=e81]:
+          - group [ref=e83]:
+            - 'button "Spoken Language: Any" [ref=e84] [cursor=pointer]'
+          - group [ref=e86]:
+            - 'button "Language: Any" [ref=e87] [cursor=pointer]'
+          - group [ref=e89]:
+            - 'button "Date range: Today" [ref=e90] [cursor=pointer]'
+      - generic [ref=e91]:
+        - article [ref=e92]:
+          - generic [ref=e93]:
+            - link "Sponsor @Blaizzy" [ref=e94] [cursor=pointer]:
+              - /url: /sponsors/Blaizzy
+              - generic [ref=e96]:
+                - img [ref=e97]
+                - text: Sponsor
+            - link "You must be signed in to star a repository" [ref=e100] [cursor=pointer]:
+              - /url: /login?return_to=%2FBlaizzy%2Fmlx-vlm
+              - img [ref=e101]
+              - text: Star
+          - heading "Blaizzy / mlx-vlm" [level=2] [ref=e103]:
+            - link "Blaizzy / mlx-vlm" [ref=e104] [cursor=pointer]:
+              - /url: /Blaizzy/mlx-vlm
+              - img [ref=e105]
+              - text: Blaizzy / mlx-vlm
+          - paragraph [ref=e107]: MLX-VLM is a package for inference and fine-tuning of Vision Language Models (VLMs) on your Mac using MLX.
+          - generic [ref=e108]:
+            - generic [ref=e109]: Python
+            - link "star 3,627" [ref=e111] [cursor=pointer]:
+              - /url: /Blaizzy/mlx-vlm/stargazers
+              - img "star" [ref=e112]
+              - text: 3,627
+            - link "fork 398" [ref=e114] [cursor=pointer]:
+              - /url: /Blaizzy/mlx-vlm/forks
+              - img "fork" [ref=e115]
+              - text: "398"
+            - generic [ref=e117]:
+              - text: Built by
+              - link "@Blaizzy" [ref=e118] [cursor=pointer]:
+                - /url: /Blaizzy
+                - img "@Blaizzy" [ref=e119]
+              - link "@claude" [ref=e120] [cursor=pointer]:
+                - /url: /claude
+                - img "@claude" [ref=e121]
+              - link "@pcuenca" [ref=e122] [cursor=pointer]:
+                - /url: /pcuenca
+                - img "@pcuenca" [ref=e123]
+              - link "@neilmehta24" [ref=e124] [cursor=pointer]:
+                - /url: /neilmehta24
+                - img "@neilmehta24" [ref=e125]
+              - link "@viktike" [ref=e126] [cursor=pointer]:
+                - /url: /viktike
+                - img "@viktike" [ref=e127]
+            - generic [ref=e128]:
+              - img [ref=e129]
+              - text: 343 stars today
+        - article [ref=e131]:
+          - link "You must be signed in to star a repository" [ref=e134] [cursor=pointer]:
+            - /url: /login?return_to=%2Fonyx-dot-app%2Fonyx
+            - img [ref=e135]
+            - text: Star
+          - heading "onyx-dot-app / onyx" [level=2] [ref=e137]:
+            - link "onyx-dot-app / onyx" [ref=e138] [cursor=pointer]:
+              - /url: /onyx-dot-app/onyx
+              - img [ref=e139]
+              - text: onyx-dot-app / onyx
+          - paragraph [ref=e141]: Open Source AI Platform - AI Chat with advanced features that works with every LLM
+          - generic [ref=e142]:
+            - generic [ref=e143]: Python
+            - link "star 24,317" [ref=e145] [cursor=pointer]:
+              - /url: /onyx-dot-app/onyx/stargazers
+              - img "star" [ref=e146]
+              - text: 24,317
+            - link "fork 3,260" [ref=e148] [cursor=pointer]:
+              - /url: /onyx-dot-app/onyx/forks
+              - img "fork" [ref=e149]
+              - text: 3,260
+            - generic [ref=e151]:
+              - text: Built by
+              - link "@github-merge-queue" [ref=e152] [cursor=pointer]:
+                - /url: /apps/github-merge-queue
+                - img "@github-merge-queue" [ref=e153]
+              - link "@Weves" [ref=e154] [cursor=pointer]:
+                - /url: /Weves
+                - img "@Weves" [ref=e155]
+              - link "@yuhongsun96" [ref=e156] [cursor=pointer]:
+                - /url: /yuhongsun96
+                - img "@yuhongsun96" [ref=e157]
+              - link "@pablonyx" [ref=e158] [cursor=pointer]:
+                - /url: /pablonyx
+                - img "@pablonyx" [ref=e159]
+              - link "@jmelahman" [ref=e160] [cursor=pointer]:
+                - /url: /jmelahman
+                - img "@jmelahman" [ref=e161]
+            - generic [ref=e162]:
+              - img [ref=e163]
+              - text: 1,197 stars today
+        - article [ref=e165]:
+          - generic [ref=e166]:
+            - link "Sponsor @Yeachan-Heo" [ref=e167] [cursor=pointer]:
+              - /url: /sponsors/Yeachan-Heo
+              - generic [ref=e169]:
+                - img [ref=e170]
+                - text: Sponsor
+            - link "You must be signed in to star a repository" [ref=e173] [cursor=pointer]:
+              - /url: /login?return_to=%2FYeachan-Heo%2Foh-my-codex
+              - img [ref=e174]
+              - text: Star
+          - heading "Yeachan-Heo / oh-my-codex" [level=2] [ref=e176]:
+            - link "Yeachan-Heo / oh-my-codex" [ref=e177] [cursor=pointer]:
+              - /url: /Yeachan-Heo/oh-my-codex
+              - img [ref=e178]
+              - text: Yeachan-Heo / oh-my-codex
+          - paragraph [ref=e180]: "OmX - Oh My codeX: Your codex is not alone. Add hooks, agent teams, HUDs, and so much more."
+          - generic [ref=e181]:
+            - generic [ref=e182]: TypeScript
+            - link "star 15,731" [ref=e184] [cursor=pointer]:
+              - /url: /Yeachan-Heo/oh-my-codex/stargazers
+              - img "star" [ref=e185]
+              - text: 15,731
+            - link "fork 1,475" [ref=e187] [cursor=pointer]:
+              - /url: /Yeachan-Heo/oh-my-codex/forks
+              - img "fork" [ref=e188]
+              - text: 1,475
+            - generic [ref=e190]:
+              - text: Built by
+              - link "@Yeachan-Heo" [ref=e191] [cursor=pointer]:
+                - /url: /Yeachan-Heo
+                - img "@Yeachan-Heo" [ref=e192]
+              - link "@claude" [ref=e193] [cursor=pointer]:
+                - /url: /claude
+                - img "@claude" [ref=e194]
+              - link "@HaD0Yun" [ref=e195] [cursor=pointer]:
+                - /url: /HaD0Yun
+                - img "@HaD0Yun" [ref=e196]
+              - link "@dependabot" [ref=e197] [cursor=pointer]:
+                - /url: /apps/dependabot
+                - img "@dependabot" [ref=e198]
+              - link "@junhoyeo" [ref=e199] [cursor=pointer]:
+                - /url: /junhoyeo
+                - img "@junhoyeo" [ref=e200]
+            - generic [ref=e201]:
+              - img [ref=e202]
+              - text: 1,789 stars today
+        - article [ref=e204]:
+          - link "You must be signed in to star a repository" [ref=e207] [cursor=pointer]:
+            - /url: /login?return_to=%2Fsiddharthvaddem%2Fopenscreen
+            - img [ref=e208]
+            - text: Star
+          - heading "siddharthvaddem / openscreen" [level=2] [ref=e210]:
+            - link "siddharthvaddem / openscreen" [ref=e211] [cursor=pointer]:
+              - /url: /siddharthvaddem/openscreen
+              - img [ref=e212]
+              - text: siddharthvaddem / openscreen
+          - paragraph [ref=e214]: Create stunning demos for free. Open-source, no subscriptions, no watermarks, and free for commercial use. An alternative to Screen Studio.
+          - generic [ref=e215]:
+            - generic [ref=e216]: TypeScript
+            - link "star 20,170" [ref=e218] [cursor=pointer]:
+              - /url: /siddharthvaddem/openscreen/stargazers
+              - img "star" [ref=e219]
+              - text: 20,170
+            - link "fork 1,381" [ref=e221] [cursor=pointer]:
+              - /url: /siddharthvaddem/openscreen/forks
+              - img "fork" [ref=e222]
+              - text: 1,381
+            - generic [ref=e224]:
+              - text: Built by
+              - link "@siddharthvaddem" [ref=e225] [cursor=pointer]:
+                - /url: /siddharthvaddem
+                - img "@siddharthvaddem" [ref=e226]
+              - link "@EtienneLescot" [ref=e227] [cursor=pointer]:
+                - /url: /EtienneLescot
+                - img "@EtienneLescot" [ref=e228]
+              - link "@prayaslashkari" [ref=e229] [cursor=pointer]:
+                - /url: /prayaslashkari
+                - img "@prayaslashkari" [ref=e230]
+              - link "@marcusschiesser" [ref=e231] [cursor=pointer]:
+                - /url: /marcusschiesser
+                - img "@marcusschiesser" [ref=e232]
+              - link "@FabLrc" [ref=e233] [cursor=pointer]:
+                - /url: /FabLrc
+                - img "@FabLrc" [ref=e234]
+            - generic [ref=e235]:
+              - img [ref=e236]
+              - text: 1,591 stars today
+        - article [ref=e238]:
+          - link "You must be signed in to star a repository" [ref=e241] [cursor=pointer]:
+            - /url: /login?return_to=%2Ftelegramdesktop%2Ftdesktop
+            - img [ref=e242]
+            - text: Star
+          - heading "telegramdesktop / tdesktop" [level=2] [ref=e244]:
+            - link "telegramdesktop / tdesktop" [ref=e245] [cursor=pointer]:
+              - /url: /telegramdesktop/tdesktop
+              - img [ref=e246]
+              - text: telegramdesktop / tdesktop
+          - paragraph [ref=e248]: Telegram Desktop messaging app
+          - generic [ref=e249]:
+            - generic [ref=e250]: C++
+            - link "star 30,848" [ref=e252] [cursor=pointer]:
+              - /url: /telegramdesktop/tdesktop/stargazers
+              - img "star" [ref=e253]
+              - text: 30,848
+            - link "fork 6,520" [ref=e255] [cursor=pointer]:
+              - /url: /telegramdesktop/tdesktop/forks
+              - img "fork" [ref=e256]
+              - text: 6,520
+            - generic [ref=e258]:
+              - text: Built by
+              - link "@john-preston" [ref=e259] [cursor=pointer]:
+                - /url: /john-preston
+                - img "@john-preston" [ref=e260]
+              - link "@23rd" [ref=e261] [cursor=pointer]:
+                - /url: /23rd
+                - img "@23rd" [ref=e262]
+              - link "@ilya-fedin" [ref=e263] [cursor=pointer]:
+                - /url: /ilya-fedin
+                - img "@ilya-fedin" [ref=e264]
+              - link "@claude" [ref=e265] [cursor=pointer]:
+                - /url: /claude
+                - img "@claude" [ref=e266]
+              - link "@auchri" [ref=e267] [cursor=pointer]:
+                - /url: /auchri
+                - img "@auchri" [ref=e268]
+            - generic [ref=e269]:
+              - img [ref=e270]
+              - text: 249 stars today
+        - article [ref=e272]:
+          - link "You must be signed in to star a repository" [ref=e275] [cursor=pointer]:
+            - /url: /login?return_to=%2Fblock%2Fgoose
+            - img [ref=e276]
+            - text: Star
+          - heading "block / goose" [level=2] [ref=e278]:
+            - link "block / goose" [ref=e279] [cursor=pointer]:
+              - /url: /block/goose
+              - img [ref=e280]
+              - text: block / goose
+          - paragraph [ref=e282]: an open source, extensible AI agent that goes beyond code suggestions - install, execute, edit, and test with any LLM
+          - generic [ref=e283]:
+            - generic [ref=e284]: Rust
+            - link "star 35,738" [ref=e286] [cursor=pointer]:
+              - /url: /block/goose/stargazers
+              - img "star" [ref=e287]
+              - text: 35,738
+            - link "fork 3,355" [ref=e289] [cursor=pointer]:
+              - /url: /block/goose/forks
+              - img "fork" [ref=e290]
+              - text: 3,355
+            - generic [ref=e292]:
+              - text: Built by
+              - link "@EbonyLouis" [ref=e293] [cursor=pointer]:
+                - /url: /EbonyLouis
+                - img "@EbonyLouis" [ref=e294]
+              - link "@blackgirlbytes" [ref=e295] [cursor=pointer]:
+                - /url: /blackgirlbytes
+                - img "@blackgirlbytes" [ref=e296]
+              - link "@angiejones" [ref=e297] [cursor=pointer]:
+                - /url: /angiejones
+                - img "@angiejones" [ref=e298]
+              - link "@dianed-square" [ref=e299] [cursor=pointer]:
+                - /url: /dianed-square
+                - img "@dianed-square" [ref=e300]
+              - link "@michaelneale" [ref=e301] [cursor=pointer]:
+                - /url: /michaelneale
+                - img "@michaelneale" [ref=e302]
+            - generic [ref=e303]:
+              - img [ref=e304]
+              - text: 935 stars today
+        - article [ref=e306]:
+          - link "You must be signed in to star a repository" [ref=e309] [cursor=pointer]:
+            - /url: /login?return_to=%2Fmicrosoft%2Fagent-framework
+            - img [ref=e310]
+            - text: Star
+          - heading "microsoft / agent-framework" [level=2] [ref=e312]:
+            - link "microsoft / agent-framework" [ref=e313] [cursor=pointer]:
+              - /url: /microsoft/agent-framework
+              - img [ref=e314]
+              - text: microsoft / agent-framework
+          - paragraph [ref=e316]: A framework for building, orchestrating and deploying AI agents and multi-agent workflows with support for Python and .NET.
+          - generic [ref=e317]:
+            - generic [ref=e318]: Python
+            - link "star 8,724" [ref=e320] [cursor=pointer]:
+              - /url: /microsoft/agent-framework/stargazers
+              - img "star" [ref=e321]
+              - text: 8,724
+            - link "fork 1,438" [ref=e323] [cursor=pointer]:
+              - /url: /microsoft/agent-framework/forks
+              - img "fork" [ref=e324]
+              - text: 1,438
+            - generic [ref=e326]:
+              - text: Built by
+              - link "@eavanvalkenburg" [ref=e327] [cursor=pointer]:
+                - /url: /eavanvalkenburg
+                - img "@eavanvalkenburg" [ref=e328]
+              - link "@westey-m" [ref=e329] [cursor=pointer]:
+                - /url: /westey-m
+                - img "@westey-m" [ref=e330]
+              - link "@moonbox3" [ref=e331] [cursor=pointer]:
+                - /url: /moonbox3
+                - img "@moonbox3" [ref=e332]
+              - link "@dmytrostruk" [ref=e333] [cursor=pointer]:
+                - /url: /dmytrostruk
+                - img "@dmytrostruk" [ref=e334]
+              - link "@Copilot" [ref=e335] [cursor=pointer]:
+                - /url: /apps/github-copilot-cli
+                - img "@Copilot" [ref=e336]
+            - generic [ref=e337]:
+              - img [ref=e338]
+              - text: 72 stars today
+        - article [ref=e340]:
+          - link "You must be signed in to star a repository" [ref=e343] [cursor=pointer]:
+            - /url: /login?return_to=%2Fsherlock-project%2Fsherlock
+            - img [ref=e344]
+            - text: Star
+          - heading "sherlock-project / sherlock" [level=2] [ref=e346]:
+            - link "sherlock-project / sherlock" [ref=e347] [cursor=pointer]:
+              - /url: /sherlock-project/sherlock
+              - img [ref=e348]
+              - text: sherlock-project / sherlock
+          - paragraph [ref=e350]: Hunt down social media accounts by username across social networks
+          - generic [ref=e351]:
+            - generic [ref=e352]: Python
+            - link "star 79,415" [ref=e354] [cursor=pointer]:
+              - /url: /sherlock-project/sherlock/stargazers
+              - img "star" [ref=e355]
+              - text: 79,415
+            - link "fork 9,252" [ref=e357] [cursor=pointer]:
+              - /url: /sherlock-project/sherlock/forks
+              - img "fork" [ref=e358]
+              - text: 9,252
+            - generic [ref=e360]:
+              - text: Built by
+              - link "@sdushantha" [ref=e361] [cursor=pointer]:
+                - /url: /sdushantha
+                - img "@sdushantha" [ref=e362]
+              - link "@hoadlck" [ref=e363] [cursor=pointer]:
+                - /url: /hoadlck
+                - img "@hoadlck" [ref=e364]
+              - link "@ppfeister" [ref=e365] [cursor=pointer]:
+                - /url: /ppfeister
+                - img "@ppfeister" [ref=e366]
+              - link "@TheYahya" [ref=e367] [cursor=pointer]:
+                - /url: /TheYahya
+                - img "@TheYahya" [ref=e368]
+              - link "@Czechball" [ref=e369] [cursor=pointer]:
+                - /url: /Czechball
+                - img "@Czechball" [ref=e370]
+            - generic [ref=e371]:
+              - img [ref=e372]
+              - text: 994 stars today
+  - contentinfo [ref=e374]:
+    - heading "Footer" [level=2] [ref=e375]
+    - generic [ref=e376]:
+      - generic [ref=e377]:
+        - link "GitHub Homepage" [ref=e378] [cursor=pointer]:
+          - /url: https://github.com
+          - img [ref=e379]
+        - generic [ref=e381]: © 2026 GitHub, Inc.
+      - navigation "Footer" [ref=e382]:
+        - heading "Footer navigation" [level=3] [ref=e383]
+        - list "Footer navigation" [ref=e384]:
+          - listitem [ref=e385]:
+            - link "Terms" [ref=e386] [cursor=pointer]:
+              - /url: https://docs.github.com/site-policy/github-terms/github-terms-of-service
+          - listitem [ref=e387]:
+            - link "Privacy" [ref=e388] [cursor=pointer]:
+              - /url: https://docs.github.com/site-policy/privacy-policies/github-privacy-statement
+          - listitem [ref=e389]:
+            - link "Security" [ref=e390] [cursor=pointer]:
+              - /url: https://github.com/security
+          - listitem [ref=e391]:
+            - link "Status" [ref=e392] [cursor=pointer]:
+              - /url: https://www.githubstatus.com/
+          - listitem [ref=e393]:
+            - link "Community" [ref=e394] [cursor=pointer]:
+              - /url: https://github.community/
+          - listitem [ref=e395]:
+            - link "Docs" [ref=e396] [cursor=pointer]:
+              - /url: https://docs.github.com/
+          - listitem [ref=e397]:
+            - link "Contact" [ref=e398] [cursor=pointer]:
+              - /url: https://support.github.com?tags=dotcom-footer
+          - listitem [ref=e399]:
+            - button "Manage cookies" [ref=e401] [cursor=pointer]
+          - listitem [ref=e402]:
+            - button "Do not share my personal information" [ref=e404] [cursor=pointer]

@@ -1,0 +1,599 @@
+- generic [active] [ref=e1]:
+  - link "Skip to main content" [ref=e2] [cursor=pointer]:
+    - /url: "#main-content"
+    - generic [ref=e4]: Skip to main content
+  - generic [ref=e6]:
+    - generic:
+      - generic [ref=e7]:
+        - generic: Machine Learning
+      - banner [ref=e10]:
+        - navigation [ref=e11]:
+          - link "Home" [ref=e15] [cursor=pointer]:
+            - /url: /
+            - img [ref=e17]
+          - search [ref=e34]:
+            - generic [ref=e36]:
+              - img [ref=e39]
+              - generic "Remove r/MachineLearning filter and expand search to all of Reddit" [ref=e42] [cursor=pointer]:
+                - button [pressed] [ref=e43]:
+                  - generic [ref=e47]: r/MachineLearning
+                - img [ref=e49]
+              - textbox "Remove r/MachineLearning filter and expand search to all of Reddit" [ref=e52]:
+                - /placeholder: Search in r/MachineLearning
+          - generic [ref=e53]:
+            - button "Get App" [ref=e58] [cursor=pointer]:
+              - generic [ref=e59]:
+                - img [ref=e61]
+                - generic [ref=e63]: Get App
+            - link "Log In" [ref=e67] [cursor=pointer]:
+              - /url: https://www.reddit.com/login/
+              - generic [ref=e69]: Log In
+            - button "Expand user menu" [ref=e74] [cursor=pointer]:
+              - img [ref=e77]
+              - generic [ref=e79]:
+                - generic: Expand user menu
+      - generic [ref=e80]:
+        - generic [ref=e81]:
+          - region "Community actions" [ref=e85]:
+            - generic [ref=e86]:
+              - heading "r/MachineLearning" [level=1] [ref=e92]
+              - generic [ref=e93]:
+                - button "Create Post" [ref=e97] [cursor=pointer]:
+                  - generic [ref=e98]:
+                    - img [ref=e100]
+                    - generic [ref=e102]: Create Post
+                - button "Join" [ref=e107] [cursor=pointer]
+          - generic [ref=e108]:
+            - generic:
+              - generic:
+                - link "Skip to Navigation" [ref=e109] [cursor=pointer]:
+                  - /url: "#left-sidebar-container"
+                - link "Skip to Right Sidebar" [ref=e110] [cursor=pointer]:
+                  - /url: "#right-sidebar-container"
+          - generic [ref=e111]:
+            - main [ref=e112]:
+              - generic [ref=e115]:
+                - generic "Sort by" [ref=e119]:
+                  - 'button "Sort by: Hot" [ref=e121] [cursor=pointer]':
+                    - generic [ref=e123]: Hot
+                - generic "View" [ref=e129]:
+                  - 'button "View: Card" [ref=e131] [cursor=pointer]'
+              - generic [ref=e137]:
+                - button "collapse/expand community highlights" [ref=e138] [cursor=pointer]:
+                  - heading "Community highlights" [level=3] [ref=e139]:
+                    - img [ref=e140]
+                    - generic [ref=e142]: Community highlights
+                  - button "collapse/expand community highlights" [ref=e144]:
+                    - img [ref=e147]
+                - list [ref=e151]:
+                  - generic:
+                    - listitem [ref=e152]:
+                      - link "[D] Self-Promotion Thread 12 votes • 23 comments AutoModerator" [ref=e153] [cursor=pointer]:
+                        - /url: /r/MachineLearning/comments/1sa4rlx/d_selfpromotion_thread/
+                        - generic [ref=e157]:
+                          - generic [ref=e158]:
+                            - heading "[D] Self-Promotion Thread" [level=2] [ref=e161]
+                            - generic [ref=e164]:
+                              - generic [ref=e165]: "12"
+                              - text: votes •
+                              - generic [ref=e166]: "23"
+                              - text: comments
+                          - img "AutoModerator" [ref=e173]
+                    - listitem [ref=e174]:
+                      - link "[D] Monthly Who's Hiring and Who wants to be Hired? 6 votes • 1 comment AutoModerator" [ref=e175] [cursor=pointer]:
+                        - /url: /r/MachineLearning/comments/1s8b199/d_monthly_whos_hiring_and_who_wants_to_be_hired/
+                        - generic [ref=e179]:
+                          - generic [ref=e180]:
+                            - heading "[D] Monthly Who's Hiring and Who wants to be Hired?" [level=2] [ref=e183]
+                            - generic [ref=e186]:
+                              - generic [ref=e187]: "6"
+                              - text: votes •
+                              - generic [ref=e188]: "1"
+                              - text: comment
+                          - img "AutoModerator" [ref=e195]
+              - generic [ref=e196]:
+                - generic "Machine Learning"
+                - separator [ref=e197]
+                - generic [ref=e198]:
+                  - heading "Feed" [level=1] [ref=e200]
+                  - generic:
+                    - article "[D] KDD Review Discussion" [ref=e201]:
+                      - generic [ref=e202] [cursor=pointer]:
+                        - link "[D] KDD Review Discussion" [ref=e203]:
+                          - /url: /r/MachineLearning/comments/1sci9nh/d_kdd_review_discussion/
+                          - generic [ref=e204]:
+                            - generic: "[D] KDD Review Discussion"
+                        - generic [ref=e205]:
+                          - generic [ref=e206]:
+                            - 'link "Author: u/BomsDrag" [ref=e211]':
+                              - /url: /user/BomsDrag/
+                              - generic [ref=e212]:
+                                - img [ref=e217]
+                                - generic [ref=e219]: u/BomsDrag
+                            - generic [ref=e220]: •
+                            - time [ref=e222]: 7 hr. ago
+                          - button "Open user actions" [ref=e227]:
+                            - img [ref=e230]
+                        - generic [ref=e233]:
+                          - heading "[D] KDD Review Discussion" [level=2] [ref=e234]:
+                            - link "[D] KDD Review Discussion" [ref=e235]:
+                              - /url: /r/MachineLearning/comments/1sci9nh/d_kdd_review_discussion/
+                              - text: "[D] KDD Review Discussion"
+                          - generic [ref=e236]:
+                            - generic:
+                              - link "KDD 2026 (Feb Cycle) reviews will release today (4-April AoE), This thread is open to discuss about reviews and importantly celebrate successful reviews. Let us all remember that review system is noisy and we all suffer from it and this doesn't define our research impact. Let's all prioritise reviews which enhance our papers. Feel free to discuss your experiences":
+                                - /url: /r/MachineLearning/comments/1sci9nh/d_kdd_review_discussion/
+                                - generic:
+                                  - generic:
+                                    - paragraph: KDD 2026 (Feb Cycle) reviews will release today (4-April AoE), This thread is open to discuss about reviews and importantly celebrate successful reviews.
+                                    - paragraph: Let us all remember that review system is noisy and we all suffer from it and this doesn't define our research impact. Let's all prioritise reviews which enhance our papers. Feel free to discuss your experiences
+                          - 'link "Flair: Discussion" [ref=e239]':
+                            - /url: /r/MachineLearning/?f=flair_name%3A%22Discussion%22
+                            - 'generic "Flair: Discussion" [ref=e241]': Discussion
+                        - generic "Actions available for this post" [ref=e242]:
+                          - generic [ref=e245]:
+                            - button "Upvote" [ref=e246]:
+                              - img [ref=e248]
+                              - generic [ref=e250]:
+                                - generic: Upvote
+                            - generic [ref=e252]: "30"
+                            - button "Downvote" [ref=e253]:
+                              - img [ref=e255]
+                              - generic [ref=e257]:
+                                - generic: Downvote
+                          - link "26 Go to comments" [ref=e258]:
+                            - /url: /r/MachineLearning/comments/1sci9nh/d_kdd_review_discussion/
+                            - generic [ref=e259]:
+                              - img [ref=e261]
+                              - generic [ref=e264]: "26"
+                            - generic [ref=e265]:
+                              - generic: Go to comments
+                          - button "Give award" [ref=e267]:
+                            - img [ref=e270]
+                          - button "Share" [ref=e275]:
+                            - generic [ref=e276]:
+                              - img [ref=e278]
+                              - generic [ref=e280]: Share
+                    - separator [ref=e281]
+                    - generic [ref=e282]:
+                      - 'generic "Advertisement: Don’t let merge-related issues slow you down. Keep PRs moving with Codex. Try Codex for Free." [ref=e283]':
+                        - 'link "Advertisement: Don’t let merge-related issues slow you down. Keep PRs moving with Codex. Try Codex for Free." [ref=e284] [cursor=pointer]':
+                          - /url: https://alb.reddit.com/cr?za=R3Msahh-IQ9Z4dbo3kl8IAyjx20b_D4hja5saw-widUo-t-HDSs53Ds96N0movA7XjnNkSVvqzogmL30u3VTtxcixHTmD96s4IgHE4xD53yXJQ_JLVXNraUUrVXtIakcdTS4dERjvzr5zeVO2l29T0sv-IX4acwKIz7F6-JlGwaoMe2nKOlrIRVsM_GO2n70TU6WETPgVslTfDPnXlFhUNVVF67xsCuYbJ1ShPtvmKfIKt6P9quGpQcbuJ9QXHFHxBSAmFfe2fZ54ffSENCHghHg7n_ihgekjf9y5RORE0tnkaHIqnV9zPiZaBHMGss-9zR_vhxB0xLk3UWJJBCwn_Favbrrp8YjbPdm-XgZsmDfO6EXoQxCC5SuzMn--ddW-vqd2VO_6fTr27CNDGBxQb6G9SF-9GUs5IbiLKsbgeqf--2fU639OZgXpu9lyHynkmHevDuKp1vaFd5E3mIQRt5PAO96A9UE0q0JmPSUP9no-5WjtPNELNZG16u3wKRIhLVREE5B_H4F-rNXTnzr8XRL4lEOETtPCUarufw6NLEsmLdENBodC3MWPC9_VSVmdmVtta94RjzQw2Prj7j7iB1WFCACATUDU87NS7coyQSpnAwLBxJ4L1T43sGHdM2kj7621jJ5IuRjDVLsuqnj7kdC6QofGENMazbpNfzeL-z-TS7H9gUr5x9lcUVeR34_XhdKvhRI2mVuCdGi7CiFh14t1lvvadR3HJ4&zp=NSWIuc9LjTc3NtjpdBZIItcI11eUqH30o_wI9tGFpnl6znitkErvMh3n78h9ABZIPxVwJAj0SepzYNRgWTaRL0GV3uwiygIAmhwnlnRb_DDOv4Eemx6sA0P6-VdzAEN1dnFIvc4e_EdbYSkR7LkIKIt3mldSbxfQ8DpY4JovOvkY9lv6r4EI2QJ8q5dhAGABFSo6ctA67z-ATAz9D3bmM1dPEOvfnWkHIjcUS3cRwXw6rNH2NS9gxcT7cpz17LYlLmAu42xfbw5wD7ywQHNmV0nV_iH-aV3IfchylfpNT-ycap_fMo5mBh4t-Fodh42lilKB8smfCOOazhzBJHzZJlXqy78KfS-KsTToiQSI9W96gKjhMRHcYoWpUcQScaI5lPUijfrXwQH-aGROMxcoYX-UHrB86x9WN7ftKBHkuO3vL1Z54aZyc_JzcKmEStl5JyUaGHKqIP6Lj3pPZ5bHA_-voXkGwLIvTFKxciotE3UKm859NTpf0etCeClExLucMLKk9A1XpsXYPl-Wf5MEld19_0NzuMzaDP5a891PGbcHMyDSNCkZKun0Dk2JYRAGKqaTvUhNqF4
+                      - generic [ref=e285]:
+                        - generic [ref=e286]:
+                          - link "u/OpenAI avatar u/OpenAI" [ref=e289] [cursor=pointer]:
+                            - /url: /user/OpenAI/
+                            - img "u/OpenAI avatar" [ref=e294]
+                            - generic [ref=e295]: u/OpenAI
+                          - generic [ref=e296]: •
+                          - link "Promoted" [ref=e298] [cursor=pointer]:
+                            - /url: /user/OpenAI/
+                            - generic [ref=e299]: Promoted
+                          - link [ref=e301] [cursor=pointer]:
+                            - /url: https://alb.reddit.com/cr?za=R3Msahh-IQ9Z4dbo3kl8IAyjx20b_D4hja5saw-widUo-t-HDSs53Ds96N0movA7XjnNkSVvqzogmL30u3VTtxcixHTmD96s4IgHE4xD53yXJQ_JLVXNraUUrVXtIakcdTS4dERjvzr5zeVO2l29T0sv-IX4acwKIz7F6-JlGwaoMe2nKOlrIRVsM_GO2n70TU6WETPgVslTfDPnXlFhUNVVF67xsCuYbJ1ShPtvmKfIKt6P9quGpQcbuJ9QXHFHxBSAmFfe2fZ54ffSENCHghHg7n_ihgekjf9y5RORE0tnkaHIqnV9zPiZaBHMGss-9zR_vhxB0xLk3UWJJBCwn_Favbrrp8YjbPdm-XgZsmDfO6EXoQxCC5SuzMn--ddW-vqd2VO_6fTr27CNDGBxQb6G9SF-9GUs5IbiLKsbgeqf--2fU639OZgXpu9lyHynkmHevDuKp1vaFd5E3mIQRt5PAO96A9UE0q0JmPSUP9no-5WjtPNELNZG16u3wKRIhLVREE5B_H4F-rNXTnzr8XRL4lEOETtPCUarufw6NLEsmLdENBodC3MWPC9_VSVmdmVtta94RjzQw2Prj7j7iB1WFCACATUDU87NS7coyQSpnAwLBxJ4L1T43sGHdM2kj7621jJ5IuRjDVLsuqnj7kdC6QofGENMazbpNfzeL-z-TS7H9gUr5x9lcUVeR34_XhdKvhRI2mVuCdGi7CiFh14t1lvvadR3HJ4&zp=NSWIuc9LjTc3NtjpdBZIItcI11eUqH30o_wI9tGFpnl6znitkErvMh3n78h9ABZIPxVwJAj0SepzYNRgWTaRL0GV3uwiygIAmhwnlnRb_DDOv4Eemx6sA0P6-VdzAEN1dnFIvc4e_EdbYSkR7LkIKIt3mldSbxfQ8DpY4JovOvkY9lv6r4EI2QJ8q5dhAGABFSo6ctA67z-ATAz9D3bmM1dPEOvfnWkHIjcUS3cRwXw6rNH2NS9gxcT7cpz17LYlLmAu42xfbw5wD7ywQHNmV0nV_iH-aV3IfchylfpNT-ycap_fMo5mBh4t-Fodh42lilKB8smfCOOazhzBJHzZJlXqy78KfS-KsTToiQSI9W96gKjhMRHcYoWpUcQScaI5lPUijfrXwQH-aGROMxcoYX-UHrB86x9WN7ftKBHkuO3vL1Z54aZyc_JzcKmEStl5JyUaGHKqIP6Lj3pPZ5bHA_-voXkGwLIvTFKxciotE3UKm859NTpf0etCeClExLucMLKk9A1XpsXYPl-Wf5MEld19_0NzuMzaDP5a891PGbcHMyDSNCkZKun0Dk2JYRAGKqaTvUhNqF4
+                        - button "Open user actions" [ref=e306] [cursor=pointer]:
+                          - img [ref=e309]
+                      - heading "Don’t let merge-related issues slow you down. Keep PRs moving with Codex. Try Codex for Free." [level=2] [ref=e313]:
+                        - link "Don’t let merge-related issues slow you down. Keep PRs moving with Codex. Try Codex for Free." [ref=e316] [cursor=pointer]:
+                          - /url: https://alb.reddit.com/cr?za=R3Msahh-IQ9Z4dbo3kl8IAyjx20b_D4hja5saw-widUo-t-HDSs53Ds96N0movA7XjnNkSVvqzogmL30u3VTtxcixHTmD96s4IgHE4xD53yXJQ_JLVXNraUUrVXtIakcdTS4dERjvzr5zeVO2l29T0sv-IX4acwKIz7F6-JlGwaoMe2nKOlrIRVsM_GO2n70TU6WETPgVslTfDPnXlFhUNVVF67xsCuYbJ1ShPtvmKfIKt6P9quGpQcbuJ9QXHFHxBSAmFfe2fZ54ffSENCHghHg7n_ihgekjf9y5RORE0tnkaHIqnV9zPiZaBHMGss-9zR_vhxB0xLk3UWJJBCwn_Favbrrp8YjbPdm-XgZsmDfO6EXoQxCC5SuzMn--ddW-vqd2VO_6fTr27CNDGBxQb6G9SF-9GUs5IbiLKsbgeqf--2fU639OZgXpu9lyHynkmHevDuKp1vaFd5E3mIQRt5PAO96A9UE0q0JmPSUP9no-5WjtPNELNZG16u3wKRIhLVREE5B_H4F-rNXTnzr8XRL4lEOETtPCUarufw6NLEsmLdENBodC3MWPC9_VSVmdmVtta94RjzQw2Prj7j7iB1WFCACATUDU87NS7coyQSpnAwLBxJ4L1T43sGHdM2kj7621jJ5IuRjDVLsuqnj7kdC6QofGENMazbpNfzeL-z-TS7H9gUr5x9lcUVeR34_XhdKvhRI2mVuCdGi7CiFh14t1lvvadR3HJ4&zp=NSWIuc9LjTc3NtjpdBZIItcI11eUqH30o_wI9tGFpnl6znitkErvMh3n78h9ABZIPxVwJAj0SepzYNRgWTaRL0GV3uwiygIAmhwnlnRb_DDOv4Eemx6sA0P6-VdzAEN1dnFIvc4e_EdbYSkR7LkIKIt3mldSbxfQ8DpY4JovOvkY9lv6r4EI2QJ8q5dhAGABFSo6ctA67z-ATAz9D3bmM1dPEOvfnWkHIjcUS3cRwXw6rNH2NS9gxcT7cpz17LYlLmAu42xfbw5wD7ywQHNmV0nV_iH-aV3IfchylfpNT-ycap_fMo5mBh4t-Fodh42lilKB8smfCOOazhzBJHzZJlXqy78KfS-KsTToiQSI9W96gKjhMRHcYoWpUcQScaI5lPUijfrXwQH-aGROMxcoYX-UHrB86x9WN7ftKBHkuO3vL1Z54aZyc_JzcKmEStl5JyUaGHKqIP6Lj3pPZ5bHA_-voXkGwLIvTFKxciotE3UKm859NTpf0etCeClExLucMLKk9A1XpsXYPl-Wf5MEld19_0NzuMzaDP5a891PGbcHMyDSNCkZKun0Dk2JYRAGKqaTvUhNqF4
+                          - generic: Don’t let merge-related issues slow you down. Keep PRs moving with Codex. Try Codex for Free.
+                      - generic [ref=e317]:
+                        - generic [ref=e322]:
+                          - generic "video player" [ref=e323]
+                          - button "Play" [ref=e324] [cursor=pointer]:
+                            - img [ref=e325]
+                        - separator [ref=e327]
+                        - generic [ref=e328]:
+                          - link [ref=e330] [cursor=pointer]:
+                            - /url: https://alb.reddit.com/cr?za=R3Msahh-IQ9Z4dbo3kl8IAyjx20b_D4hja5saw-widUo-t-HDSs53Ds96N0movA7XjnNkSVvqzogmL30u3VTtxcixHTmD96s4IgHE4xD53yXJQ_JLVXNraUUrVXtIakcdTS4dERjvzr5zeVO2l29T0sv-IX4acwKIz7F6-JlGwaoMe2nKOlrIRVsM_GO2n70TU6WETPgVslTfDPnXlFhUNVVF67xsCuYbJ1ShPtvmKfIKt6P9quGpQcbuJ9QXHFHxBSAmFfe2fZ54ffSENCHghHg7n_ihgekjf9y5RORE0tnkaHIqnV9zPiZaBHMGss-9zR_vhxB0xLk3UWJJBCwn_Favbrrp8YjbPdm-XgZsmDfO6EXoQxCC5SuzMn--ddW-vqd2VO_6fTr27CNDGBxQb6G9SF-9GUs5IbiLKsbgeqf--2fU639OZgXpu9lyHynkmHevDuKp1vaFd5E3mIQRt5PAO96A9UE0q0JmPSUP9no-5WjtPNELNZG16u3wKRIhLVREE5B_H4F-rNXTnzr8XRL4lEOETtPCUarufw6NLEsmLdENBodC3MWPC9_VSVmdmVtta94RjzQw2Prj7j7iB1WFCACATUDU87NS7coyQSpnAwLBxJ4L1T43sGHdM2kj7621jJ5IuRjDVLsuqnj7kdC6QofGENMazbpNfzeL-z-TS7H9gUr5x9lcUVeR34_XhdKvhRI2mVuCdGi7CiFh14t1lvvadR3HJ4&zp=NSWIuc9LjTc3NtjpdBZIItcI11eUqH30o_wI9tGFpnl6znitkErvMh3n78h9ABZIPxVwJAj0SepzYNRgWTaRL0GV3uwiygIAmhwnlnRb_DDOv4Eemx6sA0P6-VdzAEN1dnFIvc4e_EdbYSkR7LkIKIt3mldSbxfQ8DpY4JovOvkY9lv6r4EI2QJ8q5dhAGABFSo6ctA67z-ATAz9D3bmM1dPEOvfnWkHIjcUS3cRwXw6rNH2NS9gxcT7cpz17LYlLmAu42xfbw5wD7ywQHNmV0nV_iH-aV3IfchylfpNT-ycap_fMo5mBh4t-Fodh42lilKB8smfCOOazhzBJHzZJlXqy78KfS-KsTToiQSI9W96gKjhMRHcYoWpUcQScaI5lPUijfrXwQH-aGROMxcoYX-UHrB86x9WN7ftKBHkuO3vL1Z54aZyc_JzcKmEStl5JyUaGHKqIP6Lj3pPZ5bHA_-voXkGwLIvTFKxciotE3UKm859NTpf0etCeClExLucMLKk9A1XpsXYPl-Wf5MEld19_0NzuMzaDP5a891PGbcHMyDSNCkZKun0Dk2JYRAGKqaTvUhNqF4
+                          - generic [ref=e331]:
+                            - link "chatgpt.com" [ref=e334] [cursor=pointer]:
+                              - /url: https://alb.reddit.com/cr?za=R3Msahh-IQ9Z4dbo3kl8IAyjx20b_D4hja5saw-widUo-t-HDSs53Ds96N0movA7XjnNkSVvqzogmL30u3VTtxcixHTmD96s4IgHE4xD53yXJQ_JLVXNraUUrVXtIakcdTS4dERjvzr5zeVO2l29T0sv-IX4acwKIz7F6-JlGwaoMe2nKOlrIRVsM_GO2n70TU6WETPgVslTfDPnXlFhUNVVF67xsCuYbJ1ShPtvmKfIKt6P9quGpQcbuJ9QXHFHxBSAmFfe2fZ54ffSENCHghHg7n_ihgekjf9y5RORE0tnkaHIqnV9zPiZaBHMGss-9zR_vhxB0xLk3UWJJBCwn_Favbrrp8YjbPdm-XgZsmDfO6EXoQxCC5SuzMn--ddW-vqd2VO_6fTr27CNDGBxQb6G9SF-9GUs5IbiLKsbgeqf--2fU639OZgXpu9lyHynkmHevDuKp1vaFd5E3mIQRt5PAO96A9UE0q0JmPSUP9no-5WjtPNELNZG16u3wKRIhLVREE5B_H4F-rNXTnzr8XRL4lEOETtPCUarufw6NLEsmLdENBodC3MWPC9_VSVmdmVtta94RjzQw2Prj7j7iB1WFCACATUDU87NS7coyQSpnAwLBxJ4L1T43sGHdM2kj7621jJ5IuRjDVLsuqnj7kdC6QofGENMazbpNfzeL-z-TS7H9gUr5x9lcUVeR34_XhdKvhRI2mVuCdGi7CiFh14t1lvvadR3HJ4&zp=NSWIuc9LjTc3NtjpdBZIItcI11eUqH30o_wI9tGFpnl6znitkErvMh3n78h9ABZIPxVwJAj0SepzYNRgWTaRL0GV3uwiygIAmhwnlnRb_DDOv4Eemx6sA0P6-VdzAEN1dnFIvc4e_EdbYSkR7LkIKIt3mldSbxfQ8DpY4JovOvkY9lv6r4EI2QJ8q5dhAGABFSo6ctA67z-ATAz9D3bmM1dPEOvfnWkHIjcUS3cRwXw6rNH2NS9gxcT7cpz17LYlLmAu42xfbw5wD7ywQHNmV0nV_iH-aV3IfchylfpNT-ycap_fMo5mBh4t-Fodh42lilKB8smfCOOazhzBJHzZJlXqy78KfS-KsTToiQSI9W96gKjhMRHcYoWpUcQScaI5lPUijfrXwQH-aGROMxcoYX-UHrB86x9WN7ftKBHkuO3vL1Z54aZyc_JzcKmEStl5JyUaGHKqIP6Lj3pPZ5bHA_-voXkGwLIvTFKxciotE3UKm859NTpf0etCeClExLucMLKk9A1XpsXYPl-Wf5MEld19_0NzuMzaDP5a891PGbcHMyDSNCkZKun0Dk2JYRAGKqaTvUhNqF4
+                              - generic: chatgpt.com
+                            - link "Learn More" [ref=e336] [cursor=pointer]:
+                              - /url: https://alb.reddit.com/cr?za=R3Msahh-IQ9Z4dbo3kl8IAyjx20b_D4hja5saw-widUo-t-HDSs53Ds96N0movA7XjnNkSVvqzogmL30u3VTtxcixHTmD96s4IgHE4xD53yXJQ_JLVXNraUUrVXtIakcdTS4dERjvzr5zeVO2l29T0sv-IX4acwKIz7F6-JlGwaoMe2nKOlrIRVsM_GO2n70TU6WETPgVslTfDPnXlFhUNVVF67xsCuYbJ1ShPtvmKfIKt6P9quGpQcbuJ9QXHFHxBSAmFfe2fZ54ffSENCHghHg7n_ihgekjf9y5RORE0tnkaHIqnV9zPiZaBHMGss-9zR_vhxB0xLk3UWJJBCwn_Favbrrp8YjbPdm-XgZsmDfO6EXoQxCC5SuzMn--ddW-vqd2VO_6fTr27CNDGBxQb6G9SF-9GUs5IbiLKsbgeqf--2fU639OZgXpu9lyHynkmHevDuKp1vaFd5E3mIQRt5PAO96A9UE0q0JmPSUP9no-5WjtPNELNZG16u3wKRIhLVREE5B_H4F-rNXTnzr8XRL4lEOETtPCUarufw6NLEsmLdENBodC3MWPC9_VSVmdmVtta94RjzQw2Prj7j7iB1WFCACATUDU87NS7coyQSpnAwLBxJ4L1T43sGHdM2kj7621jJ5IuRjDVLsuqnj7kdC6QofGENMazbpNfzeL-z-TS7H9gUr5x9lcUVeR34_XhdKvhRI2mVuCdGi7CiFh14t1lvvadR3HJ4&zp=NSWIuc9LjTc3NtjpdBZIItcI11eUqH30o_wI9tGFpnl6znitkErvMh3n78h9ABZIPxVwJAj0SepzYNRgWTaRL0GV3uwiygIAmhwnlnRb_DDOv4Eemx6sA0P6-VdzAEN1dnFIvc4e_EdbYSkR7LkIKIt3mldSbxfQ8DpY4JovOvkY9lv6r4EI2QJ8q5dhAGABFSo6ctA67z-ATAz9D3bmM1dPEOvfnWkHIjcUS3cRwXw6rNH2NS9gxcT7cpz17LYlLmAu42xfbw5wD7ywQHNmV0nV_iH-aV3IfchylfpNT-ycap_fMo5mBh4t-Fodh42lilKB8smfCOOazhzBJHzZJlXqy78KfS-KsTToiQSI9W96gKjhMRHcYoWpUcQScaI5lPUijfrXwQH-aGROMxcoYX-UHrB86x9WN7ftKBHkuO3vL1Z54aZyc_JzcKmEStl5JyUaGHKqIP6Lj3pPZ5bHA_-voXkGwLIvTFKxciotE3UKm859NTpf0etCeClExLucMLKk9A1XpsXYPl-Wf5MEld19_0NzuMzaDP5a891PGbcHMyDSNCkZKun0Dk2JYRAGKqaTvUhNqF4
+                              - generic [ref=e338]:
+                                - generic: Learn More
+                      - generic "Actions available for this post" [ref=e339]:
+                        - generic [ref=e342]:
+                          - button "Upvote" [ref=e343] [cursor=pointer]:
+                            - img [ref=e345]
+                            - generic [ref=e347]:
+                              - generic: Upvote
+                          - text: Vote
+                          - button "Downvote" [ref=e348] [cursor=pointer]:
+                            - img [ref=e350]
+                            - generic [ref=e352]:
+                              - generic: Downvote
+                        - link "0 Go to comments" [ref=e353] [cursor=pointer]:
+                          - /url: /user/OpenAI/comments/1rvcby4/dont_let_mergerelated_issues_slow_you_down_keep/?p=1&impressionid=5959677434562353067
+                          - generic [ref=e354]:
+                            - img [ref=e356]
+                            - generic [ref=e359]: "0"
+                          - generic [ref=e360]:
+                            - generic: Go to comments
+                        - button "Share" [ref=e364] [cursor=pointer]:
+                          - generic [ref=e365]:
+                            - img [ref=e367]
+                            - generic [ref=e369]: Share
+                        - link [ref=e371] [cursor=pointer]:
+                          - /url: https://alb.reddit.com/cr?za=R3Msahh-IQ9Z4dbo3kl8IAyjx20b_D4hja5saw-widUo-t-HDSs53Ds96N0movA7XjnNkSVvqzogmL30u3VTtxcixHTmD96s4IgHE4xD53yXJQ_JLVXNraUUrVXtIakcdTS4dERjvzr5zeVO2l29T0sv-IX4acwKIz7F6-JlGwaoMe2nKOlrIRVsM_GO2n70TU6WETPgVslTfDPnXlFhUNVVF67xsCuYbJ1ShPtvmKfIKt6P9quGpQcbuJ9QXHFHxBSAmFfe2fZ54ffSENCHghHg7n_ihgekjf9y5RORE0tnkaHIqnV9zPiZaBHMGss-9zR_vhxB0xLk3UWJJBCwn_Favbrrp8YjbPdm-XgZsmDfO6EXoQxCC5SuzMn--ddW-vqd2VO_6fTr27CNDGBxQb6G9SF-9GUs5IbiLKsbgeqf--2fU639OZgXpu9lyHynkmHevDuKp1vaFd5E3mIQRt5PAO96A9UE0q0JmPSUP9no-5WjtPNELNZG16u3wKRIhLVREE5B_H4F-rNXTnzr8XRL4lEOETtPCUarufw6NLEsmLdENBodC3MWPC9_VSVmdmVtta94RjzQw2Prj7j7iB1WFCACATUDU87NS7coyQSpnAwLBxJ4L1T43sGHdM2kj7621jJ5IuRjDVLsuqnj7kdC6QofGENMazbpNfzeL-z-TS7H9gUr5x9lcUVeR34_XhdKvhRI2mVuCdGi7CiFh14t1lvvadR3HJ4&zp=NSWIuc9LjTc3NtjpdBZIItcI11eUqH30o_wI9tGFpnl6znitkErvMh3n78h9ABZIPxVwJAj0SepzYNRgWTaRL0GV3uwiygIAmhwnlnRb_DDOv4Eemx6sA0P6-VdzAEN1dnFIvc4e_EdbYSkR7LkIKIt3mldSbxfQ8DpY4JovOvkY9lv6r4EI2QJ8q5dhAGABFSo6ctA67z-ATAz9D3bmM1dPEOvfnWkHIjcUS3cRwXw6rNH2NS9gxcT7cpz17LYlLmAu42xfbw5wD7ywQHNmV0nV_iH-aV3IfchylfpNT-ycap_fMo5mBh4t-Fodh42lilKB8smfCOOazhzBJHzZJlXqy78KfS-KsTToiQSI9W96gKjhMRHcYoWpUcQScaI5lPUijfrXwQH-aGROMxcoYX-UHrB86x9WN7ftKBHkuO3vL1Z54aZyc_JzcKmEStl5JyUaGHKqIP6Lj3pPZ5bHA_-voXkGwLIvTFKxciotE3UKm859NTpf0etCeClExLucMLKk9A1XpsXYPl-Wf5MEld19_0NzuMzaDP5a891PGbcHMyDSNCkZKun0Dk2JYRAGKqaTvUhNqF4
+                    - separator [ref=e372]
+                    - article "[D] Those of you with 10+ years in ML — what is the public completely wrong about?" [ref=e373]:
+                      - generic [ref=e374] [cursor=pointer]:
+                        - link "[D] Those of you with 10+ years in ML — what is the public completely wrong about?" [ref=e375]:
+                          - /url: /r/MachineLearning/comments/1sbzxwn/d_those_of_you_with_10_years_in_ml_what_is_the/
+                          - generic [ref=e376]:
+                            - generic: "[D] Those of you with 10+ years in ML — what is the public completely wrong about?"
+                        - generic [ref=e377]:
+                          - generic [ref=e378]:
+                            - 'link "Author: u/PhattRatt" [ref=e383]':
+                              - /url: /user/PhattRatt/
+                              - generic [ref=e384]:
+                                - img "u/PhattRatt avatar" [ref=e387]
+                                - generic [ref=e388]: u/PhattRatt
+                            - generic [ref=e389]: •
+                            - time [ref=e391]: 22 hr. ago
+                          - button "Open user actions" [ref=e396]:
+                            - img [ref=e399]
+                        - generic [ref=e402]:
+                          - heading "[D] Those of you with 10+ years in ML — what is the public completely wrong about?" [level=2] [ref=e403]:
+                            - link "[D] Those of you with 10+ years in ML — what is the public completely wrong about?" [ref=e404]:
+                              - /url: /r/MachineLearning/comments/1sbzxwn/d_those_of_you_with_10_years_in_ml_what_is_the/
+                          - generic [ref=e405]:
+                            - generic:
+                              - link "For those of you who've been in ML/AI research or applied ML for 10+ years — what's the gap between what the public thinks AI is doing vs. what's actually happening at the frontier? What are we collectively underestimating or overestimating?":
+                                - /url: /r/MachineLearning/comments/1sbzxwn/d_those_of_you_with_10_years_in_ml_what_is_the/
+                                - generic:
+                                  - generic:
+                                    - paragraph: For those of you who've been in ML/AI research or applied ML for 10+ years — what's the gap between what the public thinks AI is doing vs. what's actually happening at the frontier? What are we collectively underestimating or overestimating?
+                          - 'link "Flair: Discussion" [ref=e408]':
+                            - /url: /r/MachineLearning/?f=flair_name%3A%22Discussion%22
+                            - 'generic "Flair: Discussion" [ref=e410]': Discussion
+                        - generic "Actions available for this post" [ref=e411]:
+                          - generic [ref=e414]:
+                            - button "Upvote" [ref=e415]:
+                              - img [ref=e417]
+                              - generic [ref=e419]:
+                                - generic: Upvote
+                            - generic [ref=e421]: "159"
+                            - button "Downvote" [ref=e422]:
+                              - img [ref=e424]
+                              - generic [ref=e426]:
+                                - generic: Downvote
+                          - link "200 Go to comments" [ref=e427]:
+                            - /url: /r/MachineLearning/comments/1sbzxwn/d_those_of_you_with_10_years_in_ml_what_is_the/
+                            - generic [ref=e428]:
+                              - img [ref=e430]
+                              - generic [ref=e433]: "200"
+                            - generic [ref=e434]:
+                              - generic: Go to comments
+                          - button "Give award" [ref=e436]:
+                            - img [ref=e439]
+                          - button "Share" [ref=e444]:
+                            - generic [ref=e445]:
+                              - img [ref=e447]
+                              - generic [ref=e449]: Share
+                    - separator [ref=e450]
+                    - article "[D] ICML reviewer making up false claim in acknowledgement, what to do?" [ref=e451]:
+                      - generic [ref=e452] [cursor=pointer]:
+                        - link "[D] ICML reviewer making up false claim in acknowledgement, what to do?" [ref=e453]:
+                          - /url: /r/MachineLearning/comments/1sc79nk/d_icml_reviewer_making_up_false_claim_in/
+                          - generic [ref=e454]:
+                            - generic: "[D] ICML reviewer making up false claim in acknowledgement, what to do?"
+                        - generic [ref=e455]:
+                          - generic [ref=e456]:
+                            - 'link "Author: u/dontknowwhattoplay" [ref=e461]':
+                              - /url: /user/dontknowwhattoplay/
+                              - generic [ref=e462]:
+                                - img [ref=e467]
+                                - generic [ref=e469]: u/dontknowwhattoplay
+                            - generic [ref=e470]: •
+                            - time [ref=e472]: 15 hr. ago
+                          - button "Open user actions" [ref=e477]:
+                            - img [ref=e480]
+                        - generic [ref=e483]:
+                          - heading "[D] ICML reviewer making up false claim in acknowledgement, what to do?" [level=2] [ref=e484]:
+                            - link "[D] ICML reviewer making up false claim in acknowledgement, what to do?" [ref=e485]:
+                              - /url: /r/MachineLearning/comments/1sc79nk/d_icml_reviewer_making_up_false_claim_in/
+                          - generic [ref=e486]:
+                            - generic:
+                              - link "In a rebuttal acknowledgement we received, the reviewer made up a claim that our method performs worse than baselines with some hyperparameter settings. We did do a comprehensive list of hyperparameter comparisons and the reviewer's claim is not supported by what's presented in the paper. In this case what can we do?":
+                                - /url: /r/MachineLearning/comments/1sc79nk/d_icml_reviewer_making_up_false_claim_in/
+                                - generic:
+                                  - generic:
+                                    - paragraph: In a rebuttal acknowledgement we received, the reviewer made up a claim that our method performs worse than baselines with some hyperparameter settings. We did do a comprehensive list of hyperparameter comparisons and the reviewer's claim is not supported by what's presented in the paper.
+                                    - paragraph: In this case what can we do?
+                          - 'link "Flair: Discussion" [ref=e489]':
+                            - /url: /r/MachineLearning/?f=flair_name%3A%22Discussion%22
+                            - 'generic "Flair: Discussion" [ref=e491]': Discussion
+                        - generic "Actions available for this post" [ref=e492]:
+                          - generic [ref=e495]:
+                            - button "Upvote" [ref=e496]:
+                              - img [ref=e498]
+                              - generic [ref=e500]:
+                                - generic: Upvote
+                            - generic [ref=e502]: "18"
+                            - button "Downvote" [ref=e503]:
+                              - img [ref=e505]
+                              - generic [ref=e507]:
+                                - generic: Downvote
+                          - link "12 Go to comments" [ref=e508]:
+                            - /url: /r/MachineLearning/comments/1sc79nk/d_icml_reviewer_making_up_false_claim_in/
+                            - generic [ref=e509]:
+                              - img [ref=e511]
+                              - generic [ref=e514]: "12"
+                            - generic [ref=e515]:
+                              - generic: Go to comments
+                          - button "Give award" [ref=e517]:
+                            - img [ref=e520]
+                          - button "Share" [ref=e525]:
+                            - generic [ref=e526]:
+                              - img [ref=e528]
+                              - generic [ref=e530]: Share
+                    - separator [ref=e531]
+                  - img [ref=e537]
+            - generic [ref=e550]:
+              - complementary "Community information" [ref=e554]:
+                - generic [ref=e555]:
+                  - generic [ref=e557]:
+                    - heading "Community Info Section" [level=1] [ref=e558]
+                    - generic [ref=e559]:
+                      - generic [ref=e560]: Machine Learning
+                      - generic [ref=e561]: Beginners -> /r/mlquestions or /r/learnmachinelearning , AGI -> /r/singularity, career advices -> /r/cscareerquestions, datasets -> r/datasets
+                      - generic [ref=e562]:
+                        - generic [ref=e564]:
+                          - img [ref=e565]
+                          - text: Created Jul 29, 2009
+                        - generic [ref=e568]:
+                          - img [ref=e569]
+                          - text: Public
+                    - generic [ref=e571]:
+                      - generic [ref=e572]:
+                        - strong [ref=e574]:
+                          - generic: 148K
+                        - generic [ref=e575]: Weekly visitors
+                      - generic [ref=e576]:
+                        - strong [ref=e578]:
+                          - generic: 2.1K
+                        - generic [ref=e579]: Weekly contributions
+                  - separator [ref=e580]
+                  - generic [ref=e581]:
+                    - heading "r/MachineLearning Rules" [level=2] [ref=e583]:
+                      - generic [ref=e584]: r/MachineLearning Rules
+                    - generic [ref=e585]:
+                      - group [ref=e587]:
+                        - generic "1 No Spam" [ref=e588] [cursor=pointer]:
+                          - generic [ref=e590]:
+                            - generic [ref=e591]:
+                              - generic [ref=e593]: "1"
+                              - heading "No Spam" [level=2] [ref=e597]
+                            - img [ref=e600]
+                      - group [ref=e603]:
+                        - generic "2 No Self-Promotion" [ref=e604] [cursor=pointer]:
+                          - generic [ref=e606]:
+                            - generic [ref=e607]:
+                              - generic [ref=e609]: "2"
+                              - heading "No Self-Promotion" [level=2] [ref=e613]
+                            - img [ref=e616]
+                      - group [ref=e619]:
+                        - generic "3 No Marketing Campaigns (SEO)" [ref=e620] [cursor=pointer]:
+                          - generic [ref=e622]:
+                            - generic [ref=e623]:
+                              - generic [ref=e625]: "3"
+                              - heading "No Marketing Campaigns (SEO)" [level=2] [ref=e629]
+                            - img [ref=e632]
+                      - group [ref=e635]:
+                        - generic "4 No Disrespectful Behavior" [ref=e636] [cursor=pointer]:
+                          - generic [ref=e638]:
+                            - generic [ref=e639]:
+                              - generic [ref=e641]: "4"
+                              - heading "No Disrespectful Behavior" [level=2] [ref=e645]
+                            - img [ref=e648]
+                      - group [ref=e651]:
+                        - generic "5 No arXiv Links without Body Text" [ref=e652] [cursor=pointer]:
+                          - generic [ref=e654]:
+                            - generic [ref=e655]:
+                              - generic [ref=e657]: "5"
+                              - heading "No arXiv Links without Body Text" [level=2] [ref=e661]
+                            - img [ref=e664]
+                      - group [ref=e667]:
+                        - generic "6 No Low-Effort, Beginner Questions" [ref=e668] [cursor=pointer]:
+                          - generic [ref=e670]:
+                            - generic [ref=e671]:
+                              - generic [ref=e673]: "6"
+                              - heading "No Low-Effort, Beginner Questions" [level=2] [ref=e677]
+                            - img [ref=e680]
+                  - separator [ref=e682]
+                  - generic [ref=e683]:
+                    - heading "Recommended Subreddits" [level=2] [ref=e685]:
+                      - generic [ref=e686]: Recommended Subreddits
+                    - generic [ref=e693]:
+                      - link "r/Automate" [ref=e696] [cursor=pointer]:
+                        - /url: /r/Automate
+                      - generic [ref=e697]: 153,292 members
+                    - generic [ref=e704]:
+                      - link "r/ResearchML" [ref=e707] [cursor=pointer]:
+                        - /url: /r/ResearchML
+                      - generic [ref=e708]: 17,117 members
+                    - generic [ref=e715]:
+                      - link "r/MLQuestions" [ref=e718] [cursor=pointer]:
+                        - /url: /r/MLQuestions
+                      - generic [ref=e719]: 102,021 members
+                    - generic [ref=e721]:
+                      - img [ref=e726]
+                      - generic [ref=e728]:
+                        - link "r/learnmachinelearning" [ref=e731] [cursor=pointer]:
+                          - /url: /r/learnmachinelearning
+                        - generic [ref=e732]: 624,653 members
+                    - generic [ref=e734]:
+                      - img [ref=e739]
+                      - generic [ref=e741]:
+                        - link "r/reinforcementlearning" [ref=e744] [cursor=pointer]:
+                          - /url: /r/reinforcementlearning
+                        - generic [ref=e745]: 79,026 members
+                    - generic [ref=e747]:
+                      - img [ref=e752]
+                      - generic [ref=e754]:
+                        - link "r/deeplearning" [ref=e757] [cursor=pointer]:
+                          - /url: /r/deeplearning
+                        - generic [ref=e758]: 230,636 members
+                    - generic [ref=e765]:
+                      - link "r/ArtificialInteligence" [ref=e768] [cursor=pointer]:
+                        - /url: /r/ArtificialInteligence
+                      - generic [ref=e769]: 1,757,033 members
+                    - generic [ref=e776]:
+                      - link "r/OpenAI" [ref=e779] [cursor=pointer]:
+                        - /url: /r/OpenAI
+                      - generic [ref=e780]: 2,697,284 members
+                    - generic [ref=e787]:
+                      - link "r/notebooklm" [ref=e790] [cursor=pointer]:
+                        - /url: /r/notebooklm
+                      - generic [ref=e791]: 125,979 members
+                  - separator [ref=e792]
+                  - generic [ref=e793]:
+                    - heading "Moderators" [level=2] [ref=e795]:
+                      - generic [ref=e796]: Moderators
+                    - generic [ref=e797]:
+                      - text: Moderator list hidden.
+                      - link "Learn More" [ref=e798] [cursor=pointer]:
+                        - /url: https://support.reddithelp.com/hc/articles/360049499032
+                    - link "View all moderators" [ref=e799] [cursor=pointer]:
+                      - /url: /mod/MachineLearning/moderators/
+                      - generic [ref=e801]: View all moderators
+              - generic [ref=e803]:
+                - link "Reddit Rules" [ref=e806] [cursor=pointer]:
+                  - /url: https://www.redditinc.com/policies/content-policy
+                - link "Privacy Policy" [ref=e809] [cursor=pointer]:
+                  - /url: https://www.reddit.com/policies/privacy-policy
+                - link "User Agreement" [ref=e812] [cursor=pointer]:
+                  - /url: https://www.redditinc.com/policies/user-agreement
+                - link "Your Privacy Choices" [ref=e815] [cursor=pointer]:
+                  - /url: https://support.reddithelp.com/hc/articles/43980704794004
+                - link "Accessibility" [ref=e818] [cursor=pointer]:
+                  - /url: https://support.reddithelp.com/hc/sections/38303584022676-Accessibility
+                - link "Reddit, Inc. © 2026. All rights reserved." [ref=e820] [cursor=pointer]:
+                  - /url: https://redditinc.com
+        - generic [ref=e822]:
+          - button "Collapse Navigation" [ref=e825] [cursor=pointer]:
+            - img [ref=e828]
+            - generic [ref=e830]:
+              - generic: Collapse Navigation
+          - navigation "Primary" [ref=e835]:
+            - generic [ref=e837]:
+              - link "Home" [ref=e839] [cursor=pointer]:
+                - /url: /?feed=home
+                - generic [ref=e840]:
+                  - img [ref=e842]
+                  - generic [ref=e845]: Home
+              - link "Popular" [ref=e847] [cursor=pointer]:
+                - /url: /r/popular/
+                - generic [ref=e848]:
+                  - img [ref=e850]
+                  - generic [ref=e853]: Popular
+              - link "News" [ref=e854] [cursor=pointer]:
+                - /url: /news/
+                - generic [ref=e855]:
+                  - img [ref=e857]
+                  - generic [ref=e861]: News
+              - link "Explore" [ref=e863] [cursor=pointer]:
+                - /url: /explore/
+                - generic [ref=e864]:
+                  - img [ref=e866]
+                  - generic [ref=e869]: Explore
+            - separator [ref=e870]
+            - generic [ref=e872]:
+              - group [ref=e874]:
+                - generic "RECENT" [ref=e875]:
+                  - generic [ref=e877] [cursor=pointer]:
+                    - generic [ref=e881]: RECENT
+                    - img [ref=e884]
+                - link "r/ArtificialInteligence" [ref=e888] [cursor=pointer]:
+                  - /url: /r/ArtificialInteligence/
+                  - generic [ref=e889]:
+                    - img [ref=e894]
+                    - generic [ref=e897]: r/ArtificialInteligence
+              - separator [ref=e898]
+            - navigation "Reddit resources" [ref=e899]:
+              - group [ref=e901]:
+                - generic "RESOURCES" [ref=e902] [cursor=pointer]:
+                  - generic [ref=e904]:
+                    - generic [ref=e907]: RESOURCES
+                    - img [ref=e910]
+                - generic [ref=e913]:
+                  - link "About Reddit" [ref=e915] [cursor=pointer]:
+                    - /url: https://www.redditinc.com
+                    - generic [ref=e916]:
+                      - img [ref=e918]
+                      - generic [ref=e922]: About Reddit
+                  - link "Advertise" [ref=e924] [cursor=pointer]:
+                    - /url: https://ads.reddit.com/register?utm_source=web3x_consumer&utm_name=left_nav_cta
+                    - generic [ref=e925]:
+                      - img [ref=e927]
+                      - generic [ref=e931]: Advertise
+                  - link "Developer Platform" [ref=e933] [cursor=pointer]:
+                    - /url: https://developers.reddit.com/?utm_source=reddit&utm_medium=left_nav_resources
+                    - generic [ref=e934]:
+                      - img [ref=e936]
+                      - generic [ref=e940]: Developer Platform
+                  - link "Reddit Pro BETA" [ref=e942] [cursor=pointer]:
+                    - /url: /reddit-pro?utm_source=reddit&utm_medium=left_nav_resources
+                    - generic [ref=e943]:
+                      - img [ref=e945]
+                      - generic [ref=e949]:
+                        - generic [ref=e950]: Reddit Pro
+                        - generic [ref=e951]: BETA
+                  - link "Help" [ref=e953] [cursor=pointer]:
+                    - /url: https://support.reddithelp.com/hc?utm_source=reddit&utm_medium=footer&utm_campaign=evergreen
+                    - generic [ref=e954]:
+                      - img [ref=e956]
+                      - generic [ref=e960]: Help
+                  - link "Blog" [ref=e962] [cursor=pointer]:
+                    - /url: https://redditblog.com/
+                    - generic [ref=e963]:
+                      - img [ref=e965]
+                      - generic [ref=e969]: Blog
+                  - link "Careers" [ref=e971] [cursor=pointer]:
+                    - /url: https://www.redditinc.com/careers
+                    - generic [ref=e972]:
+                      - img [ref=e974]
+                      - generic [ref=e978]: Careers
+                  - link "Press" [ref=e980] [cursor=pointer]:
+                    - /url: https://www.redditinc.com/press
+                    - generic [ref=e981]:
+                      - img [ref=e983]
+                      - generic [ref=e987]: Press
+                  - separator [ref=e988]
+                  - link "Best of Reddit" [ref=e990] [cursor=pointer]:
+                    - /url: https://www.reddit.com/posts/2026/global/
+                    - generic [ref=e991]:
+                      - img [ref=e993]
+                      - generic [ref=e998]: Best of Reddit
+                  - separator [ref=e999]
+                  - link "Reddit Rules" [ref=e1001] [cursor=pointer]:
+                    - /url: https://www.redditinc.com/policies/content-policy
+                    - generic [ref=e1002]:
+                      - img [ref=e1004]
+                      - generic [ref=e1008]: Reddit Rules
+                  - link "Privacy Policy" [ref=e1010] [cursor=pointer]:
+                    - /url: https://www.reddit.com/policies/privacy-policy
+                    - generic [ref=e1011]:
+                      - img [ref=e1013]
+                      - generic [ref=e1017]: Privacy Policy
+                  - link "User Agreement" [ref=e1019] [cursor=pointer]:
+                    - /url: https://www.redditinc.com/policies/user-agreement
+                    - generic [ref=e1020]:
+                      - img [ref=e1022]
+                      - generic [ref=e1026]: User Agreement
+                  - link "Your Privacy Choices" [ref=e1028] [cursor=pointer]:
+                    - /url: https://support.reddithelp.com/hc/articles/43980704794004
+                    - generic [ref=e1029]:
+                      - img [ref=e1031]
+                      - generic [ref=e1035]: Your Privacy Choices
+                  - link "Accessibility" [ref=e1037] [cursor=pointer]:
+                    - /url: https://support.reddithelp.com/hc/sections/38303584022676-Accessibility
+                    - generic [ref=e1038]:
+                      - img [ref=e1040]
+                      - generic [ref=e1045]: Accessibility
+            - link "Reddit, Inc. © 2026. All rights reserved." [ref=e1047] [cursor=pointer]:
+              - /url: https://redditinc.com
