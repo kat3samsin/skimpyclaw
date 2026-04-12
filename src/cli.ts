@@ -283,7 +283,7 @@ async function requestGateway(path: string, init?: RequestInit, port?: number): 
   const url = `http://127.0.0.1:${cfgPort}${path}`;
   let dashboardToken = '';
   try {
-    dashboardToken = String((loadRawConfig() as any)?.dashboard?.token || '');
+    dashboardToken = String(loadConfig()?.dashboard?.token || '');
   } catch {
     // best effort
   }
@@ -338,12 +338,12 @@ async function commandStatus(): Promise<number> {
   let port = DEFAULT_PORT;
   let dashboardToken = '';
   try {
-    const raw = loadRawConfig();
-    const rawPort = Number((raw as any)?.gateway?.port);
-    if (Number.isFinite(rawPort) && rawPort > 0) {
-      port = rawPort;
+    const cfg = loadConfig();
+    const cfgPort = Number(cfg?.gateway?.port);
+    if (Number.isFinite(cfgPort) && cfgPort > 0) {
+      port = cfgPort;
     }
-    dashboardToken = String((raw as any)?.dashboard?.token || '');
+    dashboardToken = String(cfg?.dashboard?.token || '');
   } catch {
     // Keep default when config does not exist yet.
   }
