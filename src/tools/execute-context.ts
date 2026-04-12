@@ -31,4 +31,8 @@ export interface ExecuteToolContext {
   sandboxConfig?: import('../types.js').SandboxConfig;
   /** Session ID for sandbox container mapping */
   sessionId?: string;
+  /** Discord thread ID — set when command originates from a thread */
+  discordThreadId?: string;
+  /** Discord channel ID — parent channel when originating from a thread */
+  discordChannelId?: string;
 }

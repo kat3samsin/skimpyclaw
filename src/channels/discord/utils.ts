@@ -82,6 +82,7 @@ export function conversationKey(message: Message): string {
 }
 
 export function getDiscordRunContext(message: Message): AgentRunContext {
+  const isThread = !message.channel.isDMBased() && message.channel.isThread();
   return {
     userId: message.author.id,
     sessionId: message.channel.id,
@@ -89,6 +90,12 @@ export function getDiscordRunContext(message: Message): AgentRunContext {
     trigger: 'discord',
     metadata: {
       username: message.author.username,
+      // When message originates from a thread, pass thread context so
+      // spawned coding agents can route notifications back to the thread
+      ...(isThread ? {
+        discordThreadId: message.channel.id,
+        discordChannelId: message.channel.parentId ?? message.channelId,
+      } : {}),
     },
   };
 }
@@ -141,14 +148,30 @@ export function splitToChunks(text: string, maxLength: number): string[] {
   return chunks.filter(c => c.length > 0);
 }
 
+/**
+ * Reply to a message, falling back to channel.send() if reply fails
+ * (e.g. Discord rejects replies to system/voice messages).
+ */
+export async function safeReply(message: Message, content: string | { files: unknown[]; content?: string }): Promise<void> {
+  try {
+    await message.reply(content as string);
+  } catch {
+    // Fallback: send to the channel without a reply reference
+    const channel = message.channel as { send?: (c: unknown) => Promise<unknown> };
+    if (typeof channel.send === 'function') {
+      await channel.send(content);
+    }
+  }
+}
+
 export async function sendLongText(message: Message, text: string): Promise<void> {
   if (!text || text.trim().length === 0) {
-    await message.reply('(No response generated.)');
+    await safeReply(message, '(No response generated.)');
     return;
   }
   const chunks = splitToChunks(text, 1900);
   for (const chunk of chunks) {
-    await message.reply(chunk);
+    await safeReply(message, chunk);
   }
 }
 
