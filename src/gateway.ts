@@ -10,6 +10,8 @@ import { runAgentTurn } from './agent.js';
 import { getCronJobs, runCronJob } from './cron.js';
 import { registerDashboardAPI } from './api.js';
 import { registerDashboard } from './dashboard-frontend.js';
+import { registerNewspaperAPI } from './newspaper/routes.js';
+import { registerNewspaperFrontend } from './newspaper/frontend.js';
 import { ensureDashboardToken } from './config.js';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
@@ -141,14 +143,18 @@ export async function createGateway(cfg: Config): Promise<FastifyInstance> {
   const dashboardToken = ensureDashboardToken(config);
   console.log(`[dashboard] URL: http://localhost:${config.gateway.port}/dashboard`);
 
-  // Auth guard for sensitive gateway endpoints (same token as dashboard)
+  // Auth guard for sensitive gateway endpoints (same token as dashboard).
+  // POST /api/newspaper/* endpoints (build, cleanup) require auth; GET (read) does not.
   const PROTECTED_ROUTES = new Set(['/message', '/model', '/reload']);
   fastify.addHook('onRequest', async (request, reply) => {
     const url = request.url;
+    const isProtectedNewspaper =
+      url.startsWith('/api/newspaper/') && request.method === 'POST';
     const isProtected =
       PROTECTED_ROUTES.has(url) ||
       url.startsWith('/cron/') ||
-      url === '/status';
+      url === '/status' ||
+      isProtectedNewspaper;
     if (!isProtected) return;
 
     if (!dashboardToken) return; // No token configured, allow access
@@ -160,6 +166,10 @@ export async function createGateway(cfg: Config): Promise<FastifyInstance> {
 
   // Register dashboard API routes (includes auth hook)
   registerDashboardAPI(fastify, config);
+
+  // Register newspaper API + frontend routes
+  registerNewspaperAPI(fastify, config);
+  registerNewspaperFrontend(fastify);
 
   // Register dashboard frontend (framework app)
   registerDashboard(fastify, {
