@@ -65,8 +65,21 @@ export function decodeGoogleNewsArticleUrl(url: string): string | null {
     const normalizedToken = token.replace(/-/g, '+').replace(/_/g, '/');
     const paddedToken = normalizedToken.padEnd(Math.ceil(normalizedToken.length / 4) * 4, '=');
     const decoded = Buffer.from(paddedToken, 'base64').toString('utf8');
-    const embeddedUrlMatch = decoded.match(/https?:\/\/[^\s"'<>\\\u0000-\u001f]+/i);
-    const embeddedUrl = embeddedUrlMatch?.[0]?.replace(/[^\x20-\x7e]+$/g, '');
+    const schemeMatch = decoded.match(/https?:\/\//i);
+    if (!schemeMatch || schemeMatch.index === undefined) return null;
+
+    const start = schemeMatch.index;
+    let end = decoded.length;
+    for (let index = start; index < decoded.length; index++) {
+      const char = decoded[index];
+      const code = decoded.charCodeAt(index);
+      if (code < 0x20 || /\s|["'<>\\]/.test(char)) {
+        end = index;
+        break;
+      }
+    }
+
+    const embeddedUrl = decoded.slice(start, end).replace(/[^\x20-\x7e]+$/g, '');
     if (!embeddedUrl || !isHttpUrl(embeddedUrl) || isGoogleNewsUrl(embeddedUrl)) return null;
     return embeddedUrl;
   } catch {

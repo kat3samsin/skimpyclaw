@@ -171,7 +171,7 @@ async function resolveGoogleNewsArticleUrl(article: Article): Promise<string | n
 
 async function fetchRedditThreadBody(url: URL): Promise<string | null> {
   const cleanRedditComment = (value: string): string | null => {
-    const cleaned = stripHtmlTags(value).replace(/\!\[[^\]]*\]\([^)]+\)/g, ' ').trim();
+    const cleaned = stripHtmlTags(value).replace(/!\[[^\]]*\]\([^)]+\)/g, ' ').trim();
     if (!cleaned) return null;
     if (/featured it on our discord/i.test(cleaned)) return null;
     return cleaned;
