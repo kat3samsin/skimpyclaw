@@ -376,6 +376,15 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
           durationMs: 0,
         });
         await endTrace(scriptTraceId, 'ok');
+
+        // Parse and save digest from script output (same as agentTurn path)
+        try {
+          const digest = parseAndSaveDigest(jobDef.id, jobDef.name, output);
+          appendCronLogLine(jobDef.id, `Digest saved: ${digest.articles.length} articles`);
+        } catch (digestErr) {
+          const errMsg = digestErr instanceof Error ? digestErr.message : String(digestErr);
+          appendCronLogLine(jobDef.id, `Failed to save digest: ${errMsg}`);
+        }
       } catch (scriptErr) {
         const scriptErrMsg = scriptErr instanceof Error ? scriptErr.message : String(scriptErr);
         addEvent(scriptTraceId, {

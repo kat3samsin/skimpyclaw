@@ -234,6 +234,7 @@ export interface DigestArticle {
   score?: number;
   comments?: number;
   summary?: string;
+  sourceUrl?: string;
   read?: boolean;
 }
 
