@@ -71,4 +71,21 @@ describe('digests index path resolution', () => {
     expect(digest.articles).toHaveLength(2);
     expect(digest.articles.map(a => a.title)).toEqual(['world one', 'world two']);
   });
+
+  it('extracts titles from markdown links in digest output', () => {
+    const digest = parseAndSaveDigest(
+      'news-digest',
+      'News Digest',
+      [
+        '# News Digest',
+        '',
+        '## US Headlines',
+        '1. [Direct article title](https://example.com/news/direct-article) *(Example News)*',
+      ].join('\n'),
+    );
+
+    expect(digest.articles).toHaveLength(1);
+    expect(digest.articles[0]?.title).toBe('Direct article title');
+    expect(digest.articles[0]?.url).toBe('https://example.com/news/direct-article');
+  });
 });

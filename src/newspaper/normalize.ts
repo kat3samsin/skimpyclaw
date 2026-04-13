@@ -150,7 +150,7 @@ export function normalizeDigest(digest: Digest): NormalizedArticle[] {
 
   const results: NormalizedArticle[] = [];
   for (const article of digest.articles) {
-    const resolvedSource = resolveArticleSource(article.url, (article as any).sourceUrl);
+    const resolvedSource = resolveArticleSource(article.url, article.sourceUrl);
     const cleanUrl = resolvedSource.canonicalUrl;
     if (!cleanUrl) {
       console.warn(`[newspaper] Dropping article "${article.title}" — invalid URL: ${article.url}`);
