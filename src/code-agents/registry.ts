@@ -75,11 +75,11 @@ export function storeCodeAgentTask(task: CodeAgentTask): void {
 /**
  * Find tasks spawned from a specific chat/channel that don't have a discordThreadId yet.
  * Used by Discord handler to retroactively assign threads after runAgentTurn.
+ * Includes non-running tasks to handle fast-completing agents (race condition fix).
  */
 export function getUnthreadedTasksForChat(chatId: number): CodeAgentTask[] {
   return Array.from(codeAgentTasks.values()).filter(t =>
     t.chatId === chatId &&
-    t.status === 'running' &&
     !t.discordThreadId &&
     !t.parentTaskId  // only top-level tasks get threads
   );

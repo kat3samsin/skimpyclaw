@@ -441,6 +441,8 @@ export async function runTeamOrchestrator(
         task: subtasks[i].description,
         status: waveNum === 0 ? 'running' : 'pending',
         chatId: context?.chatId,
+        discordThreadId: parentTask.discordThreadId,
+        discordChannelId: parentTask.discordChannelId,
         startedAt: new Date().toISOString(),
         workdir,
         model,
