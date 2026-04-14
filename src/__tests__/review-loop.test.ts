@@ -26,6 +26,7 @@ vi.mock('../code-agents/registry.js', () => ({
 
 import * as executorMock from '../code-agents/executor.js';
 import * as registryMock from '../code-agents/registry.js';
+import * as diffMock from '../code-agents/review-loop-diff.js';
 import { runAgentStep } from '../code-agents/review-loop.js';
 import { setWorkRootForTesting, saveWorkItem } from '../code-agents/review-loop-storage.js';
 import { createWorkItem, getWorkItem, listWorkItems, appendUserMessage, approvePlan, pauseWorkItem, resumeWorkItem, stopWorkItem, tickWorkItem } from '../code-agents/review-loop.js';
@@ -275,5 +276,56 @@ describe('tickWorkItem: planning', () => {
       expect(u?.status).toBe(status);
       expect((executorMock.runCodeAgentBackground as any).mock.calls.length).toBe(0);
     }
+  });
+});
+
+describe('tickWorkItem: implementing', () => {
+  beforeEach(() => {
+    (registryMock.getNextCodeAgentId as any).mockReturnValue('ca-dev');
+    (executorMock.runCodeAgentBackground as any).mockResolvedValue(undefined);
+  });
+
+  it('runs dev agent, captures changed files, transitions to reviewing, increments iteration', async () => {
+    const s = createWorkItem({ prompt: 'X', workdir: '/r' });
+    s.status = 'implementing';
+    s.timeline.push({
+      id: 't-2', kind: 'plan-produced', iteration: 0, at: new Date().toISOString(),
+      summary: 's', note: 'Do the thing',
+    });
+    s.lastReviewCommit = 'base123';
+    saveWorkItem(s);
+
+    (diffMock.getHeadSha as any).mockReturnValue('head456');
+    (diffMock.getChangedFiles as any).mockReturnValue(['a.ts', 'b.ts']);
+
+    (registryMock.getCodeAgent as any).mockReturnValue({
+      id: 'ca-dev', status: 'completed', outputPreview: 'done',
+      agent: 'claude', task: 't', startedAt: new Date().toISOString(), workdir: '/r',
+    });
+
+    const updated = await tickWorkItem(s.id);
+    expect(updated?.status).toBe('reviewing');
+    expect(updated?.iteration).toBe(1);
+    const devEvent = updated?.timeline.find(t => t.kind === 'dev-completed');
+    expect(devEvent?.changedFiles).toEqual(['a.ts', 'b.ts']);
+    expect(devEvent?.codeAgentTaskId).toBe('ca-dev');
+  });
+
+  it('dev failure → blocked', async () => {
+    const s = createWorkItem({ prompt: 'X', workdir: '/r' });
+    s.status = 'implementing';
+    s.timeline.push({
+      id: 't-2', kind: 'plan-produced', iteration: 0,
+      at: new Date().toISOString(), summary: 's', note: 'task',
+    });
+    saveWorkItem(s);
+
+    (registryMock.getCodeAgent as any).mockReturnValue({
+      id: 'ca-dev', status: 'failed', error: 'boom',
+      agent: 'claude', task: 't', startedAt: new Date().toISOString(), workdir: '/r',
+    });
+    const updated = await tickWorkItem(s.id);
+    expect(updated?.status).toBe('blocked');
+    expect(updated?.blockedReason).toContain('boom');
   });
 });

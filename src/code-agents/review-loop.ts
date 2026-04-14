@@ -5,7 +5,8 @@ import type {
   TimelineEventKind,
   ChatMessage,
 } from './review-loop-types.js';
-import { buildPlannerPrompt, parsePlannerOutput } from './review-loop-prompts.js';
+import { buildPlannerPrompt, parsePlannerOutput, buildDevPrompt } from './review-loop-prompts.js';
+import { getHeadSha, getChangedFiles } from './review-loop-diff.js';
 import {
   loadWorkItem,
   saveWorkItem,
@@ -289,6 +290,66 @@ async function runPlanner(state: WorkItemState): Promise<WorkItemState> {
   return state;
 }
 
+function findPendingDevTask(state: WorkItemState): string | null {
+  for (let i = state.timeline.length - 1; i >= 0; i--) {
+    const ev = state.timeline[i]!;
+    if (ev.kind === 'plan-produced' && ev.note) return ev.note;
+  }
+  return null;
+}
+
+async function runDev(state: WorkItemState): Promise<WorkItemState> {
+  const task = findPendingDevTask(state);
+  if (!task) {
+    markBlocked(state, 'no pending dev task found for implementing state');
+    saveWorkItem(state);
+    return state;
+  }
+
+  const openFindings = state.findings.filter(f => f.status === 'open');
+  const devPrompt = buildDevPrompt(state, task, openFindings);
+
+  state.liveActivity = {
+    agent: 'dev',
+    codeAgentTaskId: '(pending)',
+    startedAt: new Date().toISOString(),
+  };
+  appendTimelineEvent(state, 'dev-started', 'Dev agent started');
+  saveWorkItem(state);
+
+  const result = await runAgentStep({
+    agent: 'claude',
+    model: state.devModel,
+    task: devPrompt,
+    workdir: state.workdir,
+    validate: true,
+    pollIntervalMs: 5,
+  });
+  state.liveActivity = undefined;
+
+  if (result.status !== 'completed') {
+    markBlocked(state, `dev step ${result.status}: ${result.error ?? 'no output'}`);
+    saveWorkItem(state);
+    return state;
+  }
+
+  const fromRef = state.lastReviewCommit ?? state.baseRef;
+  const headSha = getHeadSha(state.workdir) ?? 'HEAD';
+  const changedFiles = getChangedFiles(state.workdir, fromRef, headSha);
+
+  state.iteration += 1;
+  state.status = 'reviewing';
+  appendTimelineEvent(state, 'dev-completed', `Dev agent produced ${changedFiles.length} file changes`, {
+    changedFiles,
+    codeAgentTaskId: result.codeAgentTaskId,
+  });
+  if (typeof result.totalCost === 'number') {
+    state.cost = (state.cost ?? 0) + result.totalCost;
+  }
+  saveWorkItem(state);
+  return state;
+}
+
 export async function tickWorkItem(id: string): Promise<WorkItemState | null> {
   const state = loadWorkItem(id);
   if (!state) return null;
@@ -310,7 +371,7 @@ export async function tickWorkItem(id: string): Promise<WorkItemState | null> {
     case 'awaiting_approval':
       return state;
     case 'implementing':
-      return state;  // implemented in Task 9
+      return runDev(state);
     case 'reviewing':
       return state;  // implemented in Task 10
     default:
