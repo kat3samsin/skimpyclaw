@@ -14,8 +14,8 @@ vi.mock('../code-agents/executor.js', () => ({
   runCodeAgentBackground: vi.fn(async () => {}),
 }));
 
-import { setWorkRootForTesting } from '../code-agents/review-loop-storage.js';
-import { createWorkItem, getWorkItem, listWorkItems } from '../code-agents/review-loop.js';
+import { setWorkRootForTesting, saveWorkItem } from '../code-agents/review-loop-storage.js';
+import { createWorkItem, getWorkItem, listWorkItems, appendUserMessage, approvePlan, pauseWorkItem, resumeWorkItem, stopWorkItem } from '../code-agents/review-loop.js';
 
 let tmp: string;
 
@@ -68,5 +68,70 @@ describe('review-loop: create/get/list', () => {
     const s = createWorkItem({ prompt: 'X', workdir: '/r' });
     expect(getWorkItem(s.id)).toMatchObject({ id: s.id, status: 'planning' });
     expect(listWorkItems().map(w => w.id)).toContain(s.id);
+  });
+});
+
+describe('review-loop: user actions', () => {
+  it('appendUserMessage adds to chat and flags pendingUserMessage', () => {
+    const s = createWorkItem({ prompt: 'X', workdir: '/r' });
+    const updated = appendUserMessage(s.id, 'prefer minimal diff');
+    expect(updated?.chatMessages).toHaveLength(1);
+    expect(updated?.chatMessages[0]!.content).toBe('prefer minimal diff');
+    expect(updated?.chatMessages[0]!.role).toBe('user');
+    expect(updated?.pendingUserMessage).toBe(true);
+  });
+
+  it('appendUserMessage returns null if item missing', () => {
+    expect(appendUserMessage('RL-999', 'hi')).toBeNull();
+  });
+
+  it('approvePlan transitions awaiting_approval → planning', () => {
+    const s = createWorkItem({ prompt: 'X', workdir: '/r' });
+    s.status = 'awaiting_approval';
+    s.currentPlan = 'plan body';
+    saveWorkItem(s);
+    const updated = approvePlan(s.id);
+    expect(updated?.status).toBe('planning');
+    expect(updated?.timeline.some(t => t.kind === 'plan-approved')).toBe(true);
+  });
+
+  it('approvePlan rejects when not awaiting_approval', () => {
+    const s = createWorkItem({ prompt: 'X', workdir: '/r' });
+    const updated = approvePlan(s.id);
+    expect(updated).toBeNull();
+  });
+
+  it('pauseWorkItem saves previousStatus and transitions to paused', () => {
+    const s = createWorkItem({ prompt: 'X', workdir: '/r' });
+    s.status = 'implementing';
+    saveWorkItem(s);
+    const updated = pauseWorkItem(s.id);
+    expect(updated?.status).toBe('paused');
+    expect(updated?.previousStatus).toBe('implementing');
+  });
+
+  it('resumeWorkItem restores previousStatus', () => {
+    const s = createWorkItem({ prompt: 'X', workdir: '/r' });
+    s.status = 'paused';
+    s.previousStatus = 'reviewing';
+    saveWorkItem(s);
+    const updated = resumeWorkItem(s.id);
+    expect(updated?.status).toBe('reviewing');
+    expect(updated?.previousStatus).toBeUndefined();
+  });
+
+  it('stopWorkItem transitions to terminal stopped', () => {
+    const s = createWorkItem({ prompt: 'X', workdir: '/r' });
+    const updated = stopWorkItem(s.id, 'user requested');
+    expect(updated?.status).toBe('stopped');
+    expect(updated?.stoppedReason).toBe('user requested');
+    expect(updated?.timeline.some(t => t.kind === 'stopped')).toBe(true);
+  });
+
+  it('stopWorkItem is idempotent on already-stopped items', () => {
+    const s = createWorkItem({ prompt: 'X', workdir: '/r' });
+    stopWorkItem(s.id);
+    const second = stopWorkItem(s.id);
+    expect(second?.status).toBe('stopped');
   });
 });
