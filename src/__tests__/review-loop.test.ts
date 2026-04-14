@@ -329,3 +329,90 @@ describe('tickWorkItem: implementing', () => {
     expect(updated?.blockedReason).toContain('boom');
   });
 });
+
+describe('tickWorkItem: reviewing', () => {
+  beforeEach(() => {
+    (registryMock.getNextCodeAgentId as any).mockReturnValue('ca-rev');
+    (executorMock.runCodeAgentBackground as any).mockResolvedValue(undefined);
+  });
+
+  function primedReviewingState() {
+    const s = createWorkItem({ prompt: 'X', workdir: '/r' });
+    s.status = 'reviewing';
+    s.iteration = 1;
+    s.lastReviewCommit = 'base';
+    s.timeline.push({
+      id: 't-2', kind: 'dev-completed', iteration: 1,
+      at: '', summary: '', changedFiles: ['a.ts'], codeAgentTaskId: 'ca-dev',
+    });
+    saveWorkItem(s);
+    return s;
+  }
+
+  it('approved verdict → done, lastReviewCommit updated, timeline records done', async () => {
+    const s = primedReviewingState();
+    (diffMock.getHeadSha as any).mockReturnValue('new-sha');
+    (diffMock.getReviewDiff as any).mockReturnValue('+++ diff');
+    (diffMock.getChangedFiles as any).mockReturnValue(['a.ts']);
+    (registryMock.getCodeAgent as any).mockReturnValue({
+      id: 'ca-rev', status: 'completed',
+      outputPreview: '{"verdict":"approved","findings":[]}',
+      agent: 'claude', task: 't', startedAt: new Date().toISOString(), workdir: '/r',
+    });
+
+    const updated = await tickWorkItem(s.id);
+    expect(updated?.status).toBe('done');
+    expect(updated?.lastReviewCommit).toBe('new-sha');
+    expect(updated?.timeline.some(t => t.kind === 'done')).toBe(true);
+  });
+
+  it('changes_requested → revising, findings appended with iteration tag', async () => {
+    const s = primedReviewingState();
+    (diffMock.getHeadSha as any).mockReturnValue('new-sha');
+    (diffMock.getReviewDiff as any).mockReturnValue('diff');
+    (diffMock.getChangedFiles as any).mockReturnValue(['a.ts']);
+    (registryMock.getCodeAgent as any).mockReturnValue({
+      id: 'ca-rev', status: 'completed',
+      outputPreview: '{"verdict":"changes_requested","findings":[{"severity":"high","summary":"broken","file":"a.ts","line":10}]}',
+      agent: 'claude', task: 't', startedAt: new Date().toISOString(), workdir: '/r',
+    });
+
+    const updated = await tickWorkItem(s.id);
+    expect(updated?.status).toBe('revising');
+    expect(updated?.findings).toHaveLength(1);
+    expect(updated?.findings[0]!.id).toBe('f-1-0');
+    expect(updated?.findings[0]!.iterationRaised).toBe(1);
+    expect(updated?.findings[0]!.status).toBe('open');
+  });
+
+  it('iteration cap reached on changes_requested → blocked', async () => {
+    const s = primedReviewingState();
+    s.maxIterations = 1;
+    saveWorkItem(s);
+    (diffMock.getHeadSha as any).mockReturnValue('new-sha');
+    (diffMock.getReviewDiff as any).mockReturnValue('diff');
+    (diffMock.getChangedFiles as any).mockReturnValue(['a.ts']);
+    (registryMock.getCodeAgent as any).mockReturnValue({
+      id: 'ca-rev', status: 'completed',
+      outputPreview: '{"verdict":"changes_requested","findings":[{"severity":"low","summary":"x"}]}',
+      agent: 'claude', task: 't', startedAt: new Date().toISOString(), workdir: '/r',
+    });
+
+    const updated = await tickWorkItem(s.id);
+    expect(updated?.status).toBe('blocked');
+    expect(updated?.blockedReason).toMatch(/max iterations/i);
+  });
+
+  it('reviewer returns bad JSON → blocked', async () => {
+    const s = primedReviewingState();
+    (diffMock.getHeadSha as any).mockReturnValue('new-sha');
+    (diffMock.getReviewDiff as any).mockReturnValue('diff');
+    (diffMock.getChangedFiles as any).mockReturnValue(['a.ts']);
+    (registryMock.getCodeAgent as any).mockReturnValue({
+      id: 'ca-rev', status: 'completed', outputPreview: 'nope',
+      agent: 'claude', task: 't', startedAt: new Date().toISOString(), workdir: '/r',
+    });
+    const updated = await tickWorkItem(s.id);
+    expect(updated?.status).toBe('blocked');
+  });
+});

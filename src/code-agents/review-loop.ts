@@ -4,9 +4,10 @@ import type {
   TimelineEvent,
   TimelineEventKind,
   ChatMessage,
+  ReviewFinding,
 } from './review-loop-types.js';
-import { buildPlannerPrompt, parsePlannerOutput, buildDevPrompt } from './review-loop-prompts.js';
-import { getHeadSha, getChangedFiles } from './review-loop-diff.js';
+import { buildPlannerPrompt, parsePlannerOutput, buildDevPrompt, buildReviewerPrompt, parseReviewerOutput } from './review-loop-prompts.js';
+import { getHeadSha, getChangedFiles, getReviewDiff } from './review-loop-diff.js';
 import {
   loadWorkItem,
   saveWorkItem,
@@ -350,6 +351,93 @@ async function runDev(state: WorkItemState): Promise<WorkItemState> {
   return state;
 }
 
+function latestChangedFiles(state: WorkItemState): string[] {
+  for (let i = state.timeline.length - 1; i >= 0; i--) {
+    const ev = state.timeline[i]!;
+    if (ev.kind === 'dev-completed' && ev.changedFiles) return ev.changedFiles;
+  }
+  return [];
+}
+
+async function runReviewer(state: WorkItemState): Promise<WorkItemState> {
+  const fromRef = state.lastReviewCommit ?? state.baseRef;
+  const headSha = getHeadSha(state.workdir) ?? 'HEAD';
+  const diffText = getReviewDiff(state.workdir, fromRef, headSha) ?? '';
+  const changedFiles = latestChangedFiles(state);
+
+  const reviewerPrompt = buildReviewerPrompt(state, diffText, changedFiles);
+
+  state.liveActivity = {
+    agent: 'reviewer',
+    codeAgentTaskId: '(pending)',
+    startedAt: new Date().toISOString(),
+  };
+  appendTimelineEvent(state, 'review-started', 'Reviewer started');
+  saveWorkItem(state);
+
+  const result = await runAgentStep({
+    agent: 'claude',
+    model: state.reviewerModel,
+    task: reviewerPrompt,
+    workdir: state.workdir,
+    validate: false,
+    pollIntervalMs: 5,
+  });
+  state.liveActivity = undefined;
+
+  if (result.status !== 'completed' || !result.outputPreview) {
+    markBlocked(state, `reviewer step ${result.status}: ${result.error ?? 'no output'}`);
+    saveWorkItem(state);
+    return state;
+  }
+
+  const parsed = parseReviewerOutput(result.outputPreview);
+  if (!parsed) {
+    markBlocked(state, 'reviewer returned invalid JSON');
+    saveWorkItem(state);
+    return state;
+  }
+
+  state.lastReviewCommit = headSha;
+
+  if (parsed.verdict === 'approved') {
+    state.status = 'done';
+    appendTimelineEvent(state, 'review-completed', parsed.note ?? 'Approved', {
+      codeAgentTaskId: result.codeAgentTaskId,
+    });
+    appendTimelineEvent(state, 'done', 'Reviewer approved');
+    saveWorkItem(state);
+    return state;
+  }
+
+  const newFindings: ReviewFinding[] = parsed.findings.map((f, idx) => ({
+    id: `f-${state.iteration}-${idx}`,
+    severity: f.severity,
+    summary: f.summary,
+    file: f.file,
+    line: f.line,
+    status: 'open',
+    iterationRaised: state.iteration,
+  }));
+  state.findings.push(...newFindings);
+  appendTimelineEvent(state, 'review-completed',
+    `${newFindings.length} finding(s)`,
+    {
+      codeAgentTaskId: result.codeAgentTaskId,
+      findingsSnapshot: newFindings,
+    });
+
+  if (state.iteration >= state.maxIterations) {
+    markBlocked(state, `max iterations (${state.maxIterations}) reached with ${newFindings.length} open finding(s)`);
+    saveWorkItem(state);
+    return state;
+  }
+
+  state.status = 'revising';
+  saveWorkItem(state);
+  return state;
+}
+
 export async function tickWorkItem(id: string): Promise<WorkItemState | null> {
   const state = loadWorkItem(id);
   if (!state) return null;
@@ -373,7 +461,7 @@ export async function tickWorkItem(id: string): Promise<WorkItemState | null> {
     case 'implementing':
       return runDev(state);
     case 'reviewing':
-      return state;  // implemented in Task 10
+      return runReviewer(state);
     default:
       return state;
   }
