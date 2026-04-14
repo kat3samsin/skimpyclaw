@@ -95,8 +95,13 @@ export function buildReviewerPrompt(state: WorkItemState, diff: string, changedF
 }
 
 function extractJsonBlock(raw: string): string | null {
-  const fence = /```(?:json)?\s*([\s\S]*?)```/i.exec(raw);
-  if (fence) return fence[1]!.trim();
+  // 1. Prefer a ```json fence.
+  const jsonFence = /```json\s*([\s\S]*?)```/i.exec(raw);
+  if (jsonFence) return jsonFence[1]!.trim();
+  // 2. Fall back to any fenced block.
+  const anyFence = /```\s*([\s\S]*?)```/i.exec(raw);
+  if (anyFence) return anyFence[1]!.trim();
+  // 3. Fall back to first top-level {...} match.
   const start = raw.indexOf('{');
   if (start === -1) return null;
   let depth = 0;

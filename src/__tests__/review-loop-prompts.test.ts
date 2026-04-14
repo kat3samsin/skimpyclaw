@@ -101,4 +101,17 @@ describe('review-loop-prompts', () => {
   it('parseReviewerOutput rejects invalid severity', () => {
     expect(parseReviewerOutput('{"verdict":"changes_requested","findings":[{"severity":"xxx","summary":"s"}]}')).toBeNull();
   });
+
+  it('parsePlannerOutput prefers ```json fence over earlier bare fence', () => {
+    const raw = 'first look at this example:\n```bash\necho hi\n```\nNow the output:\n```json\n{"status":"awaiting_approval","summary":"s","plan":"P"}\n```';
+    const out = parsePlannerOutput(raw);
+    expect(out?.status).toBe('awaiting_approval');
+    expect(out?.plan).toBe('P');
+  });
+
+  it('parsePlannerOutput falls back to bare fence when no json fence', () => {
+    const raw = '```\n{"status":"awaiting_approval","summary":"s","plan":"P"}\n```';
+    const out = parsePlannerOutput(raw);
+    expect(out?.plan).toBe('P');
+  });
 });

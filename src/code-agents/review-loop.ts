@@ -240,14 +240,22 @@ async function runPlanner(state: WorkItemState): Promise<WorkItemState> {
   };
   saveWorkItem(state);
 
-  const result = await runAgentStep({
-    agent: 'claude',
-    model: state.plannerModel,
-    task: prompt,
-    workdir: state.workdir,
-    validate: false,
-    pollIntervalMs: 5,
-  });
+  let result;
+  try {
+    result = await runAgentStep({
+      agent: 'claude',
+      model: state.plannerModel,
+      task: prompt,
+      workdir: state.workdir,
+      validate: false,
+      pollIntervalMs: 5,
+    });
+  } catch (err) {
+    state.liveActivity = undefined;
+    markBlocked(state, `planner step threw: ${err instanceof Error ? err.message : String(err)}`);
+    saveWorkItem(state);
+    return state;
+  }
   state.liveActivity = undefined;
 
   if (result.status !== 'completed' || !result.outputPreview) {
@@ -318,14 +326,22 @@ async function runDev(state: WorkItemState): Promise<WorkItemState> {
   appendTimelineEvent(state, 'dev-started', 'Dev agent started');
   saveWorkItem(state);
 
-  const result = await runAgentStep({
-    agent: 'claude',
-    model: state.devModel,
-    task: devPrompt,
-    workdir: state.workdir,
-    validate: true,
-    pollIntervalMs: 5,
-  });
+  let result;
+  try {
+    result = await runAgentStep({
+      agent: 'claude',
+      model: state.devModel,
+      task: devPrompt,
+      workdir: state.workdir,
+      validate: true,
+      pollIntervalMs: 5,
+    });
+  } catch (err) {
+    state.liveActivity = undefined;
+    markBlocked(state, `dev step threw: ${err instanceof Error ? err.message : String(err)}`);
+    saveWorkItem(state);
+    return state;
+  }
   state.liveActivity = undefined;
 
   if (result.status !== 'completed') {
@@ -375,14 +391,22 @@ async function runReviewer(state: WorkItemState): Promise<WorkItemState> {
   appendTimelineEvent(state, 'review-started', 'Reviewer started');
   saveWorkItem(state);
 
-  const result = await runAgentStep({
-    agent: 'claude',
-    model: state.reviewerModel,
-    task: reviewerPrompt,
-    workdir: state.workdir,
-    validate: false,
-    pollIntervalMs: 5,
-  });
+  let result;
+  try {
+    result = await runAgentStep({
+      agent: 'claude',
+      model: state.reviewerModel,
+      task: reviewerPrompt,
+      workdir: state.workdir,
+      validate: false,
+      pollIntervalMs: 5,
+    });
+  } catch (err) {
+    state.liveActivity = undefined;
+    markBlocked(state, `reviewer step threw: ${err instanceof Error ? err.message : String(err)}`);
+    saveWorkItem(state);
+    return state;
+  }
   state.liveActivity = undefined;
 
   if (result.status !== 'completed' || !result.outputPreview) {
@@ -446,7 +470,7 @@ export async function tickWorkItem(id: string): Promise<WorkItemState | null> {
     return state;
   }
 
-  if (state.iteration >= state.maxIterations && state.status !== 'planning') {
+  if (state.status === 'implementing' && state.iteration >= state.maxIterations) {
     markBlocked(state, `max iterations (${state.maxIterations}) reached`);
     saveWorkItem(state);
     return state;

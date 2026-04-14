@@ -403,6 +403,30 @@ describe('tickWorkItem: reviewing', () => {
     expect(updated?.blockedReason).toMatch(/max iterations/i);
   });
 
+  it('after final dev run (iteration === maxIterations), reviewer is still allowed to run', async () => {
+    const s = createWorkItem({ prompt: 'X', workdir: '/r' });
+    s.status = 'reviewing';
+    s.iteration = s.maxIterations;  // at the cap
+    s.lastReviewCommit = 'base';
+    s.timeline.push({
+      id: 't-2', kind: 'dev-completed', iteration: s.maxIterations,
+      at: '', summary: '', changedFiles: ['a.ts'], codeAgentTaskId: 'ca-dev',
+    });
+    saveWorkItem(s);
+
+    (diffMock.getHeadSha as any).mockReturnValue('new');
+    (diffMock.getReviewDiff as any).mockReturnValue('diff');
+    (diffMock.getChangedFiles as any).mockReturnValue(['a.ts']);
+    (registryMock.getCodeAgent as any).mockReturnValue({
+      id: 'ca-rev', status: 'completed',
+      outputPreview: '{"verdict":"approved","findings":[]}',
+      agent: 'claude', task: 't', startedAt: new Date().toISOString(), workdir: '/r',
+    });
+
+    const updated = await tickWorkItem(s.id);
+    expect(updated?.status).toBe('done');
+  });
+
   it('reviewer returns bad JSON → blocked', async () => {
     const s = primedReviewingState();
     (diffMock.getHeadSha as any).mockReturnValue('new-sha');
