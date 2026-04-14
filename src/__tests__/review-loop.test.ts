@@ -416,3 +416,61 @@ describe('tickWorkItem: reviewing', () => {
     expect(updated?.status).toBe('blocked');
   });
 });
+
+describe('review-loop: end-to-end happy path', () => {
+  it('planning → awaiting_approval → approve → revising(dev task) → implementing → reviewing(approved) → done', async () => {
+    (registryMock.getNextCodeAgentId as any).mockImplementation(() => `ca-${Math.random().toString(36).slice(2, 8)}`);
+    (executorMock.runCodeAgentBackground as any).mockResolvedValue(undefined);
+    (diffMock.getHeadSha as any).mockReturnValue('head-abc');
+    (diffMock.getChangedFiles as any).mockReturnValue(['z.ts']);
+    (diffMock.getReviewDiff as any).mockReturnValue('+++ diff');
+
+    const s = createWorkItem({ prompt: 'Add feature Z', workdir: '/r' });
+
+    // Tick 1: planner returns awaiting_approval
+    (registryMock.getCodeAgent as any).mockReturnValueOnce({
+      id: 'ca-p1', status: 'completed',
+      outputPreview: '{"status":"awaiting_approval","summary":"s","plan":"PLAN-v1"}',
+      agent: 'claude', task: 't', startedAt: new Date().toISOString(), workdir: '/r',
+    });
+    let u = await tickWorkItem(s.id);
+    expect(u?.status).toBe('awaiting_approval');
+    expect(u?.currentPlan).toBe('PLAN-v1');
+
+    // User approves → planning
+    u = approvePlan(s.id);
+    expect(u?.status).toBe('planning');
+
+    // Tick 2: planner re-runs with revising + next_dev_task → implementing
+    (registryMock.getCodeAgent as any).mockReturnValueOnce({
+      id: 'ca-p2', status: 'completed',
+      outputPreview: '{"status":"revising","summary":"s","plan":"PLAN-v2","next_dev_task":"Implement Z"}',
+      agent: 'claude', task: 't', startedAt: new Date().toISOString(), workdir: '/r',
+    });
+    u = await tickWorkItem(s.id);
+    expect(u?.status).toBe('implementing');
+    expect(u?.currentPlan).toBe('PLAN-v2');
+
+    // Tick 3: dev completes → reviewing, iteration 1
+    (registryMock.getCodeAgent as any).mockReturnValueOnce({
+      id: 'ca-d1', status: 'completed', outputPreview: 'dev done',
+      agent: 'claude', task: 't', startedAt: new Date().toISOString(), workdir: '/r',
+    });
+    u = await tickWorkItem(s.id);
+    expect(u?.status).toBe('reviewing');
+    expect(u?.iteration).toBe(1);
+
+    // Tick 4: reviewer approves → done
+    (registryMock.getCodeAgent as any).mockReturnValueOnce({
+      id: 'ca-r1', status: 'completed',
+      outputPreview: '{"verdict":"approved","findings":[]}',
+      agent: 'claude', task: 't', startedAt: new Date().toISOString(), workdir: '/r',
+    });
+    u = await tickWorkItem(s.id);
+    expect(u?.status).toBe('done');
+
+    // Terminal no-op
+    u = await tickWorkItem(s.id);
+    expect(u?.status).toBe('done');
+  });
+});
