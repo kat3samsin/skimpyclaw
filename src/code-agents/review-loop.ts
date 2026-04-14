@@ -5,6 +5,7 @@ import type {
   TimelineEventKind,
   ChatMessage,
 } from './review-loop-types.js';
+import { buildPlannerPrompt, parsePlannerOutput } from './review-loop-prompts.js';
 import {
   loadWorkItem,
   saveWorkItem,
@@ -219,4 +220,100 @@ export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentSt
     await new Promise(r => setTimeout(r, poll));
   }
   throw new Error(`Agent step ${id} timed out`);
+}
+
+function markBlocked(state: WorkItemState, reason: string): void {
+  state.status = 'blocked';
+  state.blockedReason = reason;
+  state.liveActivity = undefined;
+  appendTimelineEvent(state, 'blocked', reason);
+}
+
+async function runPlanner(state: WorkItemState): Promise<WorkItemState> {
+  const prompt = buildPlannerPrompt(state);
+  state.liveActivity = {
+    agent: 'planner',
+    codeAgentTaskId: '(pending)',
+    startedAt: new Date().toISOString(),
+  };
+  saveWorkItem(state);
+
+  const result = await runAgentStep({
+    agent: 'claude',
+    model: state.plannerModel,
+    task: prompt,
+    workdir: state.workdir,
+    validate: false,
+    pollIntervalMs: 5,
+  });
+  state.liveActivity = undefined;
+
+  if (result.status !== 'completed' || !result.outputPreview) {
+    markBlocked(state, `planner step ${result.status}: ${result.error ?? 'no output'}`);
+    saveWorkItem(state);
+    return state;
+  }
+
+  const parsed = parsePlannerOutput(result.outputPreview);
+  if (!parsed) {
+    markBlocked(state, 'planner returned invalid JSON');
+    saveWorkItem(state);
+    return state;
+  }
+
+  state.currentPlan = parsed.plan;
+  state.chatMessages.push({
+    id: nextChatId(state),
+    role: 'planner',
+    content: parsed.plan,
+    createdAt: new Date().toISOString(),
+  });
+  state.pendingUserMessage = false;
+  appendTimelineEvent(state, 'plan-produced', parsed.summary, { codeAgentTaskId: result.codeAgentTaskId });
+
+  if (parsed.status === 'awaiting_approval') {
+    state.status = 'awaiting_approval';
+  } else if (parsed.status === 'revising') {
+    if (!parsed.next_dev_task) {
+      markBlocked(state, 'planner status=revising but no next_dev_task');
+    } else {
+      const lastEvent = state.timeline[state.timeline.length - 1]!;
+      lastEvent.note = parsed.next_dev_task;
+      state.status = 'implementing';
+    }
+  } else {
+    markBlocked(state, parsed.blocked_reason ?? 'planner returned blocked');
+  }
+
+  saveWorkItem(state);
+  return state;
+}
+
+export async function tickWorkItem(id: string): Promise<WorkItemState | null> {
+  const state = loadWorkItem(id);
+  if (!state) return null;
+
+  if (['paused', 'done', 'blocked', 'stopped'].includes(state.status)) {
+    return state;
+  }
+
+  if (state.iteration >= state.maxIterations && state.status !== 'planning') {
+    markBlocked(state, `max iterations (${state.maxIterations}) reached`);
+    saveWorkItem(state);
+    return state;
+  }
+
+  switch (state.status) {
+    case 'planning':
+    case 'revising':
+      return runPlanner(state);
+    case 'awaiting_approval':
+      return state;
+    case 'implementing':
+      return state;  // implemented in Task 9
+    case 'reviewing':
+      return state;  // implemented in Task 10
+    default:
+      return state;
+  }
 }

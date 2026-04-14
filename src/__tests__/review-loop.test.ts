@@ -28,7 +28,7 @@ import * as executorMock from '../code-agents/executor.js';
 import * as registryMock from '../code-agents/registry.js';
 import { runAgentStep } from '../code-agents/review-loop.js';
 import { setWorkRootForTesting, saveWorkItem } from '../code-agents/review-loop-storage.js';
-import { createWorkItem, getWorkItem, listWorkItems, appendUserMessage, approvePlan, pauseWorkItem, resumeWorkItem, stopWorkItem } from '../code-agents/review-loop.js';
+import { createWorkItem, getWorkItem, listWorkItems, appendUserMessage, approvePlan, pauseWorkItem, resumeWorkItem, stopWorkItem, tickWorkItem } from '../code-agents/review-loop.js';
 
 let tmp: string;
 
@@ -191,5 +191,89 @@ describe('review-loop: runAgentStep', () => {
       agent: 'claude', model: 'm', task: 't', workdir: '/r', validate: false,
       pollIntervalMs: 5, timeoutMs: 20,
     })).rejects.toThrow(/timed out/i);
+  });
+});
+
+describe('tickWorkItem: planning', () => {
+  beforeEach(() => {
+    (registryMock.getNextCodeAgentId as any).mockReturnValue('ca-plan');
+    (executorMock.runCodeAgentBackground as any).mockResolvedValue(undefined);
+  });
+
+  function mockPlannerResponse(output: string, status: 'completed' | 'failed' = 'completed', error?: string) {
+    (registryMock.getCodeAgent as any).mockReturnValue({
+      id: 'ca-plan', status, outputPreview: output, error,
+      agent: 'claude', task: 't', startedAt: new Date().toISOString(), workdir: '/r',
+    });
+  }
+
+  it('transitions planning → awaiting_approval with plan text', async () => {
+    const s = createWorkItem({ prompt: 'Fix login', workdir: '/r' });
+    mockPlannerResponse('{"status":"awaiting_approval","summary":"sum","plan":"PLAN BODY"}');
+
+    const updated = await tickWorkItem(s.id);
+    expect(updated?.status).toBe('awaiting_approval');
+    expect(updated?.currentPlan).toBe('PLAN BODY');
+    expect(updated?.chatMessages.find(m => m.role === 'planner')?.content).toBe('PLAN BODY');
+    expect(updated?.timeline.some(t => t.kind === 'plan-produced')).toBe(true);
+    expect(updated?.pendingUserMessage).toBe(false);
+  });
+
+  it('revising output → transitions to implementing and stores next_dev_task', async () => {
+    const s = createWorkItem({ prompt: 'X', workdir: '/r' });
+    mockPlannerResponse('{"status":"revising","summary":"s","plan":"P","next_dev_task":"Do X"}');
+
+    const updated = await tickWorkItem(s.id);
+    expect(updated?.status).toBe('implementing');
+    expect(updated?.currentPlan).toBe('P');
+    const planEvent = updated?.timeline.find(t => t.kind === 'plan-produced');
+    expect(planEvent?.note).toBe('Do X');
+  });
+
+  it('planner output blocked → transitions to blocked', async () => {
+    const s = createWorkItem({ prompt: 'X', workdir: '/r' });
+    mockPlannerResponse('{"status":"blocked","summary":"s","plan":"P","blocked_reason":"no creds"}');
+
+    const updated = await tickWorkItem(s.id);
+    expect(updated?.status).toBe('blocked');
+    expect(updated?.blockedReason).toBe('no creds');
+  });
+
+  it('invalid planner JSON → blocked with reason', async () => {
+    const s = createWorkItem({ prompt: 'X', workdir: '/r' });
+    mockPlannerResponse('not json at all');
+    const updated = await tickWorkItem(s.id);
+    expect(updated?.status).toBe('blocked');
+    expect(updated?.blockedReason).toMatch(/planner/i);
+  });
+
+  it('agent step failed → blocked', async () => {
+    const s = createWorkItem({ prompt: 'X', workdir: '/r' });
+    mockPlannerResponse('', 'failed', 'network');
+    const updated = await tickWorkItem(s.id);
+    expect(updated?.status).toBe('blocked');
+    expect(updated?.blockedReason).toContain('network');
+  });
+
+  it('tick on paused item is a no-op', async () => {
+    const s = createWorkItem({ prompt: 'X', workdir: '/r' });
+    s.status = 'paused';
+    saveWorkItem(s);
+    (executorMock.runCodeAgentBackground as any).mockClear();
+    const updated = await tickWorkItem(s.id);
+    expect(updated?.status).toBe('paused');
+    expect((executorMock.runCodeAgentBackground as any).mock.calls.length).toBe(0);
+  });
+
+  it('tick on done/blocked/stopped items is a no-op', async () => {
+    for (const status of ['done', 'blocked', 'stopped'] as const) {
+      const s = createWorkItem({ prompt: 'X', workdir: '/r' });
+      s.status = status;
+      saveWorkItem(s);
+      (executorMock.runCodeAgentBackground as any).mockClear();
+      const u = await tickWorkItem(s.id);
+      expect(u?.status).toBe(status);
+      expect((executorMock.runCodeAgentBackground as any).mock.calls.length).toBe(0);
+    }
   });
 });
