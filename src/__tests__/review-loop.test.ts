@@ -14,6 +14,19 @@ vi.mock('../code-agents/executor.js', () => ({
   runCodeAgentBackground: vi.fn(async () => {}),
 }));
 
+vi.mock('../code-agents/registry.js', () => ({
+  getNextCodeAgentId: vi.fn(() => 'ca-mock'),
+  storeCodeAgentTask: vi.fn(() => {}),
+  writeCodeAgentTask: vi.fn(() => {}),
+  getCodeAgent: vi.fn(() => ({
+    id: 'ca-mock', status: 'completed', outputPreview: 'ok',
+    agent: 'claude', task: 't', startedAt: new Date().toISOString(), workdir: '/r',
+  })),
+}));
+
+import * as executorMock from '../code-agents/executor.js';
+import * as registryMock from '../code-agents/registry.js';
+import { runAgentStep } from '../code-agents/review-loop.js';
 import { setWorkRootForTesting, saveWorkItem } from '../code-agents/review-loop-storage.js';
 import { createWorkItem, getWorkItem, listWorkItems, appendUserMessage, approvePlan, pauseWorkItem, resumeWorkItem, stopWorkItem } from '../code-agents/review-loop.js';
 
@@ -133,5 +146,50 @@ describe('review-loop: user actions', () => {
     stopWorkItem(s.id);
     const second = stopWorkItem(s.id);
     expect(second?.status).toBe('stopped');
+  });
+});
+
+describe('review-loop: runAgentStep', () => {
+  beforeEach(() => {
+    (registryMock.getNextCodeAgentId as any).mockReturnValue('ca-99');
+    (registryMock.storeCodeAgentTask as any).mockImplementation(() => {});
+    (registryMock.writeCodeAgentTask as any).mockImplementation(() => {});
+    (executorMock.runCodeAgentBackground as any).mockResolvedValue(undefined);
+  });
+
+  it('spawns runCodeAgentBackground and polls registry until completion', async () => {
+    (registryMock.getCodeAgent as any).mockReturnValue({
+      id: 'ca-99',
+      agent: 'claude',
+      status: 'completed',
+      outputPreview: '{"verdict":"approved","findings":[]}',
+      task: 't',
+      startedAt: new Date().toISOString(),
+      workdir: '/r',
+    });
+
+    const result = await runAgentStep({
+      agent: 'claude',
+      model: 'claude-sonnet',
+      task: 'review this',
+      workdir: '/r',
+      validate: false,
+      pollIntervalMs: 5,
+    });
+    expect(result.status).toBe('completed');
+    expect(result.outputPreview).toContain('approved');
+    expect(result.codeAgentTaskId).toBe('ca-99');
+  });
+
+  it('times out if polling never sees terminal status', async () => {
+    (registryMock.getCodeAgent as any).mockReturnValue({
+      id: 'ca-1', status: 'running', task: 't', agent: 'claude',
+      startedAt: new Date().toISOString(), workdir: '/r',
+    });
+
+    await expect(runAgentStep({
+      agent: 'claude', model: 'm', task: 't', workdir: '/r', validate: false,
+      pollIntervalMs: 5, timeoutMs: 20,
+    })).rejects.toThrow(/timed out/i);
   });
 });

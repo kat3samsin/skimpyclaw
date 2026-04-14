@@ -144,3 +144,79 @@ export function stopWorkItem(id: string, reason?: string): WorkItemState | null 
   saveWorkItem(state);
   return state;
 }
+
+import {
+  getNextCodeAgentId,
+  storeCodeAgentTask,
+  writeCodeAgentTask,
+  getCodeAgent,
+} from './registry.js';
+import { runCodeAgentBackground } from './executor.js';
+import type { CodeAgentTask } from './types.js';
+
+export interface RunAgentStepInput {
+  agent: string;
+  model?: string;
+  task: string;
+  workdir: string;
+  validate: boolean;
+  timeoutMs?: number;
+  pollIntervalMs?: number;
+}
+
+export interface RunAgentStepResult {
+  codeAgentTaskId: string;
+  status: CodeAgentTask['status'];
+  outputPreview?: string;
+  error?: string;
+  totalCost?: number;
+}
+
+const TERMINAL_CA_STATUSES: Array<CodeAgentTask['status']> = [
+  'completed', 'failed', 'timeout', 'cancelled',
+];
+
+export async function runAgentStep(input: RunAgentStepInput): Promise<RunAgentStepResult> {
+  const id = getNextCodeAgentId();
+  const startedAt = new Date();
+  const task: CodeAgentTask = {
+    id,
+    agent: input.agent,
+    task: input.task,
+    status: 'running',
+    startedAt: startedAt.toISOString(),
+    workdir: input.workdir,
+    model: input.model,
+  };
+  storeCodeAgentTask(task);
+  writeCodeAgentTask(task);
+
+  await runCodeAgentBackground(
+    id,
+    input.agent,
+    input.task,
+    input.workdir,
+    input.validate,
+    { model: input.model, task: input.task },
+    startedAt,
+    { defaultTimeoutMinutes: Math.ceil((input.timeoutMs ?? 30 * 60 * 1000) / 60000) },
+  );
+
+  const poll = input.pollIntervalMs ?? 1500;
+  const deadline = Date.now() + (input.timeoutMs ?? 30 * 60 * 1000);
+
+  while (Date.now() < deadline) {
+    const current = getCodeAgent(id);
+    if (current && TERMINAL_CA_STATUSES.includes(current.status)) {
+      return {
+        codeAgentTaskId: id,
+        status: current.status,
+        outputPreview: current.outputPreview,
+        error: current.error,
+        totalCost: current.totalCost,
+      };
+    }
+    await new Promise(r => setTimeout(r, poll));
+  }
+  throw new Error(`Agent step ${id} timed out`);
+}
