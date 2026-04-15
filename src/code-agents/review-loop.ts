@@ -116,6 +116,7 @@ export function approvePlan(id: string): WorkItemState | null {
   if (!state) return null;
   if (state.status !== 'awaiting_approval') return null;
   state.status = 'planning';
+  state.planApproved = true;
   appendTimelineEvent(state, 'plan-approved', 'Plan approved by user');
   saveWorkItem(state);
   return state;
@@ -291,14 +292,24 @@ async function runPlanner(state: WorkItemState): Promise<WorkItemState> {
   state.pendingUserMessage = false;
   appendTimelineEvent(state, 'plan-produced', parsed.summary, { codeAgentTaskId: result.codeAgentTaskId });
 
-  if (parsed.status === 'awaiting_approval') {
+  const wasApproved = state.planApproved === true;
+  state.planApproved = false;  // consumed
+
+  // If user already approved a plan, coerce an awaiting_approval response
+  // into revising — we already have user consent to proceed.
+  const effectiveStatus = (wasApproved && parsed.status === 'awaiting_approval')
+    ? 'revising' : parsed.status;
+
+  if (effectiveStatus === 'awaiting_approval') {
     state.status = 'awaiting_approval';
-  } else if (parsed.status === 'revising') {
-    if (!parsed.next_dev_task) {
+  } else if (effectiveStatus === 'revising') {
+    const devTask = parsed.next_dev_task
+      ?? (wasApproved ? parsed.plan : undefined);
+    if (!devTask) {
       markBlocked(state, 'planner status=revising but no next_dev_task');
     } else {
       const lastEvent = state.timeline[state.timeline.length - 1]!;
-      lastEvent.note = parsed.next_dev_task;
+      lastEvent.note = devTask;
       state.status = 'implementing';
     }
   } else {

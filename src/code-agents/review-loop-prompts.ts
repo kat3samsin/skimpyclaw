@@ -27,6 +27,9 @@ export function buildPlannerPrompt(state: WorkItemState): string {
     `OPEN FINDINGS:\n${findings}`,
     '',
     state.currentPlan ? `PREVIOUS PLAN:\n${state.currentPlan}\n` : '',
+    state.planApproved
+      ? 'THE USER HAS APPROVED THE PREVIOUS PLAN. You MUST now emit status="revising" with a concrete next_dev_task derived from the plan (the first actionable step the dev agent should execute). DO NOT return awaiting_approval again.\n'
+      : '',
     'Return ONLY a JSON object matching this shape (no prose outside the JSON):',
     '```json',
     '{',

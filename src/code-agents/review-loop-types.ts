@@ -94,6 +94,8 @@ export interface WorkItemState {
   lastReviewCommit?: string;
   currentPlan?: string;
   pendingUserMessage?: boolean;
+  /** Set when user approves the current plan; cleared after planner consumes it to emit next_dev_task. */
+  planApproved?: boolean;
   createdAt: string;
   updatedAt: string;
   cost?: number;
