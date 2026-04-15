@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
-import { LuPlus } from 'react-icons/lu';
+import { LuPlus, LuPause, LuPlay, LuSquare, LuSend, LuCircleCheck, LuMessageSquare } from 'react-icons/lu';
 import {
   getWorkItems, createWork,
+  getWorkItem, sendWorkChat, approveWork, pauseWork, resumeWork, stopWork,
 } from '../api/client.js';
-import type { WorkItemState, WorkStatus, CreateWorkInput } from '../types.js';
+import type { WorkItemState, WorkStatus, CreateWorkInput, WorkTimelineEvent } from '../types.js';
 
 const ACTIVE: WorkStatus[] = ['planning', 'awaiting_approval', 'implementing', 'reviewing', 'revising', 'paused'];
 const DONE: WorkStatus[] = ['done', 'blocked', 'stopped'];
@@ -253,7 +254,215 @@ export function Work() {
   );
 }
 
-// Stub — full implementation in Task 4.
 function WorkDetail({ id }: { id: string }) {
-  return <div style={{ padding: 24 }}>Detail for {id} — coming in Task 4</div>;
+  const [state, setState] = useState<WorkItemState | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [chatInput, setChatInput] = useState('');
+  const [actionPending, setActionPending] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    async function load() {
+      try {
+        const s = await getWorkItem(id);
+        if (alive) setState(s);
+      } catch (err: any) {
+        if (alive) setError(err?.message ?? 'failed to load');
+      }
+    }
+    load();
+    const interval = setInterval(load, 3000);
+    return () => { alive = false; clearInterval(interval); };
+  }, [id]);
+
+  if (error) return <div style={{ padding: 24, color: 'var(--error)' }}>{error}</div>;
+  if (!state) return <div style={{ padding: 24 }}>Loading…</div>;
+
+  async function runAction(key: string, fn: () => Promise<WorkItemState>) {
+    setActionPending(key);
+    try {
+      const next = await fn();
+      setState(next);
+    } catch (err: any) {
+      setError(err?.message ?? `${key} failed`);
+    } finally {
+      setActionPending(null);
+    }
+  }
+
+  async function onSendChat(e: Event) {
+    e.preventDefault();
+    const msg = chatInput.trim();
+    if (!msg) return;
+    setChatInput('');
+    await runAction('chat', () => sendWorkChat(id, msg));
+  }
+
+  const terminal = ['done', 'blocked', 'stopped'].includes(state.status);
+  const paused = state.status === 'paused';
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div style={{
+        padding: '12px 16px', borderBottom: '1px solid var(--border)',
+        background: 'var(--surface)',
+        display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+      }}>
+        <span style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--text-muted)' }}>{state.id}</span>
+        <span style={{ fontSize: 11, padding: '2px 6px', background: statusColor(state.status), color: 'white', borderRadius: 3 }}>{state.status}</span>
+        <span style={{ fontSize: 12 }}>iter {state.iteration}/{state.maxIterations}</span>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+          planner: {state.plannerModel} · dev: {state.devModel} · reviewer: {state.reviewerModel}
+        </span>
+        <div style={{ flex: 1 }} />
+        {!terminal && !paused && (
+          <button class="btn" disabled={actionPending === 'pause'} onClick={() => runAction('pause', () => pauseWork(id))} style={{ fontSize: 12 }}>
+            <LuPause size={12} /> Pause
+          </button>
+        )}
+        {paused && (
+          <button class="btn btn-primary" disabled={actionPending === 'resume'} onClick={() => runAction('resume', () => resumeWork(id))} style={{ fontSize: 12 }}>
+            <LuPlay size={12} /> Resume
+          </button>
+        )}
+        {!terminal && (
+          <button class="btn" disabled={actionPending === 'stop'} onClick={() => runAction('stop', () => stopWork(id))} style={{ fontSize: 12 }}>
+            <LuSquare size={12} /> Stop
+          </button>
+        )}
+      </div>
+
+      <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
+        <Feed state={state} onApprove={() => runAction('approve', () => approveWork(id))} approvePending={actionPending === 'approve'} />
+      </div>
+
+      {!terminal && (
+        <form onSubmit={onSendChat} style={{ padding: 12, borderTop: '1px solid var(--border)', display: 'flex', gap: 8 }}>
+          <input
+            type="text"
+            placeholder="Message the planner…"
+            value={chatInput}
+            onInput={e => setChatInput((e.target as HTMLInputElement).value)}
+            style={{ flex: 1, fontSize: 13, padding: 8 }}
+          />
+          <button type="submit" class="btn btn-primary" disabled={!chatInput.trim() || actionPending === 'chat'}>
+            <LuSend size={14} />
+          </button>
+        </form>
+      )}
+
+      {(state.blockedReason || state.stoppedReason) && (
+        <div style={{ padding: 12, borderTop: '1px solid var(--border)', fontSize: 12, color: 'var(--text-muted)' }}>
+          {state.blockedReason && <>Blocked: {state.blockedReason}</>}
+          {state.stoppedReason && <>Stopped: {state.stoppedReason}</>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Feed({ state, onApprove, approvePending }: { state: WorkItemState; onApprove: () => void; approvePending: boolean }) {
+  const entries = useMemo(() => {
+    type Entry =
+      | { kind: 'chat'; at: string; role: 'user' | 'planner'; content: string; id: string }
+      | { kind: 'iter'; at: string; iteration: number; ev: WorkTimelineEvent; id: string };
+    const out: Entry[] = [];
+    for (const m of state.chatMessages) {
+      out.push({ kind: 'chat', at: m.createdAt, role: m.role, content: m.content, id: m.id });
+    }
+    for (const ev of state.timeline) {
+      if (ev.kind === 'dev-completed' || ev.kind === 'review-completed') {
+        out.push({ kind: 'iter', at: ev.at, iteration: ev.iteration, ev, id: ev.id });
+      }
+    }
+    out.sort((a, b) => a.at.localeCompare(b.at));
+    return out;
+  }, [state]);
+
+  return (
+    <div>
+      {entries.map(e => {
+        if (e.kind === 'chat') {
+          const isUser = e.role === 'user';
+          return (
+            <div key={e.id} style={{ display: 'flex', justifyContent: isUser ? 'flex-end' : 'flex-start', marginBottom: 12 }}>
+              <div style={{
+                maxWidth: '80%', padding: '8px 12px', borderRadius: 8,
+                background: isUser ? 'var(--accent, #4a90b8)' : 'var(--surface-alt)',
+                color: isUser ? 'white' : 'inherit',
+                fontSize: 13, whiteSpace: 'pre-wrap',
+              }}>
+                {!isUser && <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 4, color: '#4a9b5a' }}>PLANNER</div>}
+                {e.content}
+                {!isUser && state.status === 'awaiting_approval' && isLatestPlannerMessage(state, e.id) && (
+                  <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
+                    <button class="btn btn-primary" disabled={approvePending} onClick={onApprove} style={{ fontSize: 12 }}>
+                      <LuCircleCheck size={12} /> Approve
+                    </button>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', alignSelf: 'center' }}>
+                      or refine via chat below
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        }
+        return <IterationRow key={e.id} ev={e.ev} />;
+      })}
+
+      {state.liveActivity && (
+        <div style={{ padding: 10, background: 'var(--surface-alt)', borderRadius: 6, fontSize: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <LuMessageSquare size={14} />
+          <strong>{state.liveActivity.agent}</strong> running…
+          <span style={{ color: 'var(--text-muted)' }}>
+            {Math.round((Date.now() - new Date(state.liveActivity.startedAt).getTime()) / 1000)}s
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function isLatestPlannerMessage(state: WorkItemState, msgId: string): boolean {
+  const plannerMsgs = state.chatMessages.filter(m => m.role === 'planner');
+  return plannerMsgs.length > 0 && plannerMsgs[plannerMsgs.length - 1]!.id === msgId;
+}
+
+function IterationRow({ ev }: { ev: WorkTimelineEvent }) {
+  const [open, setOpen] = useState(false);
+  const label = ev.kind === 'dev-completed'
+    ? `iter ${ev.iteration} · dev → ${ev.changedFiles?.length ?? 0} files`
+    : `iter ${ev.iteration} · reviewer → ${ev.findingsSnapshot?.length ?? 0} findings`;
+  return (
+    <div style={{ borderTop: '1px dashed var(--border)', padding: '8px 0', fontSize: 12, color: 'var(--text-muted)' }}>
+      <button onClick={() => setOpen(v => !v)} class="btn" style={{ fontSize: 12, padding: '2px 6px' }}>
+        {open ? '▾' : '▸'} {label}
+      </button>
+      {open && (
+        <div style={{ padding: '8px 16px', fontSize: 12 }}>
+          {ev.changedFiles && ev.changedFiles.length > 0 && (
+            <div><strong>Files:</strong>
+              <ul style={{ margin: '4px 0 8px 20px' }}>{ev.changedFiles.map(f => <li key={f}>{f}</li>)}</ul>
+            </div>
+          )}
+          {ev.findingsSnapshot && ev.findingsSnapshot.length > 0 && (
+            <div><strong>Findings:</strong>
+              <ul style={{ margin: '4px 0 0 20px' }}>
+                {ev.findingsSnapshot.map(f => (
+                  <li key={f.id}>
+                    <span style={{ fontWeight: 600, color: f.severity === 'high' ? 'var(--error)' : f.severity === 'medium' ? '#c49a3a' : 'inherit' }}>
+                      [{f.severity}]
+                    </span>{' '}
+                    {f.summary}
+                    {f.file && <span style={{ color: 'var(--text-muted)' }}> — {f.file}{f.line ? `:${f.line}` : ''}</span>}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
