@@ -14,10 +14,15 @@ import {
   listWorkItems as storageList,
   allocateWorkItemId,
 } from './review-loop-storage.js';
-import { resolveSelectedCodeAgent } from './utils.js';
+import { resolveSelectedCodeAgent, resolveModelAlias, getCodeAgentConfig } from './utils.js';
 
 function agentForModel(model: string): 'claude' | 'codex' | 'kimi' {
   return resolveSelectedCodeAgent(undefined, 'claude', model) ?? 'claude';
+}
+
+function resolveModel(model: string): string {
+  const aliases = getCodeAgentConfig()?.models?.aliases;
+  return resolveModelAlias(model, aliases) ?? model;
 }
 
 const DEFAULT_PLANNER = 'claude-opus';
@@ -249,7 +254,7 @@ async function runPlanner(state: WorkItemState): Promise<WorkItemState> {
   try {
     result = await runAgentStep({
       agent: agentForModel(state.plannerModel),
-      model: state.plannerModel,
+      model: resolveModel(state.plannerModel),
       task: prompt,
       workdir: state.workdir,
       validate: false,
@@ -335,7 +340,7 @@ async function runDev(state: WorkItemState): Promise<WorkItemState> {
   try {
     result = await runAgentStep({
       agent: agentForModel(state.devModel),
-      model: state.devModel,
+      model: resolveModel(state.devModel),
       task: devPrompt,
       workdir: state.workdir,
       validate: true,
@@ -400,7 +405,7 @@ async function runReviewer(state: WorkItemState): Promise<WorkItemState> {
   try {
     result = await runAgentStep({
       agent: agentForModel(state.reviewerModel),
-      model: state.reviewerModel,
+      model: resolveModel(state.reviewerModel),
       task: reviewerPrompt,
       workdir: state.workdir,
       validate: false,
