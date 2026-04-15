@@ -12,7 +12,7 @@ import {
   loadWorkItem,
   saveWorkItem,
   listWorkItems as storageList,
-  nextWorkItemId,
+  allocateWorkItemId,
 } from './review-loop-storage.js';
 
 const DEFAULT_PLANNER = 'claude-opus';
@@ -49,7 +49,7 @@ export function appendTimelineEvent(
 }
 
 export function createWorkItem(input: CreateWorkInput): WorkItemState {
-  const id = nextWorkItemId();
+  const id = allocateWorkItemId();
   const now = new Date().toISOString();
   const state: WorkItemState = {
     id,

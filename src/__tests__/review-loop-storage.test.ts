@@ -8,13 +8,7 @@ vi.mock('os', async () => {
   return { ...actual };
 });
 
-import {
-  setWorkRootForTesting,
-  saveWorkItem,
-  loadWorkItem,
-  listWorkItems,
-  nextWorkItemId,
-} from '../code-agents/review-loop-storage.js';
+import { allocateWorkItemId, setWorkRootForTesting, saveWorkItem, loadWorkItem, listWorkItems, nextWorkItemId } from '../code-agents/review-loop-storage.js';
 import type { WorkItemState } from '../code-agents/review-loop-types.js';
 
 let tmp: string;
@@ -100,5 +94,27 @@ describe('review-loop-storage', () => {
     bad.self = bad;  // circular → JSON.stringify throws
     expect(() => saveWorkItem(bad)).toThrow();
     expect(readFileSync(file, 'utf-8')).toBe(original);
+  });
+});
+
+describe('allocateWorkItemId — concurrent-safe', () => {
+  it('ten parallel calls produce distinct ids', async () => {
+    const ids = await Promise.all(
+      Array.from({ length: 10 }, () => Promise.resolve(allocateWorkItemId())),
+    );
+    const unique = new Set(ids);
+    expect(unique.size).toBe(10);
+    for (const id of ids) expect(id).toMatch(/^RL-\d{3,}$/);
+  });
+
+  it('allocateWorkItemId reserves the id so saveWorkItem can overwrite the placeholder', () => {
+    const a = allocateWorkItemId();
+    const b = allocateWorkItemId();
+    expect(a).not.toBe(b);
+    const state = makeState(a);
+    // saveWorkItem should not throw even though the placeholder exists.
+    saveWorkItem(state);
+    const loaded = loadWorkItem(a);
+    expect(loaded?.id).toBe(a);
   });
 });

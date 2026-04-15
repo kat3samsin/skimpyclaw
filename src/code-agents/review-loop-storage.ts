@@ -1,5 +1,5 @@
 // src/code-agents/review-loop-storage.ts
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, renameSync, unlinkSync } from 'fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, renameSync, unlinkSync, openSync, closeSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
 import type { WorkItemState } from './review-loop-types.js';
@@ -74,4 +74,28 @@ export function nextWorkItemId(): string {
   }
   const next = max + 1;
   return `RL-${String(next).padStart(3, '0')}`;
+}
+
+/**
+ * Atomically reserve the next RL-NNN id by creating a zero-byte placeholder
+ * file with O_EXCL. Two racing callers will never get the same id. The
+ * placeholder is overwritten by the first subsequent saveWorkItem call.
+ */
+export function allocateWorkItemId(): string {
+  const root = ensureRoot();
+  let candidate = nextWorkItemId();
+  for (let attempts = 0; attempts < 32; attempts++) {
+    const file = join(root, `${candidate}.json`);
+    try {
+      const fd = openSync(file, 'wx', 0o600); // 'wx' = O_WRONLY | O_CREAT | O_EXCL
+      closeSync(fd);
+      return candidate;
+    } catch (err: any) {
+      if (err?.code !== 'EEXIST') throw err;
+      const m = /^RL-(\d+)$/.exec(candidate);
+      const n = m ? parseInt(m[1]!, 10) : 0;
+      candidate = `RL-${String(n + 1).padStart(3, '0')}`;
+    }
+  }
+  throw new Error('allocateWorkItemId: exceeded retry budget');
 }
