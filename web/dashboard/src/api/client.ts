@@ -301,4 +301,12 @@ export function pickWorkdir(): Promise<{ path?: string; cancelled?: boolean }> {
   return request('work/pick-workdir', { method: 'POST' });
 }
 
+export function listDir(path?: string, showHidden = false): Promise<{ path: string; parent: string | null; entries: string[] }> {
+  const q = new URLSearchParams();
+  if (path) q.set('path', path);
+  if (showHidden) q.set('showHidden', '1');
+  const qs = q.toString();
+  return request(`work/list-dir${qs ? `?${qs}` : ''}`);
+}
+
 export { ApiError };

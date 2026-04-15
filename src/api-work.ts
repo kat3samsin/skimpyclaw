@@ -176,7 +176,31 @@ export function registerWorkAPI(fastify: FastifyInstance, config: Config): void 
     return state;
   });
 
-  // Native folder picker. macOS only; returns POSIX path or { cancelled: true }.
+  // List subdirectories of a given path. Used by the in-browser folder picker.
+  // Only lists directories; filters hidden entries by default.
+  fastify.get('/api/dashboard/work/list-dir', async (request, reply) => {
+    const q = request.query as { path?: string; showHidden?: string };
+    const raw = typeof q.path === 'string' && q.path.trim() ? q.path : homedir();
+    const expanded = raw === '~' ? homedir() : raw.startsWith('~/') ? resolve(homedir(), raw.slice(2)) : resolve(raw);
+    if (!existsSync(expanded)) return reply.code(404).send({ error: 'path does not exist', path: expanded });
+    let st;
+    try { st = statSync(expanded); } catch (err: any) { return reply.code(500).send({ error: err.message }); }
+    if (!st.isDirectory()) return reply.code(400).send({ error: 'not a directory', path: expanded });
+    const showHidden = q.showHidden === '1' || q.showHidden === 'true';
+    try {
+      const { readdirSync } = await import('fs');
+      const entries = readdirSync(expanded, { withFileTypes: true })
+        .filter(e => e.isDirectory() && (showHidden || !e.name.startsWith('.')))
+        .map(e => e.name)
+        .sort((a, b) => a.localeCompare(b));
+      const parent = expanded === '/' ? null : resolve(expanded, '..');
+      return { path: expanded, parent, entries };
+    } catch (err: any) {
+      return reply.code(500).send({ error: err.message });
+    }
+  });
+
+  // Native folder picker. macOS only; kept for non-daemon contexts.
   fastify.post('/api/dashboard/work/pick-workdir', async (_request, reply) => {
     if (process.platform !== 'darwin') {
       return reply.code(501).send({ error: 'folder picker only supported on macOS' });

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'preact/hooks';
 import { LuPlus, LuPause, LuPlay, LuSquare, LuSend, LuCircleCheck, LuMessageSquare, LuFolderOpen } from 'react-icons/lu';
 import {
   getWorkItems, createWork,
-  getWorkItem, sendWorkChat, approveWork, pauseWork, resumeWork, stopWork, openWorkWorkdir, pickWorkdir,
+  getWorkItem, sendWorkChat, approveWork, pauseWork, resumeWork, stopWork, openWorkWorkdir, listDir,
 } from '../api/client.js';
 import type { WorkItemState, WorkStatus, CreateWorkInput, WorkTimelineEvent } from '../types.js';
 
@@ -72,6 +72,7 @@ export function Work() {
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(() => readSelectedFromHash());
   const [submitting, setSubmitting] = useState(false);
+  const [browserOpen, setBrowserOpen] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -184,17 +185,17 @@ export function Work() {
                 type="button"
                 class="btn"
                 title="Pick folder"
-                onClick={async () => {
-                  try {
-                    const res = await pickWorkdir();
-                    if (res.path) setForm(s => ({ ...s, workdir: res.path! }));
-                  } catch (err: any) {
-                    setError(err?.message ?? 'picker failed');
-                  }
-                }}
+                onClick={() => setBrowserOpen(true)}
                 style={{ fontSize: 11, padding: '2px 10px' }}
               >Browse…</button>
             </div>
+            {browserOpen && (
+              <FolderBrowser
+                initialPath={form.workdir || undefined}
+                onCancel={() => setBrowserOpen(false)}
+                onSelect={(path) => { setForm(s => ({ ...s, workdir: path })); setBrowserOpen(false); }}
+              />
+            )}
             <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
               <input
                 type="checkbox"
@@ -515,6 +516,93 @@ function IterationRow({ ev }: { ev: WorkTimelineEvent }) {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function FolderBrowser({ initialPath, onSelect, onCancel }: { initialPath?: string; onSelect: (p: string) => void; onCancel: () => void }) {
+  const [cwd, setCwd] = useState<string>(initialPath ?? '');
+  const [parent, setParent] = useState<string | null>(null);
+  const [entries, setEntries] = useState<string[]>([]);
+  const [showHidden, setShowHidden] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function load(path?: string) {
+    setLoading(true);
+    setErr(null);
+    try {
+      const r = await listDir(path, showHidden);
+      setCwd(r.path);
+      setParent(r.parent);
+      setEntries(r.entries);
+    } catch (e: any) {
+      setErr(e?.message ?? 'failed to list');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => { load(initialPath); }, []);
+  useEffect(() => { if (cwd) load(cwd); }, [showHidden]);
+
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+      }}
+      onClick={onCancel}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: 'var(--surface)', border: '1px solid var(--border)',
+          borderRadius: 8, width: 560, maxHeight: '70vh', display: 'flex', flexDirection: 'column',
+          boxShadow: 'var(--shadow-md)',
+        }}
+      >
+        <div style={{ padding: 12, borderBottom: '1px solid var(--border)', display: 'flex', gap: 8, alignItems: 'center' }}>
+          <strong style={{ fontSize: 13 }}>Select folder</strong>
+          <div style={{ flex: 1 }} />
+          <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
+            <input type="checkbox" checked={showHidden} onChange={e => setShowHidden((e.target as HTMLInputElement).checked)} />
+            Hidden
+          </label>
+        </div>
+        <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 6, alignItems: 'center' }}>
+          <button class="btn" disabled={!parent} onClick={() => parent && load(parent)} style={{ fontSize: 11, padding: '2px 8px' }}>↑ Up</button>
+          <input
+            value={cwd}
+            onInput={e => setCwd((e.target as HTMLInputElement).value)}
+            onKeyDown={e => { if ((e as any).key === 'Enter') load(cwd); }}
+            style={{ flex: 1, fontSize: 12, padding: 4, fontFamily: 'var(--mono)' }}
+          />
+          <button class="btn" onClick={() => load(cwd)} style={{ fontSize: 11, padding: '2px 8px' }}>Go</button>
+        </div>
+        <div style={{ flex: 1, overflow: 'auto', minHeight: 200 }}>
+          {err && <div style={{ padding: 12, color: 'var(--error)', fontSize: 12 }}>{err}</div>}
+          {loading ? (
+            <div style={{ padding: 16, color: 'var(--text-muted)', fontSize: 12 }}>Loading…</div>
+          ) : entries.length === 0 ? (
+            <div style={{ padding: 16, color: 'var(--text-muted)', fontSize: 12 }}>(no subdirectories)</div>
+          ) : (
+            <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+              {entries.map(name => (
+                <li
+                  key={name}
+                  onClick={() => load(`${cwd.replace(/\/$/, '')}/${name}`)}
+                  style={{ padding: '6px 12px', fontSize: 12, cursor: 'pointer', borderBottom: '1px solid var(--border)' }}
+                >📁 {name}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div style={{ padding: 12, borderTop: '1px solid var(--border)', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button class="btn" onClick={onCancel} style={{ fontSize: 12 }}>Cancel</button>
+          <button class="btn btn-primary" onClick={() => onSelect(cwd)} style={{ fontSize: 12 }}>Select this folder</button>
+        </div>
+      </div>
     </div>
   );
 }
