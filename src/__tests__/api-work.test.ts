@@ -33,7 +33,7 @@ beforeEach(async () => {
   registerWorkAPI(app, {
     dashboard: { token: 'test-token' },
     projects: {},
-    tools: { allowedPaths: ['/r', '/tmp'] },
+    tools: { allowedPaths: [tmp] },
   } as any);
   await app.ready();
 });
@@ -107,7 +107,7 @@ describe('POST /api/dashboard/work', () => {
     const r = await app.inject({
       method: 'POST', url: '/api/dashboard/work',
       headers: { ...AUTH, 'content-type': 'application/json' },
-      payload: { prompt: 'Fix login', workdir: '/r' },
+      payload: { prompt: 'Fix login', workdir: tmp },
     });
     expect(r.statusCode).toBe(201);
     const body = JSON.parse(r.payload);
@@ -139,7 +139,7 @@ describe('POST /api/dashboard/work', () => {
       method: 'POST', url: '/api/dashboard/work',
       headers: { ...AUTH, 'content-type': 'application/json' },
       payload: {
-        prompt: 'X', workdir: '/r',
+        prompt: 'X', workdir: tmp,
         plannerModel: 'alt-p', devModel: 'alt-d', reviewerModel: 'alt-r',
         baseRef: 'main', maxIterations: 3,
       },
@@ -294,19 +294,21 @@ describe('POST /api/dashboard/work: workdir validation', () => {
   });
 
   it('accepts workdir inside allowed path', async () => {
+    const sub = join(tmp, 'sub');
+    require('fs').mkdirSync(sub);
     await app.close();
     app = Fastify();
     registerWorkAPI(app, {
       dashboard: { token: 'test-token' },
       projects: {},
-      tools: { allowedPaths: ['/safe'] },
+      tools: { allowedPaths: [tmp] },
     } as any);
     await app.ready();
 
     const r = await app.inject({
       method: 'POST', url: '/api/dashboard/work',
       headers: { ...AUTH, 'content-type': 'application/json' },
-      payload: { prompt: 'X', workdir: '/safe/sub' },
+      payload: { prompt: 'X', workdir: sub },
     });
     expect(r.statusCode).toBe(201);
   });
@@ -316,7 +318,7 @@ describe('POST /api/dashboard/work: workdir validation', () => {
     app = Fastify();
     registerWorkAPI(app, {
       dashboard: { token: 'test-token' },
-      projects: { myproj: '/projects/myproj' },
+      projects: { myproj: tmp },
       tools: { allowedPaths: [] },
     } as any);
     await app.ready();
@@ -328,8 +330,7 @@ describe('POST /api/dashboard/work: workdir validation', () => {
     });
     expect(r.statusCode).toBe(201);
     const body = JSON.parse(r.payload);
-    // Resolved project path is absolute
-    expect(body.workdir).toBe('/projects/myproj');
+    expect(body.workdir).toBe(tmp);
   });
 
   it('rejects when no allowed paths configured and not a project', async () => {

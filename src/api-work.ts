@@ -1,6 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { resolve } from 'path';
-import { spawn } from 'child_process';
+import { homedir } from 'os';
+import { existsSync, statSync } from 'fs';
+import { spawn, execFile } from 'child_process';
 import { validateBearerToken } from './utils.js';
 import type { Config } from './types.js';
 import { isPathAllowed } from './tools/path-utils.js';
@@ -23,6 +25,12 @@ function isValidWorkId(id: string): boolean {
   return WORK_ID_RE.test(id);
 }
 
+function expandHome(p: string): string {
+  if (p === '~') return homedir();
+  if (p.startsWith('~/')) return resolve(homedir(), p.slice(2));
+  return p;
+}
+
 function resolveAndValidateWorkdir(
   rawWorkdir: string,
   projects: Record<string, string>,
@@ -30,11 +38,15 @@ function resolveAndValidateWorkdir(
 ): { ok: true; workdir: string } | { ok: false; error: string } {
   // Project name alias first
   if (projects[rawWorkdir]) {
-    return { ok: true, workdir: resolve(projects[rawWorkdir]) };
+    const wd = resolve(expandHome(projects[rawWorkdir]));
+    if (!existsSync(wd) || !statSync(wd).isDirectory()) {
+      return { ok: false, error: `project workdir does not exist: ${wd}` };
+    }
+    return { ok: true, workdir: wd };
   }
-  const resolved = resolve(rawWorkdir);
-  const projectPaths = Object.values(projects).map(p => resolve(p));
-  const effective = [...allowedPaths, ...projectPaths];
+  const resolved = resolve(expandHome(rawWorkdir));
+  const projectPaths = Object.values(projects).map(p => resolve(expandHome(p)));
+  const effective = [...allowedPaths.map(expandHome), ...projectPaths];
   if (!isPathAllowed(resolved, effective)) {
     const aliases = Object.keys(projects);
     const hint = aliases.length ? ` (or project names: ${aliases.join(', ')})` : '';
@@ -42,6 +54,9 @@ function resolveAndValidateWorkdir(
       ok: false,
       error: `workdir not allowed. Permitted: ${allowedPaths.join(', ') || '(none)'}${hint}`,
     };
+  }
+  if (!existsSync(resolved) || !statSync(resolved).isDirectory()) {
+    return { ok: false, error: `workdir does not exist: ${resolved}` };
   }
   return { ok: true, workdir: resolved };
 }
@@ -158,6 +173,29 @@ export function registerWorkAPI(fastify: FastifyInstance, config: Config): void 
     const state = stopWorkItem(id, reason);
     if (!state) return reply.code(404).send({ error: 'not found' });
     return state;
+  });
+
+  // Native folder picker. macOS only; returns POSIX path or { cancelled: true }.
+  fastify.post('/api/dashboard/work/pick-workdir', async (_request, reply) => {
+    if (process.platform !== 'darwin') {
+      return reply.code(501).send({ error: 'folder picker only supported on macOS' });
+    }
+    return new Promise((resolve) => {
+      const script = 'set f to choose folder with prompt "Select workdir"\nPOSIX path of f';
+      execFile('osascript', ['-e', script], { timeout: 60_000 }, (err, stdout) => {
+        if (err) {
+          // User cancelled or dialog failed
+          if (/User canceled/i.test(String((err as any).stderr) + err.message)) {
+            resolve(reply.send({ cancelled: true }));
+            return;
+          }
+          resolve(reply.code(500).send({ error: err.message }));
+          return;
+        }
+        const path = stdout.trim().replace(/\/$/, '');
+        resolve(reply.send({ path }));
+      });
+    });
   });
 
   // Open the work item's workdir in the OS file manager. macOS: `open`.

@@ -297,4 +297,8 @@ export function openWorkWorkdir(id: string): Promise<{ opened: boolean; workdir:
   return request(`work/${encodeURIComponent(id)}/open-workdir`, { method: 'POST' });
 }
 
+export function pickWorkdir(): Promise<{ path?: string; cancelled?: boolean }> {
+  return request('work/pick-workdir', { method: 'POST' });
+}
+
 export { ApiError };

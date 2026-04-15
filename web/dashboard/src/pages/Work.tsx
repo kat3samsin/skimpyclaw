@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'preact/hooks';
 import { LuPlus, LuPause, LuPlay, LuSquare, LuSend, LuCircleCheck, LuMessageSquare, LuFolderOpen } from 'react-icons/lu';
 import {
   getWorkItems, createWork,
-  getWorkItem, sendWorkChat, approveWork, pauseWork, resumeWork, stopWork, openWorkWorkdir,
+  getWorkItem, sendWorkChat, approveWork, pauseWork, resumeWork, stopWork, openWorkWorkdir, pickWorkdir,
 } from '../api/client.js';
 import type { WorkItemState, WorkStatus, CreateWorkInput, WorkTimelineEvent } from '../types.js';
 
@@ -169,13 +169,29 @@ export function Work() {
               rows={3}
               style={{ width: '100%', fontSize: 12, padding: 6, marginBottom: 8, boxSizing: 'border-box' }}
             />
-            <input
-              placeholder="Workdir (absolute path or project alias)"
-              value={form.workdir}
-              onInput={e => setForm(s => ({ ...s, workdir: (e.target as HTMLInputElement).value }))}
-              required
-              style={{ width: '100%', fontSize: 12, padding: 6, marginBottom: 8, boxSizing: 'border-box' }}
-            />
+            <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+              <input
+                placeholder="Workdir (absolute path or project alias)"
+                value={form.workdir}
+                onInput={e => setForm(s => ({ ...s, workdir: (e.target as HTMLInputElement).value }))}
+                required
+                style={{ flex: 1, fontSize: 12, padding: 6, boxSizing: 'border-box' }}
+              />
+              <button
+                type="button"
+                class="btn"
+                title="Pick folder"
+                onClick={async () => {
+                  try {
+                    const res = await pickWorkdir();
+                    if (res.path) setForm(s => ({ ...s, workdir: res.path! }));
+                  } catch (err: any) {
+                    setError(err?.message ?? 'picker failed');
+                  }
+                }}
+                style={{ fontSize: 11, padding: '2px 10px' }}
+              >Browse…</button>
+            </div>
             <div style={{ marginBottom: 8 }}>
               <button type="button" onClick={() => setForm(s => ({ ...s, advanced: !s.advanced }))} class="btn" style={{ fontSize: 11, padding: '2px 6px' }}>
                 {form.advanced ? 'Hide advanced' : 'Show advanced'}
