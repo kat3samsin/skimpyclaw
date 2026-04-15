@@ -1,10 +1,293 @@
+# Review Loop UI Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Add a "Work" dashboard page that consumes the plan-2 API. Master-detail layout: a list of work items on the left, a chat-primary detail pane on the right with approval gate, live activity banner, and pause/resume/stop controls. This is Phase 1 of the UI spec (`docs/superpowers/specs/2026-04-14-work-ui-design.md`); later phases (diff viewer, overview cards, keyboard shortcuts) are out of scope.
+
+**Architecture:** Preact + TypeScript, matching the existing dashboard. New file `web/dashboard/src/pages/Work.tsx`. Polls `GET /api/dashboard/work` and `GET /api/dashboard/work/:id` every 3s. Uses existing `api/client.ts` pattern. Routing via the existing hash-based `PageId` enum. No new dependencies.
+
+**Tech Stack:** Preact 10, TypeScript, `react-icons/lu`, existing dashboard CSS variables.
+
+---
+
+## File Structure
+
+- `web/dashboard/src/types.ts` — add `WorkItemState`, `ReviewFinding`, `ChatMessage`, `TimelineEvent`, `WorkStatus`
+- `web/dashboard/src/api/client.ts` — add `getWorkItems`, `getWorkItem`, `createWork`, `sendWorkChat`, `approveWork`, `pauseWork`, `resumeWork`, `stopWork`
+- `web/dashboard/src/components/Sidebar.tsx` — add `'work'` to `PageId` + nav entry
+- `web/dashboard/src/pages/Work.tsx` — new page (master list + detail pane)
+- `web/dashboard/src/pages/index.ts` — re-export `Work`
+- `web/dashboard/src/App.tsx` — route `'work'` to `<Work />`
+
+---
+
+## Task 1: Types + API client helpers
+
+**Files:**
+- Modify: `web/dashboard/src/types.ts`
+- Modify: `web/dashboard/src/api/client.ts`
+
+- [ ] **Step 1: Add types to `web/dashboard/src/types.ts`.**
+
+Append:
+
+```ts
+// ── Review-loop Work items ────────────────────────────────────────────
+
+export type WorkStatus =
+  | 'planning'
+  | 'awaiting_approval'
+  | 'implementing'
+  | 'reviewing'
+  | 'revising'
+  | 'paused'
+  | 'done'
+  | 'blocked'
+  | 'stopped';
+
+export interface ReviewFinding {
+  id: string;
+  severity: 'low' | 'medium' | 'high';
+  summary: string;
+  file?: string;
+  line?: number;
+  status: 'open' | 'resolved' | 'disputed';
+  iterationRaised: number;
+  iterationResolved?: number;
+}
+
+export interface WorkChatMessage {
+  id: string;
+  role: 'user' | 'planner';
+  content: string;
+  createdAt: string;
+}
+
+export type TimelineEventKind =
+  | 'created' | 'plan-produced' | 'plan-approved'
+  | 'dev-started' | 'dev-completed'
+  | 'review-started' | 'review-completed'
+  | 'paused' | 'resumed' | 'stopped' | 'blocked' | 'done';
+
+export interface WorkTimelineEvent {
+  id: string;
+  kind: TimelineEventKind;
+  iteration: number;
+  at: string;
+  summary: string;
+  changedFiles?: string[];
+  findingsSnapshot?: ReviewFinding[];
+  codeAgentTaskId?: string;
+  note?: string;
+}
+
+export interface WorkLiveActivity {
+  agent: 'planner' | 'dev' | 'reviewer';
+  codeAgentTaskId: string;
+  startedAt: string;
+}
+
+export interface WorkItemState {
+  id: string;
+  title: string;
+  prompt: string;
+  workdir: string;
+  baseRef: string;
+  plannerModel: string;
+  devModel: string;
+  reviewerModel: string;
+  maxIterations: number;
+  iteration: number;
+  status: WorkStatus;
+  previousStatus?: WorkStatus;
+  findings: ReviewFinding[];
+  chatMessages: WorkChatMessage[];
+  timeline: WorkTimelineEvent[];
+  liveActivity?: WorkLiveActivity;
+  lastReviewCommit?: string;
+  currentPlan?: string;
+  pendingUserMessage?: boolean;
+  createdAt: string;
+  updatedAt: string;
+  cost?: number;
+  blockedReason?: string;
+  stoppedReason?: string;
+}
+
+export interface WorkListResponse {
+  items: WorkItemState[];
+}
+
+export interface CreateWorkInput {
+  prompt: string;
+  workdir: string;
+  baseRef?: string;
+  plannerModel?: string;
+  devModel?: string;
+  reviewerModel?: string;
+  maxIterations?: number;
+}
+```
+
+- [ ] **Step 2: Add API client helpers to `web/dashboard/src/api/client.ts`.**
+
+Append after the existing helpers:
+
+```ts
+// ── Review-loop Work ─────────────────────────────────────────────────
+
+import type { WorkItemState, WorkListResponse, CreateWorkInput } from '../types.js';
+
+export function getWorkItems(status?: 'active' | 'done' | 'all'): Promise<WorkListResponse> {
+  const q = status && status !== 'all' ? `?status=${status}` : '';
+  return request<WorkListResponse>(`work${q}`);
+}
+
+export function getWorkItem(id: string): Promise<WorkItemState> {
+  return request<WorkItemState>(`work/${encodeURIComponent(id)}`);
+}
+
+export function createWork(input: CreateWorkInput): Promise<WorkItemState> {
+  return request<WorkItemState>('work', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export function sendWorkChat(id: string, content: string): Promise<WorkItemState> {
+  return request<WorkItemState>(`work/${encodeURIComponent(id)}/chat`, {
+    method: 'POST',
+    body: JSON.stringify({ content }),
+  });
+}
+
+export function approveWork(id: string): Promise<WorkItemState> {
+  return request<WorkItemState>(`work/${encodeURIComponent(id)}/approve`, { method: 'POST' });
+}
+
+export function pauseWork(id: string): Promise<WorkItemState> {
+  return request<WorkItemState>(`work/${encodeURIComponent(id)}/pause`, { method: 'POST' });
+}
+
+export function resumeWork(id: string): Promise<WorkItemState> {
+  return request<WorkItemState>(`work/${encodeURIComponent(id)}/resume`, { method: 'POST' });
+}
+
+export function stopWork(id: string, reason?: string): Promise<WorkItemState> {
+  return request<WorkItemState>(`work/${encodeURIComponent(id)}/stop`, {
+    method: 'POST',
+    body: reason ? JSON.stringify({ reason }) : undefined,
+  });
+}
+```
+
+- [ ] **Step 3: Verify dashboard type-checks.**
+
+```
+cd web/dashboard && pnpm exec tsc --noEmit 2>&1 | grep -v "node_modules" | head -20
+```
+
+Expected: no errors in types.ts or client.ts.
+
+- [ ] **Step 4: Commit.**
+
+```bash
+git add web/dashboard/src/types.ts web/dashboard/src/api/client.ts
+git commit -m "feat(dashboard): add Work types and API client helpers"
+```
+
+---
+
+## Task 2: Sidebar entry
+
+**Files:**
+- Modify: `web/dashboard/src/components/Sidebar.tsx`
+- Modify: `web/dashboard/src/App.tsx`
+
+- [ ] **Step 1: Add `'work'` to the `PageId` union in `Sidebar.tsx`.**
+
+Find the `PageId` type (line ~23) and add `'work'`:
+
+```ts
+export type PageId =
+  | 'overview'
+  | 'history'
+  | 'cron'
+  | 'memory'
+  | 'model'
+  | 'work'
+  | 'coding'
+  | 'logs'
+  | 'audit'
+  | 'digests'
+  | 'skills'
+  | 'approvals'
+  | 'health'
+  | 'usage'
+  | 'config'
+  | 'templates';
+```
+
+- [ ] **Step 2: Add nav entry.**
+
+Find `NAV_ITEMS` and insert a `'work'` entry between `coding` and `memory`:
+
+```ts
+{ id: 'work', label: 'Work', icon: LuLayers, section: 'dashboard' },
+```
+
+(Use whichever Lu* icon fits. If `LuLayers` isn't imported at the top of Sidebar.tsx, add it to the `from 'react-icons/lu'` imports. If unsure which icon is available, fall back to `LuBriefcase` or `LuListChecks` — any icon already used in the dashboard is acceptable.)
+
+- [ ] **Step 3: Update `App.tsx` to include `'work'` in `PAGE_IDS`.**
+
+Add `'work'` to the `PAGE_IDS` array:
+
+```ts
+const PAGE_IDS: PageId[] = [
+  'overview',
+  'history',
+  'cron',
+  'memory',
+  'model',
+  'work',
+  'coding',
+  // ...rest
+];
+```
+
+**Do not** yet add the `case 'work':` in `renderPage()` — that happens in Task 5 once `<Work />` exists.
+
+- [ ] **Step 4: Verify build still succeeds.**
+
+```
+cd web/dashboard && pnpm exec tsc --noEmit 2>&1 | grep -v "node_modules" | head -20
+```
+
+- [ ] **Step 5: Commit.**
+
+```bash
+git add web/dashboard/src/components/Sidebar.tsx web/dashboard/src/App.tsx
+git commit -m "feat(dashboard): add Work sidebar entry and page id"
+```
+
+---
+
+## Task 3: Work.tsx list view (master pane) + create form
+
+**Files:**
+- Create: `web/dashboard/src/pages/Work.tsx`
+- Modify: `web/dashboard/src/pages/index.ts`
+
+- [ ] **Step 1: Create `Work.tsx` with the list view and a stubbed detail pane placeholder.**
+
+```tsx
+// web/dashboard/src/pages/Work.tsx
 import { useEffect, useMemo, useState } from 'preact/hooks';
-import { LuPlus, LuPause, LuPlay, LuSquare, LuSend, LuCircleCheck, LuMessageSquare } from 'react-icons/lu';
+import { LuPlus, LuRefreshCw } from 'react-icons/lu';
 import {
   getWorkItems, createWork,
-  getWorkItem, sendWorkChat, approveWork, pauseWork, resumeWork, stopWork,
 } from '../api/client.js';
-import type { WorkItemState, WorkStatus, CreateWorkInput, WorkTimelineEvent } from '../types.js';
+import type { WorkItemState, WorkStatus, CreateWorkInput } from '../types.js';
 
 const ACTIVE: WorkStatus[] = ['planning', 'awaiting_approval', 'implementing', 'reviewing', 'revising', 'paused'];
 const DONE: WorkStatus[] = ['done', 'blocked', 'stopped'];
@@ -55,8 +338,8 @@ function defaultFormState(): CreateFormState {
     workdir: '',
     advanced: false,
     plannerModel: 'claude-opus',
-    devModel: 'claude-think',
-    reviewerModel: 'codex',
+    devModel: 'skimpyclaw',
+    reviewerModel: 'claude-sonnet',
     baseRef: 'HEAD',
     maxIterations: 5,
   };
@@ -241,6 +524,7 @@ export function Work() {
         )}
       </div>
 
+      {/* Detail pane — implemented in Task 4 */}
       <div class="work-detail" style={{ overflow: 'auto' }}>
         {selectedId ? (
           <WorkDetail id={selectedId} />
@@ -254,6 +538,55 @@ export function Work() {
   );
 }
 
+// Stub for Task 4 — real implementation lands there.
+function WorkDetail({ id }: { id: string }) {
+  return <div style={{ padding: 24 }}>Detail for {id} — coming in Task 4</div>;
+}
+```
+
+- [ ] **Step 2: Add `Work` to `pages/index.ts`.**
+
+Append:
+```ts
+export { Work } from './Work.js';
+```
+
+- [ ] **Step 3: Verify tsc passes.**
+
+```
+cd web/dashboard && pnpm exec tsc --noEmit 2>&1 | grep -v "node_modules" | head -20
+```
+
+- [ ] **Step 4: Commit.**
+
+```bash
+git add web/dashboard/src/pages/Work.tsx web/dashboard/src/pages/index.ts
+git commit -m "feat(dashboard): Work page list view with create form and filter tabs"
+```
+
+---
+
+## Task 4: Work detail pane — feed, approval gate, controls
+
+**Files:**
+- Modify: `web/dashboard/src/pages/Work.tsx`
+
+Replace the `WorkDetail` stub with the full implementation.
+
+- [ ] **Step 1: Replace the stub.**
+
+```tsx
+import { LuPause, LuPlay, LuSquare, LuSend, LuCheckCircle2, LuMessageSquare } from 'react-icons/lu';
+import {
+  getWorkItem, sendWorkChat, approveWork, pauseWork, resumeWork, stopWork,
+} from '../api/client.js';
+import type { WorkTimelineEvent } from '../types.js';
+```
+(Merge these imports with the existing ones at the top of Work.tsx.)
+
+Replace the stub `WorkDetail` with:
+
+```tsx
 function WorkDetail({ id }: { id: string }) {
   const [state, setState] = useState<WorkItemState | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -303,6 +636,7 @@ function WorkDetail({ id }: { id: string }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {/* Sticky header */}
       <div style={{
         padding: '12px 16px', borderBottom: '1px solid var(--border)',
         background: 'var(--surface)',
@@ -332,10 +666,12 @@ function WorkDetail({ id }: { id: string }) {
         )}
       </div>
 
+      {/* Feed */}
       <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
         <Feed state={state} onApprove={() => runAction('approve', () => approveWork(id))} approvePending={actionPending === 'approve'} />
       </div>
 
+      {/* Chat input */}
       {!terminal && (
         <form onSubmit={onSendChat} style={{ padding: 12, borderTop: '1px solid var(--border)', display: 'flex', gap: 8 }}>
           <input
@@ -362,6 +698,7 @@ function WorkDetail({ id }: { id: string }) {
 }
 
 function Feed({ state, onApprove, approvePending }: { state: WorkItemState; onApprove: () => void; approvePending: boolean }) {
+  // Build a chronological merged feed of chat messages and iteration-summary events.
   const entries = useMemo(() => {
     type Entry =
       | { kind: 'chat'; at: string; role: 'user' | 'planner'; content: string; id: string }
@@ -397,7 +734,7 @@ function Feed({ state, onApprove, approvePending }: { state: WorkItemState; onAp
                 {!isUser && state.status === 'awaiting_approval' && isLatestPlannerMessage(state, e.id) && (
                   <div style={{ marginTop: 8, display: 'flex', gap: 8 }}>
                     <button class="btn btn-primary" disabled={approvePending} onClick={onApprove} style={{ fontSize: 12 }}>
-                      <LuCircleCheck size={12} /> Approve
+                      <LuCheckCircle2 size={12} /> Approve
                     </button>
                     <span style={{ fontSize: 11, color: 'var(--text-muted)', alignSelf: 'center' }}>
                       or refine via chat below
@@ -466,3 +803,138 @@ function IterationRow({ ev }: { ev: WorkTimelineEvent }) {
     </div>
   );
 }
+```
+
+- [ ] **Step 2: Verify tsc passes.**
+
+```
+cd web/dashboard && pnpm exec tsc --noEmit 2>&1 | grep -v "node_modules" | head -20
+```
+
+- [ ] **Step 3: Commit.**
+
+```bash
+git add web/dashboard/src/pages/Work.tsx
+git commit -m "feat(dashboard): Work detail pane with chat feed, approval gate, and controls"
+```
+
+---
+
+## Task 5: Wire `<Work />` into `App.tsx` routing
+
+**Files:**
+- Modify: `web/dashboard/src/App.tsx`
+
+- [ ] **Step 1: Add `Work` to the imports at the top of `App.tsx`.**
+
+Update the import block from `./pages/index.js`:
+
+```ts
+import {
+  Overview, History, Cron, Coding, Audit, Approvals, Memory, Model, Logs,
+  Config, Digests, Skills, Health, Templates, Usage, Work,
+} from './pages/index.js';
+```
+
+- [ ] **Step 2: Add a `case 'work':` in `renderPage()`.**
+
+Add this case inside the switch (alongside the existing cases):
+
+```ts
+case 'work':
+  return <Work />;
+```
+
+- [ ] **Step 3: Handle `#work/RL-NNN` hash in the `isPageId` predicate / `readPageFromHash`.**
+
+The existing `readPageFromHash` strips the leading `#` and checks against `PAGE_IDS`. If the hash is `#work/RL-001`, the raw value is `work/RL-001`, which will not match `'work'`. Fix by splitting on `/` before the check:
+
+Replace the existing `readPageFromHash`:
+
+```ts
+function readPageFromHash(): PageId {
+  const raw = window.location.hash.replace(/^#/, '').split('/')[0]!.trim();
+  return isPageId(raw) ? raw : 'overview';
+}
+```
+
+- [ ] **Step 4: Run the dashboard build.**
+
+```
+cd web/dashboard && pnpm build 2>&1 | tail -20
+```
+Expected: clean build (or whatever the preexisting baseline is — no new errors from our code).
+
+- [ ] **Step 5: Commit.**
+
+```bash
+git add web/dashboard/src/App.tsx
+git commit -m "feat(dashboard): route 'work' page id and support nested work hash"
+```
+
+---
+
+## Task 6: Manual smoke test
+
+**Files:** (none — runtime check only)
+
+- [ ] **Step 1: Start the dev gateway.**
+
+```
+pnpm dev
+```
+
+Wait a few seconds for the gateway to come up.
+
+- [ ] **Step 2: Open the dashboard in a browser.**
+
+Visit `http://localhost:18790/dashboard/` and log in with the dashboard token (from `~/.skimpyclaw/config.json` → `dashboard.token`).
+
+- [ ] **Step 3: Navigate to the Work tab. Verify:**
+
+- Sidebar has a "Work" entry.
+- Clicking it shows the empty list placeholder.
+- Clicking "+ New" opens the inline create form.
+- Submitting with an invalid workdir (outside allowed paths) surfaces a 400 error in the form.
+- Submitting with a valid workdir (e.g. `skimpyclaw` project alias, or the repo root if in `tools.allowedPaths`) creates an item and navigates to its detail.
+- The planner will start running in the background; within a few seconds the status transitions to `awaiting_approval` and a planner message appears in the feed with an "Approve" button.
+- Clicking Approve moves status back to `planning` (then `implementing` on the next tick).
+
+If any of these fail, diagnose (check `pnpm logs` and browser devtools network tab) and fix before proceeding.
+
+Do not commit anything for this task — it's validation-only.
+
+---
+
+## Self-Review Notes
+
+**Spec coverage:**
+- New page at `/dashboard/work` with hash `#work` and `#work/:id` — Tasks 2, 3, 5 ✓
+- Sidebar entry between Coding and Memory — Task 2 ✓
+- Inline creation form with Advanced panel — Task 3 ✓
+- Master-detail with chat-primary feed — Tasks 3, 4 ✓
+- 3s polling on both panes — Tasks 3, 4 ✓
+- Status pills, iteration counter, findings count — Tasks 3, 4 ✓
+- Plan approval gate with Approve + Refine via chat — Task 4 ✓
+- Pause / Stop controls in header — Task 4 ✓
+- Live activity banner in feed — Task 4 ✓
+- Iteration summary rows with expansion — Task 4 ✓
+- Sticky chat input — Task 4 ✓
+- Bearer auth via existing client — Task 1 ✓
+
+**Not covered (explicitly out of scope per spec Phase 1):**
+- Overview page cards, Telegram/Discord triggers, diff viewer, cost analytics, archive/delete UX, keyboard shortcuts.
+- Per-finding resolve tracking (findings are rendered but not clickable to individual resolve actions beyond what the planner emits).
+
+**Type consistency:** All API shapes in `types.ts` mirror the engine types from plan 1 exactly. `WorkStatus` is identical. Field names (`plannerModel`, `chatMessages`, `timeline`, `liveActivity`, `iterationRaised`) match.
+
+**No placeholders:** Every task has exact code or exact commands.
+
+## Execution Handoff
+
+Plan complete. Two options:
+
+**1. Subagent-Driven (recommended)** — fresh subagent per task, review between tasks
+**2. Inline** — execute tasks in this session with checkpoints
+
+Which approach?

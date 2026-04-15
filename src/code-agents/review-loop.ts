@@ -14,10 +14,15 @@ import {
   listWorkItems as storageList,
   allocateWorkItemId,
 } from './review-loop-storage.js';
+import { resolveSelectedCodeAgent } from './utils.js';
+
+function agentForModel(model: string): 'claude' | 'codex' | 'kimi' {
+  return resolveSelectedCodeAgent(undefined, 'claude', model) ?? 'claude';
+}
 
 const DEFAULT_PLANNER = 'claude-opus';
-const DEFAULT_DEV = 'skimpyclaw';
-const DEFAULT_REVIEWER = 'claude-sonnet';
+const DEFAULT_DEV = 'claude-think';
+const DEFAULT_REVIEWER = 'codex';
 const DEFAULT_MAX_ITERATIONS = 5;
 const DEFAULT_BASE_REF = 'HEAD';
 
@@ -243,7 +248,7 @@ async function runPlanner(state: WorkItemState): Promise<WorkItemState> {
   let result;
   try {
     result = await runAgentStep({
-      agent: 'claude',
+      agent: agentForModel(state.plannerModel),
       model: state.plannerModel,
       task: prompt,
       workdir: state.workdir,
@@ -329,7 +334,7 @@ async function runDev(state: WorkItemState): Promise<WorkItemState> {
   let result;
   try {
     result = await runAgentStep({
-      agent: 'claude',
+      agent: agentForModel(state.devModel),
       model: state.devModel,
       task: devPrompt,
       workdir: state.workdir,
@@ -394,7 +399,7 @@ async function runReviewer(state: WorkItemState): Promise<WorkItemState> {
   let result;
   try {
     result = await runAgentStep({
-      agent: 'claude',
+      agent: agentForModel(state.reviewerModel),
       model: state.reviewerModel,
       task: reviewerPrompt,
       workdir: state.workdir,

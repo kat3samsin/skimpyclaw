@@ -50,8 +50,8 @@ describe('review-loop: create/get/list', () => {
     expect(s.status).toBe('planning');
     expect(s.iteration).toBe(0);
     expect(s.plannerModel).toBe('claude-opus');
-    expect(s.devModel).toBe('skimpyclaw');
-    expect(s.reviewerModel).toBe('claude-sonnet');
+    expect(s.devModel).toBe('claude-think');
+    expect(s.reviewerModel).toBe('codex');
     expect(s.maxIterations).toBe(5);
     expect(s.baseRef).toBe('HEAD');
     expect(s.title).toContain('Fix auth');
