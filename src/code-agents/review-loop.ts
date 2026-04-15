@@ -285,12 +285,16 @@ async function runPlanner(state: WorkItemState): Promise<WorkItemState> {
   }
 
   state.currentPlan = parsed.plan;
-  state.chatMessages.push({
-    id: nextChatId(state),
-    role: 'planner',
-    content: parsed.plan,
-    createdAt: new Date().toISOString(),
-  });
+  // Dedupe: skip pushing if the plan matches the most recent planner message.
+  const lastPlanner = [...state.chatMessages].reverse().find(m => m.role === 'planner');
+  if (!lastPlanner || lastPlanner.content !== parsed.plan) {
+    state.chatMessages.push({
+      id: nextChatId(state),
+      role: 'planner',
+      content: parsed.plan,
+      createdAt: new Date().toISOString(),
+    });
+  }
   state.pendingUserMessage = false;
   appendTimelineEvent(state, 'plan-produced', parsed.summary, { codeAgentTaskId: result.codeAgentTaskId });
 

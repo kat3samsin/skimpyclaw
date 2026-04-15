@@ -494,24 +494,41 @@ function IterationRow({ ev }: { ev: WorkTimelineEvent }) {
       </button>
       {open && (
         <div style={{ padding: '8px 16px', fontSize: 12 }}>
-          {ev.changedFiles && ev.changedFiles.length > 0 && (
-            <div><strong>Files:</strong>
-              <ul style={{ margin: '4px 0 8px 20px' }}>{ev.changedFiles.map(f => <li key={f}>{f}</li>)}</ul>
-            </div>
+          {ev.kind === 'dev-completed' && (
+            ev.changedFiles && ev.changedFiles.length > 0 ? (
+              <div><strong>Files:</strong>
+                <ul style={{ margin: '4px 0 8px 20px' }}>{ev.changedFiles.map(f => <li key={f}>{f}</li>)}</ul>
+              </div>
+            ) : (
+              <div style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                Dev agent completed but changed no files. Summary: {ev.summary || '(none)'}
+              </div>
+            )
           )}
-          {ev.findingsSnapshot && ev.findingsSnapshot.length > 0 && (
-            <div><strong>Findings:</strong>
-              <ul style={{ margin: '4px 0 0 20px' }}>
-                {ev.findingsSnapshot.map(f => (
-                  <li key={f.id}>
-                    <span style={{ fontWeight: 600, color: f.severity === 'high' ? 'var(--error)' : f.severity === 'medium' ? '#c49a3a' : 'inherit' }}>
-                      [{f.severity}]
-                    </span>{' '}
-                    {f.summary}
-                    {f.file && <span style={{ color: 'var(--text-muted)' }}> — {f.file}{f.line ? `:${f.line}` : ''}</span>}
-                  </li>
-                ))}
-              </ul>
+          {ev.kind === 'review-completed' && (
+            ev.findingsSnapshot && ev.findingsSnapshot.length > 0 ? (
+              <div><strong>Findings:</strong>
+                <ul style={{ margin: '4px 0 0 20px' }}>
+                  {ev.findingsSnapshot.map(f => (
+                    <li key={f.id}>
+                      <span style={{ fontWeight: 600, color: f.severity === 'high' ? 'var(--error)' : f.severity === 'medium' ? '#c49a3a' : 'inherit' }}>
+                        [{f.severity}]
+                      </span>{' '}
+                      {f.summary}
+                      {f.file && <span style={{ color: 'var(--text-muted)' }}> — {f.file}{f.line ? `:${f.line}` : ''}</span>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <div style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                Reviewer approved with no findings. Summary: {ev.summary || '(none)'}
+              </div>
+            )
+          )}
+          {ev.codeAgentTaskId && (
+            <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)' }}>
+              code agent: {ev.codeAgentTaskId}
             </div>
           )}
         </div>
