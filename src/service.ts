@@ -6,6 +6,7 @@ import type { Config } from './types.js';
 import { createGateway } from './gateway.js';
 import { initCron, stopCron } from './cron.js';
 import { initHeartbeat, stopHeartbeat } from './heartbeat.js';
+import { startWorkTicker } from './work-ticker.js';
 import { initActiveChannel, startActiveChannel, stopActiveChannel } from './channels.js';
 import { initProviders } from './agent.js';
 import { initLangfuse, shutdownLangfuse } from './langfuse.js';
@@ -69,13 +70,16 @@ export async function startRuntime(config: Config): Promise<SkimpyClawRuntime> {
   const host = config.gateway.host ?? '127.0.0.1';
   await gateway.listen({ port, host });
 
+  let stopWorkTicker: (() => void) | undefined;
+
   if (!smokeTest) {
     initCron(config);
     await initActiveChannel(config);
     await startActiveChannel();
     initHeartbeat(config);
+    stopWorkTicker = startWorkTicker({ intervalMs: 3000 });
   } else {
-    console.log('[smoke-test] Skipping channels, cron, and heartbeat');
+    console.log('[smoke-test] Skipping channels, cron, heartbeat, and work ticker');
   }
 
   return {
@@ -85,6 +89,7 @@ export async function startRuntime(config: Config): Promise<SkimpyClawRuntime> {
       await releaseAll();
       stopCron();
       stopHeartbeat();
+      if (stopWorkTicker) stopWorkTicker();
       await stopActiveChannel();
       await gateway.close();
       await shutdownLangfuse();
