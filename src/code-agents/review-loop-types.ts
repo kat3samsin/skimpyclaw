@@ -96,6 +96,8 @@ export interface WorkItemState {
   pendingUserMessage?: boolean;
   /** Set when user approves the current plan; cleared after planner consumes it to emit next_dev_task. */
   planApproved?: boolean;
+  /** Skip the awaiting_approval gate — treat every plan as pre-approved. */
+  autoApprove?: boolean;
   createdAt: string;
   updatedAt: string;
   cost?: number;
@@ -111,6 +113,7 @@ export interface CreateWorkInput {
   devModel?: string;
   reviewerModel?: string;
   maxIterations?: number;
+  autoApprove?: boolean;
 }
 
 export interface PlannerOutput {

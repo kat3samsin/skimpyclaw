@@ -441,4 +441,5 @@ export interface CreateWorkInput {
   devModel?: string;
   reviewerModel?: string;
   maxIterations?: number;
+  autoApprove?: boolean;
 }

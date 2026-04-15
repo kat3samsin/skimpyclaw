@@ -117,6 +117,7 @@ export function registerWorkAPI(fastify: FastifyInstance, config: Config): void 
       devModel: typeof body.devModel === 'string' ? body.devModel : undefined,
       reviewerModel: typeof body.reviewerModel === 'string' ? body.reviewerModel : undefined,
       maxIterations: typeof body.maxIterations === 'number' ? body.maxIterations : undefined,
+      autoApprove: body.autoApprove === true,
     });
     void tickWorkItem(state.id).catch(err => console.error('[api-work] tick error:', err));
     return reply.code(201).send(state);
@@ -181,15 +182,21 @@ export function registerWorkAPI(fastify: FastifyInstance, config: Config): void 
       return reply.code(501).send({ error: 'folder picker only supported on macOS' });
     }
     return new Promise((resolve) => {
-      const script = 'set f to choose folder with prompt "Select workdir"\nPOSIX path of f';
-      execFile('osascript', ['-e', script], { timeout: 60_000 }, (err, stdout) => {
+      // Force the dialog to front: use SystemUIServer activation so the picker
+      // surfaces even when the gateway is launchd-spawned with no UI context.
+      const args = [
+        '-e', 'tell application "System Events" to activate',
+        '-e', 'set f to choose folder with prompt "Select workdir"',
+        '-e', 'POSIX path of f',
+      ];
+      execFile('osascript', args, { timeout: 120_000 }, (err, stdout, stderr) => {
         if (err) {
-          // User cancelled or dialog failed
-          if (/User canceled/i.test(String((err as any).stderr) + err.message)) {
+          const msg = String(stderr ?? '') + err.message;
+          if (/User canceled|-128/i.test(msg)) {
             resolve(reply.send({ cancelled: true }));
             return;
           }
-          resolve(reply.code(500).send({ error: err.message }));
+          resolve(reply.code(500).send({ error: msg }));
           return;
         }
         const path = stdout.trim().replace(/\/$/, '');

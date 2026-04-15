@@ -76,6 +76,8 @@ export function createWorkItem(input: CreateWorkInput): WorkItemState {
     findings: [],
     chatMessages: [],
     timeline: [],
+    autoApprove: input.autoApprove === true,
+    planApproved: input.autoApprove === true,
     createdAt: now,
     updatedAt: now,
   };
@@ -292,8 +294,8 @@ async function runPlanner(state: WorkItemState): Promise<WorkItemState> {
   state.pendingUserMessage = false;
   appendTimelineEvent(state, 'plan-produced', parsed.summary, { codeAgentTaskId: result.codeAgentTaskId });
 
-  const wasApproved = state.planApproved === true;
-  state.planApproved = false;  // consumed
+  const wasApproved = state.planApproved === true || state.autoApprove === true;
+  state.planApproved = false;  // consumed (autoApprove is re-applied on next tick)
 
   // If user already approved a plan, coerce an awaiting_approval response
   // into revising — we already have user consent to proceed.

@@ -47,6 +47,7 @@ interface CreateFormState {
   reviewerModel: string;
   baseRef: string;
   maxIterations: number;
+  autoApprove: boolean;
 }
 
 function defaultFormState(): CreateFormState {
@@ -59,6 +60,7 @@ function defaultFormState(): CreateFormState {
     reviewerModel: 'codex',
     baseRef: 'HEAD',
     maxIterations: 5,
+    autoApprove: false,
   };
 }
 
@@ -111,6 +113,7 @@ export function Work() {
         prompt: form.prompt,
         workdir: form.workdir,
       };
+      payload.autoApprove = form.autoApprove;
       if (form.advanced) {
         payload.plannerModel = form.plannerModel;
         payload.devModel = form.devModel;
@@ -192,6 +195,14 @@ export function Work() {
                 style={{ fontSize: 11, padding: '2px 10px' }}
               >Browse…</button>
             </div>
+            <label style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+              <input
+                type="checkbox"
+                checked={form.autoApprove}
+                onChange={e => setForm(s => ({ ...s, autoApprove: (e.target as HTMLInputElement).checked }))}
+              />
+              Auto-approve plans (skip the approval gate each iteration)
+            </label>
             <div style={{ marginBottom: 8 }}>
               <button type="button" onClick={() => setForm(s => ({ ...s, advanced: !s.advanced }))} class="btn" style={{ fontSize: 11, padding: '2px 6px' }}>
                 {form.advanced ? 'Hide advanced' : 'Show advanced'}
