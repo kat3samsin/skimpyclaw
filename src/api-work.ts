@@ -7,6 +7,9 @@ import {
   createWorkItem,
   appendUserMessage,
   approvePlan,
+  pauseWorkItem,
+  resumeWorkItem,
+  stopWorkItem,
   tickWorkItem,
 } from './code-agents/review-loop.js';
 import { ACTIVE_STATUSES, TERMINAL_STATUSES } from './code-agents/review-loop-types.js';
@@ -95,6 +98,33 @@ export function registerWorkAPI(fastify: FastifyInstance, config: Config): void 
       return reply.code(409).send({ error: `cannot approve from status ${existing.status}` });
     }
     void tickWorkItem(id).catch(err => console.error('[api-work] tick error:', err));
+    return state;
+  });
+
+  fastify.post('/api/dashboard/work/:id/pause', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    if (!isValidWorkId(id)) return reply.code(400).send({ error: 'invalid id' });
+    const state = pauseWorkItem(id);
+    if (!state) return reply.code(404).send({ error: 'not found' });
+    return state;
+  });
+
+  fastify.post('/api/dashboard/work/:id/resume', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    if (!isValidWorkId(id)) return reply.code(400).send({ error: 'invalid id' });
+    const state = resumeWorkItem(id);
+    if (!state) return reply.code(404).send({ error: 'not found' });
+    void tickWorkItem(id).catch(err => console.error('[api-work] tick error:', err));
+    return state;
+  });
+
+  fastify.post('/api/dashboard/work/:id/stop', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    if (!isValidWorkId(id)) return reply.code(400).send({ error: 'invalid id' });
+    const body = request.body as any;
+    const reason = body && typeof body.reason === 'string' ? body.reason : undefined;
+    const state = stopWorkItem(id, reason);
+    if (!state) return reply.code(404).send({ error: 'not found' });
     return state;
   });
 }

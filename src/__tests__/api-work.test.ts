@@ -205,3 +205,65 @@ describe('POST /api/dashboard/work/:id/approve', () => {
     expect(r.statusCode).toBe(409);
   });
 });
+
+describe('POST /api/dashboard/work/:id/pause|resume|stop', () => {
+  it('pause transitions active item to paused', async () => {
+    const s = createWorkItem({ prompt: 'X', workdir: '/r' });
+    const { saveWorkItem, loadWorkItem } = await import('../code-agents/review-loop-storage.js');
+    const state = loadWorkItem(s.id)!;
+    state.status = 'implementing';
+    saveWorkItem(state);
+
+    const r = await app.inject({
+      method: 'POST', url: `/api/dashboard/work/${s.id}/pause`, headers: AUTH,
+    });
+    expect(r.statusCode).toBe(200);
+    const body = JSON.parse(r.payload);
+    expect(body.status).toBe('paused');
+    expect(body.previousStatus).toBe('implementing');
+  });
+
+  it('resume restores previous state', async () => {
+    const s = createWorkItem({ prompt: 'X', workdir: '/r' });
+    const { saveWorkItem, loadWorkItem } = await import('../code-agents/review-loop-storage.js');
+    const state = loadWorkItem(s.id)!;
+    state.status = 'paused';
+    state.previousStatus = 'reviewing';
+    saveWorkItem(state);
+
+    const r = await app.inject({
+      method: 'POST', url: `/api/dashboard/work/${s.id}/resume`, headers: AUTH,
+    });
+    const body = JSON.parse(r.payload);
+    expect(body.status).toBe('reviewing');
+  });
+
+  it('stop transitions to stopped with reason', async () => {
+    const s = createWorkItem({ prompt: 'X', workdir: '/r' });
+    const r = await app.inject({
+      method: 'POST', url: `/api/dashboard/work/${s.id}/stop`,
+      headers: { ...AUTH, 'content-type': 'application/json' },
+      payload: { reason: 'cancelled' },
+    });
+    const body = JSON.parse(r.payload);
+    expect(body.status).toBe('stopped');
+    expect(body.stoppedReason).toBe('cancelled');
+  });
+
+  it('stop without body still works', async () => {
+    const s = createWorkItem({ prompt: 'X', workdir: '/r' });
+    const r = await app.inject({
+      method: 'POST', url: `/api/dashboard/work/${s.id}/stop`, headers: AUTH,
+    });
+    expect(r.statusCode).toBe(200);
+  });
+
+  it('404 on missing id for all three', async () => {
+    for (const action of ['pause', 'resume', 'stop']) {
+      const r = await app.inject({
+        method: 'POST', url: `/api/dashboard/work/RL-999/${action}`, headers: AUTH,
+      });
+      expect(r.statusCode).toBe(404);
+    }
+  });
+});
