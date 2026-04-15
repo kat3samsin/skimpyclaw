@@ -332,7 +332,30 @@ function WorkDetail({ id }: { id: string }) {
         )}
       </div>
 
+      {(state.blockedReason || state.stoppedReason) && (
+        <div style={{
+          padding: '12px 16px',
+          background: state.blockedReason ? 'rgba(193, 92, 79, 0.12)' : 'rgba(136, 136, 136, 0.12)',
+          borderBottom: '1px solid var(--border)',
+          fontSize: 13,
+        }}>
+          <strong style={{ color: state.blockedReason ? 'var(--error)' : 'var(--text-muted)' }}>
+            {state.blockedReason ? 'Blocked' : 'Stopped'}:
+          </strong>{' '}
+          {state.blockedReason ?? state.stoppedReason}
+        </div>
+      )}
+
       <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
+        <div style={{
+          padding: '10px 14px', marginBottom: 16, borderRadius: 8,
+          background: 'var(--surface-alt)', border: '1px solid var(--border)',
+        }}>
+          <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 6, color: 'var(--text-muted)' }}>
+            ORIGINAL GOAL · workdir: {state.workdir}
+          </div>
+          <div style={{ fontSize: 13, whiteSpace: 'pre-wrap' }}>{state.prompt}</div>
+        </div>
         <Feed state={state} onApprove={() => runAction('approve', () => approveWork(id))} approvePending={actionPending === 'approve'} />
       </div>
 
@@ -349,13 +372,6 @@ function WorkDetail({ id }: { id: string }) {
             <LuSend size={14} />
           </button>
         </form>
-      )}
-
-      {(state.blockedReason || state.stoppedReason) && (
-        <div style={{ padding: 12, borderTop: '1px solid var(--border)', fontSize: 12, color: 'var(--text-muted)' }}>
-          {state.blockedReason && <>Blocked: {state.blockedReason}</>}
-          {state.stoppedReason && <>Stopped: {state.stoppedReason}</>}
-        </div>
       )}
     </div>
   );

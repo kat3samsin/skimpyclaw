@@ -3,7 +3,20 @@
 import { spawn, exec, execSync } from 'child_process';
 import type { ChildProcess } from 'child_process';
 import { createWriteStream, existsSync, readFileSync } from 'fs';
-import { join } from 'path';
+import { join, dirname } from 'path';
+
+/**
+ * Ensure PATH contains the directory of the running node binary. The claude /
+ * codex CLIs use `#!/usr/bin/env node` shebangs — when launchd-spawned processes
+ * inherit a minimal PATH, `env node` fails and spawn returns ENOENT.
+ */
+function ensureNodeInPath(env: Record<string, string | undefined>): void {
+  const nodeDir = dirname(process.execPath);
+  const path = env.PATH ?? '';
+  if (!path.split(':').includes(nodeDir)) {
+    env.PATH = path ? `${nodeDir}:${path}` : nodeDir;
+  }
+}
 
 // SKIMPYCLAW_ROOT for log paths
 const SKIMPYCLAW_ROOT = join(import.meta.dirname || process.cwd(), '..', '..');
@@ -372,6 +385,7 @@ export async function runCodeAgentBackground(
       // Remove stale GH_TOKEN so gh CLI falls back to keyring auth
       delete spawnEnv.GH_TOKEN;
       delete spawnEnv.GITHUB_TOKEN;
+      ensureNodeInPath(spawnEnv);
       // Apply extra env vars (e.g. team mode feature flag)
       if (options?.env) Object.assign(spawnEnv, options.env);
 
@@ -586,6 +600,7 @@ export async function runCodeAgentBackground(
           delete spawnEnv.CLAUDECODE;
           delete spawnEnv.GH_TOKEN;
           delete spawnEnv.GITHUB_TOKEN;
+          ensureNodeInPath(spawnEnv);
           const retrySpawnCmd = sandboxContainer ? getRuntime() : retryCmd;
           const retrySpawnArgs = sandboxContainer ? ['exec', sandboxContainer, retryCmd, ...retryArgs] : retryArgs;
           const retryProc = spawn(retrySpawnCmd, retrySpawnArgs, {
