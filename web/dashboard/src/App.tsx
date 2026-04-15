@@ -18,6 +18,7 @@ import {
   Health,
   Templates,
   Usage,
+  Work,
 } from './pages/index.js';
 import { getToken, onUnauthorized, setToken } from './api/client.js';
 import './styles/base.css';
@@ -46,7 +47,7 @@ function isPageId(value: string): value is PageId {
 }
 
 function readPageFromHash(): PageId {
-  const raw = window.location.hash.replace(/^#/, '').trim();
+  const raw = window.location.hash.replace(/^#/, '').split('/')[0]!.trim();
   return isPageId(raw) ? raw : 'overview';
 }
 
@@ -239,6 +240,8 @@ export function App() {
         return <Cron showToast={showToast} />;
       case 'usage':
         return <Usage />;
+      case 'work':
+        return <Work />;
       case 'coding':
         return <Coding />;
       case 'audit':
