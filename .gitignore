@@ -21,3 +21,5 @@ backend-review-*.md
 .tmp/
 __test_outside__/
 __test_sandbox__/
+docs/superpowers/
+plan.md
