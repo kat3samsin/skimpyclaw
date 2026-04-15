@@ -462,7 +462,19 @@ async function runReviewer(state: WorkItemState): Promise<WorkItemState> {
   return state;
 }
 
-export async function tickWorkItem(id: string): Promise<WorkItemState | null> {
+const inflightTicks = new Map<string, Promise<WorkItemState | null>>();
+
+export function tickWorkItem(id: string): Promise<WorkItemState | null> {
+  const existing = inflightTicks.get(id);
+  if (existing) return existing;
+  const p = tickWorkItemInternal(id).finally(() => {
+    inflightTicks.delete(id);
+  });
+  inflightTicks.set(id, p);
+  return p;
+}
+
+async function tickWorkItemInternal(id: string): Promise<WorkItemState | null> {
   const state = loadWorkItem(id);
   if (!state) return null;
 

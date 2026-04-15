@@ -441,6 +441,39 @@ describe('tickWorkItem: reviewing', () => {
   });
 });
 
+describe('tickWorkItem: concurrency', () => {
+  beforeEach(() => {
+    (registryMock.getNextCodeAgentId as any).mockReturnValue('ca-plan');
+    (executorMock.runCodeAgentBackground as any).mockResolvedValue(undefined);
+    (executorMock.runCodeAgentBackground as any).mockClear();
+    (registryMock.getCodeAgent as any).mockImplementation(() => ({
+      id: 'ca-plan',
+      status: 'completed',
+      outputPreview: '{"status":"awaiting_approval","summary":"s","plan":"P"}',
+      agent: 'claude', task: 't', startedAt: new Date().toISOString(), workdir: '/r',
+    }));
+  });
+
+  it('parallel ticks for same id serialize — runCodeAgentBackground called once', async () => {
+    const s = createWorkItem({ prompt: 'Fix login', workdir: '/r' });
+
+    const [a, b] = await Promise.all([tickWorkItem(s.id), tickWorkItem(s.id)]);
+    expect(a?.status).toBe('awaiting_approval');
+    expect(b?.status).toBe('awaiting_approval');
+    expect((executorMock.runCodeAgentBackground as any).mock.calls.length).toBe(1);
+  });
+
+  it('sequential ticks for same id both run (mutex releases after each)', async () => {
+    const s = createWorkItem({ prompt: 'Y', workdir: '/r' });
+
+    await tickWorkItem(s.id);  // first tick: planner -> awaiting_approval
+    // State is now awaiting_approval; next tick is a no-op (no agent call).
+    (executorMock.runCodeAgentBackground as any).mockClear();
+    await tickWorkItem(s.id);  // awaiting_approval → returns without calling agent
+    expect((executorMock.runCodeAgentBackground as any).mock.calls.length).toBe(0);
+  });
+});
+
 describe('review-loop: end-to-end happy path', () => {
   it('planning → awaiting_approval → approve → revising(dev task) → implementing → reviewing(approved) → done', async () => {
     (registryMock.getNextCodeAgentId as any).mockImplementation(() => `ca-${Math.random().toString(36).slice(2, 8)}`);
