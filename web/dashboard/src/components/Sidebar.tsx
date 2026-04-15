@@ -12,6 +12,7 @@ import {
   LuFileText,
   LuHeartPulse,
   LuLayoutDashboard,
+  LuLayers,
   LuLogs,
   LuMessageSquare,
   LuNewspaper,
@@ -26,6 +27,7 @@ export type PageId =
   | 'cron'
   | 'memory'
   | 'model'
+  | 'work'
   | 'coding'
   | 'logs'
   | 'audit'
@@ -52,6 +54,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'digests', label: 'Digests', icon: LuNewspaper, section: 'dashboard' },
   { id: 'audit', label: 'Audit', icon: LuSearch, section: 'dashboard' },
   { id: 'usage', label: 'Usage', icon: LuDollarSign, section: 'dashboard' },
+  { id: 'work', label: 'Work', icon: LuLayers, section: 'dashboard' },
   { id: 'coding', label: 'Coding Agent', icon: LuCode, section: 'dashboard' },
   { id: 'memory', label: 'Memory', icon: LuDatabase, section: 'settings' },
   { id: 'templates', label: 'Templates', icon: LuFileText, section: 'settings' },

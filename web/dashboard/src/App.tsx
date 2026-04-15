@@ -28,6 +28,7 @@ const PAGE_IDS: PageId[] = [
   'cron',
   'memory',
   'model',
+  'work',
   'coding',
   'logs',
   'audit',
