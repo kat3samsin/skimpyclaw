@@ -24,6 +24,9 @@ import type {
   Template,
   UsageSummaryResponse,
   UsageRecordsResponse,
+  WorkItemState,
+  WorkListResponse,
+  CreateWorkInput,
 } from '../types.js';
 
 const TOKEN_KEY = 'dashboard_token';
@@ -244,6 +247,50 @@ export function getUsageRecords(params?: { limit?: number; offset?: number; mode
   if (params?.model) q.set('model', params.model);
   const qs = q.toString();
   return request<UsageRecordsResponse>(`usage/records${qs ? `?${qs}` : ''}`);
+}
+
+// ── Review-loop Work ─────────────────────────────────────────────────
+
+export function getWorkItems(status?: 'active' | 'done' | 'all'): Promise<WorkListResponse> {
+  const q = status && status !== 'all' ? `?status=${status}` : '';
+  return request<WorkListResponse>(`work${q}`);
+}
+
+export function getWorkItem(id: string): Promise<WorkItemState> {
+  return request<WorkItemState>(`work/${encodeURIComponent(id)}`);
+}
+
+export function createWork(input: CreateWorkInput): Promise<WorkItemState> {
+  return request<WorkItemState>('work', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
+export function sendWorkChat(id: string, content: string): Promise<WorkItemState> {
+  return request<WorkItemState>(`work/${encodeURIComponent(id)}/chat`, {
+    method: 'POST',
+    body: JSON.stringify({ content }),
+  });
+}
+
+export function approveWork(id: string): Promise<WorkItemState> {
+  return request<WorkItemState>(`work/${encodeURIComponent(id)}/approve`, { method: 'POST' });
+}
+
+export function pauseWork(id: string): Promise<WorkItemState> {
+  return request<WorkItemState>(`work/${encodeURIComponent(id)}/pause`, { method: 'POST' });
+}
+
+export function resumeWork(id: string): Promise<WorkItemState> {
+  return request<WorkItemState>(`work/${encodeURIComponent(id)}/resume`, { method: 'POST' });
+}
+
+export function stopWork(id: string, reason?: string): Promise<WorkItemState> {
+  return request<WorkItemState>(`work/${encodeURIComponent(id)}/stop`, {
+    method: 'POST',
+    body: reason ? JSON.stringify({ reason }) : undefined,
+  });
 }
 
 export { ApiError };
