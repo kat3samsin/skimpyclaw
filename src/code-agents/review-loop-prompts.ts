@@ -97,23 +97,48 @@ export function buildReviewerPrompt(state: WorkItemState, diff: string, changedF
   ].join('\n');
 }
 
-function extractJsonBlock(raw: string): string | null {
-  // 1. Prefer a ```json fence.
-  const jsonFence = /```json\s*([\s\S]*?)```/i.exec(raw);
-  if (jsonFence) return jsonFence[1]!.trim();
-  // 2. Fall back to any fenced block.
-  const anyFence = /```\s*([\s\S]*?)```/i.exec(raw);
-  if (anyFence) return anyFence[1]!.trim();
-  // 3. Fall back to first top-level {...} match.
-  const start = raw.indexOf('{');
-  if (start === -1) return null;
+/**
+ * Extract a JSON object by scanning for a balanced {...}, tracking
+ * string literals and escapes. Robust to nested ```json fences inside
+ * the outer JSON (e.g. in a "plan" string that contains markdown code blocks).
+ */
+function balancedJsonFrom(raw: string, startIdx: number): string | null {
   let depth = 0;
-  for (let i = start; i < raw.length; i++) {
-    if (raw[i] === '{') depth++;
-    else if (raw[i] === '}') {
-      depth--;
-      if (depth === 0) return raw.slice(start, i + 1);
+  let inString = false;
+  let escape = false;
+  for (let i = startIdx; i < raw.length; i++) {
+    const ch = raw[i]!;
+    if (inString) {
+      if (escape) { escape = false; continue; }
+      if (ch === '\\') { escape = true; continue; }
+      if (ch === '"') inString = false;
+      continue;
     }
+    if (ch === '"') { inString = true; continue; }
+    if (ch === '{') depth++;
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0) return raw.slice(startIdx, i + 1);
+    }
+  }
+  return null;
+}
+
+function extractJsonBlock(raw: string): string | null {
+  // 1. Prefer a ```json fence — but balance-match from the first { inside it.
+  const jsonFenceStart = raw.search(/```json\s*/i);
+  if (jsonFenceStart !== -1) {
+    const afterFence = raw.indexOf('{', jsonFenceStart);
+    if (afterFence !== -1) {
+      const found = balancedJsonFrom(raw, afterFence);
+      if (found) return found;
+    }
+  }
+  // 2. Fall back to balanced match from the first { anywhere.
+  const firstBrace = raw.indexOf('{');
+  if (firstBrace !== -1) {
+    const found = balancedJsonFrom(raw, firstBrace);
+    if (found) return found;
   }
   return null;
 }

@@ -114,4 +114,18 @@ describe('review-loop-prompts', () => {
     const out = parsePlannerOutput(raw);
     expect(out?.plan).toBe('P');
   });
+
+  it('parsePlannerOutput handles nested ```json fence inside plan field', () => {
+    const inner = JSON.stringify({
+      status: 'revising',
+      summary: 's',
+      plan: '## Fix\n```json\n{"foo":1}\n```\n\ndone',
+      next_dev_task: 'do it',
+    });
+    const raw = 'Here it is:\n```json\n' + inner + '\n```';
+    const out = parsePlannerOutput(raw);
+    expect(out?.status).toBe('revising');
+    expect(out?.next_dev_task).toBe('do it');
+    expect(out?.plan).toContain('```json');
+  });
 });
