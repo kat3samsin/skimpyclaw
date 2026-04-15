@@ -4,6 +4,10 @@ import type { Config } from './types.js';
 import {
   listWorkItems,
   getWorkItem,
+  createWorkItem,
+  appendUserMessage,
+  approvePlan,
+  tickWorkItem,
 } from './code-agents/review-loop.js';
 import { ACTIVE_STATUSES, TERMINAL_STATUSES } from './code-agents/review-loop-types.js';
 
@@ -45,5 +49,52 @@ export function registerWorkAPI(fastify: FastifyInstance, config: Config): void 
     const item = getWorkItem(id);
     if (!item) return reply.code(404).send({ error: 'not found' });
     return item;
+  });
+
+  fastify.post('/api/dashboard/work', async (request, reply) => {
+    const body = request.body as any;
+    if (!body || typeof body.prompt !== 'string' || !body.prompt.trim()) {
+      return reply.code(400).send({ error: 'prompt is required' });
+    }
+    if (typeof body.workdir !== 'string' || !body.workdir.trim()) {
+      return reply.code(400).send({ error: 'workdir is required' });
+    }
+    const state = createWorkItem({
+      prompt: body.prompt,
+      workdir: body.workdir,
+      baseRef: typeof body.baseRef === 'string' ? body.baseRef : undefined,
+      plannerModel: typeof body.plannerModel === 'string' ? body.plannerModel : undefined,
+      devModel: typeof body.devModel === 'string' ? body.devModel : undefined,
+      reviewerModel: typeof body.reviewerModel === 'string' ? body.reviewerModel : undefined,
+      maxIterations: typeof body.maxIterations === 'number' ? body.maxIterations : undefined,
+    });
+    void tickWorkItem(state.id).catch(err => console.error('[api-work] tick error:', err));
+    return reply.code(201).send(state);
+  });
+
+  fastify.post('/api/dashboard/work/:id/chat', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    if (!isValidWorkId(id)) return reply.code(400).send({ error: 'invalid id' });
+    const body = request.body as any;
+    if (!body || typeof body.content !== 'string' || !body.content.trim()) {
+      return reply.code(400).send({ error: 'content is required' });
+    }
+    const state = appendUserMessage(id, body.content);
+    if (!state) return reply.code(404).send({ error: 'not found' });
+    void tickWorkItem(id).catch(err => console.error('[api-work] tick error:', err));
+    return state;
+  });
+
+  fastify.post('/api/dashboard/work/:id/approve', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    if (!isValidWorkId(id)) return reply.code(400).send({ error: 'invalid id' });
+    const state = approvePlan(id);
+    if (!state) {
+      const existing = getWorkItem(id);
+      if (!existing) return reply.code(404).send({ error: 'not found' });
+      return reply.code(409).send({ error: `cannot approve from status ${existing.status}` });
+    }
+    void tickWorkItem(id).catch(err => console.error('[api-work] tick error:', err));
+    return state;
   });
 }

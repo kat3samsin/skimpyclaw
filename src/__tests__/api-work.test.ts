@@ -97,3 +97,111 @@ describe('GET /api/dashboard/work/:id', () => {
     expect(r.statusCode).toBe(400);
   });
 });
+
+describe('POST /api/dashboard/work', () => {
+  it('creates a work item with required fields', async () => {
+    const r = await app.inject({
+      method: 'POST', url: '/api/dashboard/work',
+      headers: { ...AUTH, 'content-type': 'application/json' },
+      payload: { prompt: 'Fix login', workdir: '/r' },
+    });
+    expect(r.statusCode).toBe(201);
+    const body = JSON.parse(r.payload);
+    expect(body.id).toMatch(/^RL-/);
+    expect(body.status).toBe('planning');
+    expect(body.prompt).toBe('Fix login');
+  });
+
+  it('400 on missing prompt', async () => {
+    const r = await app.inject({
+      method: 'POST', url: '/api/dashboard/work',
+      headers: { ...AUTH, 'content-type': 'application/json' },
+      payload: { workdir: '/r' },
+    });
+    expect(r.statusCode).toBe(400);
+  });
+
+  it('400 on missing workdir', async () => {
+    const r = await app.inject({
+      method: 'POST', url: '/api/dashboard/work',
+      headers: { ...AUTH, 'content-type': 'application/json' },
+      payload: { prompt: 'X' },
+    });
+    expect(r.statusCode).toBe(400);
+  });
+
+  it('accepts optional fields', async () => {
+    const r = await app.inject({
+      method: 'POST', url: '/api/dashboard/work',
+      headers: { ...AUTH, 'content-type': 'application/json' },
+      payload: {
+        prompt: 'X', workdir: '/r',
+        plannerModel: 'alt-p', devModel: 'alt-d', reviewerModel: 'alt-r',
+        baseRef: 'main', maxIterations: 3,
+      },
+    });
+    const body = JSON.parse(r.payload);
+    expect(body.plannerModel).toBe('alt-p');
+    expect(body.maxIterations).toBe(3);
+  });
+});
+
+describe('POST /api/dashboard/work/:id/chat', () => {
+  it('appends a message', async () => {
+    const s = createWorkItem({ prompt: 'X', workdir: '/r' });
+    const r = await app.inject({
+      method: 'POST', url: `/api/dashboard/work/${s.id}/chat`,
+      headers: { ...AUTH, 'content-type': 'application/json' },
+      payload: { content: 'prefer minimal diff' },
+    });
+    expect(r.statusCode).toBe(200);
+    const body = JSON.parse(r.payload);
+    expect(body.chatMessages).toHaveLength(1);
+    expect(body.chatMessages[0].content).toBe('prefer minimal diff');
+  });
+
+  it('400 on empty content', async () => {
+    const s = createWorkItem({ prompt: 'X', workdir: '/r' });
+    const r = await app.inject({
+      method: 'POST', url: `/api/dashboard/work/${s.id}/chat`,
+      headers: { ...AUTH, 'content-type': 'application/json' },
+      payload: { content: '' },
+    });
+    expect(r.statusCode).toBe(400);
+  });
+
+  it('404 on missing item', async () => {
+    const r = await app.inject({
+      method: 'POST', url: '/api/dashboard/work/RL-999/chat',
+      headers: { ...AUTH, 'content-type': 'application/json' },
+      payload: { content: 'x' },
+    });
+    expect(r.statusCode).toBe(404);
+  });
+});
+
+describe('POST /api/dashboard/work/:id/approve', () => {
+  it('transitions awaiting_approval to planning', async () => {
+    const s = createWorkItem({ prompt: 'X', workdir: '/r' });
+    const { saveWorkItem, loadWorkItem } = await import('../code-agents/review-loop-storage.js');
+    const state = loadWorkItem(s.id)!;
+    state.status = 'awaiting_approval';
+    state.currentPlan = 'plan';
+    saveWorkItem(state);
+
+    const r = await app.inject({
+      method: 'POST', url: `/api/dashboard/work/${s.id}/approve`, headers: AUTH,
+    });
+    expect(r.statusCode).toBe(200);
+    const body = JSON.parse(r.payload);
+    expect(body.status).toBe('planning');
+  });
+
+  it('409 if not awaiting_approval', async () => {
+    const s = createWorkItem({ prompt: 'X', workdir: '/r' });
+    const r = await app.inject({
+      method: 'POST', url: `/api/dashboard/work/${s.id}/approve`, headers: AUTH,
+    });
+    expect(r.statusCode).toBe(409);
+  });
+});
