@@ -293,4 +293,8 @@ export function stopWork(id: string, reason?: string): Promise<WorkItemState> {
   });
 }
 
+export function openWorkWorkdir(id: string): Promise<{ opened: boolean; workdir: string }> {
+  return request(`work/${encodeURIComponent(id)}/open-workdir`, { method: 'POST' });
+}
+
 export { ApiError };

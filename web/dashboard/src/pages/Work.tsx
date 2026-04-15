@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'preact/hooks';
-import { LuPlus, LuPause, LuPlay, LuSquare, LuSend, LuCircleCheck, LuMessageSquare } from 'react-icons/lu';
+import { LuPlus, LuPause, LuPlay, LuSquare, LuSend, LuCircleCheck, LuMessageSquare, LuFolderOpen } from 'react-icons/lu';
 import {
   getWorkItems, createWork,
-  getWorkItem, sendWorkChat, approveWork, pauseWork, resumeWork, stopWork,
+  getWorkItem, sendWorkChat, approveWork, pauseWork, resumeWork, stopWork, openWorkWorkdir,
 } from '../api/client.js';
 import type { WorkItemState, WorkStatus, CreateWorkInput, WorkTimelineEvent } from '../types.js';
 
@@ -351,8 +351,17 @@ function WorkDetail({ id }: { id: string }) {
           padding: '10px 14px', marginBottom: 16, borderRadius: 8,
           background: 'var(--surface-alt)', border: '1px solid var(--border)',
         }}>
-          <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 6, color: 'var(--text-muted)' }}>
-            ORIGINAL GOAL · workdir: {state.workdir}
+          <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 6, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span>ORIGINAL GOAL</span>
+            <span>·</span>
+            <button
+              onClick={() => openWorkWorkdir(id).catch(e => setError(e?.message ?? 'open failed'))}
+              class="btn"
+              title="Open workdir in file manager"
+              style={{ fontSize: 11, padding: '2px 6px', fontFamily: 'var(--mono)', fontWeight: 400 }}
+            >
+              <LuFolderOpen size={11} /> {state.workdir}
+            </button>
           </div>
           <div style={{ fontSize: 13, whiteSpace: 'pre-wrap' }}>{state.prompt}</div>
         </div>

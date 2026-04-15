@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { resolve } from 'path';
+import { spawn } from 'child_process';
 import { validateBearerToken } from './utils.js';
 import type { Config } from './types.js';
 import { isPathAllowed } from './tools/path-utils.js';
@@ -157,5 +158,24 @@ export function registerWorkAPI(fastify: FastifyInstance, config: Config): void 
     const state = stopWorkItem(id, reason);
     if (!state) return reply.code(404).send({ error: 'not found' });
     return state;
+  });
+
+  // Open the work item's workdir in the OS file manager. macOS: `open`.
+  // Linux: `xdg-open`. Windows: `explorer`. Path is the stored workdir, which
+  // was validated against allowedPaths at creation time.
+  fastify.post('/api/dashboard/work/:id/open-workdir', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    if (!isValidWorkId(id)) return reply.code(400).send({ error: 'invalid id' });
+    const item = getWorkItem(id);
+    if (!item) return reply.code(404).send({ error: 'not found' });
+    const cmd = process.platform === 'darwin' ? 'open'
+      : process.platform === 'win32' ? 'explorer'
+      : 'xdg-open';
+    try {
+      spawn(cmd, [item.workdir], { detached: true, stdio: 'ignore' }).unref();
+      return { opened: true, workdir: item.workdir };
+    } catch (err: any) {
+      return reply.code(500).send({ error: err?.message ?? 'failed to open' });
+    }
   });
 }
