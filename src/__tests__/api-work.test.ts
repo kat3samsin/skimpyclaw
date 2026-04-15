@@ -30,7 +30,11 @@ beforeEach(async () => {
   tmp = mkdtempSync(join(tmpdir(), 'api-work-'));
   setWorkRootForTesting(tmp);
   app = Fastify();
-  registerWorkAPI(app, { dashboard: { token: 'test-token' } } as any);
+  registerWorkAPI(app, {
+    dashboard: { token: 'test-token' },
+    projects: {},
+    tools: { allowedPaths: ['/r', '/tmp'] },
+  } as any);
   await app.ready();
 });
 
@@ -265,5 +269,84 @@ describe('POST /api/dashboard/work/:id/pause|resume|stop', () => {
       });
       expect(r.statusCode).toBe(404);
     }
+  });
+});
+
+describe('POST /api/dashboard/work: workdir validation', () => {
+  it('rejects workdir not in allowed paths', async () => {
+    // Re-register with restricted allowlist
+    await app.close();
+    app = Fastify();
+    registerWorkAPI(app, {
+      dashboard: { token: 'test-token' },
+      projects: { myproj: '/safe/proj' },
+      tools: { allowedPaths: ['/safe'] },
+    } as any);
+    await app.ready();
+
+    const r = await app.inject({
+      method: 'POST', url: '/api/dashboard/work',
+      headers: { ...AUTH, 'content-type': 'application/json' },
+      payload: { prompt: 'X', workdir: '/etc' },
+    });
+    expect(r.statusCode).toBe(400);
+    expect(JSON.parse(r.payload).error).toMatch(/workdir/i);
+  });
+
+  it('accepts workdir inside allowed path', async () => {
+    await app.close();
+    app = Fastify();
+    registerWorkAPI(app, {
+      dashboard: { token: 'test-token' },
+      projects: {},
+      tools: { allowedPaths: ['/safe'] },
+    } as any);
+    await app.ready();
+
+    const r = await app.inject({
+      method: 'POST', url: '/api/dashboard/work',
+      headers: { ...AUTH, 'content-type': 'application/json' },
+      payload: { prompt: 'X', workdir: '/safe/sub' },
+    });
+    expect(r.statusCode).toBe(201);
+  });
+
+  it('resolves project alias to its allowed path', async () => {
+    await app.close();
+    app = Fastify();
+    registerWorkAPI(app, {
+      dashboard: { token: 'test-token' },
+      projects: { myproj: '/projects/myproj' },
+      tools: { allowedPaths: [] },
+    } as any);
+    await app.ready();
+
+    const r = await app.inject({
+      method: 'POST', url: '/api/dashboard/work',
+      headers: { ...AUTH, 'content-type': 'application/json' },
+      payload: { prompt: 'X', workdir: 'myproj' },
+    });
+    expect(r.statusCode).toBe(201);
+    const body = JSON.parse(r.payload);
+    // Resolved project path is absolute
+    expect(body.workdir).toBe('/projects/myproj');
+  });
+
+  it('rejects when no allowed paths configured and not a project', async () => {
+    await app.close();
+    app = Fastify();
+    registerWorkAPI(app, {
+      dashboard: { token: 'test-token' },
+      projects: {},
+      tools: { allowedPaths: [] },
+    } as any);
+    await app.ready();
+
+    const r = await app.inject({
+      method: 'POST', url: '/api/dashboard/work',
+      headers: { ...AUTH, 'content-type': 'application/json' },
+      payload: { prompt: 'X', workdir: '/tmp/anywhere' },
+    });
+    expect(r.statusCode).toBe(400);
   });
 });

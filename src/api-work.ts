@@ -1,6 +1,8 @@
 import type { FastifyInstance } from 'fastify';
+import { resolve } from 'path';
 import { validateBearerToken } from './utils.js';
 import type { Config } from './types.js';
+import { isPathAllowed } from './tools/path-utils.js';
 import {
   listWorkItems,
   getWorkItem,
@@ -18,6 +20,29 @@ const WORK_ID_RE = /^RL-\d{3,}$/;
 
 function isValidWorkId(id: string): boolean {
   return WORK_ID_RE.test(id);
+}
+
+function resolveAndValidateWorkdir(
+  rawWorkdir: string,
+  projects: Record<string, string>,
+  allowedPaths: string[],
+): { ok: true; workdir: string } | { ok: false; error: string } {
+  // Project name alias first
+  if (projects[rawWorkdir]) {
+    return { ok: true, workdir: resolve(projects[rawWorkdir]) };
+  }
+  const resolved = resolve(rawWorkdir);
+  const projectPaths = Object.values(projects).map(p => resolve(p));
+  const effective = [...allowedPaths, ...projectPaths];
+  if (!isPathAllowed(resolved, effective)) {
+    const aliases = Object.keys(projects);
+    const hint = aliases.length ? ` (or project names: ${aliases.join(', ')})` : '';
+    return {
+      ok: false,
+      error: `workdir not allowed. Permitted: ${allowedPaths.join(', ') || '(none)'}${hint}`,
+    };
+  }
+  return { ok: true, workdir: resolved };
 }
 
 export function registerWorkAPI(fastify: FastifyInstance, config: Config): void {
@@ -62,9 +87,15 @@ export function registerWorkAPI(fastify: FastifyInstance, config: Config): void 
     if (typeof body.workdir !== 'string' || !body.workdir.trim()) {
       return reply.code(400).send({ error: 'workdir is required' });
     }
+    const projects = (runtimeConfig as any).projects ?? {};
+    const allowedPaths = (runtimeConfig as any).tools?.allowedPaths ?? [];
+    const wd = resolveAndValidateWorkdir(body.workdir, projects, allowedPaths);
+    if (!wd.ok) {
+      return reply.code(400).send({ error: wd.error });
+    }
     const state = createWorkItem({
       prompt: body.prompt,
-      workdir: body.workdir,
+      workdir: wd.workdir,
       baseRef: typeof body.baseRef === 'string' ? body.baseRef : undefined,
       plannerModel: typeof body.plannerModel === 'string' ? body.plannerModel : undefined,
       devModel: typeof body.devModel === 'string' ? body.devModel : undefined,
