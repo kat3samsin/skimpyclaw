@@ -16,7 +16,6 @@ function ensureNodeInPath(env: Record<string, string | undefined>): void {
   if (!path.split(':').includes(nodeDir)) {
     env.PATH = path ? `${nodeDir}:${path}` : nodeDir;
   }
-  console.error(`[code-agent:spawn-env] execPath=${process.execPath} PATH(head)=${(env.PATH || '').split(':').slice(0, 5).join(':')}`);
 }
 
 // SKIMPYCLAW_ROOT for log paths
