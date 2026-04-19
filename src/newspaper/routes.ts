@@ -81,7 +81,7 @@ export function registerNewspaperAPI(fastify: FastifyInstance, config: Config): 
   });
 
   // POST /api/newspaper/build — manually trigger edition build (same pipeline as cron).
-  // Public: newspaper routes are intentionally unauthenticated.
+  // Auth: requires Bearer token (enforced by gateway auth hook).
   // Body: { hoursBack?: number (default 14), slot?: "morning"|"evening" (auto-detected if omitted) }
   // Response: { success: true, editionId, articleCount, slot } or 500 with error detail.
   // UI: "Build Now" button in the newspaper frontend calls this endpoint.

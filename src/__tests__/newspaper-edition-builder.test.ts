@@ -24,12 +24,24 @@ describe('determineSlot', () => {
     const evening = new Date('2026-04-11T22:00:00Z');
     expect(determineSlot(evening)).toBe('evening');
   });
+
+  it('uses CST during winter instead of a fixed UTC-5 offset', () => {
+    // January 15, 2026 20:30 UTC = 2:30pm CST, still morning.
+    const winterAfternoon = new Date('2026-01-15T20:30:00Z');
+    expect(determineSlot(winterAfternoon)).toBe('morning');
+  });
 });
 
 describe('generateEditionId', () => {
   it('creates id from date and slot', () => {
     const date = new Date('2026-04-11T12:00:00Z');
     expect(generateEditionId(date, 'morning')).toBe('2026-04-11-morning');
+  });
+
+  it('uses the Chicago calendar date instead of UTC date', () => {
+    // April 19, 2026 20:00 CDT is still April 19 in Chicago, but April 20 in UTC.
+    const lateChicagoEvening = new Date('2026-04-20T01:00:00Z');
+    expect(generateEditionId(lateChicagoEvening, 'evening')).toBe('2026-04-19-evening');
   });
 });
 

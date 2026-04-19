@@ -19,6 +19,7 @@ vi.mock('../agent.js', () => ({
 
 vi.mock('../config.js', () => ({
   ensureDashboardToken: () => 'test-token',
+  getLogsDir: () => '/tmp/test-skimpyclaw/logs',
 }));
 
 const { createGateway } = await import('../gateway.js');
@@ -62,11 +63,24 @@ describe('gateway /status auth', () => {
     }
   });
 
-  it('allows POST /api/newspaper/build without auth', async () => {
+  it('requires auth for POST /api/newspaper/build', async () => {
     const app = await createGateway(cfg);
     try {
       const res = await app.inject({ method: 'POST', url: '/api/newspaper/build' });
-      // Should NOT be 401 — newspaper endpoints are public
+      expect(res.statusCode).toBe(401);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('allows POST /api/newspaper/build with valid bearer token', async () => {
+    const app = await createGateway(cfg);
+    try {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/newspaper/build',
+        headers: { authorization: 'Bearer test-token' },
+      });
       expect(res.statusCode).not.toBe(401);
     } finally {
       await app.close();
