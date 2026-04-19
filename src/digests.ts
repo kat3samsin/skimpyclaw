@@ -23,6 +23,7 @@ export interface DigestArticle {
   summary?: string;
   content?: string;
   publishedAt?: string;
+  sourceUrl?: string;       // original article URL when primary URL is a redirect/aggregator link
   read?: boolean;
 }
 
@@ -307,6 +308,15 @@ function extractTitleForUrl(text: string, url: string): string {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (line.includes(url)) {
+      const markdownLinkMatches = [...line.matchAll(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g)];
+      for (const match of markdownLinkMatches) {
+        const markdownUrl = match[2]?.replace(/[.,;:!?)\]>'"`]+$/, '');
+        if (markdownUrl === url) {
+          const title = match[1]?.trim();
+          if (title) return title.slice(0, 150);
+        }
+      }
+
       // If the URL is on its own line (🔗 link line), look backwards for the title
       const isLinkOnlyLine = /^\s*🔗?\s*https?:\/\//i.test(line.trim());
       if (isLinkOnlyLine) {

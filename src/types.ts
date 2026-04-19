@@ -2,6 +2,8 @@
 
 import type { SkillConfig } from './skills-types.js';
 export type { SkillConfig } from './skills-types.js';
+import type { NewspaperConfig } from './newspaper/types.js';
+export type { NewspaperConfig } from './newspaper/types.js';
 
 export interface VoiceProviderConfig {
   apiKey?: string;
@@ -90,6 +92,7 @@ export interface Config {
    *  Project paths are automatically added to tool allowedPaths and available to code_with_agent by name. */
   projects?: Record<string, string>;
   sandbox?: SandboxConfig;
+  newspaper?: NewspaperConfig;
 }
 
 export interface AgentConfig {

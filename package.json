@@ -25,6 +25,7 @@
     "docs:dev": "pnpm --dir docs dev",
     "docs:build": "pnpm --dir docs install --frozen-lockfile && pnpm --dir docs build",
     "docs:preview": "pnpm --dir docs preview",
+    "newspaper:seed": "tsx src/newspaper/seed.ts",
     "setup": "tsx src/setup.ts",
     "onboard": "tsx src/cli.ts onboard",
     "build": "tsc && pnpm dashboard:build",

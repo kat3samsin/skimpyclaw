@@ -11,6 +11,7 @@ import {
 import { join } from 'path';
 import { getLogsDir } from '../config.js';
 import type { Edition, EditionListItem, EditionIndex, EditionIndexEntry, Section } from './types.js';
+import { getChicagoDateString } from './time.js';
 
 const NEWSPAPER_DIR = 'newspaper';
 const EDITIONS_DIR = 'editions';
@@ -115,7 +116,7 @@ export function getLatestEdition(): Edition | null {
  * Get today's edition for a specific slot.
  */
 export function getTodayEdition(slot?: 'morning' | 'evening'): Edition | null {
-  const today = new Date().toISOString().split('T')[0];
+  const today = getChicagoDateString(new Date());
   const index = loadIndex();
 
   for (const entry of index.editions) {
