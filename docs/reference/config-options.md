@@ -42,7 +42,7 @@ Each provider key maps to its auth config:
 {
   "anthropic": { "authToken": "${CLAUDE_CODE_OAUTH_TOKEN}" },
   "openai": { "apiKey": "${OPENAI_API_KEY}", "baseURL": "https://api.openai.com/v1" },
-  "codex": { "authToken": "codex", "authPath": "${HOME}/.codex/auth.json" },
+  "codex": { "authToken": "codex", "authPath": "${HOME}/.codex/auth.json", "baseURL": "https://chatgpt.com/backend-api" },
   "minimax": { "apiKey": "${MINIMAX_API_KEY}", "baseURL": "https://api.minimax.io/v1" }
 }
 ```
@@ -136,7 +136,7 @@ Map of shorthand names to full `provider/model-id`. See [Model Aliases](./model-
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `intervalMs` | number | `1800000` | Check interval (30 min) |
+| `intervalMs` | number | `3600000` | Check interval (1 hour) |
 | `prompt` | string | | Heartbeat prompt |
 | `model` | string | | Model override for heartbeat |
 | `tools` | ToolConfig | | Tool access for heartbeat agent |
@@ -153,7 +153,7 @@ Map of shorthand names to full `provider/model-id`. See [Model Aliases](./model-
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `maxConcurrent` | number | `5` | Max parallel coding agents |
-| `defaultAgent` | string | `claude` | Default CLI: `claude` or `codex` |
+| `defaultAgent` | string | `claude` | Default CLI: `claude`, `codex`, or `kimi` |
 | `timeoutMinutes` | number | `30` | Timeout for solo `code_with_agent` (max: 60) |
 | `teamTimeoutMinutes` | number | `60` | Timeout for `code_with_team` (max: 120) |
 | `maxTurns` | number | `50` | Max tool-use turns per agent (team children: 25) |
@@ -257,6 +257,7 @@ Used by cron jobs, heartbeat, and channel defaults:
 |-------|------|---------|-------------|
 | `enabled` | boolean | `true` | Enable automatic context compaction |
 | `maxContextTokens` | number | `100000` | Token threshold before compaction triggers |
+| `compactionModel` | string | `anthropic/claude-haiku-4-5` | Model used for LLM summarization when compacting |
 
 ### `browser`
 

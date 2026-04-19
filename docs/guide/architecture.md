@@ -1,5 +1,7 @@
 # Architecture
 
+> **Visual overview:** [architecture-diagram.html](./architecture-diagram.html) — open in a browser for a full system diagram (channels, gateway, agent core, providers, tools, storage).
+
 ## Component View
 
 ```mermaid
@@ -265,7 +267,7 @@ src/
   channels.ts           # Active channel selection + proactive routing
   channels/
     telegram/           # Telegram bot commands and message handling (Grammy)
-  discord.ts            # Discord bot commands and message handling (discord.js)
+    discord/            # Discord bot commands and message handling (discord.js)
   voice.ts              # Voice input/output (TTS/STT via multiple providers)
   digests.ts            # Daily digest generation for cron job article outputs
   skills.ts             # Skill loading, eligibility checks, and prompt injection
@@ -290,16 +292,19 @@ src/
     runner.ts           # Check orchestration
     types.ts            # Doctor type definitions
 
-templates/              # Default template markdown files copied during setup
-  SOUL.md               # Core agent personality and principles
-  IDENTITY.md           # Agent name, emoji, persona
-  USER.md               # User context and preferences
+templates/              # Bundled agent template markdown files
+                        # Only SOUL, IDENTITY, USER, HEARTBEAT are copied by default
+                        # during `skimpyclaw onboard` (REQUIRED_TEMPLATE_DEFAULTS).
+                        # The rest are available to copy into ~/.skimpyclaw/agents/main/ manually.
+  SOUL.md               # Core agent personality and principles  [copied by default]
+  IDENTITY.md           # Agent name, emoji, persona             [copied by default]
+  USER.md               # User context and preferences           [copied by default]
+  HEARTBEAT.md          # Heartbeat check instructions           [copied by default]
   TOOLS.md              # Tool usage instructions
   BOOT.md               # Startup behavior
-  HEARTBEAT.md          # Heartbeat check instructions
   MEMORY.md             # Memory management guidelines
-  AGENTS.md             # Multi-agent coordination
-  BOOTSTRAP.md          # Bootstrap instructions
+  AGENTS.md             # Multi-agent coordination (optional reference)
+  BOOTSTRAP.md          # First-run bootstrap instructions (optional, loaded via hasBootstrap())
 
 web/dashboard/          # Preact/Vite dashboard frontend
   src/
