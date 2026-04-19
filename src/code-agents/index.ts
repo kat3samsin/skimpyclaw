@@ -210,6 +210,8 @@ export async function executeCodeWithAgent(
     task,
     status: 'running',
     chatId: context?.chatId,
+    discordThreadId: context?.discordThreadId,
+    discordChannelId: context?.discordChannelId,
     startedAt: startedAt.toISOString(),
     workdir,
     model: modelForAgent,
@@ -299,6 +301,8 @@ export async function executeCodeWithTeam(
     task,
     status: 'running',
     chatId: context?.chatId,
+    discordThreadId: context?.discordThreadId,
+    discordChannelId: context?.discordChannelId,
     startedAt: startedAt.toISOString(),
     workdir,
     model: resolvedModel,
@@ -318,3 +322,33 @@ export async function executeCodeWithTeam(
 
 // Need to import join for the file operations
 import { join } from 'path';
+
+// Review-loop public surface
+export {
+  createWorkItem,
+  getWorkItem,
+  listWorkItems,
+  tickWorkItem,
+  appendUserMessage,
+  approvePlan,
+  pauseWorkItem,
+  resumeWorkItem,
+  stopWorkItem,
+  runAgentStep,
+} from './review-loop.js';
+
+export type {
+  WorkStatus,
+  WorkItemState,
+  ReviewFinding,
+  ChatMessage,
+  TimelineEvent,
+  TimelineEventKind,
+  LiveActivity,
+  CreateWorkInput,
+  PlannerOutput,
+  ReviewerOutput,
+  FindingSeverity,
+} from './review-loop-types.js';
+
+export { ACTIVE_STATUSES, TERMINAL_STATUSES } from './review-loop-types.js';

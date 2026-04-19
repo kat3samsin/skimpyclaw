@@ -16,27 +16,22 @@ import { saveEdition, getEdition } from './storage.js';
 import { summarizeEditionArticles } from './summarize.js';
 import { loadConfig } from '../config.js';
 import type { Digest } from '../digests.js';
+import { getChicagoDateString, getChicagoHour } from './time.js';
 
 /**
  * Determine the edition slot based on current time.
- * Morning: before 3pm CT (8pm UTC)
+ * Morning: before 3pm Chicago time
  * Evening: 3pm CT and later
  */
 export function determineSlot(now: Date = new Date()): EditionSlot {
-  // Convert to Central Time offset (-5 or -6)
-  // Use simple approach: check UTC hour
-  const utcHour = now.getUTCHours();
-  // CT is UTC-5 (CDT) or UTC-6 (CST). Approximate as UTC-5.
-  const ctHour = (utcHour - 5 + 24) % 24;
-  return ctHour < 15 ? 'morning' : 'evening';
+  return getChicagoHour(now) < 15 ? 'morning' : 'evening';
 }
 
 /**
  * Generate an edition ID from date and slot.
  */
 export function generateEditionId(date: Date, slot: EditionSlot): string {
-  const dateStr = date.toISOString().split('T')[0];
-  return `${dateStr}-${slot}`;
+  return `${getChicagoDateString(date)}-${slot}`;
 }
 
 /**

@@ -2,18 +2,21 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdirSync, writeFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { loadSkills, getSkillsForContext, formatSkillsPrompt, checkEligibility } from '../skills.js';
+import { randomUUID } from 'crypto';
+import { loadSkills, getSkillsForContext, formatSkillsPrompt, checkEligibility, clearSkillsCache } from '../skills.js';
 import type { LoadedSkill } from '../skills-types.js';
 
 // Create a temp skills directory for each test
 let skillsDir: string;
 
 beforeEach(() => {
-  skillsDir = join(tmpdir(), `skimpyclaw-skills-test-${Date.now()}`);
+  clearSkillsCache();
+  skillsDir = join(tmpdir(), `skimpyclaw-skills-test-${Date.now()}-${randomUUID()}`);
   mkdirSync(skillsDir, { recursive: true });
 });
 
 afterEach(() => {
+  clearSkillsCache();
   rmSync(skillsDir, { recursive: true, force: true });
 });
 

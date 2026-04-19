@@ -226,6 +226,8 @@ export async function runAgentTurn(
     sandboxConfig: config.sandbox,
     sessionId: context?.sessionId || String(chatIdNum ?? 'default'),
     isCronJob: (context?.metadata as any)?.isCronJob === true,
+    discordThreadId: (context?.metadata as any)?.discordThreadId,
+    discordChannelId: (context?.metadata as any)?.discordChannelId,
   };
 
   const runTurn = async (): Promise<string> => {

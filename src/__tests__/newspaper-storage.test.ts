@@ -20,6 +20,7 @@ import {
   saveEdition,
   getEdition,
   getLatestEdition,
+  getTodayEdition,
   listEditions,
   updateArticleRead,
   cleanupOldEditions,
@@ -148,6 +149,39 @@ describe('getLatestEdition', () => {
   });
 });
 
+describe('getTodayEdition', () => {
+  it('matches today using the Chicago calendar date', () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-04-20T01:00:00Z'));
+
+      const edition = makeEdition({
+        id: '2026-04-19-evening',
+        createdAt: '2026-04-20T00:30:00.000Z',
+        slot: 'evening',
+      });
+      const index = {
+        editions: [
+          { id: '2026-04-19-evening', createdAt: '2026-04-20T00:30:00.000Z', slot: 'evening', articleCount: 2 },
+        ],
+      };
+
+      mockExistsSync.mockImplementation((path: any) => {
+        const p = path as string;
+        return p.includes('index.json') || p.includes('2026-04-19-evening.json') || p.includes('editions');
+      });
+      mockReadFileSync.mockImplementation((path: any) => {
+        const p = path as string;
+        if (p.includes('index.json')) return JSON.stringify(index);
+        return JSON.stringify(edition);
+      });
+
+      expect(getTodayEdition()?.id).toBe('2026-04-19-evening');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
 describe('listEditions', () => {
   it('returns empty array when no editions', () => {
     mockExistsSync.mockReturnValue(false);

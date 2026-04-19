@@ -271,6 +271,19 @@ function resolveDiscordThreadId(task: CodeAgentTask): string | undefined {
 }
 
 /**
+ * Resolve the originating Discord channel ID for a task.
+ * If the task doesn't have one, check the parent task (for team children).
+ */
+function resolveDiscordChannelId(task: CodeAgentTask): string | undefined {
+  if (task.discordChannelId) return task.discordChannelId;
+  if (task.parentTaskId) {
+    const parent = getCodeAgent(task.parentTaskId);
+    if (parent?.discordChannelId) return parent.discordChannelId;
+  }
+  return undefined;
+}
+
+/**
  * Try to send a notification to a Discord thread associated with this task.
  * Returns true if successfully sent to thread.
  */
@@ -291,6 +304,29 @@ async function trySendToDiscordThread(task: CodeAgentTask, message: string): Pro
   }
 }
 
+/**
+ * Try to send a notification to the originating Discord channel for this task.
+ * Returns true if successfully sent to channel.
+ */
+async function trySendToDiscordChannel(task: CodeAgentTask, message: string): Promise<boolean> {
+  const channelId = resolveDiscordChannelId(task);
+  if (!channelId) return false;
+
+  try {
+    const { sendDiscordProactiveMessage } = await import('../channels/discord/index.js');
+    await sendDiscordProactiveMessage(channelId, message);
+    console.log(`[code-agent] Notification for ${task.id} sent to Discord channel ${channelId}`);
+    return true;
+  } catch (err) {
+    console.error(`[code-agent] Failed to send to Discord channel for ${task.id}:`, err);
+    return false;
+  }
+}
+
+function hasDiscordRouting(task: CodeAgentTask): boolean {
+  return !!(resolveDiscordThreadId(task) || resolveDiscordChannelId(task));
+}
+
 /** Send auto-notification to active channel on completion/failure. */
 export async function notifyCodeAgentResult(
   task: CodeAgentTask,
@@ -305,28 +341,34 @@ export async function notifyCodeAgentResult(
   if (task.agent === 'team-coordinator') {
     message = buildTeamNotification(task, getChildTask);
 
-    // Try Discord thread first, fall back to broadcast channel
+    // Prefer task-scoped Discord routing over global active-channel fallback.
     const threadSent = await trySendToDiscordThread(task, message);
-    if (!threadSent) {
+    const channelSent = threadSent ? true : await trySendToDiscordChannel(task, message);
+    if (!threadSent && !channelSent && !hasDiscordRouting(task)) {
       const sent = await sendActiveChannelProactiveMessage(_codeAgentConfig, message).catch((err) => {
         console.error(`[code-agent] Failed to send team notification for ${task.id}:`, err);
         return false;
       });
       if (!sent) console.warn(`[code-agent] Team notification not delivered for ${task.id} (no active channel or target)`);
+    } else if (!threadSent && !channelSent) {
+      console.warn(`[code-agent] Team notification not delivered for ${task.id} (Discord thread/channel unavailable)`);
     }
     return;
   }
 
   message = buildSoloNotification(task);
 
-  // Try Discord thread first, fall back to broadcast channel
+  // Prefer task-scoped Discord routing over global active-channel fallback.
   const threadSent = await trySendToDiscordThread(task, message);
-  if (!threadSent) {
+  const channelSent = threadSent ? true : await trySendToDiscordChannel(task, message);
+  if (!threadSent && !channelSent && !hasDiscordRouting(task)) {
     const sent = await sendActiveChannelProactiveMessage(_codeAgentConfig, message).catch((err) => {
       console.error(`[code-agent] Failed to send notification for ${task.id}:`, err);
       return false;
     });
     if (!sent) console.warn(`[code-agent] Notification not delivered for ${task.id} (no active channel or target)`);
+  } else if (!threadSent && !channelSent) {
+    console.warn(`[code-agent] Notification not delivered for ${task.id} (Discord thread/channel unavailable)`);
   }
 }
 

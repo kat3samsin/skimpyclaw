@@ -347,3 +347,100 @@ export interface ConversationDetail {
   total: number;
   hasMore: boolean;
 }
+
+// ── Review-loop Work items ────────────────────────────────────────────
+
+export type WorkStatus =
+  | 'planning'
+  | 'awaiting_approval'
+  | 'implementing'
+  | 'reviewing'
+  | 'revising'
+  | 'paused'
+  | 'done'
+  | 'blocked'
+  | 'stopped';
+
+export interface ReviewFinding {
+  id: string;
+  severity: 'low' | 'medium' | 'high';
+  summary: string;
+  file?: string;
+  line?: number;
+  status: 'open' | 'resolved' | 'disputed';
+  iterationRaised: number;
+  iterationResolved?: number;
+}
+
+export interface WorkChatMessage {
+  id: string;
+  role: 'user' | 'planner';
+  content: string;
+  createdAt: string;
+}
+
+export type TimelineEventKind =
+  | 'created' | 'plan-produced' | 'plan-approved'
+  | 'dev-started' | 'dev-completed'
+  | 'review-started' | 'review-completed'
+  | 'paused' | 'resumed' | 'stopped' | 'blocked' | 'done';
+
+export interface WorkTimelineEvent {
+  id: string;
+  kind: TimelineEventKind;
+  iteration: number;
+  at: string;
+  summary: string;
+  changedFiles?: string[];
+  findingsSnapshot?: ReviewFinding[];
+  codeAgentTaskId?: string;
+  note?: string;
+}
+
+export interface WorkLiveActivity {
+  agent: 'planner' | 'dev' | 'reviewer';
+  codeAgentTaskId: string;
+  startedAt: string;
+}
+
+export interface WorkItemState {
+  id: string;
+  title: string;
+  prompt: string;
+  workdir: string;
+  baseRef: string;
+  plannerModel: string;
+  devModel: string;
+  reviewerModel: string;
+  maxIterations: number;
+  iteration: number;
+  status: WorkStatus;
+  previousStatus?: WorkStatus;
+  findings: ReviewFinding[];
+  chatMessages: WorkChatMessage[];
+  timeline: WorkTimelineEvent[];
+  liveActivity?: WorkLiveActivity;
+  lastReviewCommit?: string;
+  currentPlan?: string;
+  pendingUserMessage?: boolean;
+  createdAt: string;
+  updatedAt: string;
+  cost?: number;
+  blockedReason?: string;
+  stoppedReason?: string;
+}
+
+export interface WorkListResponse {
+  items: WorkItemState[];
+}
+
+export interface CreateWorkInput {
+  prompt: string;
+  workdir: string;
+  baseRef?: string;
+  plannerModel?: string;
+  devModel?: string;
+  reviewerModel?: string;
+  maxIterations?: number;
+  autoApprove?: boolean;
+}
