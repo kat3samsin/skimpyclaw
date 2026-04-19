@@ -1142,6 +1142,41 @@ export function pageShell(title: string, content: string, nav: string = ''): str
       }
     }
 
+    function getNewspaperAuthToken() {
+      try {
+        return window.localStorage.getItem('dashboard_token')
+          || window.localStorage.getItem('skimpyclaw.newspaperToken')
+          || '';
+      } catch {
+        return '';
+      }
+    }
+
+    function saveNewspaperAuthToken(token) {
+      try {
+        if (token) {
+          window.localStorage.setItem('dashboard_token', token);
+          window.localStorage.setItem('skimpyclaw.newspaperToken', token);
+        } else {
+          window.localStorage.removeItem('dashboard_token');
+          window.localStorage.removeItem('skimpyclaw.newspaperToken');
+        }
+      } catch {
+        // Non-critical
+      }
+    }
+
+    async function ensureNewspaperAuthToken(forcePrompt) {
+      const existing = !forcePrompt ? getNewspaperAuthToken() : '';
+      if (existing) return existing;
+
+      const entered = window.prompt('Enter dashboard Bearer token to refresh the newspaper:');
+      const token = (entered || '').trim();
+      if (!token) return '';
+      saveNewspaperAuthToken(token);
+      return token;
+    }
+
     async function triggerBuild(mode = 'fetch-and-build') {
       setRefreshButtons(true, mode);
       setPageLoader(true, 'Refreshing the newspaper and assembling a fresh edition…');
@@ -1150,11 +1185,43 @@ export function pageShell(title: string, content: string, nav: string = ''): str
         'Fetching latest digests\u2026',
       );
       try {
-        const res = await fetch('/api/newspaper/refresh', {
+        let token = await ensureNewspaperAuthToken(false);
+        if (!token) {
+          setBuildStatus('error', 'Refresh cancelled', 'A Bearer token is required to refresh the newspaper.');
+          setPageLoader(false);
+          setRefreshButtons(false, mode);
+          return;
+        }
+
+        let res = await fetch('/api/newspaper/refresh', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + token,
+          },
           body: JSON.stringify({ mode }),
         });
+
+        if (res.status === 401) {
+          saveNewspaperAuthToken('');
+          token = await ensureNewspaperAuthToken(true);
+          if (!token) {
+            setBuildStatus('error', 'Refresh cancelled', 'A valid Bearer token is required to refresh the newspaper.');
+            setPageLoader(false);
+            setRefreshButtons(false, mode);
+            return;
+          }
+
+          res = await fetch('/api/newspaper/refresh', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + token,
+            },
+            body: JSON.stringify({ mode }),
+          });
+        }
+
         const data = await res.json();
         if (res.ok && data.success) {
           const detail = Array.isArray(data.cronRuns)

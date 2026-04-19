@@ -89,11 +89,13 @@ describe('newspaper frontend — build status indicator', () => {
     expect(html).toContain("fetch('/api/newspaper/status')");
   });
 
-  it('triggerBuild does not require auth token', () => {
+  it('triggerBuild reuses the dashboard auth token for refresh actions', () => {
     const html = pageShell('Test', '<p>content</p>');
-    expect(html).not.toContain('dashboard-token');
-    expect(html).not.toContain("'Authorization'");
-    expect(html).not.toContain('res.status === 401');
+    expect(html).toContain("window.localStorage.getItem('dashboard_token')");
+    expect(html).toContain('skimpyclaw.newspaperToken');
+    expect(html).toContain("'Authorization': 'Bearer ' + token");
+    expect(html).toContain('res.status === 401');
+    expect(html).toContain('window.prompt(');
   });
 
   it('pageShell CSS includes build-status styles', () => {
