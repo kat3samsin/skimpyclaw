@@ -18,7 +18,6 @@ import {
   Health,
   Templates,
   Usage,
-  Work,
 } from './pages/index.js';
 import { getToken, onUnauthorized, setToken } from './api/client.js';
 import './styles/base.css';
@@ -29,7 +28,6 @@ const PAGE_IDS: PageId[] = [
   'cron',
   'memory',
   'model',
-  'work',
   'coding',
   'logs',
   'audit',
@@ -240,8 +238,6 @@ export function App() {
         return <Cron showToast={showToast} />;
       case 'usage':
         return <Usage />;
-      case 'work':
-        return <Work />;
       case 'coding':
         return <Coding />;
       case 'audit':

@@ -4,6 +4,7 @@ All notable documentation and behavior updates should be recorded here.
 
 ## Unreleased
 
+- Removed the Work feature entirely: `src/api-work.ts`, `src/work-ticker.ts`, `src/code-agents/review-loop*.ts` (engine, storage, prompts, types, diff), the `Work` dashboard page and its sidebar nav, all Work types and API client methods, and the 3-second polling ticker started in `src/service.ts`. Interactive sessions and `code_with_agent` cover the remaining AI-coding use cases; the autonomous plan → implement → review loop was not in active use and was accumulating fix-commits. On-disk state under `~/.skimpyclaw/logs/review-loop/` is left intact for archival.
 - Discord: added a required documentation process for Discord posting/update workflow changes, including update targets in `README.md`, guide pages, and changelog maintenance expectations.
 - Discord: cron jobs now support `payload.discordThreadId` to target a specific thread for start/digest/completion notifications, with validation and fallback to active-channel delivery.
 - Discord: `code_with_agent` now accepts `interactive: true` to start a bidirectional coding session pinned to a Discord thread. Follow-up messages in the thread are routed directly to `claude --resume` (serialized FIFO per thread); sessions persist across gateway restarts in `~/.skimpyclaw/logs/code-agents/interactive-sessions.json`.

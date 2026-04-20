@@ -9,7 +9,6 @@ import { validateBearerToken } from './utils.js';
 import { runAgentTurn } from './agent.js';
 import { getCronJobs, runCronJob } from './cron.js';
 import { registerDashboardAPI } from './api.js';
-import { registerWorkAPI } from './api-work.js';
 import { registerDashboard } from './dashboard-frontend.js';
 import { registerNewspaperAPI } from './newspaper/routes.js';
 import { registerNewspaperFrontend } from './newspaper/frontend.js';
@@ -167,7 +166,6 @@ export async function createGateway(cfg: Config): Promise<FastifyInstance> {
 
   // Register dashboard API routes (includes auth hook)
   registerDashboardAPI(fastify, config);
-  registerWorkAPI(fastify, config);
 
   // Register newspaper API + frontend routes
   registerNewspaperAPI(fastify, config);
