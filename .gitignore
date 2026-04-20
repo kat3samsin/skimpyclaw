@@ -19,6 +19,7 @@ docs/.vitepress/dist/
 .pnpm-store/
 backend-review-*.md
 .tmp/
+.playwright-cli/
 __test_outside__/
 __test_sandbox__/
 docs/superpowers/

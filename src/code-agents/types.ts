@@ -34,6 +34,9 @@ export interface CodeAgentTask {
   // Dependency tracking
   dependsOn?: number[];          // indices of subtasks this depends on
   wave?: number;                 // which execution wave (0-based)
+  // Interactive coding session (Discord thread bidirectional; claude/codex only).
+  interactive?: boolean;
+  cliSessionId?: string;         // claude --session-id UUID; set at spawn time
 }
 
 export interface DecomposedSubtask {
@@ -66,6 +69,7 @@ export interface BuildCodeAgentArgsInput {
   workdir?: string;
   model?: string;
   max_turns?: number;
+  sessionId?: string;            // claude --session-id UUID for interactive mode first turn
 }
 
 export interface ValidationResult {

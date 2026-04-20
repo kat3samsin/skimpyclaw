@@ -22,7 +22,7 @@ describe('setup config generation', () => {
     expect(config.channels.discord.defaultAllowedPaths).toEqual(['${HOME}/.skimpyclaw']);
     expect(config.heartbeat.tools.allowedPaths).toEqual(['${HOME}/.skimpyclaw']);
     expect(config.models.aliases['claude-think']).toBe('anthropic/claude-sonnet-4-6');
-    expect(config.models.aliases['claude-opus']).toBe('anthropic/claude-opus-4-6');
+    expect(config.models.aliases['claude-opus']).toBe('anthropic/claude-opus-4-7');
     expect(config.models.aliases.codex).toBe('codex/gpt-5.3-codex');
     expect(config.models.aliases['codex5.1']).toBe('codex/gpt-5.1-codex');
     expect(config.models.aliases['codex5.2']).toBe('codex/gpt-5.2-codex');

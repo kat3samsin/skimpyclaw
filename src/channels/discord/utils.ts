@@ -82,7 +82,8 @@ export function conversationKey(message: Message): string {
 }
 
 export function getDiscordRunContext(message: Message): AgentRunContext {
-  const isThread = !message.channel.isDMBased() && message.channel.isThread();
+  const isDm = message.channel.isDMBased();
+  const isThread = !isDm && message.channel.isThread();
   return {
     userId: message.author.id,
     sessionId: message.channel.id,
@@ -90,6 +91,7 @@ export function getDiscordRunContext(message: Message): AgentRunContext {
     trigger: 'discord',
     metadata: {
       username: message.author.username,
+      isDm,
       // When message originates from a thread, pass thread context so
       // spawned coding agents can route notifications back to the thread
       ...(isThread ? {

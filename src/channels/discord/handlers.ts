@@ -40,8 +40,10 @@ import {
   sendLongText,
   startTypingIndicator,
 } from './utils.js';
-import { createTaskThread } from './threads.js';
+import { createTaskThread, buildThreadUrl } from './threads.js';
 import { isDocumentAttachment, processAttachments, supportedExtensions } from './attachments.js';
+import { getSession, linkThread } from '../../code-agents/interactive-sessions.js';
+import { handleInteractiveThreadMessage } from '../../code-agents/interactive-resume.js';
 
 // ── Command handler ─────────────────────────────────────────────────
 
@@ -332,6 +334,34 @@ export async function handleIncomingMessage(message: Message, config: Config): P
     return;
   }
 
+  // Interactive coding session intercept: if this is a thread bound to an active
+  // interactive session, route the message to --resume instead of the main agent.
+  if (message.channel.isThread()) {
+    try {
+      const session = getSession(message.channel.id);
+      if (session) {
+        const stopTyping = startTypingIndicator(message);
+        try {
+          await handleInteractiveThreadMessage({
+            discordThreadId: message.channel.id,
+            userMessage: message.content,
+            postToThread: async (chunks) => {
+              for (const c of chunks) {
+                await (message.channel as any).send(c);
+              }
+            },
+          });
+        } finally {
+          stopTyping();
+        }
+        return;
+      }
+    } catch (err) {
+      console.error('[discord] Interactive-session intercept failed:', err);
+      // fall through to normal handling
+    }
+  }
+
   // Check for image attachments
   const imageAttachments = message.attachments.filter(
     a => a.contentType?.startsWith('image/')
@@ -566,20 +596,29 @@ export async function handleIncomingMessage(message: Message, config: Config): P
     await addToHistory(key, text, response);
     await sendLongText(message, response);
 
-    // If the response started coding agent(s), create threads for status updates
+    // If the response started coding agent(s), create threads for status updates.
+    // Only consider tasks started within the current turn (last 2 min) — older
+    // unthreaded tasks are stale registry entries that will steal the single
+    // thread Discord allows per message.
     const useThreads = config.channels.discord?.threadedReplies !== false;
     if (useThreads && !message.channel.isDMBased()) {
       try {
         const { getUnthreadedTasksForChat, writeCodeAgentTask } = await import('../../code-agents/registry.js');
         const chatId = Number(message.channel.id);
-        const unthreadedTasks = getUnthreadedTasksForChat(chatId);
+        const freshnessCutoffMs = Date.now() - 2 * 60 * 1000;
+        const unthreadedTasks = getUnthreadedTasksForChat(chatId).filter(t => {
+          const started = Date.parse(t.startedAt);
+          return Number.isFinite(started) && started >= freshnessCutoffMs;
+        });
         const isThread = message.channel.isThread();
         for (const task of unthreadedTasks) {
+          let assignedThreadId: string | undefined;
           if (isThread) {
             // Already in a thread — use it directly instead of creating a sub-thread
             task.discordThreadId = message.channel.id;
             task.discordChannelId = message.channel.parentId ?? message.channelId;
             writeCodeAgentTask(task);
+            assignedThreadId = task.discordThreadId;
           } else {
             const taskPreview = task.task.length > 90 ? task.task.slice(0, 90) + '...' : task.task;
             const threadId = await createTaskThread(message, task.id, taskPreview);
@@ -587,6 +626,24 @@ export async function handleIncomingMessage(message: Message, config: Config): P
               task.discordThreadId = threadId;
               task.discordChannelId = message.channelId;
               writeCodeAgentTask(task);
+              assignedThreadId = threadId;
+              // Post a clickable link to the new thread for easy mobile access.
+              const url = buildThreadUrl(message.guildId, threadId);
+              if (url) {
+                try {
+                  await (message.channel as any).send(`→ ${task.interactive ? 'Interactive session' : 'Thread'} ${task.id}: ${url}`);
+                } catch (err) {
+                  console.warn(`[discord] Failed to post thread link for ${task.id}:`, err);
+                }
+              }
+            }
+          }
+          // Promote any pending interactive session from taskId-keyed to threadId-keyed.
+          if (assignedThreadId && task.interactive) {
+            try {
+              linkThread(task.id, assignedThreadId);
+            } catch (err) {
+              console.error(`[discord] Failed to link interactive session ${task.id} → ${assignedThreadId}:`, err);
             }
           }
         }

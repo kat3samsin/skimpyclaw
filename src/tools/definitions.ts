@@ -59,7 +59,18 @@ export const TOOL_DEFINITIONS = [...BUILTIN_TOOL_DEFINITIONS, BROWSER_TOOL_DEFIN
 
 export const CODE_WITH_AGENT_TOOL = {
   name: 'code_with_agent',
-  input_schema: { type: 'object' as const, properties: { task: { type: 'string' as const }, agent: { type: 'string' as const } }, required: ['task'] },
+  input_schema: {
+    type: 'object' as const,
+    properties: {
+      task: { type: 'string' as const },
+      agent: { type: 'string' as const },
+      interactive: {
+        type: 'boolean' as const,
+        description: 'If true, spawn as an interactive session. Creates a Discord thread and resumes session on follow-up messages. Discord-only; claude or codex only. Default false.',
+      },
+    },
+    required: ['task'],
+  },
 };
 
 export const CODE_WITH_TEAM_TOOL = {

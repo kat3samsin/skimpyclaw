@@ -10,7 +10,7 @@ These are created by the setup wizard:
 |-------|-------------|
 | `claude-fast` | `anthropic/claude-haiku-4-5` |
 | `claude-think` | `anthropic/claude-sonnet-4-6` |
-| `claude-opus` | `anthropic/claude-opus-4-6` |
+| `claude-opus` | `anthropic/claude-opus-4-7` |
 | `codex5.1` | `codex/gpt-5.1-codex` |
 | `codex5.2` | `codex/gpt-5.2-codex` |
 | `codex5.3` | `codex/gpt-5.3-codex` |

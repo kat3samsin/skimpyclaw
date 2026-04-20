@@ -26,9 +26,23 @@ function isCommandAvailable(name: string): boolean {
   }
 }
 
-const CLAUDE_CLI_PATH = resolveCliPath('claude');
+export const CLAUDE_CLI_PATH = resolveCliPath('claude');
 const CODEX_CLI_PATH = resolveCliPath('codex');
 const KIMI_CLI_PATH = resolveCliPath('kimi');
+
+/**
+ * Prepare env for spawning a coding-agent CLI (claude/codex/kimi):
+ * - Drops CLAUDECODE so nested `claude` invocations start cleanly.
+ * - Drops GH_TOKEN/GITHUB_TOKEN so `gh` falls back to keychain auth instead
+ *   of a stale process token.
+ */
+export function buildCodeAgentSpawnEnv(base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const env = { ...base };
+  delete env.CLAUDECODE;
+  delete env.GH_TOKEN;
+  delete env.GITHUB_TOKEN;
+  return env;
+}
 
 /** Return supported coding CLIs currently available on PATH. */
 export function getAvailableCodingCliTools(
@@ -172,6 +186,10 @@ export function buildCodeAgentArgs(input: BuildCodeAgentArgsInput): { cmd: strin
     '--max-turns', maxTurns,
     '--append-system-prompt', `Output text only. Never use say or TTS. Focus on the coding task. Run ${buildValidationCommand(input.workdir || process.cwd())} to verify changes.`,
   ];
+  // Interactive mode: pin this turn to a known session UUID so follow-ups can --resume it.
+  if (input.sessionId) {
+    args.push('--session-id', input.sessionId);
+  }
   // Only pass model to Claude CLI if it's not a known non-Claude model.
   // GPT/Codex/Kimi/o-series models would be rejected by the Claude CLI.
   if (input.model && !/^(gpt|codex|kimi|o[134]|openai\/)/i.test(input.model)) {
@@ -399,7 +417,7 @@ export function resolveModelAlias(
   }
   // Resolve common shorthand names to full model IDs
   const SHORTHAND_MAP: Record<string, string> = {
-    opus: 'claude-opus-4-6',
+    opus: 'claude-opus-4-7',
     sonnet: 'claude-sonnet-4-6',
     haiku: 'claude-haiku-4-5',
   };

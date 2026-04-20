@@ -34,8 +34,14 @@ export async function createTaskThread(
 ): Promise<string | null> {
   try {
     // Only text channels in guilds support threads
-    if (message.channel.isDMBased()) return null;
-    if (!('threads' in message.channel)) return null;
+    if (message.channel.isDMBased()) {
+      console.warn(`[discord] Skipping thread for ${taskId}: DM channel does not support threads`);
+      return null;
+    }
+    if (!('threads' in message.channel)) {
+      console.warn(`[discord] Skipping thread for ${taskId}: channel type ${message.channel.type} does not support threads`);
+      return null;
+    }
 
     const threadName = `${taskId}: ${taskPreview.slice(0, 90)}`;
     const thread = await message.startThread({
@@ -50,6 +56,15 @@ export async function createTaskThread(
     console.error(`[discord] Failed to create thread for ${taskId}:`, err);
     return null;
   }
+}
+
+/**
+ * Build a user-facing Discord URL for a thread, suitable for posting as a clickable link.
+ * Returns undefined if we can't construct one (e.g. missing guild context).
+ */
+export function buildThreadUrl(guildId: string | null | undefined, threadId: string): string | undefined {
+  if (!guildId) return undefined;
+  return `https://discord.com/channels/${guildId}/${threadId}`;
 }
 
 /**

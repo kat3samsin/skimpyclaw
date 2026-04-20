@@ -228,6 +228,7 @@ export async function runAgentTurn(
     isCronJob: (context?.metadata as any)?.isCronJob === true,
     discordThreadId: (context?.metadata as any)?.discordThreadId,
     discordChannelId: (context?.metadata as any)?.discordChannelId,
+    isDm: (context?.metadata as any)?.isDm === true,
   };
 
   const runTurn = async (): Promise<string> => {

@@ -35,4 +35,6 @@ export interface ExecuteToolContext {
   discordThreadId?: string;
   /** Discord channel ID — parent channel when originating from a thread */
   discordChannelId?: string;
+  /** True when Discord message originated from a DM (threads not supported) */
+  isDm?: boolean;
 }

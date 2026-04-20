@@ -60,8 +60,8 @@ describe('provider utils', () => {
 
   it('migrates deprecated claude opus 4 model ids', () => {
     const cfg: any = { models: { aliases: {} } };
-    expect(resolveModel('claude-opus-4', cfg)).toBe('claude-opus-4-6');
-    expect(resolveModel('anthropic/claude-opus-4', cfg)).toBe('anthropic/claude-opus-4-6');
+    expect(resolveModel('claude-opus-4', cfg)).toBe('claude-opus-4-7');
+    expect(resolveModel('anthropic/claude-opus-4', cfg)).toBe('anthropic/claude-opus-4-7');
   });
 
   it('normalizes provider route fields after deprecated model migration', () => {

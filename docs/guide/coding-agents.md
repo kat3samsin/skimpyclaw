@@ -77,6 +77,27 @@ Notification format:
 
 Notifications are also sent to the active channel (Telegram or Discord) via `sendActiveChannelProactiveMessage()`. Long messages are chunked at 1900 characters for Discord.
 
+## Interactive Sessions (Discord)
+
+Pass `interactive: true` to `code_with_agent` to start a **bidirectional** coding session pinned to a Discord thread:
+
+```
+code_with_agent { task: "...", interactive: true }
+```
+
+- **Discord-only**, `claude` or `codex` agents only.
+- The first turn is started with a stable session UUID (`--session-id` for Claude, `thread_id` for Codex).
+- Subsequent messages in the thread are routed directly to `claude --resume <session-id>` instead of the main agent, letting you iterate with the coding agent without spawning a new process each time.
+- Messages are queued per-thread (FIFO) to prevent concurrent `--resume` subprocesses from corrupting session history.
+- Session state is persisted to `~/.skimpyclaw/logs/code-agents/interactive-sessions.json` so sessions survive gateway restarts.
+- Session status transitions: `active` → `errored` (on subprocess crash) or `archived` (manual/cleanup). A non-`active` session posts a warning and stops routing.
+
+### Sending follow-up messages
+
+Once an interactive session is active, just post a message in the Discord thread. No command prefix needed — the Discord handler detects the thread binding and routes automatically.
+
+To end the session, start a new `code_with_agent` call or close the thread.
+
 ## Selection behavior
 
 - Agent selection supports `claude`, `codex`, `kimi`

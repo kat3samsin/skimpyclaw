@@ -2,6 +2,7 @@
 // Background multi-agent coding task execution
 
 import { resolve } from 'path';
+import { randomUUID } from 'crypto';
 import type { ToolConfig } from '../types.js';
 import type { ExecuteToolContext } from '../tools/execute-context.js';
 import { isPathAllowed } from '../tools/path-utils.js';
@@ -21,6 +22,7 @@ import {
 } from './registry.js';
 import { runCodeAgentBackground, runValidation } from './executor.js';
 import { runTeamOrchestrator, computeWaves, decomposeTask, synthesizeResults } from './orchestrator.js';
+import { addPendingSession } from './interactive-sessions.js';
 import {
   setCodeAgentConfig,
   getCodeAgentConfig,
@@ -166,6 +168,24 @@ export async function executeCodeWithAgent(
     return `Error: Invalid agent "${requestedAgent}". Must be claude, codex, or kimi.`;
   }
 
+  // Interactive mode prerequisites: Discord server channel (NOT DM) + claude only.
+  // Discord DMs do not support threads, which interactive mode requires.
+  const isInteractive = input.interactive === true;
+  if (isInteractive) {
+    if (context?.channel !== 'discord') {
+      return 'Error: interactive mode requires Discord. Telegram and other channels are not supported yet.';
+    }
+    if (context?.isDm === true) {
+      return 'Error: interactive mode requires a Discord server channel. Direct messages do not support threads. Please move to a server channel and try again.';
+    }
+    if (agent !== 'claude' && agent !== 'codex') {
+      return `Error: interactive mode supports claude and codex only (requested: ${agent}).`;
+    }
+    if (agent === 'codex') {
+      return 'Error: interactive mode for codex is not yet implemented. Use claude for now.';
+    }
+  }
+
   // Don't pass a non-matching session model to a different agent CLI.
   // e.g. if session is gpt-5.3-codex but agent is claude, let claude use its own default.
   const isModelFromSession = !input.model;
@@ -204,6 +224,8 @@ export async function executeCodeWithAgent(
   // Create task with unique ID
   const id = getNextCodeAgentId();
   const startedAt = new Date();
+  // Interactive mode: generate session UUID up-front so --session-id can pin it.
+  const cliSessionId = (isInteractive && agent === 'claude') ? randomUUID() : undefined;
   const caTask: CodeAgentTask = {
     id,
     agent,
@@ -215,9 +237,25 @@ export async function executeCodeWithAgent(
     startedAt: startedAt.toISOString(),
     workdir,
     model: modelForAgent,
+    interactive: isInteractive || undefined,
+    cliSessionId,
   };
   storeCodeAgentTask(caTask);
   writeCodeAgentTask(caTask);
+
+  // Register a pending interactive session keyed by the task ID.
+  // The Discord thread-creation handler will call linkThread(taskId, threadId)
+  // to promote it into the threadId-keyed map so follow-up messages work.
+  if (isInteractive && cliSessionId) {
+    addPendingSession(id, {
+      cliSessionId,
+      cliAgent: agent as 'claude' | 'codex',
+      status: 'active',
+      createdAt: startedAt.toISOString(),
+      lastActivityAt: startedAt.toISOString(),
+      initialTask: task,
+    });
+  }
 
   // Fire-and-forget: spawn background process
   const configTimeout = context?.fullConfig?.codeAgents?.timeoutMinutes ?? 30;

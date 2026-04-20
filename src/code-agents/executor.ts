@@ -32,7 +32,7 @@ import {
   deleteCodeAgentCanceller,
   getCodeAgent,
 } from './registry.js';
-import { buildCodeAgentArgs, notifyCodeAgentResult, resolveModelAlias } from './utils.js';
+import { buildCodeAgentArgs, buildCodeAgentSpawnEnv, notifyCodeAgentResult, resolveModelAlias } from './utils.js';
 import { parseStreamJsonForLive, parseClaudeOutput, parseCodexOutput } from './parser.js';
 import { startTrace, addEvent, endTrace } from '../audit.js';
 import { buildUsageRecord, recordUsage } from '../usage.js';
@@ -136,6 +136,12 @@ function getChangedPackageDirs(workdir: string): string[] {
   }
 }
 
+// Reject any value that could break out of an unquoted shell argument.
+// npm package names: optional "@scope/", then [a-zA-Z0-9._-]. Max 214 chars.
+const NPM_PKG_NAME_RE = /^(?:@[a-zA-Z0-9._-]+\/)?[a-zA-Z0-9._-]+$/;
+// Workspace directory paths derived from git: allow nested path segments only.
+const SAFE_PATH_RE = /^[a-zA-Z0-9._-]+(?:\/[a-zA-Z0-9._-]+)*$/;
+
 /**
  * Build scoped validation commands for a monorepo by detecting changed packages.
  * Returns a combined command that builds/tests only affected packages, or null
@@ -152,6 +158,12 @@ function buildMonorepoValidationCommand(workdir: string): string | null {
   const parts: string[] = [];
 
   for (const dir of changedDirs) {
+    // Defence-in-depth: `dir` flows into shell command strings below.
+    if (!SAFE_PATH_RE.test(dir) || dir.length > 256) {
+      console.warn(`[validation] Skipping unsafe package dir: ${JSON.stringify(dir)}`);
+      continue;
+    }
+
     const pkgJsonPath = join(workdir, dir, 'package.json');
     if (!existsSync(pkgJsonPath)) continue;
 
@@ -161,6 +173,14 @@ function buildMonorepoValidationCommand(workdir: string): string | null {
       const scripts = pkg.scripts || {};
 
       if (!pkgName) continue;
+
+      // pkgName comes from an untrusted package.json and is interpolated into
+      // a shell command executed by exec(). Enforce npm's legal name charset
+      // to prevent command injection via crafted "name" fields.
+      if (typeof pkgName !== 'string' || pkgName.length > 214 || !NPM_PKG_NAME_RE.test(pkgName)) {
+        console.warn(`[validation] Skipping package with unsafe name: ${JSON.stringify(pkgName)}`);
+        continue;
+      }
 
       // Build with workspace command
       if (scripts.build) {
@@ -354,6 +374,7 @@ export async function runCodeAgentBackground(
         workdir,
         model: input.model,
         max_turns: input.max_turns,
+        sessionId: caTask.cliSessionId,
       });
 
   let stdout = '';
@@ -380,11 +401,7 @@ export async function runCodeAgentBackground(
 
     ensureNotCancelled();
     const exitCode = await new Promise<number | null>((resolvePromise, reject) => {
-      const spawnEnv = { ...process.env };
-      delete spawnEnv.CLAUDECODE;
-      // Remove stale GH_TOKEN so gh CLI falls back to keyring auth
-      delete spawnEnv.GH_TOKEN;
-      delete spawnEnv.GITHUB_TOKEN;
+      const spawnEnv = buildCodeAgentSpawnEnv();
       ensureNodeInPath(spawnEnv);
       // Apply extra env vars (e.g. team mode feature flag)
       if (options?.env) Object.assign(spawnEnv, options.env);
@@ -596,10 +613,7 @@ export async function runCodeAgentBackground(
         });
 
         const retryExitCode = await new Promise<number | null>((resolveRetry, rejectRetry) => {
-          const spawnEnv = { ...process.env };
-          delete spawnEnv.CLAUDECODE;
-          delete spawnEnv.GH_TOKEN;
-          delete spawnEnv.GITHUB_TOKEN;
+          const spawnEnv = buildCodeAgentSpawnEnv();
           ensureNodeInPath(spawnEnv);
           const retrySpawnCmd = sandboxContainer ? getRuntime() : retryCmd;
           const retrySpawnArgs = sandboxContainer ? ['exec', sandboxContainer, retryCmd, ...retryArgs] : retryArgs;

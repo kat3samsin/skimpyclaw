@@ -219,6 +219,18 @@ export interface Session {
   updatedAt: Date;
 }
 
+export type InteractiveSessionStatus = 'active' | 'errored' | 'archived';
+
+export interface InteractiveSession {
+  discordThreadId: string;
+  cliSessionId: string;               // UUID for claude, thread_id for codex
+  cliAgent: 'claude' | 'codex';
+  status: InteractiveSessionStatus;
+  createdAt: string;                  // ISO 8601
+  lastActivityAt: string;             // ISO 8601
+  initialTask: string;
+}
+
 export interface GatewayStatus {
   status: 'ok' | 'error';
   uptime: number;
