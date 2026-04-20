@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SkimpyClaw — Architecture Diagram</title>
+  <meta
+    name="description"
+    content="Component-level architecture of SkimpyClaw: input channels, gateway, agent runtime, tools, coding-agent CLIs, providers, and local storage."
+  />
+  <meta name="theme-color" content="#d33b36" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&family=Playfair+Display:wght@600;700&display=swap"
+    rel="stylesheet"
+  />
+  <style>
+    /* ── Palette — mirrors skimpyclaw.xyz ── */
+    :root {
+      --bg: #ffffff;
+      --bg-soft: #fffaf5;
+      --bg-alt: #f5ebe5;
+      --text-1: #0c0303;
+      --text-2: #5a4a40;
+      --text-3: #9a8a80;
+      --brand: #d33b36;
+      --brand-hover: #c65a24;
+      --accent: #dfaa6d;
+      --border: rgba(23, 16, 11, 0.08);
+      --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --font-heading: 'Playfair Display', Georgia, serif;
+      --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
+      --radius: 16px;
+      --radius-sm: 10px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #1e1814;
+        --bg-soft: #161210;
+        --bg-alt: #2a2018;
+        --text-1: #fcf3f3;
+        --text-2: #d4ccc6;
+        --text-3: #948c86;
+        --brand: #f38646;
+        --brand-hover: #ff9a60;
+        --border: rgba(243, 236, 231, 0.08);
+      }
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: var(--font-body);
+      background: var(--bg);
+      color: var(--text-1);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      padding: 40px 24px 60px;
+    }
+
+    .container {
+      max-width: 1280px;
+      margin: 0 auto;
+    }
+
+    .crumbs {
+      font-size: 0.85rem;
+      color: var(--text-3);
+      margin-bottom: 20px;
+    }
+    .crumbs a { color: var(--brand); text-decoration: none; }
+    .crumbs a:hover { color: var(--brand-hover); }
+
+    .page-header {
+      margin-bottom: 36px;
+    }
+
+    .page-title {
+      font-family: var(--font-heading);
+      font-weight: 800;
+      font-size: 2.25rem;
+      color: var(--text-1);
+      margin-bottom: 10px;
+      letter-spacing: -0.02em;
+    }
+
+    .page-title .gradient {
+      background: linear-gradient(135deg, var(--brand) 0%, var(--accent) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .page-tagline {
+      font-size: 1rem;
+      color: var(--text-2);
+      max-width: 720px;
+      line-height: 1.7;
+    }
+
+    .diagram-frame {
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      overflow: hidden;
+      box-shadow:
+        0 12px 48px rgba(23, 16, 11, 0.1),
+        0 0 0 1px rgba(23, 16, 11, 0.03);
+      background: var(--bg-alt);
+    }
+
+    .card-topbar {
+      display: flex;
+      gap: 6px;
+      padding: 10px 14px;
+      background: var(--bg-alt);
+      border-bottom: 1px solid var(--border);
+    }
+    .card-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--text-3);
+      opacity: 0.3;
+    }
+
+    .diagram-svg-wrap {
+      background: var(--bg-soft);
+      padding: 24px;
+      overflow-x: auto;
+    }
+
+    svg.diagram {
+      width: 100%;
+      min-width: 1000px;
+      display: block;
+    }
+
+    .info-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+      margin-top: 32px;
+    }
+
+    .info-card {
+      background: var(--bg-soft);
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      padding: 18px 20px;
+    }
+
+    .info-card h3 {
+      font-family: var(--font-heading);
+      font-weight: 700;
+      font-size: 1.05rem;
+      color: var(--text-1);
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .info-card h3 .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+    }
+
+    .info-card ul {
+      list-style: none;
+    }
+
+    .info-card li {
+      color: var(--text-2);
+      font-size: 0.86rem;
+      line-height: 1.55;
+      padding: 4px 0 4px 18px;
+      position: relative;
+    }
+
+    .info-card li::before {
+      content: "•";
+      position: absolute;
+      left: 2px;
+      color: var(--brand);
+      font-weight: 700;
+    }
+
+    .info-card code {
+      font-family: var(--font-mono);
+      font-size: 0.82em;
+      background: var(--bg-alt);
+      padding: 1px 5px;
+      border-radius: 4px;
+    }
+
+    .dot.green { background: #16a34a; }
+    .dot.orange { background: #ea580c; }
+    .dot.red { background: #dc2626; }
+    .dot.yellow { background: #ca8a04; }
+    .dot.blue { background: #2563eb; }
+    .dot.purple { background: #9333ea; }
+    @media (prefers-color-scheme: dark) {
+      .dot.green { background: #4ade80; }
+      .dot.orange { background: #fb923c; }
+      .dot.red { background: #f87171; }
+      .dot.yellow { background: #facc15; }
+      .dot.blue { background: #60a5fa; }
+      .dot.purple { background: #c084fc; }
+    }
+
+    /* SVG token palette (drives dark-mode swap) */
+    .diagram {
+      --svg-grid: rgba(23, 16, 11, 0.05);
+      --svg-boundary: rgba(211, 59, 54, 0.35);
+      --svg-boundary-ext: rgba(234, 179, 8, 0.5);
+      --svg-text: var(--text-1);
+      --svg-text-soft: var(--text-2);
+      --svg-arrow: #9a8a80;
+      --svg-mask: var(--bg);
+
+      --cat-channel-fill: rgba(37, 99, 235, 0.1);
+      --cat-channel-stroke: #2563eb;
+      --cat-core-fill: rgba(211, 59, 54, 0.1);
+      --cat-core-stroke: #d33b36;
+      --cat-tool-fill: rgba(22, 163, 74, 0.1);
+      --cat-tool-stroke: #16a34a;
+      --cat-security-fill: rgba(220, 38, 38, 0.12);
+      --cat-security-stroke: #dc2626;
+      --cat-coding-fill: rgba(234, 88, 12, 0.1);
+      --cat-coding-stroke: #ea580c;
+      --cat-provider-fill: rgba(202, 138, 4, 0.1);
+      --cat-provider-stroke: #ca8a04;
+      --cat-storage-fill: rgba(147, 51, 234, 0.1);
+      --cat-storage-stroke: #9333ea;
+    }
+    @media (prefers-color-scheme: dark) {
+      .diagram {
+        --svg-grid: rgba(243, 236, 231, 0.04);
+        --svg-boundary: rgba(243, 134, 70, 0.35);
+        --svg-boundary-ext: rgba(250, 204, 21, 0.5);
+        --svg-arrow: #948c86;
+        --svg-mask: var(--bg);
+
+        --cat-channel-fill: rgba(96, 165, 250, 0.15);
+        --cat-channel-stroke: #60a5fa;
+        --cat-core-fill: rgba(243, 134, 70, 0.15);
+        --cat-core-stroke: #f38646;
+        --cat-tool-fill: rgba(74, 222, 128, 0.15);
+        --cat-tool-stroke: #4ade80;
+        --cat-security-fill: rgba(248, 113, 113, 0.16);
+        --cat-security-stroke: #f87171;
+        --cat-coding-fill: rgba(251, 146, 60, 0.15);
+        --cat-coding-stroke: #fb923c;
+        --cat-provider-fill: rgba(250, 204, 21, 0.12);
+        --cat-provider-stroke: #facc15;
+        --cat-storage-fill: rgba(192, 132, 252, 0.15);
+        --cat-storage-stroke: #c084fc;
+      }
+    }
+
+    .diagram .mask { fill: var(--svg-mask); }
+    .diagram .boundary-local {
+      fill: rgba(211, 59, 54, 0.02);
+      stroke: var(--svg-boundary);
+      stroke-width: 1;
+      stroke-dasharray: 8 4;
+    }
+    .diagram .boundary-ext {
+      fill: rgba(234, 179, 8, 0.04);
+      stroke: var(--svg-boundary-ext);
+      stroke-width: 1;
+      stroke-dasharray: 8 4;
+    }
+    .diagram .security-group {
+      fill: transparent;
+      stroke: var(--cat-security-stroke);
+      stroke-width: 1;
+      stroke-dasharray: 4 4;
+      opacity: 0.7;
+    }
+    .diagram .box { stroke-width: 1.5; }
+    .diagram .box.channel { fill: var(--cat-channel-fill); stroke: var(--cat-channel-stroke); }
+    .diagram .box.core { fill: var(--cat-core-fill); stroke: var(--cat-core-stroke); }
+    .diagram .box.tool { fill: var(--cat-tool-fill); stroke: var(--cat-tool-stroke); }
+    .diagram .box.security { fill: var(--cat-security-fill); stroke: var(--cat-security-stroke); }
+    .diagram .box.coding { fill: var(--cat-coding-fill); stroke: var(--cat-coding-stroke); }
+    .diagram .box.provider { fill: var(--cat-provider-fill); stroke: var(--cat-provider-stroke); }
+    .diagram .box.storage { fill: var(--cat-storage-fill); stroke: var(--cat-storage-stroke); }
+
+    .diagram .label-title { font-family: var(--font-body); font-weight: 700; fill: var(--svg-text); font-size: 12px; }
+    .diagram .label-sub { font-family: var(--font-body); font-weight: 500; fill: var(--svg-text-soft); font-size: 10px; }
+    .diagram .label-src { font-family: var(--font-mono); font-weight: 500; font-size: 9px; }
+    .diagram .label-src.channel { fill: var(--cat-channel-stroke); }
+    .diagram .label-src.core { fill: var(--cat-core-stroke); }
+    .diagram .label-src.tool { fill: var(--cat-tool-stroke); }
+    .diagram .label-src.security { fill: var(--cat-security-stroke); }
+    .diagram .label-src.coding { fill: var(--cat-coding-stroke); }
+    .diagram .label-src.provider { fill: var(--cat-provider-stroke); }
+    .diagram .label-src.storage { fill: var(--cat-storage-stroke); }
+    .diagram .label-section {
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: 10px;
+      letter-spacing: 0.12em;
+    }
+    .diagram .label-boundary {
+      font-family: var(--font-mono);
+      font-weight: 600;
+      font-size: 11px;
+    }
+
+    .diagram line { stroke-width: 1.5; }
+    .diagram .flow-channel { stroke: var(--cat-channel-stroke); }
+    .diagram .flow-core { stroke: var(--cat-core-stroke); }
+    .diagram .flow-tool { stroke: var(--cat-tool-stroke); }
+    .diagram .flow-coding { stroke: var(--cat-coding-stroke); }
+    .diagram .flow-provider { stroke: var(--cat-provider-stroke); stroke-dasharray: 4 4; }
+    .diagram .flow-security { stroke: var(--cat-security-stroke); stroke-dasharray: 5 3; }
+    .diagram .flow-storage { stroke: var(--cat-storage-stroke); stroke-dasharray: 2 3; opacity: 0.55; stroke-width: 1; }
+    .diagram .flow-api { stroke: var(--cat-provider-stroke); stroke-dasharray: 3 3; stroke-width: 1; opacity: 0.5; }
+
+    @media (max-width: 768px) {
+      .page-title { font-size: 1.65rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="crumbs">
+      <a href="/">Docs</a> · <a href="/guide/architecture.html">Architecture</a> · Diagram
+    </div>
+
+    <header class="page-header">
+      <h1 class="page-title">SkimpyClaw Architecture <span class="gradient">at a glance</span></h1>
+      <p class="page-tagline">
+        Component view — channels, gateway, agent runtime, tools, and providers.
+        All in one self-hosted service on your machine.
+      </p>
+    </header>
+
+    <div class="diagram-frame">
+      <div class="card-topbar">
+        <span class="card-dot"></span>
+        <span class="card-dot"></span>
+        <span class="card-dot"></span>
+      </div>
+      <div class="diagram-svg-wrap">
+        <svg class="diagram" viewBox="0 0 1160 820" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+              <polygon points="0 0, 10 3.5, 0 7" fill="var(--svg-arrow)" />
+            </marker>
+            <marker id="ah-channel" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+              <polygon points="0 0, 10 3.5, 0 7" fill="var(--cat-channel-stroke)" />
+            </marker>
+            <marker id="ah-core" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+              <polygon points="0 0, 10 3.5, 0 7" fill="var(--cat-core-stroke)" />
+            </marker>
+            <marker id="ah-tool" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+              <polygon points="0 0, 10 3.5, 0 7" fill="var(--cat-tool-stroke)" />
+            </marker>
+            <marker id="ah-coding" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+              <polygon points="0 0, 10 3.5, 0 7" fill="var(--cat-coding-stroke)" />
+            </marker>
+            <marker id="ah-provider" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+              <polygon points="0 0, 10 3.5, 0 7" fill="var(--cat-provider-stroke)" />
+            </marker>
+            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="var(--svg-grid)" stroke-width="1" />
+            </pattern>
+          </defs>
+
+          <rect width="100%" height="100%" fill="url(#grid)" />
+
+          <!-- Boundaries -->
+          <rect class="boundary-local" x="20" y="50" width="870" height="720" rx="12" />
+          <text x="35" y="70" class="label-boundary" fill="var(--cat-core-stroke)">Local Machine · self-hosted service</text>
+
+          <rect class="boundary-ext" x="910" y="50" width="230" height="720" rx="12" />
+          <text x="925" y="70" class="label-boundary" fill="var(--cat-provider-stroke)">External APIs</text>
+
+          <!-- Arrows (drawn first, behind boxes) -->
+          <line class="flow-channel" x1="100" y1="170" x2="350" y2="220" marker-end="url(#ah-channel)"/>
+          <line class="flow-channel" x1="240" y1="170" x2="390" y2="220" marker-end="url(#ah-channel)"/>
+          <line class="flow-channel" x1="380" y1="170" x2="430" y2="220" marker-end="url(#ah-channel)"/>
+          <line class="flow-channel" x1="520" y1="170" x2="470" y2="220" marker-end="url(#ah-channel)"/>
+          <line class="flow-channel" x1="660" y1="170" x2="510" y2="220" marker-end="url(#ah-channel)"/>
+
+          <line class="flow-core" x1="430" y1="280" x2="280" y2="340" marker-end="url(#ah-core)"/>
+          <line class="flow-core" x1="500" y1="280" x2="580" y2="340" marker-end="url(#ah-core)"/>
+          <line class="flow-core" x1="550" y1="280" x2="720" y2="340" marker-end="url(#ah-core)"/>
+
+          <line class="flow-tool" x1="280" y1="420" x2="280" y2="470" marker-end="url(#ah-tool)"/>
+          <line class="flow-core" x1="580" y1="390" x2="340" y2="400" stroke-dasharray="4 4" marker-end="url(#ah-core)"/>
+
+          <line class="flow-tool" x1="220" y1="550" x2="170" y2="600" marker-end="url(#ah-tool)"/>
+          <line class="flow-security" x1="280" y1="550" x2="360" y2="600" marker-end="url(#arrowhead)"/>
+          <line class="flow-tool" x1="340" y1="550" x2="560" y2="600" marker-end="url(#ah-tool)"/>
+          <line class="flow-tool" x1="320" y1="550" x2="740" y2="600" marker-end="url(#ah-tool)"/>
+
+          <line class="flow-coding" x1="540" y1="680" x2="535" y2="720" marker-end="url(#ah-coding)"/>
+          <line class="flow-coding" x1="560" y1="680" x2="640" y2="720" marker-end="url(#ah-coding)"/>
+          <line class="flow-coding" x1="580" y1="680" x2="730" y2="720" marker-end="url(#ah-coding)"/>
+
+          <line class="flow-provider" x1="460" y1="340" x2="940" y2="190" marker-end="url(#ah-provider)"/>
+          <line class="flow-provider" x1="460" y1="360" x2="940" y2="260" marker-end="url(#ah-provider)"/>
+          <line class="flow-provider" x1="460" y1="380" x2="940" y2="330" marker-end="url(#ah-provider)"/>
+          <line class="flow-provider" x1="340" y1="510" x2="940" y2="430" marker-end="url(#ah-provider)"/>
+
+          <line class="flow-api" x1="100" y1="120" x2="940" y2="520" marker-end="url(#ah-provider)"/>
+          <line class="flow-api" x1="240" y1="120" x2="940" y2="570" marker-end="url(#ah-provider)"/>
+
+          <!-- INPUT CHANNELS -->
+          <text x="40" y="100" class="label-section" fill="var(--cat-channel-stroke)">INPUT CHANNELS</text>
+
+          <rect class="mask" x="40" y="110" width="120" height="60" rx="6" />
+          <rect class="box channel" x="40" y="110" width="120" height="60" rx="6" />
+          <text class="label-title" x="100" y="132" text-anchor="middle">Telegram Bot</text>
+          <text class="label-sub" x="100" y="148" text-anchor="middle">voice, images</text>
+          <text class="label-src channel" x="100" y="162" text-anchor="middle">src/channels/telegram</text>
+
+          <rect class="mask" x="180" y="110" width="120" height="60" rx="6" />
+          <rect class="box channel" x="180" y="110" width="120" height="60" rx="6" />
+          <text class="label-title" x="240" y="132" text-anchor="middle">Discord Bot</text>
+          <text class="label-sub" x="240" y="148" text-anchor="middle">threads, attachments</text>
+          <text class="label-src channel" x="240" y="162" text-anchor="middle">src/channels/discord</text>
+
+          <rect class="mask" x="320" y="110" width="120" height="60" rx="6" />
+          <rect class="box channel" x="320" y="110" width="120" height="60" rx="6" />
+          <text class="label-title" x="380" y="132" text-anchor="middle">Web Dashboard</text>
+          <text class="label-sub" x="380" y="148" text-anchor="middle">Preact + Vite SPA</text>
+          <text class="label-src channel" x="380" y="162" text-anchor="middle">:18790/dashboard</text>
+
+          <rect class="mask" x="460" y="110" width="120" height="60" rx="6" />
+          <rect class="box channel" x="460" y="110" width="120" height="60" rx="6" />
+          <text class="label-title" x="520" y="132" text-anchor="middle">CLI</text>
+          <text class="label-sub" x="520" y="148" text-anchor="middle">start · onboard · cron</text>
+          <text class="label-src channel" x="520" y="162" text-anchor="middle">skimpyclaw …</text>
+
+          <rect class="mask" x="600" y="110" width="120" height="60" rx="6" />
+          <rect class="box channel" x="600" y="110" width="120" height="60" rx="6" />
+          <text class="label-title" x="660" y="132" text-anchor="middle">Newspaper</text>
+          <text class="label-sub" x="660" y="148" text-anchor="middle">daily edition UI</text>
+          <text class="label-src channel" x="660" y="162" text-anchor="middle">:18790/newspaper</text>
+
+          <!-- GATEWAY -->
+          <rect class="mask" x="340" y="220" width="260" height="60" rx="6" />
+          <rect class="box core" x="340" y="220" width="260" height="60" rx="6" />
+          <text class="label-title" x="470" y="244" text-anchor="middle" font-size="13">Fastify Gateway</text>
+          <text class="label-sub" x="470" y="261" text-anchor="middle">bearer auth · port :18790</text>
+          <text class="label-src core" x="470" y="275" text-anchor="middle">src/gateway.ts + src/api.ts</text>
+
+          <!-- CORE RUNTIME -->
+          <text x="40" y="332" class="label-section" fill="var(--cat-core-stroke)">CORE RUNTIME</text>
+
+          <rect class="mask" x="200" y="340" width="160" height="80" rx="6" />
+          <rect class="box core" x="200" y="340" width="160" height="80" rx="6" />
+          <text class="label-title" x="280" y="364" text-anchor="middle">Agent Runner</text>
+          <text class="label-sub" x="280" y="381" text-anchor="middle">runAgentTurn() · tool loop</text>
+          <text class="label-sub" x="280" y="395" text-anchor="middle">history · memory · audit</text>
+          <text class="label-src core" x="280" y="411" text-anchor="middle">src/agent.ts</text>
+
+          <rect class="mask" x="380" y="340" width="160" height="80" rx="6" />
+          <rect class="box core" x="380" y="340" width="160" height="80" rx="6" />
+          <text class="label-title" x="460" y="364" text-anchor="middle">Provider Router</text>
+          <text class="label-sub" x="460" y="381" text-anchor="middle">runToolLoop (unified)</text>
+          <text class="label-sub" x="460" y="395" text-anchor="middle">model-selection · aliases</text>
+          <text class="label-src core" x="460" y="411" text-anchor="middle">src/providers/*</text>
+
+          <rect class="mask" x="560" y="340" width="100" height="80" rx="6" />
+          <rect class="box core" x="560" y="340" width="100" height="80" rx="6" />
+          <text class="label-title" x="610" y="364" text-anchor="middle">Cron</text>
+          <text class="label-sub" x="610" y="381" text-anchor="middle">agentTurn +</text>
+          <text class="label-sub" x="610" y="395" text-anchor="middle">script payloads</text>
+          <text class="label-src core" x="610" y="411" text-anchor="middle">src/cron.ts</text>
+
+          <rect class="mask" x="680" y="340" width="100" height="80" rx="6" />
+          <rect class="box core" x="680" y="340" width="100" height="80" rx="6" />
+          <text class="label-title" x="730" y="364" text-anchor="middle">Heartbeat</text>
+          <text class="label-sub" x="730" y="381" text-anchor="middle">keep-alive +</text>
+          <text class="label-sub" x="730" y="395" text-anchor="middle">proactive alerts</text>
+          <text class="label-src core" x="730" y="411" text-anchor="middle">src/heartbeat.ts</text>
+
+          <!-- TOOL EXECUTOR -->
+          <rect class="mask" x="200" y="470" width="340" height="70" rx="6" />
+          <rect class="box tool" x="200" y="470" width="340" height="70" rx="6" />
+          <text class="label-title" x="370" y="494" text-anchor="middle" font-size="13">Tool Executor</text>
+          <text class="label-sub" x="370" y="512" text-anchor="middle">registry · MCP discovery · dispatch · allowedPaths guard</text>
+          <text class="label-src tool" x="370" y="528" text-anchor="middle">src/tools.ts + src/tools/*</text>
+
+          <!-- TOOLS -->
+          <text x="40" y="592" class="label-section" fill="var(--cat-tool-stroke)">TOOLS</text>
+
+          <rect class="mask" x="40" y="600" width="190" height="80" rx="6" />
+          <rect class="box tool" x="40" y="600" width="190" height="80" rx="6" />
+          <text class="label-title" x="135" y="624" text-anchor="middle">Built-in Tools</text>
+          <text class="label-sub" x="135" y="641" text-anchor="middle">Read · Write · Glob · Bash</text>
+          <text class="label-sub" x="135" y="655" text-anchor="middle">Fetch · Browser (Playwright)</text>
+          <text class="label-src tool" x="135" y="672" text-anchor="middle">src/tools/*.ts</text>
+
+          <rect class="security-group" x="240" y="585" width="180" height="105" rx="8" />
+          <text x="250" y="599" font-size="9" font-family="JetBrains Mono, monospace" fill="var(--cat-security-stroke)">security gate</text>
+          <rect class="mask" x="250" y="605" width="160" height="75" rx="6" />
+          <rect class="box security" x="250" y="605" width="160" height="75" rx="6" />
+          <text class="label-title" x="330" y="628" text-anchor="middle">Exec Approval</text>
+          <text class="label-sub" x="330" y="645" text-anchor="middle">risk tiers 0–3</text>
+          <text class="label-sub" x="330" y="659" text-anchor="middle">human-in-loop for 2–3</text>
+          <text class="label-src security" x="330" y="673" text-anchor="middle">src/exec-approval.ts</text>
+
+          <rect class="mask" x="430" y="600" width="200" height="80" rx="6" />
+          <rect class="box coding" x="430" y="600" width="200" height="80" rx="6" />
+          <text class="label-title" x="530" y="624" text-anchor="middle">code_with_agent</text>
+          <text class="label-sub" x="530" y="641" text-anchor="middle">delegate to coding CLI</text>
+          <text class="label-sub" x="530" y="655" text-anchor="middle">+ Discord interactive sessions</text>
+          <text class="label-src coding" x="530" y="672" text-anchor="middle">src/code-agents/*</text>
+
+          <rect class="mask" x="640" y="600" width="120" height="80" rx="6" />
+          <rect class="box storage" x="640" y="600" width="120" height="80" rx="6" />
+          <text class="label-title" x="700" y="624" text-anchor="middle">Skills</text>
+          <text class="label-sub" x="700" y="641" text-anchor="middle">trigger-loaded</text>
+          <text class="label-sub" x="700" y="655" text-anchor="middle">prompt snippets</text>
+          <text class="label-src storage" x="700" y="672" text-anchor="middle">~/.skimpyclaw/skills/</text>
+
+          <!-- CODING CLIs -->
+          <text x="440" y="712" class="label-section" fill="var(--cat-coding-stroke)">CODING AGENT CLIs</text>
+
+          <rect class="mask" x="480" y="720" width="110" height="50" rx="6" />
+          <rect class="box coding" x="480" y="720" width="110" height="50" rx="6" />
+          <text class="label-title" x="535" y="740" text-anchor="middle">Claude Code</text>
+          <text class="label-sub" x="535" y="756" text-anchor="middle">claude -p / --resume</text>
+
+          <rect class="mask" x="600" y="720" width="80" height="50" rx="6" />
+          <rect class="box coding" x="600" y="720" width="80" height="50" rx="6" />
+          <text class="label-title" x="640" y="740" text-anchor="middle">Codex</text>
+          <text class="label-sub" x="640" y="756" text-anchor="middle">codex exec</text>
+
+          <rect class="mask" x="690" y="720" width="80" height="50" rx="6" />
+          <rect class="box coding" x="690" y="720" width="80" height="50" rx="6" />
+          <text class="label-title" x="730" y="740" text-anchor="middle">Kimi</text>
+          <text class="label-sub" x="730" y="756" text-anchor="middle">kimi --yolo</text>
+
+          <!-- EXTERNAL PROVIDERS -->
+          <rect class="mask" x="940" y="170" width="180" height="60" rx="6" />
+          <rect class="box provider" x="940" y="170" width="180" height="60" rx="6" />
+          <text class="label-title" x="1030" y="193" text-anchor="middle">Anthropic API</text>
+          <text class="label-sub" x="1030" y="209" text-anchor="middle">Claude Opus / Sonnet / Haiku</text>
+          <text class="label-src provider" x="1030" y="223" text-anchor="middle">OAuth or API key</text>
+
+          <rect class="mask" x="940" y="240" width="180" height="60" rx="6" />
+          <rect class="box provider" x="940" y="240" width="180" height="60" rx="6" />
+          <text class="label-title" x="1030" y="263" text-anchor="middle">Codex / ChatGPT</text>
+          <text class="label-sub" x="1030" y="279" text-anchor="middle">chatgpt.com responses</text>
+          <text class="label-src provider" x="1030" y="293" text-anchor="middle">Codex OAuth</text>
+
+          <rect class="mask" x="940" y="310" width="180" height="60" rx="6" />
+          <rect class="box provider" x="940" y="310" width="180" height="60" rx="6" />
+          <text class="label-title" x="1030" y="333" text-anchor="middle">OpenAI-compatible</text>
+          <text class="label-sub" x="1030" y="349" text-anchor="middle">OpenRouter · Groq · Together…</text>
+          <text class="label-src provider" x="1030" y="363" text-anchor="middle">API key + baseURL</text>
+
+          <rect class="mask" x="940" y="410" width="180" height="60" rx="6" />
+          <rect class="box provider" x="940" y="410" width="180" height="60" rx="6" />
+          <text class="label-title" x="1030" y="433" text-anchor="middle">MCP Servers</text>
+          <text class="label-sub" x="1030" y="449" text-anchor="middle">auto-discovered</text>
+          <text class="label-src provider" x="1030" y="463" text-anchor="middle">via mcporter</text>
+
+          <rect class="mask" x="940" y="500" width="180" height="60" rx="6" />
+          <rect class="box provider" x="940" y="500" width="180" height="60" rx="6" />
+          <text class="label-title" x="1030" y="523" text-anchor="middle">Telegram API</text>
+          <text class="label-sub" x="1030" y="539" text-anchor="middle">long-poll bot updates</text>
+          <text class="label-src provider" x="1030" y="553" text-anchor="middle">bot token</text>
+
+          <rect class="mask" x="940" y="570" width="180" height="60" rx="6" />
+          <rect class="box provider" x="940" y="570" width="180" height="60" rx="6" />
+          <text class="label-title" x="1030" y="593" text-anchor="middle">Discord API</text>
+          <text class="label-sub" x="1030" y="609" text-anchor="middle">gateway websocket</text>
+          <text class="label-src provider" x="1030" y="623" text-anchor="middle">bot token</text>
+
+          <!-- STORAGE -->
+          <rect class="mask" x="40" y="710" width="400" height="50" rx="6" />
+          <rect class="box storage" x="40" y="710" width="400" height="50" rx="6" />
+          <text class="label-title" x="240" y="730" text-anchor="middle">~/.skimpyclaw/  (local storage)</text>
+          <text class="label-sub" x="240" y="748" text-anchor="middle">config.json · logs/audit · logs/usage · logs/code-agents · skills/ · agents/</text>
+
+          <line class="flow-storage" x1="280" y1="420" x2="200" y2="710" marker-end="url(#arrowhead)"/>
+          <line class="flow-storage" x1="370" y1="540" x2="300" y2="710" marker-end="url(#arrowhead)"/>
+        </svg>
+      </div>
+    </div>
+
+    <div class="info-cards">
+      <div class="info-card">
+        <h3><span class="dot blue"></span> Input Channels</h3>
+        <ul>
+          <li>Telegram bot — voice, images, history, <code>/new</code></li>
+          <li>Discord bot — threads, attachments, interactive coding sessions</li>
+          <li>Web dashboard — audit, cron, usage, templates, skills</li>
+          <li>CLI — start, stop, onboard, tools, cron</li>
+        </ul>
+      </div>
+      <div class="info-card">
+        <h3><span class="dot red"></span> Core Runtime</h3>
+        <ul>
+          <li>Fastify gateway on <code>:18790</code> with bearer auth</li>
+          <li>Agent runner with tool loop, history, and memory</li>
+          <li>Unified provider router (Anthropic / Codex / OpenAI-compat)</li>
+          <li>Cron scheduler + heartbeat keep-alive</li>
+        </ul>
+      </div>
+      <div class="info-card">
+        <h3><span class="dot green"></span> Tools</h3>
+        <ul>
+          <li>Read, Write, Glob, Bash, Fetch + Playwright browser</li>
+          <li>Path-scoped to <code>allowedPaths</code></li>
+          <li>MCP tools auto-discovered via mcporter</li>
+        </ul>
+      </div>
+      <div class="info-card">
+        <h3><span class="dot red"></span> Safety Gate</h3>
+        <ul>
+          <li>Exec approval classifies bash commands tier 0–3</li>
+          <li>Tiers 2–3 pause and require human approval</li>
+          <li>Approval requests route to the active channel</li>
+        </ul>
+      </div>
+      <div class="info-card">
+        <h3><span class="dot orange"></span> Coding Agents</h3>
+        <ul>
+          <li><code>code_with_agent</code> spawns Claude, Codex, or Kimi CLI</li>
+          <li>Monorepo-aware validation scoped to changed packages</li>
+          <li>Live stdout streaming + cost / token tracking</li>
+          <li>Discord threads: bidirectional <code>claude --resume</code> sessions</li>
+        </ul>
+      </div>
+      <div class="info-card">
+        <h3><span class="dot purple"></span> Local Storage</h3>
+        <ul>
+          <li>Config at <code>~/.skimpyclaw/config.json</code> (0600 perms)</li>
+          <li>JSONL logs: audit, usage, code-agents, interactive-sessions</li>
+          <li>Skills at <code>~/.skimpyclaw/skills/&lt;name&gt;/SKILL.md</code></li>
+          <li>Agent templates at <code>~/.skimpyclaw/agents/&lt;name&gt;/</code></li>
+        </ul>
+      </div>
+      <div class="info-card">
+        <h3><span class="dot yellow"></span> External APIs</h3>
+        <ul>
+          <li>Anthropic (Claude Opus / Sonnet / Haiku)</li>
+          <li>Codex backend via ChatGPT responses endpoint</li>
+          <li>Any OpenAI-compatible provider (OpenRouter, Groq, Together)</li>
+          <li>MCP servers auto-discovered via mcporter</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

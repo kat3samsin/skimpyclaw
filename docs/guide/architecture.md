@@ -1,111 +1,33 @@
 # Architecture
 
-> **Visual overview:** [architecture-diagram.html](./architecture-diagram.html) — open in a browser for a full system diagram (channels, gateway, agent core, providers, tools, storage).
-
 ## Component View
 
-```mermaid
-flowchart LR
-  subgraph Channels
-    user["User (Telegram/Discord)"]
-    browser["User (Browser)"]
-  end
+<p>
+  <a href="/architecture-diagram.html" target="_blank" rel="noopener">
+    👙🦞 Open the full interactive diagram →
+  </a>
+</p>
 
-  subgraph Gateway["Gateway · Fastify :18790"]
-    dash["Dashboard UI (Preact/Vite)"]
-    api["Dashboard API"]
-    routes["/health /status /message /model /cron/:id/run"]
-  end
-
-  subgraph Core
-    agent["Agent Runtime"]
-    codeAgents["Coding Agents"]
-    codeagents["Code Agents (Claude/Codex/Kimi)"]
-    cron["Cron Scheduler"]
-    hb["Heartbeat Timer"]
-    audit["Audit Log"]
-    skills["Skills System"]
-    approvals["Exec Approval"]
-  end
-
-  subgraph Providers
-    models["Anthropic / OpenAI / Codex / Kimi / MiniMax"]
-    mcp["MCP Servers (mcporter)"]
-  end
-
-  user --> agent
-  browser --> dash --> api --> agent
-  routes --> agent
-  cron --> agent
-  hb --> agent
-  agent --> codeAgents
-  agent --> codeagents
-  agent --> audit
-  agent --> skills
-  agent --> approvals
-  agent --> models
-  agent --> mcp
-  agent --> fs["~/.skimpyclaw (config, logs, memory, templates)"]
-```
+The diagram shows the full system at a glance: input channels (Telegram, Discord, Dashboard, CLI, Newspaper) → Fastify gateway → core runtime (agent runner, provider router, cron, heartbeat) → tool executor → tools (built-ins, exec approval, `code_with_agent`, skills) → external providers (Anthropic, Codex, OpenAI-compatible, MCP) and local storage under `~/.skimpyclaw/`.
 
 <details>
-<summary>📄 Text version</summary>
+<summary>Plain-text summary</summary>
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              CHANNELS                                       │
-│  ┌─────────────────────┐    ┌─────────────────────┐                        │
-│  │ User (Telegram/     │    │ User (Browser)      │                        │
-│  │      Discord)       │    │                     │                        │
-│  └──────────┬──────────┘    └──────────┬──────────┘                        │
-└─────────────┼──────────────────────────┼────────────────────────────────────┘
-              │                          │
-              ▼                          ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                         GATEWAY · Fastify :18790                           │
-│  ┌─────────────────────────────────────┐   ┌─────────────────────────────┐ │
-│  │ Dashboard UI (Preact/Vite) ◄────────┼───┘                             │ │
-│  │                                     │      Dashboard API               │ │
-│  └─────────────────────────────────────┘   └─────────────────────────────┘ │
-│         │                                    │                              │
-│         │    /health /status /message        │                              │
-│         │    /model /cron/:id/run            │                              │
-│         └────────────────────────────────────┘                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                       │
-                                       ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                                 CORE                                        │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐    │
-│  │ Agent        │──│ Code Agents  │──│ Cron         │                    │
-│  │ Runtime      │  │ (Claude/     │  │ Scheduler    │                    │
-│  └──────┬───────┘  │  Codex/Kimi) │  └──────────────┘                    │
-│         │                             └──────────────┘         │            │
-│         │                                                      │            │
-│         │    ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
-│         ├───►│ Audit Log    │  │ Skills       │  │ Heartbeat    │          │
-│         │    └──────────────┘  │ System       │  │ Timer        │          │
-│         │                      └──────────────┘  └──────────────┘          │
-│         │                                                                   │
-│         │    ┌──────────────┐                                              │
-│         └───►│ Exec         │                                              │
-│              │ Approval     │                                              │
-│              └──────────────┘                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                       │
-                                       ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                               PROVIDERS                                     │
-│  ┌──────────────────────────────────────┐  ┌─────────────────────────────┐  │
-│  │ Anthropic / OpenAI / Codex / Kimi    │  │ MCP Servers (mcporter)      │  │
-│  │ / MiniMax                            │  │                             │  │
-│  └──────────────────────────────────────┘  └─────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                       │
-                                       ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  ~/.skimpyclaw/ (config, logs, memory, templates)                          │
-└─────────────────────────────────────────────────────────────────────────────┘
+CHANNELS     Telegram · Discord · Web Dashboard · CLI · Newspaper
+                                    ↓
+GATEWAY      Fastify :18790  (bearer auth, dashboard + newspaper + agent routes)
+                                    ↓
+CORE         Agent Runner · Provider Router · Cron · Heartbeat
+                                    ↓
+TOOLS        Read · Write · Glob · Bash · Fetch · Browser
+                Exec Approval (risk tiers 0–3)
+                code_with_agent → Claude / Codex / Kimi CLIs
+                Skills (trigger-loaded prompt snippets)
+                                    ↓
+PROVIDERS    Anthropic · Codex · OpenAI-compatible · MCP (mcporter)
+                                    ↓
+STORAGE      ~/.skimpyclaw/  (config · logs · agents · skills)
 ```
 </details>
 
