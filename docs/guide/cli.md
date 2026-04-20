@@ -77,17 +77,6 @@ skimpyclaw browser wait --ms 30000
 skimpyclaw browser close
 ```
 
-## Sandbox
-
-```bash
-skimpyclaw sandbox status                  # Show active sandbox containers
-skimpyclaw sandbox prune                   # Force-prune all sandbox containers
-skimpyclaw sandbox init                    # Auto-setup runtime, image, and config
-skimpyclaw sandbox init --profile dev      # Build with dev profile (more tools)
-skimpyclaw sandbox init --runtime docker   # Use docker instead of container
-skimpyclaw sandbox doctor                  # Sandbox-specific diagnostics and hints
-```
-
 ## npm scripts
 
 ```bash

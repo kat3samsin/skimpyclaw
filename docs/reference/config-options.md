@@ -223,18 +223,6 @@ Named project paths. Keys are short names (e.g. `"skimpyclaw"`), values are abso
 }
 ```
 
-## `sandbox`
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `enabled` | boolean | `false` | Enable sandboxed execution |
-| `runtime` | string | auto-detect | Container runtime: `container` or `docker` |
-| `image` | string | `skimpyclaw-sandbox` | Container image name |
-| `cpus` | number | `2` | CPU limit |
-| `memory` | string | `2G` | Memory limit |
-| `network` | string | `none` | Network mode |
-| `idleTimeoutMs` | number | `3600000` | Idle timeout before container stops (1 hour) |
-
 ---
 
 ## `ToolConfig`

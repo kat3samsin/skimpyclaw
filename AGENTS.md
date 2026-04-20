@@ -43,7 +43,7 @@ Always run `pnpm build && pnpm test` after making changes. Do not submit work wi
 | `src/usage.ts` | Cost & token usage tracking (JSONL) |
 | `src/env-sanitizer.ts` | Shared env sanitization for child processes (strips secrets, extends PATH) |
 | `src/model-selection.ts` | Model alias/provider resolution (single source of truth) |
-| `src/cli.ts` | CLI entrypoint (start/stop/restart/status/logs/onboard/config/model/cron/tools/sandbox/uninstall) |
+| `src/cli.ts` | CLI entrypoint (start/stop/restart/status/logs/onboard/config/model/cron/tools/uninstall) |
 | `src/types.ts` | All TypeScript interfaces and types |
 
 ## Critical Rules
@@ -58,7 +58,6 @@ Always run `pnpm build && pnpm test` after making changes. Do not submit work wi
 - **Hardcode paths** — prefer simple over configurable
 - **Skills directory** — `~/.skimpyclaw/skills/`, NOT `~/.claude/skills/`
 - **Model selection** — always call `resolveModelSelection`, don't duplicate alias parsing
-- **Sandbox CLI workflows** — use `skimpyclaw sandbox init` for runtime/image/profile bootstrap and `skimpyclaw sandbox doctor` for targeted diagnostics
 
 ## Security & Secrets
 

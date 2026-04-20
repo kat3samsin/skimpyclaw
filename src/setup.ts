@@ -11,13 +11,6 @@ import { runDoctor as runDoctorChecks } from './doctor/runner.js';
 import { toErrorMessage } from './utils.js';
 import { secureStoreAvailable, setSecureValue } from './secure-store.js';
 import {
-  detectSandboxRuntime,
-  isSandboxRuntimeRunning,
-  sandboxNetworkExists,
-  defaultSandboxNetwork,
-  type SandboxRuntime,
-} from './sandbox-utils.js';
-import {
   ensureCoreTemplates,
   ensureStarterSkills,
   buildStarterCronJobs,
@@ -91,46 +84,6 @@ function loadExistingSetup(): ExistingSetup {
   return { config, env };
 }
 
-function bootstrapSandbox(runtime: SandboxRuntime, image: string, network: string): { ok: boolean; message: string } {
-  const sandboxDir = join(__dirname, '..', 'sandbox');
-  const dockerfile = join(sandboxDir, 'Dockerfile');
-  if (!existsSync(dockerfile)) {
-    return { ok: false, message: `Sandbox Dockerfile not found: ${dockerfile}` };
-  }
-
-  if (!isSandboxRuntimeRunning(runtime)) {
-    const hint = runtime === 'container'
-      ? 'Run `container system start` and rerun onboarding.'
-      : 'Start Docker Desktop and rerun onboarding.';
-    return { ok: false, message: `Runtime "${runtime}" is not running. ${hint}` };
-  }
-
-  if (!sandboxNetworkExists(runtime, network)) {
-    return { ok: false, message: `Network "${network}" not found for ${runtime}. Update sandbox.network and run \`skimpyclaw sandbox init\`.` };
-  }
-
-  const build = spawnSync(
-    runtime,
-    ['build', '--build-arg', 'SKIMPY_PROFILE=minimal', '-t', image, sandboxDir],
-    { encoding: 'utf-8' }
-  );
-  if (build.status !== 0) {
-    const detail = `${build.stderr || ''}\n${build.stdout || ''}`.trim();
-    return { ok: false, message: `Image build failed: ${detail.slice(-800)}` };
-  }
-
-  const smoke = spawnSync(
-    runtime,
-    ['run', '--rm', '--network', network, image, 'sh', '-lc', 'hostname && command -v gh >/dev/null && command -v rg >/dev/null && echo sandbox-ok'],
-    { encoding: 'utf-8' }
-  );
-  if (smoke.status !== 0) {
-    const detail = `${smoke.stderr || ''}\n${smoke.stdout || ''}`.trim();
-    return { ok: false, message: `Sandbox smoke test failed: ${detail.slice(-800)}` };
-  }
-
-  return { ok: true, message: (smoke.stdout || '').trim().split('\n').join(' | ') };
-}
 
 function ask(rl: readline.Interface, question: string): Promise<string> {
   return new Promise((resolve) => {
@@ -331,7 +284,6 @@ interface SetupFeatures {
   browser: boolean;
   voice: boolean;
   mcp: boolean;
-  sandbox: boolean;
 }
 
 interface SetupBuildInput {
@@ -566,7 +518,7 @@ function buildEnvContent(
 
 export function buildSetupConfig(input: SetupBuildInput): Record<string, unknown> {
   const useDiscord = Boolean(input.discordToken);
-  const features = input.features ?? { browser: false, voice: false, mcp: false, sandbox: false };
+  const features = input.features ?? { browser: false, voice: false, mcp: false };
   const starters = input.starters ?? {
     cronTechNews: false,
     cronWeather: false,
@@ -669,16 +621,6 @@ export function buildSetupConfig(input: SetupBuildInput): Record<string, unknown
           telegram: { enabled: true, acceptVoice: true, sendVoice: true },
           discord: { enabled: true, acceptVoice: true, sendVoice: true },
         },
-      },
-    } : {}),
-    ...(features.sandbox ? {
-      sandbox: {
-        enabled: true,
-        image: 'skimpyclaw-sandbox',
-        cpus: 2,
-        memory: '2G',
-        network: 'bridge',
-        idleTimeoutMs: 3600000,
       },
     } : {}),
     ...(Object.keys(starterSkillEntries).length > 0 ? {
@@ -1008,32 +950,10 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
       statusOk('MCP tools disabled');
     }
 
-    // 6d. Sandbox (container isolation)
-    const existingSandbox = existing.config?.sandbox?.enabled === true;
-    const sandboxDefault = existingSandbox ? 'Y' : 'N';
-    const enableSandbox = /^y(es)?$/i.test(await ask(rl, `   Enable sandbox? (requires Docker or Apple Containers) [${existingSandbox ? 'Y/n' : 'y/N'}]: `) || sandboxDefault);
-    let detectedSandboxRuntime: SandboxRuntime | null = null;
-    if (enableSandbox) {
-      const containerCli = spawnSync('which', ['container'], { encoding: 'utf-8' });
-      const docker = spawnSync('which', ['docker'], { encoding: 'utf-8' });
-      if (containerCli.status === 0) {
-        detectedSandboxRuntime = 'container';
-        statusOk('Apple Containers detected');
-      } else if (docker.status === 0) {
-        detectedSandboxRuntime = 'docker';
-        statusOk('Docker detected');
-      } else {
-        statusWarn('No container runtime found — sandbox features won\'t work until Docker or Apple Containers is installed');
-      }
-    } else {
-      statusOk('sandbox disabled');
-    }
-
     const features: SetupFeatures = {
       browser: enableBrowser,
       voice: enableVoice,
       mcp: enableMcp,
-      sandbox: enableSandbox,
     };
 
     sectionHeader('Starter Packs (optional)');
@@ -1115,9 +1035,6 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
       if (existing.config.langfuse) {
         (generatedConfig as any).langfuse = existing.config.langfuse;
       }
-      if (existing.config.sandbox) {
-        (generatedConfig as any).sandbox = existing.config.sandbox;
-      }
       // Preserve voice provider config if voice was already configured
       if (existing.config.voice?.providers && Object.keys(existing.config.voice.providers).length > 0) {
         (generatedConfig as any).voice = existing.config.voice;
@@ -1132,17 +1049,6 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
             ...(generatedSkills.entries || {}),
           },
         };
-      }
-    }
-
-    if (enableSandbox && (generatedConfig as any).sandbox) {
-      const runtime = detectSandboxRuntime(detectedSandboxRuntime) || detectSandboxRuntime();
-      if (runtime) {
-        (generatedConfig as any).sandbox.runtime = runtime;
-        (generatedConfig as any).sandbox.network = defaultSandboxNetwork(runtime);
-      }
-      if (!(generatedConfig as any).sandbox.image) {
-        (generatedConfig as any).sandbox.image = 'skimpyclaw-sandbox:latest';
       }
     }
 
@@ -1206,26 +1112,6 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
       console.log(`✓ Secrets written to ${envPath}`);
     }
 
-    if (enableSandbox) {
-      sectionHeader('Sandbox Bootstrap');
-      const sandboxCfg = (generatedConfig as any).sandbox || {};
-      const runtime = detectSandboxRuntime(sandboxCfg.runtime as SandboxRuntime | undefined);
-      const image = String(sandboxCfg.image || 'skimpyclaw-sandbox:latest');
-      const network = String(sandboxCfg.network || (runtime ? defaultSandboxNetwork(runtime) : 'bridge'));
-      if (!runtime) {
-        statusWarn('Sandbox enabled, but no runtime detected. Run `skimpyclaw sandbox init` later.');
-      } else {
-        console.log(`   Building sandbox image (${runtime}, network=${network})...`);
-        const bootstrap = bootstrapSandbox(runtime, image, network);
-        if (bootstrap.ok) {
-          statusOk(`sandbox ready (${bootstrap.message})`);
-        } else {
-          statusWarn(bootstrap.message);
-          console.log(`   ${c.dim('You can retry later with: skimpyclaw sandbox init')}`);
-        }
-      }
-    }
-
     // Update USER.md with name
     writeFileSync(join(AGENTS_DIR, 'USER.md'), `# USER.md - About ${userName}\n\nName: ${userName}\n\n## Preferences\n\n- Direct communication, no fluff\n\n## Routines\n\n- Morning: Review tasks and messages\n- EOD: Review completed work, plan tomorrow\n`);
 
@@ -1268,17 +1154,6 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
     console.log('\nNext steps:');
     let step = 1;
     console.log(`${step++}. Review templates in ~/.skimpyclaw/agents/main/`);
-    if (enableSandbox) {
-      const runtimeHint = detectedSandboxRuntime === 'docker'
-        ? 'open -a Docker    # or start Docker Desktop'
-        : 'container system start';
-      console.log(`${step++}. Start the container runtime (if not already running):`);
-      console.log(`   ${runtimeHint}`);
-      console.log(`${step++}. Initialize the sandbox:`);
-      console.log('   skimpyclaw sandbox init');
-      console.log(`${step++}. Verify sandbox is working:`);
-      console.log('   skimpyclaw sandbox doctor');
-    }
     console.log(`${step++}. Start the daemon:`);
     console.log('   skimpyclaw start --daemon');
     console.log(`${step++}. Check health:`);

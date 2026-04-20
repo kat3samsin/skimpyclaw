@@ -218,58 +218,7 @@ grep -o '"token":"[^"]*"' ~/.skimpyclaw/config.json
 # Enter the token in the dashboard login prompt
 ```
 
-## 11. Sandbox Not Working
-
-**Symptom:** Bash commands fail with container errors, or sandbox isn't initialized after `skimpyclaw onboard`.
-
-**Causes:**
-
-- Container runtime not started
-- Sandbox not initialized (image not built)
-- Runtime not detected during onboarding
-
-**Fix:**
-
-```bash
-# 1. Start the container runtime
-# Apple Containers (macOS 26+):
-container system start
-
-# Docker:
-open -a Docker
-# or: docker info   (to verify it's running)
-
-# 2. Initialize sandbox (builds image, updates config)
-skimpyclaw sandbox init
-
-# 3. Verify everything works
-skimpyclaw sandbox doctor
-
-# 4. Restart daemon to pick up sandbox config
-skimpyclaw restart
-```
-
-**Switching runtimes:**
-
-```bash
-# Force Docker instead of Apple Containers
-skimpyclaw sandbox init --runtime docker
-
-# Force Apple Containers
-skimpyclaw sandbox init --runtime container
-```
-
-**Image build fails:**
-
-```bash
-# Check if Dockerfile exists
-ls $(pnpm root -g)/skimpyclaw/sandbox/Dockerfile
-
-# Rebuild with verbose output
-skimpyclaw sandbox init --profile minimal
-```
-
-## 12. Coding Agent Validation Fails on Monorepos
+## 11. Coding Agent Validation Fails on Monorepos
 
 **Symptom:** `code_with_agent` completes but final validation times out or runs the wrong commands.
 

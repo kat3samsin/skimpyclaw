@@ -223,7 +223,6 @@ export async function runAgentTurn(
     channelTargetId,
     approverUserId: context?.userId,
     approverUsername: (context?.metadata as any)?.username,
-    sandboxConfig: config.sandbox,
     sessionId: context?.sessionId || String(chatIdNum ?? 'default'),
     isCronJob: (context?.metadata as any)?.isCronJob === true,
     discordThreadId: (context?.metadata as any)?.discordThreadId,

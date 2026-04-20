@@ -5,7 +5,7 @@ import { exec } from 'child_process';
 import { existsSync, mkdirSync, appendFileSync, readFileSync, watch, type FSWatcher } from 'fs';
 import { join, resolve } from 'path';
 import { getLogsDir, getConfigPath, loadConfig, resolveAllowedPaths } from './config.js';
-import type { Config, CronJob, SandboxConfig, ToolConfig } from './types.js';
+import type { Config, CronJob, ToolConfig } from './types.js';
 import { homedir } from 'node:os';
 import { runAgentTurn } from './agent.js';
 import { startTrace, addEvent, endTrace } from './audit.js';
@@ -27,8 +27,6 @@ function safeTimezone(tz: string | undefined): string {
     return fallback;
   }
 }
-import { ensureContainer, SANDBOX_DEFAULTS, sandboxBash } from './sandbox/index.js';
-
 interface ScheduledJob {
   id: string;
   name: string;
@@ -466,19 +464,6 @@ async function executeScript(jobDef: CronJob, config: Config): Promise<string> {
   }
 
   const timeoutMs = jobDef.payload.timeoutMs || 600000; // 10 min default
-
-  // Sandbox routing for script payloads
-  const sandboxCfg = config.sandbox;
-  if (sandboxCfg?.enabled) {
-    const merged: SandboxConfig = { ...SANDBOX_DEFAULTS, ...sandboxCfg };
-    const containerName = await ensureContainer(`cron-${jobDef.id}`, merged, jobDef.payload.tools?.allowedPaths || []);
-    console.log(`[cron:script] Running in sandbox container: ${containerName}`);
-    console.log(`[cron:script] Running: ${script.slice(0, 100)}${script.length > 100 ? '...' : ''}`);
-    if (cwd) console.log(`[cron:script] cwd: ${cwd}`);
-    const output = await sandboxBash(containerName, script, cwd, timeoutMs);
-    console.log(`[cron:script] Sandbox completed (${output.length} chars)`);
-    return output;
-  }
 
   return new Promise((resolve, reject) => {
     const startTime = Date.now();

@@ -56,12 +56,6 @@ vi.mock('../env-sanitizer.js', () => ({
   sanitizeCronEnv: () => ({}),
 }));
 
-vi.mock('../sandbox/index.js', () => ({
-  ensureContainer: vi.fn(),
-  SANDBOX_DEFAULTS: {},
-  sandboxBash: vi.fn(),
-}));
-
 import { runCronJob } from '../cron.js';
 
 describe('runCronJob digest chat output', () => {

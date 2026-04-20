@@ -59,17 +59,6 @@ You can require approval for tier 1 commands too by setting `requireForTiers: [1
 | **Cron jobs** | Auto-denied (no human present) |
 | **Heartbeats** | Auto-denied (no human present) |
 
-## Interaction with Sandbox
-
-When [sandbox](./sandbox.md) is enabled, exec approval runs **before** the command reaches the container:
-
-1. Command is classified → tier determined
-2. If approval required → wait for human response
-3. If approved → command executes inside the sandbox container
-4. If denied → agent gets denial error, no execution
-
-The sandbox isolates *what* runs. Exec approval controls *whether* it runs.
-
 ## Dashboard
 
 The Dashboard **Approvals** page shows:

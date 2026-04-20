@@ -147,7 +147,6 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
     const jobs = getCronJobs();
     const uptime = process.uptime();
 
-    const sandboxCfg = runtimeConfig.sandbox;
     return {
       uptime,
       model: getCurrentModel(),
@@ -155,11 +154,6 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
       lastMessage: getLastMessage(),
       activeChannel: getActiveChannelId() ?? runtimeConfig.channels.active ?? null,
       cronJobs: jobs,
-      sandbox: sandboxCfg?.enabled ? {
-        enabled: true,
-        runtime: sandboxCfg.runtime ?? 'container',
-        image: sandboxCfg.image ?? 'skimpyclaw-sandbox',
-      } : { enabled: false },
     };
   });
 

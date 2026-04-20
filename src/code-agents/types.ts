@@ -1,6 +1,6 @@
 // Code Agent Type Definitions
 
-import type { ToolConfig, SandboxConfig } from '../types.js';
+import type { ToolConfig } from '../types.js';
 
 export interface CodeAgentTask {
   id: string;                    // "ca-1", "ca-2"
@@ -42,10 +42,6 @@ export interface CodeAgentBackgroundOptions {
   maxTimeoutMinutes?: number;
   /** Per-project validation command overrides from config */
   validationCommands?: Record<string, string>;
-  /** Sandbox configuration — when enabled, run CLI inside container */
-  sandboxConfig?: SandboxConfig;
-  /** Paths to mount into the sandbox container */
-  allowedPaths?: string[];
 }
 
 export interface BuildCodeAgentArgsInput {

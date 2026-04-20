@@ -21,11 +21,6 @@ import { executeReadFile, executeWriteFileLocked, executeListDirectory } from '.
 import { executeBash } from './tools/bash-tool.js';
 import { executeBrowser, cleanupBrowser } from './tools/browser-tool.js';
 import { executeFetch } from './tools/fetch-tool.js';
-import type { SandboxConfig } from './types.js';
-import { ensureContainer, SANDBOX_DEFAULTS, translatePath, validateMountPaths } from './sandbox/index.js';
-import { sandboxBash, sandboxReadFile, sandboxWriteFile, sandboxListDir, sandboxGlob } from './sandbox/index.js';
-import { isBashCommandSafe } from './security.js';
-import { classifyCommandRisk, requiresApproval } from './exec-approval.js';
 
 // Re-export from code-agents module for backward compatibility
 export {
@@ -448,114 +443,6 @@ export async function executeTool(
 
     // Map Claude Code names to internal names for built-in tools
     const normalized = fromClaudeCodeName(name).toLowerCase().replace(/-/g, '_');
-
-    // --- Sandbox routing ---
-    const sandboxCfg = context?.sandboxConfig;
-    if (sandboxCfg?.enabled) {
-      const SANDBOXED_TOOLS = new Set(['bash', 'read_file', 'write_file', 'list_directory', 'glob']);
-      // macOS-only commands that must run on the host (not available in Linux containers)
-      const MACOS_HOST_COMMANDS = new Set([
-        'osascript', 'open', 'say', 'pbcopy', 'pbpaste', 'defaults',
-        'icalBuddy', 'shortcuts', 'caffeinate', 'networksetup', 'launchctl',
-        'security', 'xattr', 'ditto', 'hdiutil', 'diskutil', 'sw_vers',
-      ]);
-      const bashCmd = input.command || input.cmd;
-      const needsHost = normalized === 'bash' && bashCmd &&
-        MACOS_HOST_COMMANDS.has(bashCmd.trim().split(/[\s;|&]/)[0]);
-      if (SANDBOXED_TOOLS.has(normalized) && !needsHost) {
-        const sessionId = context?.sessionId || context?.chatId?.toString() || 'default';
-        const merged = { ...SANDBOX_DEFAULTS, ...sandboxCfg };
-        const containerName = await ensureContainer(sessionId, merged, config.allowedPaths);
-        const mounts = validateMountPaths(config.allowedPaths);
-        const tp = (p: string) => translatePath(p, mounts);
-        // Translate host paths in bash commands so they resolve inside the container
-        const translateBashPaths = (cmd: string): string => {
-          let translated = cmd;
-          // Sort mounts by host path length descending to match most specific first
-          const sorted = [...mounts].sort((a, b) => b.host.length - a.host.length);
-          for (const mount of sorted) {
-            translated = translated.replaceAll(mount.host, mount.container);
-          }
-          // Also translate ~ and $HOME references to /workspace/config
-          const home = homedir();
-          const homeMounts = sorted.filter(m => m.host.startsWith(home));
-          for (const mount of homeMounts) {
-            const tildeForm = '~' + mount.host.slice(home.length);
-            translated = translated.replaceAll(tildeForm, mount.container);
-            const envForm = '$HOME' + mount.host.slice(home.length);
-            translated = translated.replaceAll(envForm, mount.container);
-          }
-          return translated;
-        };
-        // Reverse-translate container paths back to host paths in file content.
-        // Prevents the agent from writing /workspace/... paths into config files.
-        const reverseTranslatePaths = (content: string): string => {
-          let reversed = content;
-          const sorted = [...mounts].sort((a, b) => b.container.length - a.container.length);
-          for (const mount of sorted) {
-            reversed = reversed.replaceAll(mount.container, mount.host);
-          }
-          return reversed;
-        };
-        switch (normalized) {
-          case 'bash': {
-            const translatedCmd = translateBashPaths(bashCmd);
-            // Apply hard safety blocks inside sandbox.
-            // Sandbox provides filesystem isolation, so opaque script execution
-            // (heredocs, -c, -e) is safe — only require approval for truly
-            // destructive patterns (rm -rf, dd, mkfs, etc.).
-            if (!isBashCommandSafe(translatedCmd)) {
-              return 'Error: Command blocked by safety filter.';
-            }
-            const classification = classifyCommandRisk(translatedCmd);
-            // Downgrade opaque-script classifications in sandbox — the isolation
-            // already handles the risk that inline code poses on the host.
-            if (classification.tier >= 2 && (
-              classification.reason === 'Inline heredoc script execution' ||
-              classification.reason === 'Inline interpreter code execution'
-            )) {
-              classification.tier = 0 as import('./exec-approval.js').RiskTier;
-              classification.reason = `${classification.reason} (sandboxed — auto-approved)`;
-            }
-            const approvalConfig = config.execApproval;
-            if (requiresApproval(classification, approvalConfig)) {
-              const isUnattended =
-                context?.channel === 'subagent' ||
-                context?.isCronJob === true ||
-                (!context?.approverUserId && !context?.channelTargetId && !context?.chatId);
-              if (isUnattended) {
-                return `⛔ Command blocked — tier ${classification.tier} commands require approval but no approver is available in this context (${classification.reason}). Use safer alternatives or request approval via an interactive channel.`;
-              }
-              // Attended context — run full approval flow before executing in sandbox
-              const { createApprovalRequest: sbxCreate, waitForApproval: sbxWait } = await import('./exec-approval.js');
-              const ttlMs = approvalConfig?.ttlMs ?? 5 * 60 * 1000;
-              const channelMeta = context?.channel ? {
-                channel: context.channel,
-                chatId: context.channelTargetId ?? context.chatId,
-                userId: context.approverUserId,
-                username: context.approverUsername,
-              } : context?.chatId ? { channel: 'telegram', chatId: context.chatId } : undefined;
-              const sbxReq = sbxCreate(translatedCmd, input.cwd, classification, approvalConfig, channelMeta);
-              const sbxResolved = await sbxWait(sbxReq.id, ttlMs);
-              if (sbxResolved.status !== 'approved') {
-                return `⛔ Command not executed — approval ${sbxResolved.status} (tier ${classification.tier}: ${classification.reason}).`;
-              }
-            }
-            return await sandboxBash(containerName, translatedCmd, input.cwd ? tp(input.cwd) : undefined, config.bashTimeout);
-          }
-          case 'read_file':
-            return await sandboxReadFile(containerName, tp(input.file_path || input.path));
-          case 'write_file':
-            return await sandboxWriteFile(containerName, tp(input.file_path || input.path), reverseTranslatePaths(input.content));
-          case 'list_directory':
-            return await sandboxListDir(containerName, tp(input.path));
-          case 'glob':
-            return await sandboxGlob(containerName, tp(input.base || input.path || '/workspace'), input.pattern || '*');
-          default:
-            break; // fall through
-        }
-      }
-    }
 
     switch (normalized) {
       case '$web_search':

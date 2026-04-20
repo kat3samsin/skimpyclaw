@@ -46,12 +46,6 @@ kimi --yolo -p <task> \
 - Runtime orchestration: `src/code-agents/index.ts`
 - CLI argument builder: `src/code-agents/utils.ts`
 
-## Sandbox
-
-Coding agents run **on the host**, not inside the sandbox. They spawn external CLI processes (`claude`, `codex`, `kimi`) that manage their own tool execution and file access directly on your machine.
-
-The sandbox only applies to the built-in `Bash` tool used by the main agent. If you need sandboxed code execution, use a cron job or the main agent's `Bash` tool instead of `code_with_agent`.
-
 ## CLI monitoring
 
 ```bash

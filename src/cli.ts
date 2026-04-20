@@ -12,14 +12,6 @@ import { runSetup, renderGatewayPlist } from './setup.js';
 import { runDoctor as runDoctorCommand } from './doctor/index.js';
 import { executeTool, getToolDefinitions, BUILTIN_TOOL_DEFINITIONS, BROWSER_TOOL_DEFINITION } from './tools.js';
 import { formatModelSelectionError, getModelSelectionUsage, resolveModelSelection } from './model-selection.js';
-import {
-  detectSandboxRuntime,
-  isSandboxRuntimeRunning,
-  sandboxNetworkExists,
-  defaultSandboxNetwork,
-  sandboxImageExists,
-  type SandboxRuntime,
-} from './sandbox-utils.js';
 
 const APP_NAME = 'skimpyclaw';
 const DEFAULT_PORT = 18790;
@@ -58,10 +50,6 @@ Commands:
   agents                  List coding agents (active + recent)
   agents <id>             Show details for a coding agent (with live output)
   agents <id> --follow    Follow live output for an agent
-  sandbox status          Show active sandbox containers
-  sandbox prune           Force-prune all sandbox containers
-  sandbox init            Auto-setup sandbox runtime/image/config (supports --profile)
-  sandbox doctor          Sandbox-specific diagnostics and hints
   help                    Show this help
 `);
 }
@@ -849,51 +837,6 @@ async function commandTools(args: string[]): Promise<number> {
   return 1;
 }
 
-type SandboxProfile = 'minimal' | 'dev' | 'full';
-
-const SANDBOX_CLI_BY_PROFILE: Record<SandboxProfile, string[]> = {
-  minimal: ['bash', 'curl', 'git', 'gh', 'jq', 'python3', 'rg', 'pnpm'],
-  dev: ['bash', 'curl', 'git', 'gh', 'jq', 'python3', 'rg', 'pnpm', 'gcc', 'g++', 'make'],
-  full: ['bash', 'curl', 'git', 'gh', 'jq', 'python3', 'rg', 'pnpm', 'gcc', 'g++', 'make', 'pip3', 'sqlite3'],
-};
-
-function resolveSandboxDir(): string | null {
-  // 1. Check CWD (user is in repo root)
-  const cwdSandbox = join(process.cwd(), 'sandbox');
-  if (existsSync(join(cwdSandbox, 'Dockerfile'))) {
-    return cwdSandbox;
-  }
-  // 2. Check relative to package root (global/npm install)
-  const thisFile = fileURLToPath(import.meta.url);
-  const pkgRoot = join(thisFile, '..', '..'); // dist/src/cli.js -> repo root
-  const pkgSandbox = join(pkgRoot, 'sandbox');
-  if (existsSync(join(pkgSandbox, 'Dockerfile'))) {
-    return pkgSandbox;
-  }
-  return null;
-}
-
-function parseSandboxOption(args: string[], flag: string): string | undefined {
-  return parseOption(args, flag, '') || undefined;
-}
-
-function runSandboxImageCheck(runtime: SandboxRuntime, image: string, network: string, cmd: string): { ok: boolean; detail: string } {
-  const result = spawnSync(runtime, ['run', '--rm', '--network', network, image, 'sh', '-lc', cmd], { encoding: 'utf-8' });
-  if (result.status === 0) {
-    return { ok: true, detail: (result.stdout || '').trim() || 'ok' };
-  }
-  const detail = `${(result.stderr || '').trim()} ${(result.stdout || '').trim()}`.trim() || `exit ${result.status ?? 1}`;
-  return { ok: false, detail };
-}
-
-function printSandboxCheck(ok: boolean, name: string, detail: string, hint?: string): void {
-  const prefix = ok ? '✓' : '✗';
-  console.log(`${prefix} ${name}: ${detail}`);
-  if (!ok && hint) {
-    console.log(`  → ${hint}`);
-  }
-}
-
 async function commandAgents(args: string[]): Promise<number> {
   const { getAllCodeAgents, getCodeAgent, restoreCodeAgentTasks } = await import('./code-agents/index.js');
 
@@ -998,188 +941,11 @@ async function commandAgents(args: string[]): Promise<number> {
 
   return 0;
 }
-
-async function commandSandbox(args: string[]): Promise<number> {
-  const sub = args[0];
-  if (sub === 'status') {
-    const rt = detectSandboxRuntime();
-    if (!rt) {
-      console.log('No container runtime found (install Docker or Apple Containers).');
-      return 1;
-    }
-    const result = spawnSync(rt, ['ps', '--format', '{{.Names}}'], { encoding: 'utf-8' });
-    const lines = (result.stdout || '').trim().split('\n').filter(Boolean);
-    const containers = lines.filter((line) => line.includes('skimpyclaw-sbx'));
-    if (containers.length === 0) {
-      console.log('No active sandbox containers.');
-    } else {
-      console.log(`Active sandbox containers (${containers.length}):`);
-      containers.forEach((c) => console.log(`  ${c}`));
-    }
-    return 0;
-  }
-
-  if (sub === 'prune') {
-    const { cleanupOrphans } = await import('./sandbox/index.js');
-    const count = await cleanupOrphans();
-    console.log(`Pruned ${count} sandbox container(s).`);
-    return 0;
-  }
-
-  if (sub === 'init') {
-    const runtimeFlag = parseSandboxOption(args, '--runtime');
-    const profileFlag = parseSandboxOption(args, '--profile') || 'minimal';
-    const imageFlag = parseSandboxOption(args, '--image');
-    const networkFlag = parseSandboxOption(args, '--network');
-    const validProfiles: SandboxProfile[] = ['minimal', 'dev', 'full'];
-    if (!validProfiles.includes(profileFlag as SandboxProfile)) {
-      console.error(`Invalid profile "${profileFlag}". Use one of: minimal, dev, full`);
-      return 1;
-    }
-    const profile = profileFlag as SandboxProfile;
-
-    const runtime = detectSandboxRuntime(runtimeFlag);
-    if (!runtime) {
-      console.error('No supported runtime found. Install Apple Containers or Docker.');
-      return 1;
-    }
-    const network = networkFlag || defaultSandboxNetwork(runtime);
-    const image = imageFlag || 'skimpyclaw-sandbox:latest';
-
-    if (!isSandboxRuntimeRunning(runtime)) {
-      const hint = runtime === 'container' ? 'Run: container system start' : 'Start Docker Desktop (or run `docker info`).';
-      console.error(`Runtime "${runtime}" is not running.`);
-      console.error(hint);
-      return 1;
-    }
-
-    if (!sandboxNetworkExists(runtime, network)) {
-      const hint = runtime === 'container'
-        ? 'Create/list networks with `container network ls`.'
-        : 'Create/list networks with `docker network ls`.';
-      console.error(`Sandbox network "${network}" not found for runtime "${runtime}".`);
-      console.error(hint);
-      return 1;
-    }
-
-    const sandboxDir = resolveSandboxDir();
-    if (!sandboxDir) {
-      console.error('Could not find sandbox/Dockerfile from current directory.');
-      console.error('Run from repo root (contains ./sandbox) or build image manually.');
-      return 1;
-    }
-
-    console.log(`Building sandbox image "${image}" (runtime=${runtime}, profile=${profile})...`);
-    const build = spawnSync(
-      runtime,
-      ['build', '--build-arg', `SKIMPY_PROFILE=${profile}`, '-t', image, sandboxDir],
-      { stdio: 'inherit' }
-    );
-    if (build.status !== 0) {
-      console.error('Sandbox image build failed.');
-      return 1;
-    }
-
-    const raw = loadRawConfig() as Record<string, unknown>;
-    const sandbox = (raw.sandbox as Record<string, unknown> | undefined) ?? {};
-    sandbox.enabled = true;
-    sandbox.runtime = runtime;
-    sandbox.network = network;
-    sandbox.image = image;
-    (raw as any).sandbox = sandbox;
-    saveConfig(raw as unknown as Config);
-
-    console.log('Updated config: sandbox.enabled=true');
-    console.log(`Updated config: sandbox.runtime="${runtime}"`);
-    console.log(`Updated config: sandbox.network="${network}"`);
-    console.log(`Updated config: sandbox.image="${image}"`);
-
-    const required = SANDBOX_CLI_BY_PROFILE[profile];
-    const checkCmd = `for c in ${required.join(' ')}; do command -v "$c" >/dev/null || { echo "missing:$c"; exit 1; }; done; echo cli-ok`;
-    const cliCheck = runSandboxImageCheck(runtime, image, network, checkCmd);
-    const netCheck = runSandboxImageCheck(runtime, image, network, 'curl -fsS --max-time 8 https://example.com >/dev/null && echo net-ok');
-    const hostCheck = runSandboxImageCheck(runtime, image, network, 'hostname');
-
-    printSandboxCheck(hostCheck.ok, 'sandbox_hostname', hostCheck.detail);
-    printSandboxCheck(cliCheck.ok, 'sandbox_tools', cliCheck.detail, 'Rebuild image or choose a lighter profile.');
-    printSandboxCheck(netCheck.ok, 'sandbox_network_egress', netCheck.detail, 'Try a different sandbox.network or check runtime DNS/network settings.');
-
-    if (!hostCheck.ok || !cliCheck.ok || !netCheck.ok) {
-      return 1;
-    }
-
-    console.log('\nSandbox init complete. Restart Skimpy to apply runtime config.');
-    return 0;
-  }
-
-  if (sub === 'doctor') {
-    const config = loadConfig();
-    const runtime = detectSandboxRuntime(config.sandbox?.runtime);
-    const image = config.sandbox?.image || 'skimpyclaw-sandbox:latest';
-    const network = config.sandbox?.network || (runtime ? defaultSandboxNetwork(runtime) : 'unknown');
-    const profileFlag = parseSandboxOption(args, '--profile') || 'minimal';
-    const profile: SandboxProfile = (['minimal', 'dev', 'full'].includes(profileFlag) ? profileFlag : 'minimal') as SandboxProfile;
-
-    let failed = false;
-
-    printSandboxCheck(config.sandbox?.enabled === true, 'sandbox_enabled', config.sandbox?.enabled ? 'enabled' : 'disabled', 'Run: skimpyclaw sandbox init');
-    if (!config.sandbox?.enabled) failed = true;
-
-    printSandboxCheck(!!runtime, 'runtime_detected', runtime || 'none', 'Install Docker or Apple Containers.');
-    if (!runtime) return 1;
-
-    printSandboxCheck(isSandboxRuntimeRunning(runtime), 'runtime_running', runtime, runtime === 'container' ? 'Run: container system start' : 'Start Docker Desktop.');
-    if (!isSandboxRuntimeRunning(runtime)) failed = true;
-
-    const networkOk = sandboxNetworkExists(runtime, network);
-    printSandboxCheck(networkOk, 'network_exists', network, `Use "${runtime === 'container' ? 'container' : 'docker'} network ls" and update sandbox.network.`);
-    if (!networkOk) failed = true;
-
-    const imageOk = sandboxImageExists(runtime, image);
-    printSandboxCheck(imageOk, 'image_exists', image, `Build image: ${runtime} build -t ${image} sandbox/`);
-    if (!imageOk) failed = true;
-
-    if (imageOk && networkOk) {
-      const required = SANDBOX_CLI_BY_PROFILE[profile];
-      const checkCmd = `for c in ${required.join(' ')}; do command -v "$c" >/dev/null || { echo "missing:$c"; exit 1; }; done; echo cli-ok`;
-      const cliCheck = runSandboxImageCheck(runtime, image, network, checkCmd);
-      printSandboxCheck(cliCheck.ok, 'image_toolchain', cliCheck.detail, 'Rebuild with: skimpyclaw sandbox init --profile dev');
-      if (!cliCheck.ok) failed = true;
-
-      const netCheck = runSandboxImageCheck(runtime, image, network, 'curl -fsS --max-time 8 https://api.duckduckgo.com/?q=skimpyclaw&format=json >/dev/null && echo net-ok');
-      printSandboxCheck(netCheck.ok, 'network_egress', netCheck.detail, 'Some sources may timeout; verify DNS/network in runtime.');
-      if (!netCheck.ok) failed = true;
-    }
-
-    return failed ? 1 : 0;
-  }
-
-  console.log(`Usage: skimpyclaw sandbox <command>
-
-Commands:
-  init     Build sandbox image and enable in config
-  status   List active sandbox containers
-  prune    Remove orphaned sandbox containers
-  doctor   Run targeted sandbox diagnostics
-
-Init options:
-  --runtime <container|docker>   Container runtime (default: auto-detect)
-  --profile <minimal|dev|full>   Package set (default: minimal)
-  --image <name>                 Image name (default: skimpyclaw-sandbox:latest)
-  --network <name>               Network name (default: auto per runtime)
-
-Profiles:
-  minimal   bash, curl, git, gh, jq, python3, ripgrep, pnpm
-  dev       minimal + gcc, g++, make
-  full      dev + pip3, sqlite3, unzip, less
-
-Which runtime?
-  Apple Containers (macOS 26+) — lighter, faster startup, no daemon.
-  Docker — cross-platform, use if you already run Docker.
-  Auto-detect prefers Apple Containers, falls back to Docker.
-`);
+async function commandSandboxRemoved(): Promise<number> {
+  console.error("The sandbox subsystem has been removed. Use exec-approval for command safety.");
   return 1;
 }
+
 
 export async function runCli(argv: string[] = process.argv.slice(2)): Promise<number> {
   const [command, ...args] = argv;
@@ -1277,7 +1043,7 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<nu
     }
 
     if (command === 'sandbox') {
-      return await commandSandbox(args);
+      return await commandSandboxRemoved();
     }
 
     console.error(`Unknown command: ${command}`);

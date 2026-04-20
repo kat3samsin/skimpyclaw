@@ -7,11 +7,6 @@ export interface StatusResponse {
   lastMessage?: string;
   activeChannel?: 'telegram' | 'discord' | null;
   cronJobs: CronJobSummary[];
-  sandbox?: {
-    enabled: boolean;
-    runtime?: string;
-    image?: string;
-  };
   subagents?: {
     maxConcurrent: number;
     active: number;

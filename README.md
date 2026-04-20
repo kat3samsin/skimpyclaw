@@ -96,16 +96,6 @@ Onboarding validates your Telegram token, provider auth, and creates:
 - `~/.skimpyclaw/config.json`
 - `~/.skimpyclaw/agents/main/*.md` (from templates)
 
-**Sandbox setup (optional — isolates Bash commands in a container):**
-
-```bash
-skimpyclaw sandbox init              # detect runtime, build image, update config
-skimpyclaw sandbox doctor            # verify everything works
-skimpyclaw restart                   # pick up sandbox config
-```
-
-Requires Apple Containers (macOS 26+) or Docker. See [docs/guide/sandbox.md](docs/guide/sandbox.md) for options.
-
 **Stop/Restart daemon (macOS):**
 
 ```bash

@@ -10,7 +10,6 @@ import { initActiveChannel, startActiveChannel, stopActiveChannel } from './chan
 import { initProviders } from './agent.js';
 import { initLangfuse, shutdownLangfuse } from './langfuse.js';
 import { restoreCodeAgentTasks, setCodeAgentConfig } from './tools.js';
-import { releaseAll, cleanupOrphans, setRuntime, probeRuntime } from './sandbox/index.js';
 
 export interface SkimpyClawRuntime {
   config: Config;
@@ -43,27 +42,6 @@ export async function startRuntime(config: Config): Promise<SkimpyClawRuntime> {
   setCodeAgentConfig(config);
   cleanupScratch();
 
-  // Initialize sandbox runtime if configured — auto-disable if no runtime available
-  if (config.sandbox?.enabled) {
-    const detected = probeRuntime(config.sandbox.runtime);
-    if (detected) {
-      setRuntime(detected as 'container' | 'docker');
-      if (detected !== config.sandbox.runtime) {
-        console.log(`[sandbox] Configured runtime "${config.sandbox.runtime}" not found, using "${detected}" instead`);
-      }
-      // Clean up orphaned sandbox containers from previous runs
-      try {
-        const count = await cleanupOrphans();
-        if (count > 0) console.log(`[sandbox] Cleaned up ${count} orphaned container(s)`);
-      } catch (err) {
-        console.warn('[sandbox] Failed to clean up orphaned containers:', err instanceof Error ? err.message : err);
-      }
-    } else {
-      console.warn('[sandbox] No container runtime found (docker/container not installed). Sandbox disabled.');
-      config.sandbox.enabled = false;
-    }
-  }
-
   const port = smokeTest ? (parseInt(process.env.SKIMPYCLAW_SMOKE_PORT || '19999', 10)) : config.gateway.port;
   const gateway = await createGateway(config);
   const host = config.gateway.host ?? '127.0.0.1';
@@ -82,7 +60,6 @@ export async function startRuntime(config: Config): Promise<SkimpyClawRuntime> {
     config,
     gateway,
     stop: async () => {
-      await releaseAll();
       stopCron();
       stopHeartbeat();
       await stopActiveChannel();

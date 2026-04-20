@@ -88,7 +88,7 @@ describe('setup config generation', () => {
       agentName: 'Claw',
       selectedProviders: new Set(['anthropic-api'] as const),
       providerSecrets: { anthropicKey: 'sk-ant-test' },
-      features: { browser: false, voice: false, mcp: false, sandbox: false },
+      features: { browser: false, voice: false, mcp: false },
     }) as any;
 
     expect(config.heartbeat.tools.browser.enabled).toBe(false);
@@ -103,7 +103,7 @@ describe('setup config generation', () => {
       agentName: 'Claw',
       selectedProviders: new Set(['anthropic-api'] as const),
       providerSecrets: { anthropicKey: 'sk-ant-test' },
-      features: { browser: true, voice: true, mcp: false, sandbox: false },
+      features: { browser: true, voice: true, mcp: false },
     }) as any;
 
     expect(config.heartbeat.tools.browser.enabled).toBe(true);

@@ -149,7 +149,7 @@ Compaction behavior (`src/providers/context-manager.ts`):
 
 Startup (`skimpyclaw start`):
 1. `cli.ts` loads config and calls `startRuntime(config)`.
-2. `service.ts` initializes providers, code-agent state, sandbox probing/cleanup, gateway, cron, channels, heartbeat.
+2. `service.ts` initializes providers, code-agent state, gateway, cron, channels, heartbeat.
 
 Request entry points to `runAgentTurn()`:
 - Channel handlers (Telegram/Discord)

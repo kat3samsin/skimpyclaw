@@ -27,9 +27,7 @@ export interface ExecuteToolContext {
   agentId?: string;
   /** True when this context is from a cron job — enables spawn tools even without a chatId */
   isCronJob?: boolean;
-  /** Sandbox configuration for containerized tool execution */
-  sandboxConfig?: import('../types.js').SandboxConfig;
-  /** Session ID for sandbox container mapping */
+  /** Session ID used as file-lock scope + interactive-session key */
   sessionId?: string;
   /** Discord thread ID — set when command originates from a thread */
   discordThreadId?: string;

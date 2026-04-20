@@ -19,7 +19,6 @@ const {
   mockCheckGatewayHostBindable,
   mockCheckSkimpyclawDirWritable,
   mockCheckPortAvailability,
-  mockCheckSandboxAvailable,
 } = vi.hoisted(() => ({
   mockLoadConfig: vi.fn(),
   mockCheckNodeVersion: vi.fn(),
@@ -39,7 +38,6 @@ const {
   mockCheckGatewayHostBindable: vi.fn(),
   mockCheckSkimpyclawDirWritable: vi.fn(),
   mockCheckPortAvailability: vi.fn(),
-  mockCheckSandboxAvailable: vi.fn(),
 }));
 
 vi.mock('../config.js', () => ({
@@ -64,7 +62,6 @@ vi.mock('../doctor/checks.js', () => ({
   checkGatewayHostBindable: mockCheckGatewayHostBindable,
   checkSkimpyclawDirWritable: mockCheckSkimpyclawDirWritable,
   checkPortAvailability: mockCheckPortAvailability,
-  checkSandboxAvailable: mockCheckSandboxAvailable,
 }));
 
 import { computeExitCode, runDoctor } from '../doctor/runner.js';
@@ -111,7 +108,6 @@ describe('doctor runner', () => {
     mockCheckGatewayHostBindable.mockReset();
     mockCheckSkimpyclawDirWritable.mockReset();
     mockCheckPortAvailability.mockReset();
-    mockCheckSandboxAvailable.mockReset();
 
     mockCheckNodeVersion.mockResolvedValue(okCheck('node_version', 'environment', 'v20.11.0'));
     mockCheckPackageManagerAvailable.mockResolvedValue(okCheck('package_manager_available', 'environment', 'pnpm'));
@@ -130,7 +126,6 @@ describe('doctor runner', () => {
     mockCheckGatewayHostBindable.mockResolvedValue(okCheck('gateway_host_bindable', 'runtime', '127.0.0.1 (always available)'));
     mockCheckSkimpyclawDirWritable.mockResolvedValue(okCheck('skimpyclaw_dirs_writable', 'runtime'));
     mockCheckPortAvailability.mockResolvedValue(okCheck('gateway_port_available', 'runtime'));
-    mockCheckSandboxAvailable.mockResolvedValue(okCheck('sandbox_available', 'runtime', 'Sandbox disabled'));
   });
 
   it('computes exit code 0 when all checks pass', () => {

@@ -9,7 +9,6 @@ import { join } from 'path';
 import { homedir } from 'os';
 import { runAgentTurn } from './agent.js';
 import { resolveAllowedPaths } from './config.js';
-import { pruneIdle, SANDBOX_DEFAULTS } from './sandbox/index.js';
 import {
   getActiveChannelId,
   isActiveChannelSilenced,
@@ -96,9 +95,6 @@ export function stopHeartbeat(): void {
 }
 
 export async function runHeartbeatCheck(config: Config): Promise<string> {
-  // Prune idle sandbox containers
-  pruneIdle(config.sandbox?.idleTimeoutMs ?? SANDBOX_DEFAULTS.idleTimeoutMs ?? 3_600_000).catch(() => {});
-
   if (running) {
     console.log('[heartbeat] Skipping — previous check still running');
     return 'Skipped — previous check still running';
