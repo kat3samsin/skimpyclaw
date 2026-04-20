@@ -44,14 +44,11 @@ describe('notifyCodeAgentResult Discord routing', () => {
   });
 
   it('falls back from Discord thread to the originating Discord channel', async () => {
-    await notifyCodeAgentResult(
-      {
+    await notifyCodeAgentResult({
         ...completedTask,
         discordThreadId: 'thread-1',
         discordChannelId: 'channel-1',
-      },
-      () => null,
-    );
+      });
 
     expect(sendToDiscordThreadMock).toHaveBeenCalledWith(
       'thread-1',
@@ -67,14 +64,11 @@ describe('notifyCodeAgentResult Discord routing', () => {
   it('does not fall back to the global active channel when Discord-scoped delivery fails', async () => {
     sendDiscordProactiveMessageMock.mockRejectedValue(new Error('channel missing'));
 
-    await notifyCodeAgentResult(
-      {
+    await notifyCodeAgentResult({
         ...completedTask,
         discordThreadId: 'thread-1',
         discordChannelId: 'channel-1',
-      },
-      () => null,
-    );
+      });
 
     expect(sendToDiscordThreadMock).toHaveBeenCalled();
     expect(sendDiscordProactiveMessageMock).toHaveBeenCalled();
@@ -82,10 +76,7 @@ describe('notifyCodeAgentResult Discord routing', () => {
   });
 
   it('uses the active channel only when the task has no Discord-specific route', async () => {
-    await notifyCodeAgentResult(
-      completedTask,
-      () => null,
-    );
+    await notifyCodeAgentResult(completedTask);
 
     expect(sendToDiscordThreadMock).not.toHaveBeenCalled();
     expect(sendDiscordProactiveMessageMock).not.toHaveBeenCalled();

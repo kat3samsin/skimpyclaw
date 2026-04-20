@@ -3,7 +3,7 @@
 import { execSync } from 'child_process';
 import { resolve, join } from 'path';
 import { homedir } from 'os';
-import type { BuildCodeAgentArgsInput, CodeAgentTask, ChildResult } from './types.js';
+import type { BuildCodeAgentArgsInput, CodeAgentTask } from './types.js';
 import type { Config } from '../types.js';
 import { buildValidationCommand } from './executor.js';
 import { getCodeAgent } from './registry.js';
@@ -205,50 +205,6 @@ export function formatDuration(seconds: number | undefined): string {
   return seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
 }
 
-/** Build notification for a team-coordinator task with child results. */
-export function buildTeamNotification(
-  task: CodeAgentTask,
-  getChildTask: (id: string) => CodeAgentTask | null
-): string {
-  const dur = formatDuration(task.durationSeconds);
-  const taskPreview = task.task.length > 100 ? task.task.slice(0, 100) + '...' : task.task;
-  const statusIcon = task.status === 'completed' ? '✅' : task.status === 'timeout' ? '⏰' : '❌';
-  const validation = task.validationPassed ? ' Tests pass.' : '';
-
-  const lines: string[] = [];
-  lines.push(`${statusIcon} Team ${task.id} ${task.status} (${dur}).${validation}`);
-  lines.push(`Task: ${taskPreview}`);
-
-  // Per-child summary
-  const childIds = task.childTaskIds || [];
-  if (childIds.length > 0) {
-    lines.push('');
-    for (const childId of childIds) {
-      const child = getChildTask(childId);
-      if (!child) continue;
-      const childIcon = child.status === 'completed' ? '✅' : child.status === 'failed' ? '❌' : child.status === 'timeout' ? '⏰' : '❓';
-      const childDur = formatDuration(child.durationSeconds);
-      const subtask = (child.subtask || child.task || '').slice(0, 80);
-      lines.push(`  ${childIcon} ${child.id} (${childDur}): ${subtask}`);
-    }
-  }
-
-  // Synthesis result
-  if (task.outputPreview) {
-    lines.push(`\nResult: ${task.outputPreview}`);
-  }
-
-  // Errors
-  if (task.error && task.error !== 'Validation failed') {
-    lines.push(`\nError: ${task.error}`);
-  }
-  if (task.validationOutput) {
-    lines.push(`\nValidation:\n${task.validationOutput.slice(0, 800)}`);
-  }
-
-  return lines.join('\n');
-}
-
 /** Build notification for a single code agent. */
 export function buildSoloNotification(task: CodeAgentTask): string {
   const dur = formatDuration(task.durationSeconds);
@@ -274,31 +230,12 @@ export function buildSoloNotification(task: CodeAgentTask): string {
   }
 }
 
-/**
- * Resolve the Discord thread ID for a task.
- * If the task doesn't have one, check the parent task (for team children).
- */
 function resolveDiscordThreadId(task: CodeAgentTask): string | undefined {
-  if (task.discordThreadId) return task.discordThreadId;
-  // Children inherit thread from parent
-  if (task.parentTaskId) {
-    const parent = getCodeAgent(task.parentTaskId);
-    if (parent?.discordThreadId) return parent.discordThreadId;
-  }
-  return undefined;
+  return task.discordThreadId;
 }
 
-/**
- * Resolve the originating Discord channel ID for a task.
- * If the task doesn't have one, check the parent task (for team children).
- */
 function resolveDiscordChannelId(task: CodeAgentTask): string | undefined {
-  if (task.discordChannelId) return task.discordChannelId;
-  if (task.parentTaskId) {
-    const parent = getCodeAgent(task.parentTaskId);
-    if (parent?.discordChannelId) return parent.discordChannelId;
-  }
-  return undefined;
+  return task.discordChannelId;
 }
 
 /**
@@ -346,35 +283,11 @@ function hasDiscordRouting(task: CodeAgentTask): boolean {
 }
 
 /** Send auto-notification to active channel on completion/failure. */
-export async function notifyCodeAgentResult(
-  task: CodeAgentTask,
-  getChildTask: (id: string) => CodeAgentTask | null
-): Promise<void> {
+export async function notifyCodeAgentResult(task: CodeAgentTask): Promise<void> {
   if (!_codeAgentConfig) return;
   const { sendActiveChannelProactiveMessage } = await import('../channels.js');
 
-  let message: string;
-
-  // Team coordinator gets a structured notification
-  if (task.agent === 'team-coordinator') {
-    message = buildTeamNotification(task, getChildTask);
-
-    // Prefer task-scoped Discord routing over global active-channel fallback.
-    const threadSent = await trySendToDiscordThread(task, message);
-    const channelSent = threadSent ? true : await trySendToDiscordChannel(task, message);
-    if (!threadSent && !channelSent && !hasDiscordRouting(task)) {
-      const sent = await sendActiveChannelProactiveMessage(_codeAgentConfig, message).catch((err) => {
-        console.error(`[code-agent] Failed to send team notification for ${task.id}:`, err);
-        return false;
-      });
-      if (!sent) console.warn(`[code-agent] Team notification not delivered for ${task.id} (no active channel or target)`);
-    } else if (!threadSent && !channelSent) {
-      console.warn(`[code-agent] Team notification not delivered for ${task.id} (Discord thread/channel unavailable)`);
-    }
-    return;
-  }
-
-  message = buildSoloNotification(task);
+  const message = buildSoloNotification(task);
 
   // Prefer task-scoped Discord routing over global active-channel fallback.
   const threadSent = await trySendToDiscordThread(task, message);
@@ -435,7 +348,3 @@ export function resolveModelAlias(
   return model;
 }
 
-/** @deprecated Removed — old Claude CLI team state reader. Kept for backward compat. */
-export function readTeamState(): null {
-  return null;
-}

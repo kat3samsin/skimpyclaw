@@ -354,7 +354,7 @@ Named project paths for use with `code_with_agent`:
 }
 ```
 
-Projects are automatically added to tool `allowedPaths` and can be referenced by name in `code_with_agent` and `code_with_team` calls.
+Projects are automatically added to tool `allowedPaths` and can be referenced by name in `code_with_agent` calls.
 
 ## Complete Example
 

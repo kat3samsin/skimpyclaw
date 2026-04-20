@@ -154,13 +154,12 @@ Map of shorthand names to full `provider/model-id`. See [Model Aliases](./model-
 |-------|------|---------|-------------|
 | `maxConcurrent` | number | `5` | Max parallel coding agents |
 | `defaultAgent` | string | `claude` | Default CLI: `claude`, `codex`, or `kimi` |
-| `timeoutMinutes` | number | `30` | Timeout for solo `code_with_agent` (max: 60) |
-| `teamTimeoutMinutes` | number | `60` | Timeout for `code_with_team` (max: 120) |
-| `maxTurns` | number | `50` | Max tool-use turns per agent (team children: 25) |
+| `timeoutMinutes` | number | `30` | Timeout for `code_with_agent` (max: 60) |
+| `maxTurns` | number | `50` | Max tool-use turns per agent |
 | `skipPlaywright` | boolean | `false` | Skip Playwright MCP for coding agents |
 | `validationCommands` | object | | Per-project validation commands. Keys match project names from `projects` config. Values are shell commands run in the project dir. Overrides auto-detected build+test |
 
-> **Note:** `code_with_agent` and `code_with_team` require an external coding CLI on your PATH. See [Coding Agent Execution](./code-agents.md).
+> **Note:** `code_with_agent` requires an external coding CLI on your PATH. See [Coding Agent Execution](./code-agents.md).
 
 ## `langfuse`
 

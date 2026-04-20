@@ -4,6 +4,7 @@ All notable documentation and behavior updates should be recorded here.
 
 ## Unreleased
 
+- Removed `code_with_team` / team orchestration entirely: `src/code-agents/orchestrator.ts` (1,022 LOC), its 19-test suite, the tool schema, team-coordinator task fields (`parentTaskId`, `childTaskIds`, `subtask`, `synthesisResult`, `dependsOn`, `wave`) and `DecomposedSubtask`, the `readTeamState` shim, and all related doc sections (team worktrees, team scratchpad, `teamTimeoutMinutes` config). Interactive sessions and `code_with_agent` cover the remaining coding-agent use cases without the parallel-decompose / synthesize pattern.
 - Removed the Work feature entirely: `src/api-work.ts`, `src/work-ticker.ts`, `src/code-agents/review-loop*.ts` (engine, storage, prompts, types, diff), the `Work` dashboard page and its sidebar nav, all Work types and API client methods, and the 3-second polling ticker started in `src/service.ts`. Interactive sessions and `code_with_agent` cover the remaining AI-coding use cases; the autonomous plan → implement → review loop was not in active use and was accumulating fix-commits. On-disk state under `~/.skimpyclaw/logs/review-loop/` is left intact for archival.
 - Discord: added a required documentation process for Discord posting/update workflow changes, including update targets in `README.md`, guide pages, and changelog maintenance expectations.
 - Discord: cron jobs now support `payload.discordThreadId` to target a specific thread for start/digest/completion notifications, with validation and fallback to active-channel delivery.

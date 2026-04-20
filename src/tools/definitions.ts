@@ -73,11 +73,6 @@ export const CODE_WITH_AGENT_TOOL = {
   },
 };
 
-export const CODE_WITH_TEAM_TOOL = {
-  name: 'code_with_team',
-  input_schema: { type: 'object' as const, properties: { task: { type: 'string' as const }, team_size: { type: 'number' as const } }, required: ['task'] },
-};
-
 export const CHECK_CODE_AGENT_TOOL = {
   name: 'check_code_agent',
   input_schema: { type: 'object' as const, properties: { id: { type: 'string' as const } } },
@@ -91,7 +86,7 @@ const WRITE_TOOL = BUILTIN_TOOL_DEFINITIONS.find(t => t.name === 'Write')!;
 
 // Core tools — always sent. Extended tools added when conversation references them.
 export const CORE_TOOL_DEFINITIONS = [...BUILTIN_TOOL_DEFINITIONS.filter(t => t.name !== 'Glob' && t.name !== 'Write')];
-export const EXTENDED_TOOL_DEFINITIONS = [WRITE_TOOL, GLOB_TOOL, FETCH_TOOL_DEFINITION, BROWSER_TOOL_DEFINITION, CODE_WITH_AGENT_TOOL, CODE_WITH_TEAM_TOOL, CHECK_CODE_AGENT_TOOL];
+export const EXTENDED_TOOL_DEFINITIONS = [WRITE_TOOL, GLOB_TOOL, FETCH_TOOL_DEFINITION, BROWSER_TOOL_DEFINITION, CODE_WITH_AGENT_TOOL, CHECK_CODE_AGENT_TOOL];
 
 // Keywords that trigger inclusion of extended tools
 const TOOL_TRIGGERS: Record<string, string[]> = {
@@ -100,7 +95,6 @@ const TOOL_TRIGGERS: Record<string, string[]> = {
   Fetch: ['fetch', 'http://', 'https://', 'curl', 'api call'],
   Browser: ['browser', 'browse', 'webpage', 'website', 'click', 'screenshot', 'playwright'],
   code_with_agent: ['code_with_agent', 'delegate', 'subagent', 'sub-agent'],
-  code_with_team: ['code_with_team', 'parallel', 'team_size'],
   check_code_agent: ['check_code_agent', 'agent status', 'agent_id'],
 };
 

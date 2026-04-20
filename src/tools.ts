@@ -14,7 +14,6 @@ import {
   FETCH_TOOL_DEFINITION,
   TOOL_DEFINITIONS,
   CODE_WITH_AGENT_TOOL,
-  CODE_WITH_TEAM_TOOL,
   CHECK_CODE_AGENT_TOOL,
 } from './tools/definitions.js';
 import type { ExecuteToolContext } from './tools/execute-context.js';
@@ -39,16 +38,11 @@ export {
   restoreCodeAgentTasks,
   // Config
   setCodeAgentConfig,
-  // Orchestrator functions
-  computeWaves,
-  decomposeTask,
-  synthesizeResults,
   // Executor functions
   runValidation,
   runCodeAgentBackground,
   // Utilities
   buildCodeAgentArgs,
-  readTeamState,
   // Parsers
   parseStreamJsonForLive,
 } from './code-agents/index.js';
@@ -62,13 +56,12 @@ export {
   FETCH_TOOL_DEFINITION,
   TOOL_DEFINITIONS,
   CODE_WITH_AGENT_TOOL,
-  CODE_WITH_TEAM_TOOL,
   CHECK_CODE_AGENT_TOOL,
   cleanupBrowser,
 };
 export type { ExecuteToolContext };
 // Re-export types for backward compatibility
-export type { CodeAgentTask, DecomposedSubtask } from './code-agents/index.js';
+export type { CodeAgentTask } from './code-agents/index.js';
 
 // --- MCP (mcporter) ---
 
@@ -280,7 +273,7 @@ function injectProjects(tool: any, projects?: Record<string, string>): any {
 /**
  * Get all available tool definitions: built-ins + browser (if enabled) + MCP (auto-discovered) + agent tools.
  * This is the primary way to get tools — replaces the static TOOL_DEFINITIONS export.
- * Pass includeAgentTools: true to include code_with_agent, code_with_team, check_code_agent.
+ * Pass includeAgentTools: true to include code_with_agent and check_code_agent.
  * Results are cached for 60s to avoid rebuilding the array on every agent turn.
  */
 export async function getToolDefinitions(config?: ToolConfig, options?: { includeAgentTools?: boolean; includeMcp?: boolean; projects?: Record<string, string> }): Promise<any[]> {
@@ -303,7 +296,6 @@ export async function getToolDefinitions(config?: ToolConfig, options?: { includ
   tools.push(FETCH_TOOL_DEFINITION);
 
   // Minimal profile: built-in tools + fetch.
-  // Used by orchestrator decompose/synthesize calls.
   if (profile === 'minimal') {
     toolDefsCache.set(cacheKey, tools);
     return tools;
@@ -315,7 +307,7 @@ export async function getToolDefinitions(config?: ToolConfig, options?: { includ
   }
 
   // Coding profile: built-ins + browser + code_with_agent + check_code_agent.
-  // Skips MCP discovery and code_with_team.
+  // Skips MCP discovery.
   if (profile === 'coding') {
     if (options?.includeAgentTools) {
       tools.push(injectProjects(CODE_WITH_AGENT_TOOL, options.projects));
@@ -325,7 +317,7 @@ export async function getToolDefinitions(config?: ToolConfig, options?: { includ
     return tools;
   }
 
-  // Full profile (default): everything including MCP and code_with_team.
+  // Full profile (default): everything including MCP.
 
   // Auto-discover MCP tools from mcporter config (only for Anthropic models)
   if (includeMcp) {
@@ -333,11 +325,10 @@ export async function getToolDefinitions(config?: ToolConfig, options?: { includ
     tools.push(...mcpTools);
   }
 
-  // Include code_with_agent, code_with_team, and check_code_agent when requested
+  // Include code_with_agent and check_code_agent when requested
   if (options?.includeAgentTools) {
     const projects = options.projects;
     tools.push(injectProjects(CODE_WITH_AGENT_TOOL, projects));
-    tools.push(injectProjects(CODE_WITH_TEAM_TOOL, projects));
     tools.push(CHECK_CODE_AGENT_TOOL);
   }
 
@@ -447,12 +438,6 @@ export async function executeTool(
     if (name === 'code_with_agent') {
       const { executeCodeWithAgent } = await import('./code-agents/index.js');
       return await executeCodeWithAgent(input, config, context);
-    }
-
-    // Route code_with_team - delegate to code-agents module
-    if (name === 'code_with_team') {
-      const { executeCodeWithTeam } = await import('./code-agents/index.js');
-      return await executeCodeWithTeam(input, config, context);
     }
 
     // Route check_code_agent - delegate to code-agents module

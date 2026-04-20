@@ -175,33 +175,6 @@ Do not use for:
 
 ---
 
-## code_with_team
-
-Decompose a complex task into subtasks and run multiple `code_with_agent` instances in parallel.
-
-Parameters:
-
-- `task` (required, detailed and specific)
-- `team_size` (2-5, default 3)
-- `workdir` (optional)
-- `model` (optional)
-- `timeout_minutes` (optional, default 20, max 60)
-- `validate` (boolean, default true — runs once after all agents finish)
-
-Use when:
-
-- Multi-file refactors with independent parts
-- Cross-layer changes (frontend + backend + tests) that don't conflict
-- Tasks with clearly separable subtasks
-
-Do not use for:
-
-- Simple single-file changes (use code_with_agent)
-- Tightly coupled changes where agents would conflict on the same files
-- Non-coding tasks
-- Quick fixes or config edits
-
----
 
 ## Web Search
 

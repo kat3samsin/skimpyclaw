@@ -1,9 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { existsSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'fs';
 import { join } from 'path';
-import { executeTool, BUILTIN_TOOL_DEFINITIONS, BROWSER_TOOL_DEFINITION, CODE_WITH_AGENT_TOOL, CODE_WITH_TEAM_TOOL, CHECK_CODE_AGENT_TOOL, getToolDefinitions, fromClaudeCodeName, toClaudeCodeName, buildCodeAgentArgs, getActiveCodeAgents, getRecentCodeAgents, getCodeAgent, readTeamState, decomposeTask, synthesizeResults, computeWaves } from '../tools.js';
+import { executeTool, BUILTIN_TOOL_DEFINITIONS, BROWSER_TOOL_DEFINITION, CODE_WITH_AGENT_TOOL, CHECK_CODE_AGENT_TOOL, getToolDefinitions, fromClaudeCodeName, toClaudeCodeName, buildCodeAgentArgs, getActiveCodeAgents, getRecentCodeAgents, getCodeAgent } from '../tools.js';
 import { resolveModelAlias } from '../code-agents/utils.js';
-import type { DecomposedSubtask } from '../tools.js';
 import type { ToolConfig } from '../types.js';
 
 const TEST_DIR = join(process.cwd(), '__test_sandbox__');
@@ -92,14 +91,12 @@ describe('getToolDefinitions', () => {
       expect(tools.every(t => !t.name.startsWith('mcp__'))).toBe(true);
     });
 
-    it('coding includes code_with_agent and check_code_agent but not code_with_team', async () => {
+    it('coding includes code_with_agent and check_code_agent', async () => {
       const config: ToolConfig = { ...toolConfig, toolProfile: 'coding' };
       const tools = await getToolDefinitions(config, { includeAgentTools: true });
       const names = tools.map(t => t.name);
       expect(names).toContain('code_with_agent');
       expect(names).toContain('check_code_agent');
-
-      expect(names).not.toContain('code_with_team');
     });
 
     it('coding excludes MCP tools', async () => {
@@ -631,172 +628,3 @@ describe('code_with_agent', () => {
   });
 });
 
-describe('code_with_team', () => {
-  describe('tool definition', () => {
-    it('has correct name and required fields', () => {
-      expect(CODE_WITH_TEAM_TOOL.name).toBe('code_with_team');
-      expect(CODE_WITH_TEAM_TOOL.input_schema.required).toEqual(['task']);
-    });
-
-    it('has expected properties in schema (no max_turns)', () => {
-      const props = Object.keys(CODE_WITH_TEAM_TOOL.input_schema.properties);
-      expect(props).toContain('task');
-      expect(props).toContain('team_size');
-      // workdir, agent, model, timeout_minutes, validate — omitted from schema to save tokens
-      expect(props).not.toContain('max_turns');
-    });
-
-    it('is included in getToolDefinitions when includeSpawnSubagent is true', async () => {
-      const tools = await getToolDefinitions(toolConfig, { includeAgentTools: true, includeMcp: false });
-      expect(tools.map(t => t.name)).toContain('code_with_team');
-    });
-
-    it('is excluded from getToolDefinitions when includeSpawnSubagent is false', async () => {
-      const tools = await getToolDefinitions(toolConfig, { includeMcp: false });
-      expect(tools.map(t => t.name)).not.toContain('code_with_team');
-    });
-  });
-
-  describe('executeTool routing', () => {
-    it('rejects workdir outside allowed paths', async () => {
-      const result = await executeTool('code_with_team', {
-        task: 'refactor auth',
-        workdir: '/tmp/not-allowed',
-      }, toolConfig);
-      expect(result).toContain('Error: Working directory not allowed');
-    });
-
-    it('returns error when task is missing', async () => {
-      const result = await executeTool('code_with_team', {}, toolConfig);
-      expect(result).toContain('Error: task is required');
-    });
-
-    it('returns error when agent is invalid', async () => {
-      const result = await executeTool('code_with_team', {
-        task: 'refactor auth',
-        agent: 'not-a-real-agent',
-      }, toolConfig);
-      expect(result).toContain('Error: Invalid agent');
-    });
-  });
-});
-
-describe('decomposeTask', () => {
-  it('falls back to numbered subtasks with DecomposedSubtask format on error', async () => {
-    // decomposeTask with no valid config will fail the model call and use fallback
-    const mockConfig = {
-      agents: { list: {} },
-    } as any;
-    const subtasks = await decomposeTask('fix everything', 3, mockConfig);
-    expect(subtasks).toHaveLength(3);
-    expect(subtasks[0].description).toContain('Part 1 of 3');
-    expect(subtasks[1].description).toContain('Part 2 of 3');
-    expect(subtasks[2].description).toContain('Part 3 of 3');
-    expect(subtasks[0].description).toContain('fix everything');
-    // Fallback produces all-independent subtasks
-    expect(subtasks[0].dependsOn).toEqual([]);
-    expect(subtasks[1].dependsOn).toEqual([]);
-    expect(subtasks[2].dependsOn).toEqual([]);
-  });
-});
-
-describe('computeWaves', () => {
-  it('puts all independent subtasks in a single wave', () => {
-    const subtasks: DecomposedSubtask[] = [
-      { description: 'task A', dependsOn: [] },
-      { description: 'task B', dependsOn: [] },
-      { description: 'task C', dependsOn: [] },
-    ];
-    const waves = computeWaves(subtasks);
-    expect(waves).toHaveLength(1);
-    expect(waves[0]).toEqual([0, 1, 2]);
-  });
-
-  it('creates sequential waves for a dependency chain', () => {
-    const subtasks: DecomposedSubtask[] = [
-      { description: 'schema', dependsOn: [] },
-      { description: 'queries', dependsOn: [0] },
-      { description: 'tests', dependsOn: [1] },
-    ];
-    const waves = computeWaves(subtasks);
-    expect(waves).toHaveLength(3);
-    expect(waves[0]).toEqual([0]);
-    expect(waves[1]).toEqual([1]);
-    expect(waves[2]).toEqual([2]);
-  });
-
-  it('groups tasks with shared dependency into the same wave', () => {
-    const subtasks: DecomposedSubtask[] = [
-      { description: 'schema', dependsOn: [] },
-      { description: 'API endpoints', dependsOn: [0] },
-      { description: 'admin endpoints', dependsOn: [0] },
-      { description: 'integration tests', dependsOn: [1, 2] },
-    ];
-    const waves = computeWaves(subtasks);
-    expect(waves).toHaveLength(3);
-    expect(waves[0]).toEqual([0]);
-    expect(waves[1].sort()).toEqual([1, 2]);
-    expect(waves[2]).toEqual([3]);
-  });
-
-  it('handles mixed independent and dependent tasks', () => {
-    const subtasks: DecomposedSubtask[] = [
-      { description: 'setup types', dependsOn: [] },
-      { description: 'write docs', dependsOn: [] },
-      { description: 'implement using types', dependsOn: [0] },
-    ];
-    const waves = computeWaves(subtasks);
-    expect(waves).toHaveLength(2);
-    expect(waves[0].sort()).toEqual([0, 1]);
-    expect(waves[1]).toEqual([2]);
-  });
-
-  it('handles dependency cycles by forcing remaining into current wave', () => {
-    const subtasks: DecomposedSubtask[] = [
-      { description: 'A depends on B', dependsOn: [1] },
-      { description: 'B depends on A', dependsOn: [0] },
-    ];
-    const waves = computeWaves(subtasks);
-    // Both should end up in a wave despite the cycle
-    const allIndices = waves.flat().sort();
-    expect(allIndices).toEqual([0, 1]);
-  });
-
-  it('handles single subtask', () => {
-    const subtasks: DecomposedSubtask[] = [
-      { description: 'only task', dependsOn: [] },
-    ];
-    const waves = computeWaves(subtasks);
-    expect(waves).toHaveLength(1);
-    expect(waves[0]).toEqual([0]);
-  });
-
-  it('handles empty subtask list', () => {
-    const waves = computeWaves([]);
-    expect(waves).toHaveLength(0);
-  });
-});
-
-describe('synthesizeResults', () => {
-  it('falls back to mechanical summary on error', async () => {
-    const mockConfig = {
-      agents: { list: {} },
-    } as any;
-    const results = [
-      { subtask: 'fix auth', status: 'completed', output: 'done' },
-      { subtask: 'fix tests', status: 'failed', error: 'timeout' },
-    ];
-    const summary = await synthesizeResults('fix everything', results, mockConfig);
-    expect(summary).toContain('1/2 subtasks succeeded');
-    expect(summary).toContain('1 failed');
-    expect(summary).toContain('fix auth');
-    expect(summary).toContain('fix tests');
-  });
-});
-
-describe('readTeamState (deprecated)', () => {
-  it('always returns null', () => {
-    const state = readTeamState();
-    expect(state).toBeNull();
-  });
-});

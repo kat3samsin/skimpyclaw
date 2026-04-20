@@ -291,7 +291,7 @@ export function buildValidationCommand(workdir: string, validationCommands?: Rec
   return parts.join(' && ');
 }
 
-/** Run build/test validation. Shared by solo agents and team orchestrator. */
+/** Run build/test validation. */
 export function runValidation(workdir: string, validationCommands?: Record<string, string>): Promise<ValidationResult> {
   const cmd = buildValidationCommand(workdir, validationCommands);
   if (!cmd) {
@@ -536,7 +536,7 @@ export async function runCodeAgentBackground(
         liveOutput: undefined,
       });
       writeCodeAgentTask(caTask);
-      if (!options?.skipNotification) await notifyCodeAgentResult(caTask, (id) => getCodeAgent(id) ?? null);
+      await notifyCodeAgentResult(caTask);
       return;
     }
 
@@ -564,7 +564,7 @@ export async function runCodeAgentBackground(
           outputPreview: agentOutput.slice(0, 5000),
         });
         writeCodeAgentTask(caTask);
-        if (!options?.skipNotification) await notifyCodeAgentResult(caTask, (id) => getCodeAgent(id) ?? null);
+        await notifyCodeAgentResult(caTask);
         return;
       }
       const runValidationPromise = (): Promise<string> => new Promise((res) => {
@@ -730,7 +730,7 @@ export async function runCodeAgentBackground(
           error: 'Validation failed',
         });
         writeCodeAgentTask(caTask);
-        if (!options?.skipNotification) await notifyCodeAgentResult(caTask, (id) => getCodeAgent(id) ?? null);
+        await notifyCodeAgentResult(caTask);
         return;
       }
 
@@ -746,7 +746,7 @@ export async function runCodeAgentBackground(
         outputPreview: agentOutput.slice(0, 5000),
       });
       writeCodeAgentTask(caTask);
-      if (!options?.skipNotification) await notifyCodeAgentResult(caTask, (id) => getCodeAgent(id) ?? null);
+      await notifyCodeAgentResult(caTask);
       return;
     }
 
@@ -762,7 +762,7 @@ export async function runCodeAgentBackground(
       liveOutput: undefined,
     });
     writeCodeAgentTask(caTask);
-    if (!options?.skipNotification) await notifyCodeAgentResult(caTask, (id) => getCodeAgent(id) ?? null);
+    await notifyCodeAgentResult(caTask);
   } catch (err) {
     const errMsg = toErrorMessage(err);
     addEvent(traceId, { type: 'error', summary: errMsg.slice(0, 200), durationMs: Date.now() - startedAt.getTime() });
@@ -779,7 +779,7 @@ export async function runCodeAgentBackground(
       liveOutput: undefined,
     });
     writeCodeAgentTask(caTask);
-    if (!options?.skipNotification && caTask.status !== 'cancelled') await notifyCodeAgentResult(caTask, getCodeAgent);
+    if (caTask.status !== "cancelled") await notifyCodeAgentResult(caTask);
   } finally {
     if (activeTimer) clearTimeout(activeTimer);
     activeTimer = null;

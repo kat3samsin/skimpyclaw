@@ -271,7 +271,7 @@ skimpyclaw sandbox init --profile minimal
 
 ## 12. Coding Agent Validation Fails on Monorepos
 
-**Symptom:** `code_with_agent` or `code_with_team` completes but final validation times out or runs the wrong commands.
+**Symptom:** `code_with_agent` completes but final validation times out or runs the wrong commands.
 
 **Causes:**
 

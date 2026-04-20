@@ -80,8 +80,7 @@ export function storeCodeAgentTask(task: CodeAgentTask): void {
 export function getUnthreadedTasksForChat(chatId: number): CodeAgentTask[] {
   return Array.from(codeAgentTasks.values()).filter(t =>
     t.chatId === chatId &&
-    !t.discordThreadId &&
-    !t.parentTaskId  // only top-level tasks get threads
+    !t.discordThreadId
   );
 }
 
@@ -100,31 +99,13 @@ export function deleteCodeAgentCanceller(id: string): void {
   codeAgentCancellers.delete(id);
 }
 
-/** Cancel a running/pending code agent. For team coordinators, cascades to children. */
+/** Cancel a running/pending code agent. */
 export function cancelCodeAgent(id: string): CodeAgentTask | null {
   const task = codeAgentTasks.get(id);
   if (!task) return null;
 
   const isTerminal = ['completed', 'failed', 'timeout', 'cancelled'].includes(task.status);
   if (isTerminal) return task;
-
-  for (const childId of task.childTaskIds || []) {
-    const child = codeAgentTasks.get(childId);
-    if (!child) continue;
-    const childTerminal = ['completed', 'failed', 'timeout', 'cancelled'].includes(child.status);
-    if (childTerminal) continue;
-
-    const childCanceller = codeAgentCancellers.get(childId);
-    if (childCanceller) {
-      try { childCanceller(); } catch { /* best effort */ }
-    }
-    child.status = 'cancelled';
-    child.endedAt = new Date().toISOString();
-    child.durationSeconds = Math.round((Date.now() - new Date(child.startedAt).getTime()) / 1000);
-    child.error = 'Cancelled by user';
-    child.liveOutput = undefined;
-    writeCodeAgentTask(child);
-  }
 
   const canceller = codeAgentCancellers.get(id);
   if (canceller) {

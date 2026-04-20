@@ -21,8 +21,7 @@ Use SkimpyClaw if you live in Telegram or Discord, want to read and own every li
 - **Chat interface** — Telegram and Discord bots with persistent conversation history
 - **Tool-enabled agent** — file read/write, bash, browser (Playwright), MCP tools via mcporter
 - **Multi-modal support** — voice messages (STT/TTS), image analysis
-- **Coding agents** — delegate to Claude Code / Codex CLI; `code_with_team` for parallel multi-agent work
-- **Code agents** — delegate coding tasks to Claude Code, Codex, or Kimi CLI with `code_with_agent` and `code_with_team`
+- **Coding agents** — delegate coding tasks to Claude Code, Codex, or Kimi CLI with `code_with_agent`; Discord threads can also run bidirectional interactive sessions that `--resume` the underlying Claude process
 - **Cron scheduler** — run agent prompts or shell scripts on a schedule
 - **Web dashboard** — Preact/Vite SPA with status, cron, audit log, memory, templates, config editor, skills, approvals
 - **Heartbeat** — periodic keep-alive with Telegram/Discord alerts
@@ -162,7 +161,7 @@ src/
   tools.ts              # Tool registry + dispatch
   tools/                # Tool executors (bash, browser, file tools, path utils, execute context)
   providers/            # Provider registry, adapters, unified tool loop, provider implementations
-  code-agents/          # Background coding-agent runtime (executor/parser/orchestrator/registry)
+  code-agents/          # Background coding-agent runtime (executor/parser/registry + interactive sessions)
   channels/             # Channel adapters/utilities (telegram/discord)
   file-lock.ts          # In-memory file lock for concurrent writes
   audit.ts              # Append-only audit log (trace/event model, JSONL storage)

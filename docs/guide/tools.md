@@ -7,13 +7,13 @@
 | Built-in | Read, Write, Glob, Bash, Fetch | Always (when tools enabled) |
 | Browser | Browser (Playwright) | When `tools.browser.enabled` is true |
 | MCP | Auto-discovered from mcporter | All servers in `~/.mcporter/mcporter.json` |
-| Agent | code_with_agent, code_with_team, check_code_agent | When chatId + config present |
+| Agent | code_with_agent, check_code_agent | When chatId + config present |
 
 For coding worker details, see `docs/coding-agents.md`.
 
 ## Agent coding tools
 
-`code_with_agent` and `code_with_team` run external coding CLIs (not in-process Read/Write/Bash tool calls).
+`code_with_agent` runs an external coding CLI (not an in-process Read/Write/Bash tool call).
 
 Exact command builders live in `src/code-agents/utils.ts` (`buildCodeAgentArgs`):
 
@@ -23,8 +23,8 @@ Exact command builders live in `src/code-agents/utils.ts` (`buildCodeAgentArgs`)
 
 Related files:
 
-- Tool schemas: `src/tools/definitions.ts` (`code_with_agent`, `code_with_team`)
-- Orchestration/runtime: `src/code-agents/index.ts`
+- Tool schema: `src/tools/definitions.ts` (`code_with_agent`)
+- Runtime: `src/code-agents/index.ts`
 - Command construction: `src/code-agents/utils.ts`
 
 ## Built-in tools

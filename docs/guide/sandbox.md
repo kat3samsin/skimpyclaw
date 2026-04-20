@@ -111,7 +111,7 @@ skimpyclaw sandbox doctor       # Run targeted sandbox diagnostics
 | `Read` / `Write` tool | ✅ Yes | File reads and writes execute inside the container |
 | `ListDir` / `Glob` tool | ✅ Yes | Directory listings and glob operations execute inside the container |
 | `Browser` tool | ❌ No | Playwright runs on host via MCP |
-| `code_with_agent` / `code_with_team` | ❌ No | Coding agents spawn CLI processes on host (plumbing exists but is not wired up) |
+| `code_with_agent` | ❌ No | Coding agents spawn CLI processes on host (plumbing exists but is not wired up) |
 | Cron `script` payloads | ✅ Yes | Scripts route through sandbox when enabled |
 
 macOS-specific commands (`osascript`, `open`, `say`, `pbcopy`, `pbpaste`, `defaults`, etc.) bypass the sandbox and execute on the host, since they require macOS APIs unavailable in Linux containers.

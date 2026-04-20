@@ -258,7 +258,7 @@ src/
   index.ts              # App entrypoint with file logging setup
   gateway.ts            # Fastify server + top-level routes
   agent.ts              # Prompt assembly, model calls, tool loop, memory writes, Langfuse tracing
-  tools.ts              # Tool registry, MCP auto-discovery, code agents (code_with_agent, code_with_team)
+  tools.ts              # Tool registry, MCP auto-discovery, code agents (code_with_agent)
   model-selection.ts    # Shared model-selection contract (alias/provider-model/bare-id resolution)
   file-lock.ts          # In-memory file lock for concurrent writes
   audit.ts              # Append-only audit log (trace/event model, JSONL storage)

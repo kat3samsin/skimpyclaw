@@ -4,7 +4,7 @@ import type { ToolConfig, SandboxConfig } from '../types.js';
 
 export interface CodeAgentTask {
   id: string;                    // "ca-1", "ca-2"
-  agent: string;                 // "claude" | "codex" | "team-coordinator"
+  agent: string;                 // "claude" | "codex"
   task: string;                  // full prompt
   status: 'running' | 'validating' | 'completed' | 'failed' | 'timeout' | 'pending' | 'cancelled';
   chatId?: number;               // for notification delivery
@@ -26,26 +26,13 @@ export interface CodeAgentTask {
   totalCost?: number;
   inputTokens?: number;
   outputTokens?: number;
-  // Team coordination fields
-  parentTaskId?: string;         // child points to parent
-  childTaskIds?: string[];       // parent tracks children
-  subtask?: string;              // child's specific subtask description
-  synthesisResult?: string;      // parent's final synthesized output
-  // Dependency tracking
-  dependsOn?: number[];          // indices of subtasks this depends on
-  wave?: number;                 // which execution wave (0-based)
   // Interactive coding session (Discord thread bidirectional; claude/codex only).
   interactive?: boolean;
   cliSessionId?: string;         // claude --session-id UUID; set at spawn time
 }
 
-export interface DecomposedSubtask {
-  description: string;
-  dependsOn: number[];  // indices of subtasks this depends on
-}
-
 export interface CodeAgentBackgroundOptions {
-  /** Extra env vars to set (e.g. CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS) */
+  /** Extra env vars to set on the spawned CLI process */
   env?: Record<string, string>;
   /** Override args builder (returns { cmd, args } instead of buildCodeAgentArgs) */
   buildArgs?: () => { cmd: string; args: string[] };
@@ -53,8 +40,6 @@ export interface CodeAgentBackgroundOptions {
   defaultTimeoutMinutes?: number;
   /** Max timeout in minutes (overrides 30min cap) */
   maxTimeoutMinutes?: number;
-  /** Skip sending notification on completion (parent handles it) */
-  skipNotification?: boolean;
   /** Per-project validation command overrides from config */
   validationCommands?: Record<string, string>;
   /** Sandbox configuration — when enabled, run CLI inside container */
@@ -75,13 +60,6 @@ export interface BuildCodeAgentArgsInput {
 export interface ValidationResult {
   passed: boolean;
   output: string;
-}
-
-export interface ChildResult {
-  subtask: string;
-  status: string;
-  output?: string;
-  error?: string;
 }
 
 // Timeout constants

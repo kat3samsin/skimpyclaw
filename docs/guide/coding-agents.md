@@ -1,13 +1,12 @@
 # Coding Agents
 
-This document covers how `code_with_agent` and `code_with_team` execute external coding CLIs.
+This document covers how `code_with_agent` executes external coding CLIs.
 
-## What these tools are
+## What this tool is
 
 - `code_with_agent`: run one coding worker CLI (`claude`, `codex`, or `kimi`)
-- `code_with_team`: decompose a task and run multiple `code_with_agent` workers in parallel
 
-These are separate from in-process tool calling (`Read`, `Write`, `Glob`, `Bash`, `Fetch`, `Browser`).
+This is separate from in-process tool calling (`Read`, `Write`, `Glob`, `Bash`, `Fetch`, `Browser`).
 
 ## Exact CLI commands
 

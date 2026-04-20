@@ -21,7 +21,6 @@ import {
   getCodeAgentsDir,
 } from './registry.js';
 import { runCodeAgentBackground, runValidation } from './executor.js';
-import { runTeamOrchestrator, computeWaves, decomposeTask, synthesizeResults } from './orchestrator.js';
 import { addPendingSession } from './interactive-sessions.js';
 import {
   setCodeAgentConfig,
@@ -31,7 +30,6 @@ import {
   isModelCompatibleWithAgent,
   resolveWorkdir,
   resolveModelAlias,
-  readTeamState,
   getCodingCliPreflightError,
 } from './utils.js';
 import { parseStreamJsonForLive, parseClaudeOutput, parseCodexOutput } from './parser.js';
@@ -39,11 +37,9 @@ import { parseStreamJsonForLive, parseClaudeOutput, parseCodexOutput } from './p
 // Re-export types
 export type {
   CodeAgentTask,
-  DecomposedSubtask,
   CodeAgentBackgroundOptions,
   BuildCodeAgentArgsInput,
   ValidationResult,
-  ChildResult,
 } from './types.js';
 
 // Re-export timeout constants
@@ -63,15 +59,6 @@ export {
 // Re-export executor functions
 export { runCodeAgentBackground, runValidation } from './executor.js';
 
-// Re-export orchestrator functions
-export {
-  runTeamOrchestrator,
-  computeWaves,
-  decomposeTask,
-  synthesizeResults,
-  gatherCodebaseContext,
-} from './orchestrator.js';
-
 // Re-export utility functions
 export {
   setCodeAgentConfig,
@@ -80,7 +67,6 @@ export {
   resolveSelectedCodeAgent,
   resolveWorkdir,
   resolveModelAlias,
-  readTeamState,
 } from './utils.js';
 
 // Re-export parser functions
@@ -271,91 +257,6 @@ export async function executeCodeWithAgent(
 
   const taskPreview = task.length > 100 ? task.slice(0, 100) + '...' : task;
   return `Started coding agent ${id} (${agent}). Task: ${taskPreview}\n\nUse check_code_agent to poll status.`;
-}
-
-/**
- * Execute code_with_team tool - multi-agent team mode.
- */
-export async function executeCodeWithTeam(
-  input: Record<string, any>,
-  config: ToolConfig,
-  context?: ExecuteToolContext,
-): Promise<string> {
-  const task = input.task as string;
-  if (!task) return 'Error: task is required';
-
-  // Resolve model alias. Only fall back to session model when an explicit model
-  // was requested — otherwise the session model (e.g. gpt-5.3-codex) would
-  // override agent selection even when the user wants claude.
-  const rawTeamModel = input.model as string | undefined;
-  const resolvedModel = rawTeamModel
-    ? resolveModelAlias(rawTeamModel, context?.fullConfig?.models?.aliases)
-    : undefined;
-
-  const configDefault = context?.fullConfig?.codeAgents?.defaultAgent || 'claude';
-  const requestedAgent = input.agent as string | undefined;
-  const agent = resolveSelectedCodeAgent(requestedAgent, configDefault, resolvedModel);
-  if (!agent) {
-    return `Error: Invalid agent "${requestedAgent}". Must be claude, codex, or kimi.`;
-  }
-
-  const teamSize = Math.max(2, Math.min(5, (input.team_size as number) || 3));
-
-  const projects = context?.fullConfig?.projects ?? {};
-  const rawWorkdir = input.workdir as string | undefined;
-
-  // Resolve project name → path
-  const workdir = resolveWorkdir(rawWorkdir, projects, SKIMPYCLAW_ROOT);
-
-  // Project paths are always allowed
-  const projectPaths = Object.values(projects).map(p => resolve(p));
-  const effectiveAllowedPaths = [...config.allowedPaths, ...projectPaths];
-
-  if (!isPathAllowed(workdir, effectiveAllowedPaths)) {
-    const projectNames = Object.keys(projects).length > 0
-      ? ` (or project names: ${Object.keys(projects).join(', ')})`
-      : '';
-    return `Error: Working directory not allowed. Permitted: ${config.allowedPaths.join(', ')}${projectNames}`;
-  }
-
-  const validate = input.validate !== false;
-
-  // Concurrency check — need room for teamSize children
-  const maxConcurrent = context?.fullConfig?.codeAgents?.maxConcurrent ?? 5;
-  const activeCount = getActiveCodeAgents().length;
-  if (activeCount + teamSize > maxConcurrent) {
-    return `Error: Concurrency limit — need ${teamSize} slots but only ${maxConcurrent - activeCount} available (${activeCount}/${maxConcurrent} running). Wait for agents to finish.`;
-  }
-
-  const cliPreflightError = getCodingCliPreflightError();
-  if (cliPreflightError) return cliPreflightError;
-
-  // Create parent task
-  const id = getNextCodeAgentId();
-  const startedAt = new Date();
-  const caTask: CodeAgentTask = {
-    id,
-    agent: 'team-coordinator',
-    task,
-    status: 'running',
-    chatId: context?.chatId,
-    discordThreadId: context?.discordThreadId,
-    discordChannelId: context?.discordChannelId,
-    startedAt: startedAt.toISOString(),
-    workdir,
-    model: resolvedModel,
-    childTaskIds: [],
-  };
-  storeCodeAgentTask(caTask);
-  writeCodeAgentTask(caTask);
-
-  // Fire-and-forget: orchestrator decomposes, spawns children, monitors, synthesizes
-  runTeamOrchestrator(id, task, teamSize, workdir, validate, agent, resolvedModel, startedAt, context).catch((err) => {
-    console.error(`[code-team] Background error for ${id}:`, err);
-  });
-
-  const taskPreview = task.length > 100 ? task.slice(0, 100) + '...' : task;
-  return `Started coding team ${id} (${teamSize} parallel ${agent} agents). Task: ${taskPreview}\n\nUse check_code_agent to poll status.`;
 }
 
 // Need to import join for the file operations

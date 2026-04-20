@@ -46,7 +46,7 @@ flowchart TD
   LOOP --> CTX["adapter.compactMessages()\n-> context-manager.ts"]
   LOOP --> EXEC["executeTool()\ntools.ts"]
   EXEC --> BUILTIN["Read / Write / Glob / Bash / Fetch / Browser"]
-  EXEC --> CODEAGENTS["code_with_agent / code_with_team"]
+  EXEC --> CODEAGENTS["code_with_agent"]
   EXEC --> MCP["MCP (Anthropic path only)"]
 ```
 

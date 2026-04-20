@@ -925,24 +925,6 @@ async function commandAgents(args: string[]): Promise<number> {
       console.log(`Workdir: ${agent.workdir}`);
       console.log(`Task: ${agent.task.slice(0, 200)}${agent.task.length > 200 ? '...' : ''}`);
 
-      // Show children for team coordinator
-      if (agent.childTaskIds && agent.childTaskIds.length > 0) {
-        console.log(`\n\x1b[1mChildren:\x1b[0m`);
-        for (const childId of agent.childTaskIds) {
-          const child = getCodeAgent(childId);
-          if (!child) continue;
-          const cElapsed = child.durationSeconds != null
-            ? child.durationSeconds
-            : Math.round((Date.now() - new Date(child.startedAt).getTime()) / 1000);
-          const cStr = cElapsed < 60 ? `${cElapsed}s` : `${Math.floor(cElapsed / 60)}m${cElapsed % 60}s`;
-          const waveLabel = child.wave != null ? ` [wave ${child.wave + 1}]` : '';
-          const icon = child.status === 'completed' ? '✅' : child.status === 'failed' ? '❌' : child.status === 'running' ? '🔄' : child.status === 'pending' ? '⏳' : '❓';
-          console.log(`  ${icon} ${child.id} ${child.status} (${cStr})${waveLabel}`);
-          const subtask = (child.subtask || child.task).slice(0, 120);
-          console.log(`     ${subtask}${(child.subtask || child.task).length > 120 ? '...' : ''}`);
-        }
-      }
-
       // Show live output
       if (agent.liveOutput) {
         console.log(`\n\x1b[1mLive Output:\x1b[0m`);
@@ -998,8 +980,7 @@ async function commandAgents(args: string[]): Promise<number> {
       const elapsed = Math.round((Date.now() - new Date(a.startedAt).getTime()) / 1000);
       const elapsedStr = elapsed < 60 ? `${elapsed}s` : `${Math.floor(elapsed / 60)}m${elapsed % 60}s`;
       const taskPreview = a.task.slice(0, 80) + (a.task.length > 80 ? '...' : '');
-      const children = a.childTaskIds ? ` (${a.childTaskIds.length} children)` : '';
-      console.log(`  ${a.id}: \x1b[33m${a.status}\x1b[0m ${a.agent} (${elapsedStr})${children} — ${taskPreview}`);
+      console.log(`  ${a.id}: \x1b[33m${a.status}\x1b[0m ${a.agent} (${elapsedStr})${taskPreview ? ` — ${taskPreview}` : ''}`);
     }
   }
 
