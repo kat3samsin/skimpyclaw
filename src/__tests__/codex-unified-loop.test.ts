@@ -114,7 +114,8 @@ describe('Codex unified tool loop', () => {
     const result = await runToolLoop(adapter, messages, options, config, toolConfig);
 
     expect(result.response).toContain('maximum iterations');
-    expect(mockCodexFetch).toHaveBeenCalledTimes(2);
+    expect(mockCodexFetch).toHaveBeenCalledTimes(3);
+    expect(mockCodexFetch.mock.calls[2][0].tools).toBeUndefined();
   });
 
   it('requests tool definitions with MCP enabled for Codex', async () => {

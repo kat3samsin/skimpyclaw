@@ -205,9 +205,26 @@ export async function runToolLoop(
 
     // Max iterations reached
     logMaxIterations(adapter.name, maxIterations);
+    let responseText = `Tool use loop reached maximum iterations (${maxIterations}) before the model produced a final answer.`;
+    if (toolLog.length > 0 && adapter.onEmptyFinalResponse) {
+      try {
+        const finalized = await adapter.onEmptyFinalResponse(
+          providerMessages, providerToolDefs, options, config,
+        );
+        if (finalized) responseText = finalized;
+      } catch (err) {
+        console.warn(`[${adapter.name}] max-iteration finalization pass failed: ${toErrorMessage(err)}`);
+      }
+    }
     return {
-      response: '[Tool use loop reached maximum iterations]',
+      response: responseText,
       toolCalls: toolLog,
+      usage: {
+        prompt_tokens: totalInputTokens,
+        completion_tokens: totalOutputTokens,
+        total_tokens: totalInputTokens + totalOutputTokens,
+      },
+      cost: totalCost.total > 0 ? totalCost : undefined,
     };
   } finally {
     // End the audit trace if we created it

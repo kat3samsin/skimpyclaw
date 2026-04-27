@@ -522,6 +522,41 @@ describe('runToolLoop', () => {
       expect(result.response).toContain('Completed with 1 tool calls');
       expect(adapter.onEmptyFinalResponse).toHaveBeenCalledTimes(1);
     });
+
+    it('should call onEmptyFinalResponse when max iterations are reached after tool use', async () => {
+      const customToolConfig = { ...toolConfig, maxIterations: 2 };
+      adapter.onEmptyFinalResponse = vi.fn().mockResolvedValue('Best effort final answer');
+      adapter.responses = Array(2).fill({
+        hasToolCalls: true,
+        toolCalls: [{ id: 'call-loop', name: 'testTool', args: { x: 1 }, rawArgs: '{"x":1}' }],
+        textContent: '',
+        usage: { inputTokens: 10, outputTokens: 5 },
+        rawResponse: {},
+      });
+
+      const result = await runToolLoop(adapter, messages, options, config, customToolConfig);
+
+      expect(result.response).toBe('Best effort final answer');
+      expect(adapter.callCount).toBe(2);
+      expect(adapter.onEmptyFinalResponse).toHaveBeenCalledTimes(1);
+    });
+
+    it('should keep a clear max-iteration fallback when finalization returns empty', async () => {
+      const customToolConfig = { ...toolConfig, maxIterations: 2 };
+      adapter.onEmptyFinalResponse = vi.fn().mockResolvedValue(undefined);
+      adapter.responses = Array(2).fill({
+        hasToolCalls: true,
+        toolCalls: [{ id: 'call-loop', name: 'testTool', args: { x: 1 }, rawArgs: '{"x":1}' }],
+        textContent: '',
+        usage: { inputTokens: 10, outputTokens: 5 },
+        rawResponse: {},
+      });
+
+      const result = await runToolLoop(adapter, messages, options, config, customToolConfig);
+
+      expect(result.response).toContain('maximum iterations');
+      expect(adapter.onEmptyFinalResponse).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('Codex-specific behavior through unified loop', () => {
