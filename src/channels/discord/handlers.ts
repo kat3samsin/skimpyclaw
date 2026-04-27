@@ -84,6 +84,7 @@ const THREAD_AGENT_USAGE = [
 ].join('\n');
 
 const THINKING_LEVELS: ThinkingLevel[] = ['none', 'low', 'medium', 'high', 'xhigh'];
+const AGENT_PROMPT_MAX_CHARS = 20_000;
 
 function parseThinkingLevel(value: string | undefined): ThinkingLevel | null {
   const normalized = (value || '').trim().toLowerCase().replace(/^x[-_ ]?high$/, 'xhigh');
@@ -274,6 +275,25 @@ async function runThreadAgentPrompt(
   }
 }
 
+async function readPromptAttachment(message: Message): Promise<{ text?: string; error?: string; filename?: string }> {
+  const docAttachments = message.attachments.filter(a => isDocumentAttachment(a));
+  if (docAttachments.size === 0) return {};
+
+  const results = await processAttachments([...docAttachments.values()]);
+  const firstOk = results.find(result => result.ok && result.text?.trim());
+  if (firstOk?.text) {
+    return {
+      text: firstOk.text.trim(),
+      filename: firstOk.filename,
+    };
+  }
+
+  const errors = results.map(result => result.error).filter(Boolean);
+  return {
+    error: errors.join('\n') || `Could not read attached prompt. Supported file types: ${supportedExtensions().map(e => `.${e}`).join(', ')}`,
+  };
+}
+
 function normalizeAliasArg(value: string | undefined): string {
   return (value || '').trim().replace(/^@/, '').toLowerCase();
 }
@@ -297,6 +317,32 @@ function getAgentProfileCommandTarget(message: Message, alias?: string): { profi
     profile: null,
     error: `No target agent profile found. Pass an alias. Known profiles: ${profiles.map(profile => `@${profile.alias}`).join(', ') || '(none)'}.`,
   };
+}
+
+function getOrCreateAgentProfileCommandTarget(
+  message: Message,
+  config: Config,
+  alias?: string,
+): { profile: DiscordAgentProfile | null; created?: boolean; error?: string } {
+  const normalizedAlias = normalizeAliasArg(alias);
+  if (!normalizedAlias) return getAgentProfileCommandTarget(message);
+
+  const existing = getAgentProfileByAlias(normalizedAlias);
+  if (existing) return { profile: existing };
+
+  try {
+    return {
+      profile: upsertAgentProfile({
+        alias: normalizedAlias,
+        agentId: config.agents.default,
+        createdBy: message.author.id,
+      }),
+      created: true,
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { profile: null, error: msg };
+  }
 }
 
 function getThreadAgentCommandTarget(
@@ -473,17 +519,26 @@ async function handleThreadAgentCommand(message: Message, args: string[], config
   if (subcommand === 'prompt') {
     let alias: string | undefined;
     let promptStart = 1;
-    if (args[1] && args.length > 2 && getAgentProfileByAlias(args[1])) {
-      alias = args[1];
-      promptStart = 2;
-    }
-    const prompt = args.slice(promptStart).join(' ').trim();
-    if (!prompt) {
-      await message.reply('Usage: /agent prompt [@alias] <prompt text>');
+    const attachmentPrompt = await readPromptAttachment(message);
+    if (attachmentPrompt.error) {
+      await message.reply(attachmentPrompt.error);
       return;
     }
-    if (prompt.length > 4000) {
-      await message.reply('Prompt is too long. Keep thread-agent prompts under 4000 characters.');
+    if (args[1]) {
+      const candidateAlias = normalizeAliasArg(args[1]);
+      if ((attachmentPrompt.text && args.length === 2) || (args.length > 2 && getAgentProfileByAlias(candidateAlias))) {
+        alias = args[1];
+        promptStart = 2;
+      }
+    }
+    const inlinePrompt = args.slice(promptStart).join(' ').trim();
+    const prompt = attachmentPrompt.text || inlinePrompt;
+    if (!prompt) {
+      await message.reply('Usage: /agent prompt [@alias] <prompt text>\nYou can also attach a .txt or .md file.');
+      return;
+    }
+    if (prompt.length > AGENT_PROMPT_MAX_CHARS) {
+      await message.reply(`Prompt is too long. Keep agent prompts under ${AGENT_PROMPT_MAX_CHARS.toLocaleString()} characters.`);
       return;
     }
     const target = getAgentProfileCommandTarget(message, alias);
@@ -493,7 +548,8 @@ async function handleThreadAgentCommand(message: Message, args: string[], config
     }
     const profile = setAgentProfilePrompt(target.profile.alias, prompt);
     if (!profile) return;
-    await message.reply(`Updated prompt for @${profile.alias}.`);
+    const source = attachmentPrompt.filename ? ` from ${attachmentPrompt.filename}` : '';
+    await message.reply(`Updated prompt for @${profile.alias}${source}.`);
     return;
   }
 
@@ -501,11 +557,8 @@ async function handleThreadAgentCommand(message: Message, args: string[], config
     let alias: string | undefined;
     let modelStart = 1;
     if (args[1] && args.length > 2) {
-      const candidateAlias = normalizeAliasArg(args[1]);
-      if (getAgentProfileByAlias(candidateAlias)) {
-        alias = args[1];
-        modelStart = 2;
-      }
+      alias = args[1];
+      modelStart = 2;
     }
     const modelInput = args.slice(modelStart).join(' ').trim();
     if (!modelInput) {
@@ -517,7 +570,7 @@ async function handleThreadAgentCommand(message: Message, args: string[], config
       await message.reply(formatModelSelectionError(selection.error || 'Invalid model selection', config));
       return;
     }
-    const target = getAgentProfileCommandTarget(message, alias);
+    const target = getOrCreateAgentProfileCommandTarget(message, config, alias);
     if (!target.profile) {
       await message.reply(`${target.error || 'No target agent profile found.'}\n\n${THREAD_AGENT_USAGE}`);
       return;
@@ -525,7 +578,8 @@ async function handleThreadAgentCommand(message: Message, args: string[], config
     const profile = setAgentProfileModel(target.profile.alias, selection.resolved);
     if (!profile) return;
     const aliasText = selection.aliasUsed ? ` (${selection.aliasUsed})` : '';
-    await message.reply(`Updated model for @${profile.alias}: ${selection.resolved}${aliasText}`);
+    const createdText = target.created ? `Created agent profile @${profile.alias} -> ${profile.agentId}\n` : '';
+    await message.reply(`${createdText}Updated model for @${profile.alias}: ${selection.resolved}${aliasText}`);
     return;
   }
 
@@ -533,25 +587,23 @@ async function handleThreadAgentCommand(message: Message, args: string[], config
     let alias: string | undefined;
     let effortArg = args[1];
     if (args[1] && args.length > 2) {
-      const candidateAlias = normalizeAliasArg(args[1]);
-      if (getAgentProfileByAlias(candidateAlias)) {
-        alias = args[1];
-        effortArg = args[2];
-      }
+      alias = args[1];
+      effortArg = args[2];
     }
     const next = parseThinkingLevel(effortArg);
     if (!effortArg || !next) {
       await message.reply(`Usage: /agent ${subcommand} [agent-alias] <${THINKING_LEVELS.join('|')}>`);
       return;
     }
-    const target = getAgentProfileCommandTarget(message, alias);
+    const target = getOrCreateAgentProfileCommandTarget(message, config, alias);
     if (!target.profile) {
       await message.reply(`${target.error || 'No target agent profile found.'}\n\n${THREAD_AGENT_USAGE}`);
       return;
     }
     const profile = setAgentProfileThinking(target.profile.alias, next);
     if (!profile) return;
-    await message.reply(`Updated effort for @${profile.alias}: ${next}`);
+    const createdText = target.created ? `Created agent profile @${profile.alias} -> ${profile.agentId}\n` : '';
+    await message.reply(`${createdText}Updated effort for @${profile.alias}: ${next}`);
     return;
   }
 
