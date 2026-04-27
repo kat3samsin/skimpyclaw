@@ -7,7 +7,8 @@ import type { ProviderChatParams, ProviderToolChatParams, ToolChatResult } from 
 import { toCostDetails } from './observability.js';
 import { buildUsageRecord, recordUsage } from '../usage.js';
 
-const DEFAULT_CODEX_AUTH_PATH = join(homedir(), '.codex', 'auth.json');
+const DEFAULT_CODEX_HOME = join(homedir(), '.codex');
+const DEFAULT_CODEX_AUTH_PATH = join(DEFAULT_CODEX_HOME, 'auth.json');
 const DEFAULT_CODEX_BASE_URL = 'https://chatgpt.com/backend-api';
 const DEFAULT_CODEX_FETCH_TIMEOUT_MS = 120_000;
 
@@ -34,7 +35,7 @@ export function resetCodexProviderState(): void {
 }
 
 export function setCodexAuthPath(path: string): void {
-  codexAuthPath = path;
+  codexAuthPath = resolveCodexAuthPath(path);
 }
 
 export function setCodexBaseUrl(url: string): void {
@@ -46,7 +47,26 @@ interface CodexAuth {
   accountId: string;
 }
 
+export function resolveCodexAuthPath(authPath?: string): string {
+  if (!authPath) return DEFAULT_CODEX_AUTH_PATH;
+  if (authPath === '~') return homedir();
+  if (authPath.startsWith('~/')) return join(homedir(), authPath.slice(2));
+  return authPath;
+}
+
+function decodeJwtPayload(token: string): Record<string, any> | null {
+  const payloadPart = token.split('.')[1];
+  if (!payloadPart) return null;
+  try {
+    const normalized = payloadPart.replace(/-/g, '+').replace(/_/g, '/');
+    return JSON.parse(Buffer.from(normalized, 'base64').toString());
+  } catch {
+    return null;
+  }
+}
+
 export function loadCodexAuth(authPath: string = codexAuthPath): CodexAuth | null {
+  authPath = resolveCodexAuthPath(authPath);
   if (!existsSync(authPath)) {
     console.log(`[codex] No auth file at ${authPath}`);
     return null;
@@ -55,31 +75,35 @@ export function loadCodexAuth(authPath: string = codexAuthPath): CodexAuth | nul
   try {
     const raw = JSON.parse(readFileSync(authPath, 'utf-8'));
     const token = raw?.tokens?.access_token;
-    if (!token) {
+    if (typeof token !== 'string' || token.length === 0) {
       console.log('[codex] No access_token in auth file');
       return null;
     }
 
     // Decode JWT to check expiry and extract account ID
-    const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
-    const exp = payload.exp * 1000;
-    const now = Date.now();
-    if (now > exp) {
-      const expiredAgo = Math.round((now - exp) / 60000);
-      console.warn(`[codex] Token expired ${expiredAgo} min ago. Run 'codex' to re-auth.`);
+    const payload = decodeJwtPayload(token);
+    if (payload?.exp) {
+      const exp = payload.exp * 1000;
+      const now = Date.now();
+      if (now > exp) {
+        const expiredAgo = Math.round((now - exp) / 60000);
+        console.warn(`[codex] Token expired ${expiredAgo} min ago. Run 'codex' to re-auth.`);
+        return null;
+      }
+    }
+
+    // Current Codex CLI auth files include tokens.account_id; older files only
+    // expose it in the JWT claims.
+    const authClaims = payload?.['https://api.openai.com/auth'];
+    const accountId = raw?.tokens?.account_id || authClaims?.chatgpt_account_id;
+    if (typeof accountId !== 'string' || accountId.length === 0) {
+      console.error('[codex] No account ID in auth file');
       return null;
     }
 
-    // Extract account ID from JWT claims
-    const authClaims = payload['https://api.openai.com/auth'];
-    const accountId = authClaims?.chatgpt_account_id;
-    if (!accountId) {
-      console.error('[codex] No account ID in token');
-      return null;
-    }
-
-    const expiresIn = Math.round((exp - now) / 60000);
-    console.log(`[codex] Token valid (expires in ${expiresIn} min, account: ${accountId.slice(0, 8)}...)`);
+    const expiresIn = payload?.exp ? Math.round((payload.exp * 1000 - Date.now()) / 60000) : null;
+    const expiryDetail = expiresIn === null ? 'expiry unknown' : `expires in ${expiresIn} min`;
+    console.log(`[codex] Token valid (${expiryDetail}, account: ${accountId.slice(0, 8)}...)`);
     return { accessToken: token, accountId };
   } catch (error) {
     console.error('[codex] Failed to read auth file:', error);
@@ -88,7 +112,7 @@ export function loadCodexAuth(authPath: string = codexAuthPath): CodexAuth | nul
 }
 
 export function initCodexAuth(path?: string, baseUrl?: string): boolean {
-  if (path) codexAuthPath = path;
+  if (path) codexAuthPath = resolveCodexAuthPath(path);
   if (baseUrl) codexBaseUrl = baseUrl;
   codexAuth = loadCodexAuth();
   return codexAuth !== null;

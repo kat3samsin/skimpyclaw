@@ -113,7 +113,7 @@ interface InteractiveSession {
 }
 ```
 
-Subprocess env for both the initial spawn and `--resume` turns is prepared by `buildCodeAgentSpawnEnv()` in `src/code-agents/utils.ts`, which drops `CLAUDECODE` (so nested claude invocations start cleanly) and `GH_TOKEN` / `GITHUB_TOKEN` (so `gh` falls back to keychain auth).
+Subprocess env for both the initial spawn and `--resume` turns is prepared by `buildCodeAgentSpawnEnv()` in `src/code-agents/utils.ts`, which drops `CLAUDECODE` (so nested claude invocations start cleanly), drops `GH_TOKEN` / `GITHUB_TOKEN` (so `gh` falls back to keychain auth), and pins Codex CLI state to `~/.codex` via `CODEX_HOME`.
 
 If a `--resume` subprocess errors, the session is marked `errored` and any queued follow-ups are drained with a single notice — they are not retried.
 

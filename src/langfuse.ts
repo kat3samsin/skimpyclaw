@@ -42,6 +42,7 @@ export const MODEL_PRICING: Record<string, ModelPricing> = {
   'gpt-5.1-codex': { inputPerMTok: 1.25, outputPerMTok: 10.0 },
   'gpt-5.2-codex': { inputPerMTok: 1.75, outputPerMTok: 14.0 },
   'gpt-5.3-codex': { inputPerMTok: 1.75, outputPerMTok: 14.0 },
+  'gpt-5.5': { inputPerMTok: 5.0, outputPerMTok: 30.0 },
   'codex-5.1': { inputPerMTok: 1.25, outputPerMTok: 10.0 },
   'codex-5.2': { inputPerMTok: 1.75, outputPerMTok: 14.0 },
   'codex-5.3': { inputPerMTok: 1.75, outputPerMTok: 14.0 },
@@ -80,7 +81,8 @@ const MODEL_ALIAS_MAP: Record<string, string> = {
   'codex5.1': 'gpt-5.1-codex',
   'codex5.2': 'gpt-5.2-codex',
   'codex5.3': 'gpt-5.3-codex',
-  codex: 'gpt-5.3-codex',
+  'codex5.5': 'gpt-5.5',
+  codex: 'gpt-5.5',
   // MiniMax aliases
   minimax: 'minimax-m2.5',
 

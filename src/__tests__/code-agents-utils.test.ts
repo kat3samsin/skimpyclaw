@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { join } from 'path';
+import { homedir } from 'os';
 import {
+  buildCodeAgentSpawnEnv,
   normalizeCodeAgent,
   resolveSelectedCodeAgent,
   getAvailableCodingCliTools,
@@ -66,5 +69,22 @@ describe('coding CLI preflight', () => {
     const hasCommand = (name: string) => name === 'claude-code';
     expect(getAvailableCodingCliTools(hasCommand)).toEqual(['claude']);
     expect(getCodingCliPreflightError(hasCommand)).toBeNull();
+  });
+});
+
+describe('buildCodeAgentSpawnEnv', () => {
+  it('points Codex subprocesses at the standard ~/.codex state directory', () => {
+    const env = buildCodeAgentSpawnEnv({
+      HOME: '/tmp/ignored-home',
+      CODEX_HOME: '/tmp/old-codex-home',
+      GH_TOKEN: 'stale-gh',
+      GITHUB_TOKEN: 'stale-github',
+      CLAUDECODE: 'nested',
+    });
+
+    expect(env.CODEX_HOME).toBe(join(homedir(), '.codex'));
+    expect(env.CLAUDECODE).toBeUndefined();
+    expect(env.GH_TOKEN).toBeUndefined();
+    expect(env.GITHUB_TOKEN).toBeUndefined();
   });
 });

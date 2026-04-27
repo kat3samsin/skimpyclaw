@@ -2,7 +2,7 @@
  * Codex provider adapter for the unified tool loop.
  */
 
-import type { ChatMessage, ChatOptions, Config } from '../../types.js';
+import type { ChatMessage, ChatOptions, Config, ThinkingLevel } from '../../types.js';
 import type {
   ProviderAdapter,
   ProviderMessages,
@@ -16,6 +16,24 @@ import { compactMessages, codexFormatHelper } from '../context-manager.js';
 import { toCodexContent, toCodexToolDefinitions } from '../content.js';
 import { toCostDetails } from '../observability.js';
 import { codexFetch, parseCodexSSE, isCodexAvailable, recordCodexUsage } from '../codex.js';
+
+type CodexReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh';
+
+function codexReasoningEffort(thinking?: ThinkingLevel): CodexReasoningEffort {
+  switch (thinking) {
+    case 'low':
+    case 'medium':
+    case 'high':
+    case 'xhigh':
+      return thinking;
+    default:
+      return 'medium';
+  }
+}
+
+function codexReasoning(options: ChatOptions): { effort: CodexReasoningEffort; summary: 'auto' } {
+  return { effort: codexReasoningEffort(options.thinking), summary: 'auto' };
+}
 
 export class CodexAdapter implements ProviderAdapter {
   readonly name = 'codex';
@@ -49,7 +67,7 @@ export class CodexAdapter implements ProviderAdapter {
       input,
       store: false,
       stream: true,
-      reasoning: { effort: 'medium', summary: 'auto' },
+      reasoning: codexReasoning(options),
       include: ['reasoning.encrypted_content'],
     };
 
@@ -111,7 +129,7 @@ export class CodexAdapter implements ProviderAdapter {
       input: providerMessages.messages,
       store: false,
       stream: true,
-      reasoning: { effort: 'medium', summary: 'auto' },
+      reasoning: codexReasoning(options),
       include: ['reasoning.encrypted_content'],
     };
     if (toolDefs?.length) {
@@ -201,7 +219,7 @@ export class CodexAdapter implements ProviderAdapter {
       input: finalizeInput,
       store: false,
       stream: true,
-      reasoning: { effort: 'medium', summary: 'auto' },
+      reasoning: codexReasoning(options),
       include: ['reasoning.encrypted_content'],
     };
 

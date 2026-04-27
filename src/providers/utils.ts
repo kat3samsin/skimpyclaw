@@ -3,7 +3,7 @@
 import { writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
-import type { ChatMessage, ContentBlock, ChatOptions, Config } from '../types.js';
+import type { ChatMessage, ContentBlock, ChatOptions, Config, ThinkingLevel } from '../types.js';
 
 // Anti-hallucination instructions injected between the Claude Code identity
 // block and the actual system prompt. Prevents the model from roleplaying
@@ -328,13 +328,14 @@ export function compactOldResults(messages: any[], keepRecent: number = 2): void
 /**
  * Build thinking config based on thinking level.
  */
-export function buildThinkingConfig(thinking?: 'none' | 'low' | 'medium' | 'high'): { budget: number; maxTokens: number } | undefined {
+export function buildThinkingConfig(thinking?: ThinkingLevel): { budget: number; maxTokens: number } | undefined {
   if (!thinking || thinking === 'none') return undefined;
   
   const budgetTokens: Record<string, number> = {
     low: 2048,
     medium: 8192,
     high: 16384,
+    xhigh: 32768,
   };
   const budget = budgetTokens[thinking] || 2048;
   return {

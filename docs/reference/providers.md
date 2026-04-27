@@ -35,7 +35,7 @@ flowchart LR
 
 ## MCP Support
 
-MCP tools (via mcporter) are **only available on the Anthropic adapter path**. Codex and OpenAI-compatible adapters do not include MCP tools. mcporter spawns MCP servers as child processes and communicates over stdio JSON-RPC. Config at `~/.mcporter/mcporter.json`.
+MCP tools (via mcporter) are available on the Anthropic and Codex adapter paths. OpenAI-compatible non-Codex adapters do not include MCP tools. mcporter spawns MCP servers as child processes and communicates over stdio JSON-RPC. Config at `~/.mcporter/mcporter.json`.
 
 ## Browser Tool
 
@@ -68,4 +68,8 @@ Both share the same persistent browser profile at `~/.skimpyclaw/browser-profile
 
 ## Codex Auth
 
-Uses `~/.codex/auth.json` with ChatGPT backend headers (`chatgpt-account-id`, `OpenAI-Beta`, `originator: codex_cli_rs`).
+Uses `~/.codex/auth.json` with ChatGPT backend headers (`chatgpt-account-id`, `OpenAI-Beta`, `originator: codex_cli_rs`). The loader accepts the current Codex CLI shape with `tokens.account_id` and falls back to the account ID embedded in the access token.
+
+## Codex Reasoning
+
+Codex requests include `reasoning.summary: "auto"` and map the agent `thinking` setting to `reasoning.effort`. Supported values are `low`, `medium`, `high`, and `xhigh`; unset or `none` preserves the default `medium` effort.

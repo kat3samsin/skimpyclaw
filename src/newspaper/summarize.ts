@@ -35,10 +35,11 @@ function getSummaryModel(config: Config): string | null {
   const codex = providers.codex;
   if (codex && (hasResolvedCredential(codex.authToken) || hasResolvedCredential(codex.authPath))) {
     if (aliases.codex) return 'codex';
+    if (aliases['codex5.5']) return 'codex5.5';
     if (aliases['codex5.3']) return 'codex5.3';
     if (aliases['codex5.2']) return 'codex5.2';
     if (aliases['codex5.1']) return 'codex5.1';
-    return 'codex/gpt-5.3-codex';
+    return 'codex/gpt-5.5';
   }
 
   const openai = providers.openai;

@@ -29,7 +29,7 @@ describe('CodexAdapter', () => {
       cron: { jobs: [] },
       heartbeat: { intervalMs: 300000, prompt: 'HEARTBEAT' },
     } as Config;
-    options = { model: 'codex/gpt-5.3-codex' };
+    options = { model: 'codex/gpt-5.5' };
     mockCodexFetch.mockReset();
     mockParseCodexSSE.mockReset();
   });
@@ -92,6 +92,40 @@ describe('CodexAdapter', () => {
 
   it('enables MCP tool discovery for Codex', () => {
     expect(adapter.getToolDefinitionOptions()).toEqual({ includeMcp: true });
+  });
+
+  it('passes xhigh thinking through as Codex reasoning effort', async () => {
+    mockCodexFetch.mockResolvedValue('sse');
+    mockParseCodexSSE.mockReturnValue({
+      outputText: 'ok',
+      functionCalls: [],
+      response: { usage: { input_tokens: 10, output_tokens: 5 } },
+    });
+
+    await adapter.chat(
+      [{ role: 'user', content: 'Use deeper reasoning' }],
+      { ...options, thinking: 'xhigh' },
+      config,
+    );
+
+    expect(mockCodexFetch).toHaveBeenCalledWith(expect.objectContaining({
+      reasoning: { effort: 'xhigh', summary: 'auto' },
+    }));
+  });
+
+  it('keeps Codex reasoning at medium by default', async () => {
+    mockCodexFetch.mockResolvedValue('sse');
+    mockParseCodexSSE.mockReturnValue({
+      outputText: 'ok',
+      functionCalls: [],
+      response: { usage: { input_tokens: 10, output_tokens: 5 } },
+    });
+
+    await adapter.call({ messages: [], systemParam: 'sys' }, [], options, config);
+
+    expect(mockCodexFetch).toHaveBeenCalledWith(expect.objectContaining({
+      reasoning: { effort: 'medium', summary: 'auto' },
+    }));
   });
 
   describe('onEmptyFinalResponse', () => {

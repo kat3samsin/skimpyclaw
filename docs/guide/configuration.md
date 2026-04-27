@@ -67,7 +67,7 @@ When the app writes `~/.skimpyclaw/config.json`, it enforces restrictive `0600` 
 }
 ```
 
-Thinking levels: `none`, `low`, `medium`, `high` (enables extended thinking for supported models).
+Thinking levels: `none`, `low`, `medium`, `high`, `xhigh` (enables extended thinking for supported models).
 
 ## Models
 
@@ -92,7 +92,9 @@ Thinking levels: `none`, `low`, `medium`, `high` (enables extended thinking for 
     "claude-fast": "anthropic/claude-haiku-4-5",
     "claude-think": "anthropic/claude-sonnet-4-5",
     "claude-opus": "anthropic/claude-opus-4",
-    "codex5.3": "codex/gpt-5.3-codex"
+    "codex5.3": "codex/gpt-5.3-codex",
+    "codex5.5": "codex/gpt-5.5",
+    "codex": "codex/gpt-5.5"
   },
   "promptCaching": true
 }

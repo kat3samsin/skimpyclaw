@@ -29,15 +29,19 @@ function isCommandAvailable(name: string): boolean {
 export const CLAUDE_CLI_PATH = resolveCliPath('claude');
 const CODEX_CLI_PATH = resolveCliPath('codex');
 const KIMI_CLI_PATH = resolveCliPath('kimi');
+const DEFAULT_CODEX_HOME = join(homedir(), '.codex');
 
 /**
  * Prepare env for spawning a coding-agent CLI (claude/codex/kimi):
  * - Drops CLAUDECODE so nested `claude` invocations start cleanly.
  * - Drops GH_TOKEN/GITHUB_TOKEN so `gh` falls back to keychain auth instead
  *   of a stale process token.
+ * - Pins Codex to the standard CLI state directory so auth/config come from ~/.codex.
  */
 export function buildCodeAgentSpawnEnv(base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   const env = { ...base };
+  env.HOME ||= homedir();
+  env.CODEX_HOME = DEFAULT_CODEX_HOME;
   delete env.CLAUDECODE;
   delete env.GH_TOKEN;
   delete env.GITHUB_TOKEN;
@@ -347,4 +351,3 @@ export function resolveModelAlias(
   }
   return model;
 }
-

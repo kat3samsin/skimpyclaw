@@ -50,6 +50,7 @@ const DEFAULT_MODEL_ALIASES: Record<string, string> = {
   'codex5.1': 'codex/gpt-5.1-codex',
   'codex5.2': 'codex/gpt-5.2-codex',
   'codex5.3': 'codex/gpt-5.3-codex',
+  'codex5.5': 'codex/gpt-5.5',
   minimax: 'minimax/MiniMax-M2.5',
   kimi: 'kimi/kimi-for-coding',
 };

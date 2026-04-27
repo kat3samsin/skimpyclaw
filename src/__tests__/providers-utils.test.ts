@@ -5,6 +5,7 @@ import {
   resolveModel,
   resolveProviderRoute,
   shouldUseCodexAliasProvider,
+  buildThinkingConfig,
 } from '../providers/utils.js';
 
 describe('provider utils', () => {
@@ -71,5 +72,9 @@ describe('provider utils', () => {
     expect(route.provider).toBe('anthropic');
     expect(route.modelId).toBe('claude-sonnet-4-6');
     expect(route.isCodexModel).toBe(false);
+  });
+
+  it('supports xhigh thinking budgets', () => {
+    expect(buildThinkingConfig('xhigh')).toEqual({ budget: 32768, maxTokens: 36864 });
   });
 });

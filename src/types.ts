@@ -99,8 +99,10 @@ export interface AgentConfig {
     emoji: string;
   };
   model: string;
-  thinking?: 'none' | 'low' | 'medium' | 'high';
+  thinking?: ThinkingLevel;
 }
+
+export type ThinkingLevel = 'none' | 'low' | 'medium' | 'high' | 'xhigh';
 
 export type AllowlistEntry = string | number;
 
@@ -267,7 +269,7 @@ export interface ChatOptions {
   model: string;
   maxTokens?: number;
   temperature?: number;
-  thinking?: 'none' | 'low' | 'medium' | 'high';
+  thinking?: ThinkingLevel;
 }
 
 export interface AbortSignalLike {

@@ -431,7 +431,7 @@ function buildProviders(providers: Set<ProviderChoice>, refs?: SecretRefs): Reco
 function buildDefaultModel(providers: Set<ProviderChoice>): string {
   const hasAnthropic = providers.has('anthropic-api') || providers.has('anthropic-oauth');
   if (hasAnthropic) return 'claude-opus';
-  if (providers.has('codex-oauth')) return 'codex/gpt-5.3-codex';
+  if (providers.has('codex-oauth')) return 'codex/gpt-5.5';
   if (providers.has('kimi-api')) return 'kimi/kimi-for-coding';
   if (providers.has('minimax-api')) return 'minimax/MiniMax-M2.5';
   return 'openai/gpt-4o';
@@ -446,6 +446,7 @@ function buildAliases(providers: Set<ProviderChoice>): Record<string, string> {
     'codex5.1': 'codex/gpt-5.1-codex',
     'codex5.2': 'codex/gpt-5.2-codex',
     'codex5.3': 'codex/gpt-5.3-codex',
+    'codex5.5': 'codex/gpt-5.5',
     'minimax': 'minimax/MiniMax-M2.5',
     'kimi': 'kimi/kimi-for-coding',
   };
@@ -456,7 +457,7 @@ function buildAliases(providers: Set<ProviderChoice>): Record<string, string> {
   }
 
   if (providers.has('codex-oauth')) {
-    aliases.codex = 'codex/gpt-5.3-codex';
+    aliases.codex = 'codex/gpt-5.5';
   }
 
   if (providers.has('minimax-api')) {

@@ -30,7 +30,7 @@ On macOS, generic-password keychain references are also supported via `${KEYCHAI
 | `identity.name` | string | Display name |
 | `identity.emoji` | string | Agent emoji |
 | `model` | string | Default model (e.g. `anthropic/claude-opus-4`) |
-| `thinking` | string | Thinking level: `none`, `low`, `medium`, `high` |
+| `thinking` | string | Thinking level: `none`, `low`, `medium`, `high`, `xhigh` |
 
 ## `models`
 
