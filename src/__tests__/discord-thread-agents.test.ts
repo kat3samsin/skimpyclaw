@@ -11,6 +11,7 @@ import {
   listAgentProfiles,
   listThreadAgentBindings,
   listThreadAgents,
+  parseDiscordAgentMention,
   removeAgentProfile,
   removeThreadAgent,
   setAgentProfileModel,
@@ -158,5 +159,18 @@ describe('Discord thread agents registry', () => {
     expect(persisted.version).toBe(2);
     expect(persisted.profiles[0].alias).toBe('reviewer');
     expect(persisted.bindings[0].profileAlias).toBe('reviewer');
+  });
+
+  it('parses leading agent mentions', () => {
+    expect(parseDiscordAgentMention('@Claude-Coder review this PR')).toEqual({
+      alias: 'claude-coder',
+      prompt: 'review this PR',
+    });
+    expect(parseDiscordAgentMention('@codex-reviewer')).toEqual({
+      alias: 'codex-reviewer',
+      prompt: '',
+    });
+    expect(parseDiscordAgentMention('please ask @codex-reviewer')).toBeNull();
+    expect(parseDiscordAgentMention('<@1234567890> review this')).toBeNull();
   });
 });

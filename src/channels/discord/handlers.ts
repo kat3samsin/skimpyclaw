@@ -52,6 +52,7 @@ import {
   getThreadAgentByThreadId,
   listAgentProfiles,
   listThreadAgents,
+  parseDiscordAgentMention,
   removeAgentProfile,
   removeThreadAgent,
   setAgentProfileModel,
@@ -81,6 +82,7 @@ const THREAD_AGENT_USAGE = [
   '/agent unset',
   '/agent delete <alias>',
   '/agent list',
+  '@alias <message>',
 ].join('\n');
 
 const THINKING_LEVELS: ThinkingLevel[] = ['none', 'low', 'medium', 'high', 'xhigh'];
@@ -166,6 +168,23 @@ function getThreadAgentForMessage(message: Message, config: Config): DiscordThre
   if (!record) return null;
   if (!config.agents.list[record.agentId]) return null;
   return record;
+}
+
+function profileAsThreadAgent(
+  profile: DiscordAgentProfile,
+  message: Message,
+  channel: DiscordMessageChannel,
+): DiscordThreadAgent {
+  const channelId = isThreadChannel(channel)
+    ? channel.parentId ?? message.channelId
+    : message.channelId;
+  return {
+    ...profile,
+    threadId: channel.id,
+    profileAlias: profile.alias,
+    guildId: message.guildId || undefined,
+    channelId,
+  };
 }
 
 function isDMBasedChannel(channel: DiscordMessageChannel): boolean {
@@ -272,6 +291,66 @@ async function runThreadAgentPrompt(
     await sendLongTextToChannel(sendableChannel(targetChannel), `Error: ${msg}`);
   } finally {
     stopTyping();
+  }
+}
+
+async function runMentionedAgentPrompt(message: Message, text: string, config: Config): Promise<boolean> {
+  const invocation = parseDiscordAgentMention(text);
+  if (!invocation) return false;
+
+  const profile = getAgentProfileByAlias(invocation.alias);
+  if (!profile) {
+    await message.reply(`No Discord agent profile found for @${invocation.alias}. Create it with /agent create ${invocation.alias}.`);
+    return true;
+  }
+
+  if (!config.agents.list[profile.agentId]) {
+    await message.reply(`Agent profile @${profile.alias} points to missing configured agent "${profile.agentId}".`);
+    return true;
+  }
+
+  if (!invocation.prompt) {
+    await message.reply(`Usage: @${profile.alias} <message>`);
+    return true;
+  }
+
+  try {
+    if (message.channel.isDMBased()) {
+      const record = profileAsThreadAgent(profile, message, message.channel);
+      await runThreadAgentPrompt(message, message.channel, record, invocation.prompt, config);
+      return true;
+    }
+
+    const isThread = isDiscordThreadChannel(message.channel);
+    const targetChannel = isThread
+      ? message.channel
+      : await createThreadAgentThread(message, profile.alias, invocation.prompt);
+    if (!targetChannel) {
+      await message.reply('Agent mentions can only run in a DM, inside a Discord thread, or from a channel where I can create one.');
+      return true;
+    }
+
+    const record = bindThreadAgent({
+      threadId: targetChannel.id,
+      alias: profile.alias,
+      createdBy: message.author.id,
+      guildId: message.guildId,
+      channelId: targetChannel.isThread() ? targetChannel.parentId ?? message.channelId : message.channelId,
+    });
+
+    if (!isThread) {
+      const url = buildThreadUrl(message.guildId, targetChannel.id);
+      await message.reply(url ? `Started @${profile.alias}: ${url}` : `Started @${profile.alias}.`);
+    }
+
+    await runThreadAgentPrompt(message, targetChannel, record, invocation.prompt, config, {
+      announceTask: !isThread,
+    });
+    return true;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    await message.reply(`Error: ${msg}`);
+    return true;
   }
 }
 
@@ -400,16 +479,12 @@ async function handleThreadAgentCommand(message: Message, args: string[], config
 
   if (subcommand === 'list') {
     const profiles = listAgentProfiles();
-    const bindings = listThreadAgents();
     if (profiles.length === 0) {
       await message.reply('No Discord agent profiles configured.');
       return;
     }
     const profileText = profiles.map(formatAgentProfile).join('\n\n');
-    const bindingText = bindings.length > 0
-      ? `\n\nThread bindings:\n${bindings.map(formatThreadAgent).join('\n')}`
-      : '\n\nThread bindings: none';
-    await sendLongText(message, `Profiles:\n${profileText}${bindingText}`);
+    await sendLongText(message, `Profiles:\n${profileText}`);
     return;
   }
 
@@ -1193,6 +1268,10 @@ export async function handleIncomingMessage(message: Message, config: Config): P
 
   const text = message.content.trim();
   if (!text) return;
+
+  if (await runMentionedAgentPrompt(message, text, config)) {
+    return;
+  }
 
   const isPrefixedCommand = text.startsWith('/') || text.startsWith('!');
   const isDm = message.channel.isDMBased();

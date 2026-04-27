@@ -31,6 +31,11 @@ export interface DiscordThreadAgent extends DiscordAgentProfile {
   profileAlias: string;
 }
 
+export interface DiscordAgentMentionInvocation {
+  alias: string;
+  prompt: string;
+}
+
 const DEFAULT_STORE_PATH = join(homedir(), '.skimpyclaw', 'discord-thread-agents.json');
 const ALIAS_RE = /^[a-z][a-z0-9_-]{0,63}$/;
 const THINKING_LEVELS = new Set<ThinkingLevel>(['none', 'low', 'medium', 'high', 'xhigh']);
@@ -48,6 +53,19 @@ export function normalizeThreadAgentAlias(value: string | undefined): string | n
   const normalized = (value || '').trim().replace(/^@/, '').toLowerCase();
   if (!ALIAS_RE.test(normalized)) return null;
   return normalized;
+}
+
+export function parseDiscordAgentMention(value: string): DiscordAgentMentionInvocation | null {
+  const match = value.trim().match(/^@([a-z][a-z0-9_-]{0,63})(?:\s+([\s\S]*))?$/i);
+  if (!match) return null;
+
+  const alias = normalizeThreadAgentAlias(match[1]);
+  if (!alias) return null;
+
+  return {
+    alias,
+    prompt: (match[2] || '').trim(),
+  };
 }
 
 function normalizeThinking(value: unknown): ThinkingLevel | undefined {

@@ -153,7 +153,7 @@ export function buildHelpText(cfg: Config): string {
   const emoji = agentConfig?.identity?.emoji || '🦞';
   const name = agentConfig?.identity?.name || 'SkimpyClaw';
   const commandList = BOT_COMMANDS.map(c => `/${c.command} - ${c.description}`).join('\n');
-  return `${emoji} ${name} online.\n\nSend a message to chat, or use a command:\n\n${commandList}`;
+  return `${emoji} ${name} online.\n\nSend a message to chat, use @alias <message> to run an agent profile, or use a command:\n\n${commandList}`;
 }
 
 export function splitToChunks(text: string, maxLength: number): string[] {
