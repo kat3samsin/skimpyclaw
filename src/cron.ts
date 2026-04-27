@@ -271,7 +271,7 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
         bashTimeout: 15000,
       };
       const tools = jobDef.payload.tools
-        ? { ...jobDef.payload.tools, allowedPaths: jobDef.payload.tools.allowedPaths?.length ? jobDef.payload.tools.allowedPaths : resolveAllowedPaths(config) }
+        ? { ...jobDef.payload.tools, allowedPaths: resolveAllowedPaths(config, jobDef.payload.tools.allowedPaths) }
         : defaultTools;
       const response = await runAgentTurn(
         config.agents.default,

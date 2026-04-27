@@ -335,6 +335,8 @@ export function resolveModelAlias(
   // Resolve common shorthand names to full model IDs
   const SHORTHAND_MAP: Record<string, string> = {
     opus: 'claude-opus-4-7',
+    'opus4.6': 'claude-opus-4-6',
+    'opus-4.6': 'claude-opus-4-6',
     sonnet: 'claude-sonnet-4-6',
     haiku: 'claude-haiku-4-5',
   };
@@ -348,6 +350,9 @@ export function resolveModelAlias(
   }
   if (/^claude[-.]3[-.]5[-.]haiku(?:[-_.].*)?$/i.test(model)) {
     return 'claude-haiku-4-5';
+  }
+  if (/^claude[-.]opus[-.]4[-_.]6$/i.test(model)) {
+    return 'claude-opus-4-6';
   }
   return model;
 }

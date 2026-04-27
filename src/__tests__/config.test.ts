@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
+import { resolveAllowedPaths } from '../config.js';
+import type { Config } from '../types.js';
 
 describe('config env var expansion', () => {
   it('warns on console when expanding undefined env vars', async () => {
@@ -54,5 +56,31 @@ describe('config env var expansion', () => {
 
     warnSpy.mockRestore();
     delete process.env.SKIMPYCLAW_TEST_PRESENT_VAR;
+  });
+});
+
+describe('resolveAllowedPaths', () => {
+  it('appends project paths to channel overrides', () => {
+    const config = {
+      projects: {
+        wpcom: '/Users/example/Sites/wpcom',
+      },
+    } as unknown as Config;
+
+    expect(resolveAllowedPaths(config, ['/Users/example/.skimpyclaw'])).toEqual([
+      '/Users/example/.skimpyclaw',
+      '/Users/example/Sites/wpcom',
+    ]);
+  });
+
+  it('deduplicates project paths already present in allowed paths', () => {
+    const config = {
+      allowedPaths: ['/Users/example/Sites/wpcom'],
+      projects: {
+        wpcom: '/Users/example/Sites/wpcom',
+      },
+    } as unknown as Config;
+
+    expect(resolveAllowedPaths(config)).toEqual(['/Users/example/Sites/wpcom']);
   });
 });

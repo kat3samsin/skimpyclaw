@@ -60,9 +60,7 @@ export function getDiscordToolConfig(cfg: Config): ToolConfig {
   if (discord?.tools) {
     return {
       ...discord.tools,
-      allowedPaths: discord.tools.allowedPaths?.length
-        ? discord.tools.allowedPaths
-        : resolveAllowedPaths(cfg),
+      allowedPaths: resolveAllowedPaths(cfg, discord.tools.allowedPaths),
     };
   }
 
@@ -225,7 +223,24 @@ export async function sendLongText(message: Message, text: string): Promise<void
   }
 }
 
+export async function sendLongTextToChannel(
+  channel: { send?: (content: string) => Promise<unknown> },
+  text: string,
+): Promise<void> {
+  const content = text && text.trim().length > 0 ? text : '(No response generated.)';
+  const chunks = splitToChunks(content, 1900);
+  for (const chunk of chunks) {
+    if (typeof channel.send === 'function') {
+      await channel.send(chunk);
+    }
+  }
+}
+
 export function startTypingIndicator(message: Message): () => void {
+  return startTypingIndicatorForChannel(message.channel as { sendTyping?: () => Promise<unknown> });
+}
+
+export function startTypingIndicatorForChannel(channel: { sendTyping?: () => Promise<unknown> }): () => void {
   const maxDurationMs = 90_000;
   let stopped = false;
 
@@ -236,7 +251,6 @@ export function startTypingIndicator(message: Message): () => void {
     clearTimeout(watchdog);
   };
 
-  const channel = message.channel as { sendTyping?: () => Promise<unknown> };
   if (typeof channel.sendTyping === 'function') {
     void channel.sendTyping().catch(() => {});
   }

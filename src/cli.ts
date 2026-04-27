@@ -112,9 +112,7 @@ function getCliToolConfig(config: Config): ToolConfig {
   if (config.channels.telegram.tools) {
     return {
       ...config.channels.telegram.tools,
-      allowedPaths: config.channels.telegram.tools.allowedPaths?.length
-        ? config.channels.telegram.tools.allowedPaths
-        : resolveAllowedPaths(config),
+      allowedPaths: resolveAllowedPaths(config, config.channels.telegram.tools.allowedPaths),
     };
   }
   return {

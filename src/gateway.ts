@@ -4,7 +4,7 @@ import Fastify, { FastifyInstance } from 'fastify';
 import { existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { join } from 'path';
-import type { Config, GatewayStatus } from './types.js';
+import type { Config, GatewayStatus, ThinkingLevel } from './types.js';
 import { validateBearerToken } from './utils.js';
 import { runAgentTurn } from './agent.js';
 import { getCronJobs, runCronJob } from './cron.js';
@@ -28,6 +28,7 @@ let config: Config;
 let startTime: Date;
 let lastMessage: Date | undefined;
 let currentModel: string;
+let currentThinking: ThinkingLevel | undefined;
 
 export function setGatewayConfig(cfg: Config): void {
   config = cfg;
@@ -36,7 +37,9 @@ export function setGatewayConfig(cfg: Config): void {
 export async function createGateway(cfg: Config): Promise<FastifyInstance> {
   config = cfg;
   startTime = new Date();
-  currentModel = cfg.agents.list[cfg.agents.default]?.model || 'claude-sonnet-4-5';
+  const defaultAgent = cfg.agents.list[cfg.agents.default];
+  currentModel = defaultAgent?.model || 'claude-sonnet-4-5';
+  currentThinking = defaultAgent?.thinking;
 
   const fastify = Fastify({
     logger: {
@@ -67,6 +70,7 @@ export async function createGateway(cfg: Config): Promise<FastifyInstance> {
       uptime: Date.now() - startTime.getTime(),
       agent: config.agents.default,
       model: currentModel,
+      thinking: currentThinking,
       lastMessage,
       cronJobs: jobs.map(j => ({
         id: j.id,
@@ -95,7 +99,7 @@ export async function createGateway(cfg: Config): Promise<FastifyInstance> {
         undefined,
         {
           channel: 'gateway',
-          metadata: { ip: request.ip },
+          metadata: { ip: request.ip, thinkingOverride: currentThinking },
         }
       );
       lastMessage = new Date();
@@ -187,6 +191,14 @@ export function getCurrentModel(): string {
 
 export function setCurrentModel(model: string): void {
   currentModel = model;
+}
+
+export function getCurrentThinking(): ThinkingLevel | undefined {
+  return currentThinking;
+}
+
+export function setCurrentThinking(thinking: ThinkingLevel | undefined): void {
+  currentThinking = thinking;
 }
 
 export function getLastMessage(): Date | undefined {

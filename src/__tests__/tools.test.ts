@@ -556,6 +556,11 @@ describe('code_with_agent', () => {
       expect(resolveModelAlias('claude-sonnet-4-5', {})).toBe('claude-sonnet-4-5');
       expect(resolveModelAlias('gpt-4.1', {})).toBe('gpt-4.1');
     });
+
+    it('supports claude opus 4.6 aliases', () => {
+      expect(resolveModelAlias('opus4.6', {})).toBe('claude-opus-4-6');
+      expect(resolveModelAlias('anthropic/claude-opus-4.6', {})).toBe('claude-opus-4-6');
+    });
   });
 
   describe('executeTool routing', () => {
@@ -627,4 +632,3 @@ describe('code_with_agent', () => {
     });
   });
 });
-

@@ -65,6 +65,13 @@ describe('provider utils', () => {
     expect(resolveModel('anthropic/claude-opus-4', cfg)).toBe('anthropic/claude-opus-4-7');
   });
 
+  it('preserves explicit claude opus 4.6 model ids', () => {
+    const cfg: any = { models: { aliases: {} } };
+    expect(resolveModel('claude-opus-4.6', cfg)).toBe('claude-opus-4-6');
+    expect(resolveModel('anthropic/claude-opus-4.6', cfg)).toBe('anthropic/claude-opus-4-6');
+    expect(resolveModel('anthropic/claude-opus-4-6', cfg)).toBe('anthropic/claude-opus-4-6');
+  });
+
   it('normalizes provider route fields after deprecated model migration', () => {
     const cfg: any = { models: { aliases: {} } };
     const route = resolveProviderRoute('anthropic/claude-3-5-sonnet-20241022', cfg);

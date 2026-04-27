@@ -251,15 +251,17 @@ export function listMemoryFiles(agentId: string): { name: string; date: string; 
 }
 
 /**
- * Resolve allowed paths for a given context. Priority:
- * 1. Explicit toolConfig.allowedPaths (if provided)
- * 2. Config top-level allowedPaths
- * 3. Fallback: ~/.skimpyclaw only
+ * Resolve allowed paths for a given context. Named project paths are always
+ * appended so channel-level tool overrides cannot accidentally hide them.
  */
 export function resolveAllowedPaths(config: Config, overridePaths?: string[]): string[] {
-  if (overridePaths?.length) return overridePaths;
-  if (config.allowedPaths?.length) return config.allowedPaths;
-  return [join(homedir(), '.skimpyclaw')];
+  const basePaths = overridePaths?.length
+    ? overridePaths
+    : config.allowedPaths?.length
+      ? config.allowedPaths
+      : [join(homedir(), '.skimpyclaw')];
+  const projectPaths = Object.values(config.projects || {});
+  return [...new Set([...basePaths, ...projectPaths])];
 }
 
 export function readMemoryFile(agentId: string, filename: string): string {

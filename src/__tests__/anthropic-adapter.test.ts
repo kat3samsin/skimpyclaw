@@ -9,10 +9,12 @@ import type { ProviderMessages } from '../providers/adapter.js';
 
 // Mock the Anthropic client - create a single shared mock
 const mockMessagesCreate = vi.fn();
+const mockMessagesStream = vi.fn();
 vi.mock('../providers/anthropic.js', () => ({
   getAnthropicClient: vi.fn(() => ({
     messages: {
       create: mockMessagesCreate,
+      stream: mockMessagesStream,
     },
   })),
 }));
@@ -79,6 +81,7 @@ describe('AnthropicAdapter', () => {
 
     // Clear mock call history
     mockMessagesCreate.mockClear();
+    mockMessagesStream.mockClear();
     const { recordUsage } = await import('../usage.js');
     vi.mocked(recordUsage).mockClear();
   });
@@ -218,6 +221,36 @@ describe('AnthropicAdapter', () => {
       expect(consoleSpy).toHaveBeenCalledWith(
         expect.stringContaining('[cache]'),
       );
+    });
+
+    it('should use streaming for large xhigh thinking requests', async () => {
+      const { buildThinkingConfig } = await import('../providers/utils.js');
+      vi.mocked(buildThinkingConfig).mockReturnValueOnce({ budget: 32768, maxTokens: 36864 });
+
+      const finalMessage = vi.fn().mockResolvedValue({
+        content: [{ type: 'text', text: 'Streamed response' }],
+        stop_reason: 'end_turn',
+        usage: { input_tokens: 100, output_tokens: 50 },
+      });
+      mockMessagesStream.mockReturnValue({ finalMessage });
+
+      const providerMessages = {
+        messages: [{ role: 'user', content: 'Hi' }],
+      };
+
+      const result = await adapter.call(
+        providerMessages,
+        [],
+        { ...options, thinking: 'xhigh' },
+        config,
+      );
+
+      expect(mockMessagesCreate).not.toHaveBeenCalled();
+      expect(mockMessagesStream).toHaveBeenCalledWith(expect.objectContaining({
+        max_tokens: 36864,
+        thinking: { type: 'enabled', budget_tokens: 32768 },
+      }));
+      expect(result.textContent).toBe('Streamed response');
     });
   });
 

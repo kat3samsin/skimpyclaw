@@ -17,6 +17,19 @@ import { toCostDetails } from '../observability.js';
 import { compactMessages, anthropicFormatHelper } from '../context-manager.js';
 import { buildUsageRecord, recordUsage } from '../../usage.js';
 
+const NONSTREAMING_TOKEN_LIMIT = 21_333;
+
+function shouldStreamAnthropicRequest(params: { max_tokens?: number }): boolean {
+  return typeof params.max_tokens === 'number' && params.max_tokens > NONSTREAMING_TOKEN_LIMIT;
+}
+
+async function createAnthropicMessage(client: Anthropic, params: any): Promise<any> {
+  if (shouldStreamAnthropicRequest(params) && typeof (client.messages as any).stream === 'function') {
+    return await (client.messages as any).stream(params).finalMessage();
+  }
+  return await client.messages.create(params);
+}
+
 export class AnthropicAdapter implements ProviderAdapter {
   readonly name = 'anthropic';
 
@@ -57,7 +70,7 @@ export class AnthropicAdapter implements ProviderAdapter {
       anthropicParams.max_tokens = Math.max(anthropicParams.max_tokens, thinkingConfig.maxTokens);
     }
 
-    const response = await client.messages.create(anthropicParams);
+    const response = await createAnthropicMessage(client, anthropicParams);
     const usage = (response as any).usage;
 
     if (usage?.cache_read_input_tokens > 0 || usage?.cache_creation_input_tokens > 0) {
@@ -133,7 +146,7 @@ export class AnthropicAdapter implements ProviderAdapter {
       anthropicParams.max_tokens = Math.max(anthropicParams.max_tokens, thinkingConfig.maxTokens);
     }
 
-    const response = await client.messages.create(anthropicParams);
+    const response = await createAnthropicMessage(client, anthropicParams);
     const usage = (response as any).usage;
 
     // Log cache metrics

@@ -225,6 +225,7 @@ export interface GatewayStatus {
   uptime: number;
   agent: string;
   model: string;
+  thinking?: ThinkingLevel;
   lastMessage?: Date;
   activeChannel?: ChannelId | null;
   cronJobs: { id: string; name: string; nextRun?: Date }[];

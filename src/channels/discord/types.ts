@@ -3,7 +3,9 @@ import type { ChatMessage } from '../../types.js';
 export const BOT_COMMANDS: { command: string; description: string }[] = [
   { command: 'help', description: 'Show available commands' },
   { command: 'model', description: 'Switch model (fast/smart/opus)' },
+  { command: 'effort', description: 'Set reasoning effort (none/low/medium/high/xhigh)' },
   { command: 'status', description: 'Show bot status' },
+  { command: 'agent', description: 'Manage this Discord thread agent' },
   { command: 'clear', description: 'Clear conversation history' },
   { command: 'compact', description: 'Compress conversation history' },
   { command: 'silence', description: 'Pause proactive messages' },
@@ -16,5 +18,5 @@ export const BOT_COMMANDS: { command: string; description: string }[] = [
   { command: 'heartbeat', description: 'Trigger heartbeat check' },
 ];
 
-export const KNOWN_COMMANDS = new Set(BOT_COMMANDS.map(c => c.command));
+export const KNOWN_COMMANDS = new Set([...BOT_COMMANDS.map(c => c.command), 'thread-agent', 'think']);
 export const MAX_HISTORY_PAIRS = 5;

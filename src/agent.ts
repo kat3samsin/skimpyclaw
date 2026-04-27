@@ -6,7 +6,7 @@ import { homedir } from 'os';
 import { getAgentDir } from './config.js';
 import { buildSafeSystemPrompt, sanitizeUserInput } from './security.js';
 import { toErrorMessage } from './utils.js';
-import type { Config, ChatMessage, ChatOptions, ToolConfig, AgentRunContext, ContentBlock } from './types.js';
+import type { Config, ChatMessage, ChatOptions, ToolConfig, AgentRunContext, ContentBlock, ThinkingLevel } from './types.js';
 import { getToolDefinitions, type ExecuteToolContext } from './tools.js';
 import { startTrace, endTrace } from './audit.js';
 import { loadSkills, getSkillsForContext, formatSkillsPrompt } from './skills.js';
@@ -133,6 +133,13 @@ export function appendToMemory(agentId: string, entry: string): void {
 // Langfuse app tagging
 const LANGFUSE_APP_NAME = 'skimpyclaw';
 const LANGFUSE_APP_TAG = 'app:skimpyclaw';
+const THINKING_LEVELS = new Set<ThinkingLevel>(['none', 'low', 'medium', 'high', 'xhigh']);
+
+function metadataThinking(value: unknown): ThinkingLevel | undefined {
+  return typeof value === 'string' && THINKING_LEVELS.has(value as ThinkingLevel)
+    ? value as ThinkingLevel
+    : undefined;
+}
 
 export async function runAgentTurn(
   agentId: string,
@@ -164,6 +171,23 @@ export async function runAgentTurn(
     systemPrompt += channelHints[context.channel] || '';
   }
 
+  const metadata = context?.metadata as Record<string, unknown> | undefined;
+  const threadAgentAlias = typeof metadata?.threadAgentAlias === 'string'
+    ? metadata.threadAgentAlias.trim()
+    : '';
+  const threadAgentPrompt = typeof metadata?.threadAgentPromptOverlay === 'string'
+    ? metadata.threadAgentPromptOverlay.trim()
+    : '';
+  if (threadAgentAlias || threadAgentPrompt) {
+    systemPrompt += `\n\n## Discord Thread Agent`;
+    if (threadAgentAlias) {
+      systemPrompt += `\nAlias: ${threadAgentAlias}`;
+    }
+    if (threadAgentPrompt) {
+      systemPrompt += `\nFollow this additional thread-specific prompt:\n${threadAgentPrompt}`;
+    }
+  }
+
   // Build user content — support both string and content arrays (for images)
   let userContent: string | ContentBlock[];
   let sanitizedMessage: string;
@@ -189,7 +213,10 @@ export async function runAgentTurn(
   ];
 
   const model = modelOverride || agentConfig.model;
-  const chatOptions: ChatOptions = { model, thinking: agentConfig.thinking };
+  const thinking = metadataThinking(metadata?.threadAgentThinking)
+    ?? metadataThinking(metadata?.thinkingOverride)
+    ?? agentConfig.thinking;
+  const chatOptions: ChatOptions = { model, thinking };
 
   const route = resolveProviderRoute(model, config);
   const { resolvedModel, provider, modelId } = route;

@@ -22,9 +22,7 @@ function getHeartbeatTools(config: Config): ToolConfig {
   if (config.heartbeat.tools) {
     return {
       ...config.heartbeat.tools,
-      allowedPaths: config.heartbeat.tools.allowedPaths?.length
-        ? config.heartbeat.tools.allowedPaths
-        : resolveAllowedPaths(config),
+      allowedPaths: resolveAllowedPaths(config, config.heartbeat.tools.allowedPaths),
     };
   }
 

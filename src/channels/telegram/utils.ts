@@ -127,9 +127,7 @@ export function getDefaultTelegramToolConfig(cfg: Config): ToolConfig {
   if (cfg.channels.telegram.tools) {
     return {
       ...cfg.channels.telegram.tools,
-      allowedPaths: cfg.channels.telegram.tools.allowedPaths?.length
-        ? cfg.channels.telegram.tools.allowedPaths
-        : resolveAllowedPaths(cfg),
+      allowedPaths: resolveAllowedPaths(cfg, cfg.channels.telegram.tools.allowedPaths),
     };
   }
 
