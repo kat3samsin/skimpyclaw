@@ -124,7 +124,7 @@ export function cancelCodeAgent(id: string): CodeAgentTask | null {
 export function restoreCodeAgentTasks(): void {
   try {
     if (!existsSync(CODE_AGENTS_DIR)) return;
-    const files = readdirSync(CODE_AGENTS_DIR).filter(f => f.endsWith('.json'));
+    const files = readdirSync(CODE_AGENTS_DIR).filter(f => /^ca-\d+\.json$/.test(f));
     let maxCounter = 0;
     for (const file of files) {
       try {

@@ -36,6 +36,7 @@ import {
   getDiscordToolConfig,
   getDiscordRunContext,
   conversationKey,
+  buildCodeAgentThreadContext,
   buildHelpText,
   sendLongText,
   startTypingIndicator,
@@ -584,9 +585,13 @@ export async function handleIncomingMessage(message: Message, config: Config): P
 
   try {
     const history = await getHistory(key);
+    const codeAgentContext = buildCodeAgentThreadContext(message);
+    const prompt = codeAgentContext
+      ? `${codeAgentContext}\n\nUser message in this Discord thread:\n${text}`
+      : text;
     const response = await runAgentTurn(
       config.agents.default,
-      text,
+      prompt,
       config,
       getCurrentModel(),
       getDiscordToolConfig(config),
