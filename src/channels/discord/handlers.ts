@@ -51,15 +51,12 @@ import {
   getAgentProfileByAlias,
   getThreadAgentByThreadId,
   listAgentProfiles,
-  listThreadAgents,
   parseDiscordAgentMention,
   removeAgentProfile,
-  removeThreadAgent,
   setAgentProfileModel,
   setAgentProfilePrompt,
   setAgentProfileThinking,
   upsertAgentProfile,
-  upsertThreadAgent,
   type DiscordAgentProfile,
   type DiscordThreadAgent,
 } from './thread-agents.js';
@@ -75,11 +72,9 @@ const THREAD_AGENT_USAGE = [
   'Usage:',
   '/agent create <alias> [agent-id]',
   '/agent use <alias> [message]',
-  '/agent set <alias> [agent-id]',
   '/agent model [alias] <model-alias|provider/model|model-id>',
-  '/agent think [alias] <none|low|medium|high|xhigh>',
+  '/agent effort [alias] <none|low|medium|high|xhigh>',
   '/agent prompt [alias] <prompt text>',
-  '/agent unset',
   '/agent delete <alias>',
   '/agent list',
   '@alias <message>',
@@ -113,7 +108,7 @@ function formatThreadAgent(record: DiscordThreadAgent): string {
     : '';
   const model = record.model ? `, model ${record.model}` : '';
   const thinking = record.thinking ? `, effort ${record.thinking}` : '';
-  return `thread ${record.threadId} uses @${record.alias} -> ${record.agentId}${model}${thinking}${prompt}`;
+  return `This thread uses @${record.alias} -> ${record.agentId}${model}${thinking}${prompt}`;
 }
 
 function formatAgentProfile(profile: DiscordAgentProfile): string {
@@ -424,42 +419,6 @@ function getOrCreateAgentProfileCommandTarget(
   }
 }
 
-function getThreadAgentCommandTarget(
-  message: Message,
-  alias?: string,
-  options: { allowSingleFallback?: boolean } = { allowSingleFallback: true }
-): { record: DiscordThreadAgent | null; error?: string } {
-  const normalizedAlias = normalizeAliasArg(alias);
-  if (normalizedAlias) {
-    const found = listThreadAgents().find(record => record.alias === normalizedAlias);
-    return found ? { record: found } : { record: null, error: `No Discord thread agent found for @${normalizedAlias}.` };
-  }
-
-  if (isDiscordThreadChannel(message.channel)) {
-    const found = getThreadAgentByThreadId(message.channel.id);
-    if (found) return { record: found };
-  }
-
-  if (message.channel.isDMBased()) {
-    return { record: null, error: 'Run this inside the agent thread, or pass an agent alias.' };
-  }
-
-  const channelId = isDiscordThreadChannel(message.channel) && 'parentId' in message.channel
-    ? message.channel.parentId ?? message.channel.id
-    : message.channel.id;
-  const matches = listThreadAgents().filter(record => record.channelId === channelId);
-  if (matches.length === 1) return { record: matches[0] };
-  if (matches.length > 1) {
-    return { record: null, error: 'More than one Discord thread agent belongs to this channel. Run the command inside the target agent thread, or pass an agent alias.' };
-  }
-  const allRecords = listThreadAgents();
-  if (options.allowSingleFallback !== false && allRecords.length === 1) return { record: allRecords[0] };
-  return {
-    record: null,
-    error: `This thread is not configured as an agent yet. Current channel ${message.channel.id}, known agents: ${allRecords.map(record => `@${record.alias}`).join(', ') || '(none)'}.`,
-  };
-}
-
 async function handleEffortCommand(message: Message, args: string[]): Promise<void> {
   if (!args[0]) {
     await message.reply(`Current effort: ${getCurrentThinking() || 'default'}\n${formatThinkingUsage()}`);
@@ -495,7 +454,7 @@ async function handleThreadAgentCommand(message: Message, args: string[], config
       return;
     }
     const record = getThreadAgentByThreadId(message.channel.id);
-    await message.reply(record ? formatThreadAgent(record) : `This thread is not configured as an agent.\n\n${THREAD_AGENT_USAGE}`);
+    await message.reply(record ? formatThreadAgent(record) : `No agent profile is active in this thread.\n\n${THREAD_AGENT_USAGE}`);
     return;
   }
 
@@ -533,7 +492,7 @@ async function handleThreadAgentCommand(message: Message, args: string[], config
         ? message.channel
         : await createThreadAgentThread(message, profile.alias, initialPrompt);
       if (!targetChannel) {
-        await message.reply('Agent profiles can only be bound inside a Discord thread or from a channel where I can create one.');
+        await message.reply('Agent profiles can only run in a Discord thread or from a channel where I can create one.');
         return;
       }
       const record = bindThreadAgent({
@@ -544,46 +503,14 @@ async function handleThreadAgentCommand(message: Message, args: string[], config
         channelId: targetChannel.isThread() ? targetChannel.parentId ?? message.channelId : message.channelId,
       });
       const url = buildThreadUrl(message.guildId, targetChannel.id);
-      const link = !isThread && url ? `\n${url}` : '';
-      await message.reply(`Bound this thread to ${formatAgentProfile(profile)}${link}\n${formatThreadAgent(record)}`);
+      await message.reply(!isThread && url
+        ? `Started @${profile.alias}: ${url}`
+        : `This thread now uses ${formatAgentProfile(profile)}`);
       if (initialPrompt) {
         await runThreadAgentPrompt(message, targetChannel, record, initialPrompt, config, {
           announceTask: !isThread,
         });
       }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      await message.reply(`Error: ${msg}`);
-    }
-    return;
-  }
-
-  if (subcommand === 'set') {
-    const alias = args[1];
-    const agentId = resolveConfiguredAgentId(config, args[2]);
-    if (!alias || !agentId) {
-      await message.reply(`Usage: /agent set <alias> [agent-id]\nConfigured agents: ${formatAgentIds(config)}`);
-      return;
-    }
-    try {
-      const targetChannel = isThread
-        ? message.channel
-        : await createThreadAgentThread(message, alias);
-      if (!targetChannel) {
-        await message.reply('Thread agents can only be configured inside a Discord thread or from a channel where I can create one.');
-        return;
-      }
-      const record = upsertThreadAgent({
-        threadId: targetChannel.id,
-        alias,
-        agentId,
-        createdBy: message.author.id,
-        guildId: message.guildId,
-        channelId: targetChannel.isThread() ? targetChannel.parentId ?? message.channelId : message.channelId,
-      });
-      const url = buildThreadUrl(message.guildId, targetChannel.id);
-      const link = !isThread && url ? `\n${url}` : '';
-      await message.reply(`Configured profile and bound thread:\n${formatThreadAgent(record)}${link}`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       await message.reply(`Error: ${msg}`);
@@ -726,17 +653,6 @@ async function handleThreadAgentCommand(message: Message, args: string[], config
     return;
   }
 
-  if (subcommand === 'unset' || subcommand === 'remove') {
-    const target = getThreadAgentCommandTarget(message, args[1], { allowSingleFallback: false });
-    if (!target.record) {
-      await message.reply(target.error || 'This thread is not configured as an agent.');
-      return;
-    }
-    const removed = removeThreadAgent(target.record.threadId);
-    await message.reply(removed ? `Removed @${target.record.alias}.` : 'This thread is not configured as an agent.');
-    return;
-  }
-
   await message.reply(THREAD_AGENT_USAGE);
 }
 
@@ -755,7 +671,7 @@ export async function handleCommand(
     return;
   }
 
-  if (command === 'agent' || command === 'thread-agent') {
+  if (command === 'agent') {
     await handleThreadAgentCommand(message, args, config);
     return;
   }

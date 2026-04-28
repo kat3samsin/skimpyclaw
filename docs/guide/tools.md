@@ -6,10 +6,10 @@
 |-------|-------|---------------|
 | Built-in | Read, Write, Glob, Bash, Fetch | Always (when tools enabled) |
 | Browser | Browser (Playwright) | When `tools.browser.enabled` is true |
-| MCP | Auto-discovered from mcporter | All servers in `~/.mcporter/mcporter.json` |
+| MCP | Auto-discovered from mcporter | Full tool profile on Anthropic and Codex provider paths |
 | Agent | code_with_agent, check_code_agent | When chatId + config present |
 
-For coding worker details, see `docs/coding-agents.md`.
+For coding worker details, see [Coding Agents](./coding-agents.md). For configured agents and reusable Discord `@alias` profiles, see [Agents](./agents.md).
 
 ## Agent coding tools
 
@@ -20,6 +20,8 @@ Exact command builders live in `src/code-agents/utils.ts` (`buildCodeAgentArgs`)
 - **Claude worker**: `claude -p --verbose --output-format stream-json --dangerously-skip-permissions ... <task>`
 - **Codex worker**: `codex exec --full-auto --json --color never ... <task>`
 - **Kimi worker**: `kimi --yolo -p <task> ...`
+
+Discord interactive coding sessions currently use Claude only.
 
 Related files:
 

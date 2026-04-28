@@ -69,6 +69,27 @@ When the app writes `~/.skimpyclaw/config.json`, it enforces restrictive `0600` 
 
 Thinking levels: `none`, `low`, `medium`, `high`, `xhigh` (enables extended thinking for supported models).
 
+Each key in `agents.list` is a runnable SkimpyClaw agent. The runtime loads prompt templates from `~/.skimpyclaw/agents/<agent-id>/`, so additional agents can have their own `IDENTITY.md`, `TOOLS.md`, and memory. Discord profiles are a channel-specific alias layer that can point at any configured agent and add per-profile model, effort, and prompt overrides.
+
+```json
+"agents": {
+  "default": "main",
+  "list": {
+    "main": {
+      "identity": { "name": "SkimpyClaw", "emoji": "👙🦞" },
+      "model": "claude-fast"
+    },
+    "reviewer": {
+      "identity": { "name": "Reviewer", "emoji": "🔎" },
+      "model": "claude-think",
+      "thinking": "high"
+    }
+  }
+}
+```
+
+See [Agents](./agents.md) for core agent setup and the Discord `/agent` and `@alias` workflow.
+
 ## Models
 
 ```json
@@ -90,8 +111,10 @@ Thinking levels: `none`, `low`, `medium`, `high`, `xhigh` (enables extended thin
   },
   "aliases": {
     "claude-fast": "anthropic/claude-haiku-4-5",
-    "claude-think": "anthropic/claude-sonnet-4-5",
-    "claude-opus": "anthropic/claude-opus-4",
+    "claude-think": "anthropic/claude-sonnet-4-6",
+    "claude-opus": "anthropic/claude-opus-4-7",
+    "claude-opus4.6": "anthropic/claude-opus-4-6",
+    "claude-opus-4.6": "anthropic/claude-opus-4-6",
     "codex5.3": "codex/gpt-5.3-codex",
     "codex5.5": "codex/gpt-5.5",
     "codex": "codex/gpt-5.5"
@@ -182,7 +205,7 @@ Two payload types: `agentTurn` and `script`.
 }
 ```
 
-If `payload.discordThreadId` is set, cron notifications route to that Discord thread first. If the thread ID is invalid or delivery fails, notifications fall back to the active channel target.
+If `payload.discordThreadId` is valid, cron notifications route only to that Discord thread. Delivery failures are logged and do not fall back to the active channel. If the configured thread ID is invalid, SkimpyClaw ignores it and uses normal active-channel delivery.
 
 ### Script
 
@@ -386,8 +409,9 @@ Projects are automatically added to tool `allowedPaths` and can be referenced by
       }
     },
     "aliases": {
-      "claude-fast": "anthropic/claude-sonnet-4-5",
-      "claude-opus": "anthropic/claude-opus-4"
+      "claude-fast": "anthropic/claude-haiku-4-5",
+      "claude-think": "anthropic/claude-sonnet-4-6",
+      "claude-opus": "anthropic/claude-opus-4-7"
     },
     "promptCaching": true
   },

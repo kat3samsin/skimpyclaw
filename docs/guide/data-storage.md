@@ -24,6 +24,7 @@ All runtime data lives under `~/.skimpyclaw/`.
 ├── sessions/
 │   └── *.json                          # Session records (dashboard-readable)
 │   └── *.jsonl                         # Conversation history (Telegram/Discord)
+├── discord-thread-agents.json          # Discord profile aliases + thread bindings
 ├── browser-profile/                    # Persistent browser profile
 ├── skills/                             # Custom skills directory
 │   └── <skill-name>/
@@ -55,7 +56,7 @@ Each line in `logs/audit/YYYY-MM-DD.jsonl` is a completed trace:
   "endedAt": "2026-02-17T08:00:05.123Z",
   "events": [
     { "type": "tool_call", "summary": "Read ~/.skimpyclaw/agents/main/TOOLS.md", "durationMs": 12 },
-    { "type": "model_call", "summary": "anthropic/claude-sonnet-4-5", "durationMs": 3200 }
+    { "type": "model_call", "summary": "anthropic/claude-sonnet-4-6", "durationMs": 3200 }
   ]
 }
 ```
@@ -86,6 +87,38 @@ Digests are stored in `logs/digests/<job-id>/YYYY-MM-DD-<digest-id>.json`:
 ```
 
 Digest metadata is also indexed in `logs/digests/index.json` to support direct, validated lookup/deletion by digest ID.
+
+## Discord profile format
+
+Discord profile aliases and thread bindings are stored in `discord-thread-agents.json`:
+
+```json
+{
+  "version": 2,
+  "profiles": [
+    {
+      "alias": "reviewer",
+      "agentId": "main",
+      "model": "anthropic/claude-sonnet-4-6",
+      "thinking": "high",
+      "promptOverlay": "Focus on correctness and missing tests.",
+      "createdBy": "1234567890",
+      "createdAt": "2026-04-27T20:00:00.000Z",
+      "updatedAt": "2026-04-27T20:05:00.000Z"
+    }
+  ],
+  "bindings": [
+    {
+      "threadId": "9876543210",
+      "profileAlias": "reviewer",
+      "channelId": "5555555555",
+      "createdBy": "1234567890",
+      "createdAt": "2026-04-27T20:10:00.000Z",
+      "updatedAt": "2026-04-27T20:10:00.000Z"
+    }
+  ]
+}
+```
 
 ## Security notes
 

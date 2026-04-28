@@ -16,6 +16,7 @@ Implementation lives in:
 
 - `src/channels/discord/index.ts` (startup, proactive sends, approval event wiring)
 - `src/channels/discord/handlers.ts` (commands, incoming message handling, approvals)
+- `src/channels/discord/thread-agents.ts` (reusable agent profiles + thread bindings)
 - `src/channels/discord/threads.ts` (thread creation + thread message routing)
 - `src/channels/discord/utils.ts` (chunking, context, help text, history helpers)
 - `src/code-agents/utils.ts` (task completion notifications + Discord thread fallback)
@@ -25,9 +26,10 @@ Implementation lives in:
 When Discord behavior changes, update these docs in the same PR:
 
 1. `docs/guide/chat-commands.md`
-2. `docs/guide/configuration.md` (if any config flag/key changed)
-3. `docs/guide/changelog.md` (add/update an entry under `## Unreleased`)
-4. `README.md` only if public-facing capabilities or doc links changed
+2. `docs/guide/agents.md` (if `/agent`, mentions, or profile storage changed)
+3. `docs/guide/configuration.md` (if any config flag/key changed)
+4. `docs/guide/changelog.md` (add/update an entry under `## Unreleased`)
+5. `README.md` only if public-facing capabilities or doc links changed
 
 ## Changelog Entry Format
 

@@ -29,8 +29,10 @@ On macOS, generic-password keychain references are also supported via `${KEYCHAI
 |-------|------|-------------|
 | `identity.name` | string | Display name |
 | `identity.emoji` | string | Agent emoji |
-| `model` | string | Default model (e.g. `anthropic/claude-opus-4`) |
+| `model` | string | Default model (e.g. `anthropic/claude-opus-4-7`) |
 | `thinking` | string | Thinking level: `none`, `low`, `medium`, `high`, `xhigh` |
+
+Additional agents load prompt files from `~/.skimpyclaw/agents/<agent-id>/`. Discord `/agent` profiles are channel-specific runtime state stored separately in `~/.skimpyclaw/discord-thread-agents.json`; they point at these configured agent IDs and can override model, effort, and prompt.
 
 ## `models`
 
@@ -130,7 +132,7 @@ Map of shorthand names to full `provider/model-id`. See [Model Aliases](./model-
 | `timeoutMs` | number | Timeout in milliseconds |
 | `tools` | ToolConfig | Tool access config (for `agentTurn`) |
 | `sendAsVoice` | boolean | Send result as voice message |
-| `discordThreadId` | string | Discord thread ID to send cron notifications to; falls back to active channel if invalid/unavailable |
+| `discordThreadId` | string | Discord thread ID to send cron notifications to. Valid thread targets do not fall back to the active channel on delivery failure; invalid IDs are ignored and use normal active-channel delivery |
 
 ## `heartbeat`
 

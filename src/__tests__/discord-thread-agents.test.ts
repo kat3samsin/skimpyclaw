@@ -6,20 +6,15 @@ import {
   _setThreadAgentStorePathForTesting,
   bindThreadAgent,
   getAgentProfileByAlias,
-  getThreadAgentByAlias,
   getThreadAgentByThreadId,
   listAgentProfiles,
   listThreadAgentBindings,
-  listThreadAgents,
   parseDiscordAgentMention,
   removeAgentProfile,
-  removeThreadAgent,
   setAgentProfileModel,
   setAgentProfilePrompt,
   setAgentProfileThinking,
-  setThreadAgentModel,
   upsertAgentProfile,
-  upsertThreadAgent,
 } from '../channels/discord/thread-agents.js';
 
 let tempDir: string;
@@ -54,10 +49,8 @@ describe('Discord thread agents registry', () => {
     expect(profile.alias).toBe('reviewer');
     expect(binding.alias).toBe('reviewer');
     expect(getThreadAgentByThreadId('thread-1')?.agentId).toBe('main');
-    expect(getThreadAgentByAlias('reviewer')?.threadId).toBe('thread-1');
     expect(listAgentProfiles()).toHaveLength(1);
     expect(listThreadAgentBindings()).toHaveLength(1);
-    expect(listThreadAgents()).toHaveLength(1);
   });
 
   it('allows one profile to be reused across multiple threads', () => {
@@ -70,16 +63,16 @@ describe('Discord thread agents registry', () => {
     bindThreadAgent({ threadId: 'thread-2', alias: 'claude-coder', createdBy: 'user-1' });
 
     expect(listAgentProfiles()).toHaveLength(1);
-    expect(listThreadAgents().map(record => record.threadId)).toEqual(['thread-1', 'thread-2']);
+    expect(listThreadAgentBindings().map(record => record.threadId)).toEqual(['thread-1', 'thread-2']);
   });
 
   it('updates profile prompts, models, and thinking for all bound threads', () => {
-    upsertThreadAgent({
-      threadId: 'thread-1',
+    upsertAgentProfile({
       alias: 'claude-coder',
       agentId: 'main',
       createdBy: 'user-1',
     });
+    bindThreadAgent({ threadId: 'thread-1', alias: 'claude-coder', createdBy: 'user-1' });
     bindThreadAgent({ threadId: 'thread-2', alias: 'claude-coder', createdBy: 'user-1' });
 
     expect(setAgentProfilePrompt('claude-coder', 'Review code like a senior engineer.')?.promptOverlay)
@@ -91,39 +84,13 @@ describe('Discord thread agents registry', () => {
     expect(getThreadAgentByThreadId('thread-2')?.thinking).toBe('xhigh');
   });
 
-  it('keeps thread compatibility setters by updating the bound profile', () => {
-    upsertThreadAgent({
-      threadId: 'thread-1',
-      alias: 'claude-coder',
-      agentId: 'main',
-      createdBy: 'user-1',
-    });
-
-    expect(setThreadAgentModel('thread-1', 'anthropic/claude-opus-4-6')?.model)
-      .toBe('anthropic/claude-opus-4-6');
-    expect(getAgentProfileByAlias('claude-coder')?.model).toBe('anthropic/claude-opus-4-6');
-  });
-
-  it('removes bindings independently from profiles', () => {
-    upsertThreadAgent({
-      threadId: 'thread-1',
-      alias: 'reviewer',
-      agentId: 'main',
-      createdBy: 'user-1',
-    });
-
-    expect(removeThreadAgent('thread-1')).toBe(true);
-    expect(getThreadAgentByThreadId('thread-1')).toBeNull();
-    expect(getAgentProfileByAlias('reviewer')).not.toBeNull();
-  });
-
   it('deletes profiles with their bindings', () => {
-    upsertThreadAgent({
-      threadId: 'thread-1',
+    upsertAgentProfile({
       alias: 'reviewer',
       agentId: 'main',
       createdBy: 'user-1',
     });
+    bindThreadAgent({ threadId: 'thread-1', alias: 'reviewer', createdBy: 'user-1' });
 
     expect(removeAgentProfile('reviewer')).toBe(true);
     expect(getAgentProfileByAlias('reviewer')).toBeNull();

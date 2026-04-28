@@ -223,14 +223,6 @@ export function listThreadAgentBindings(): DiscordThreadAgentBinding[] {
   return Array.from(bindingsByThreadId.values()).sort((a, b) => a.threadId.localeCompare(b.threadId));
 }
 
-export function listThreadAgents(): DiscordThreadAgent[] {
-  ensureLoaded();
-  return listThreadAgentBindings()
-    .map(binding => resolveBinding(binding))
-    .filter((record): record is DiscordThreadAgent => Boolean(record))
-    .sort((a, b) => a.alias.localeCompare(b.alias) || a.threadId.localeCompare(b.threadId));
-}
-
 export function getAgentProfileByAlias(alias: string | undefined): DiscordAgentProfile | null {
   ensureLoaded();
   const normalized = normalizeThreadAgentAlias(alias);
@@ -250,13 +242,6 @@ export function getThreadAgentBinding(threadId: string | undefined): DiscordThre
   const id = (threadId || '').trim();
   if (!id) return null;
   return bindingsByThreadId.get(id) || null;
-}
-
-export function getThreadAgentByAlias(alias: string | undefined): DiscordThreadAgent | null {
-  ensureLoaded();
-  const normalized = normalizeThreadAgentAlias(alias);
-  if (!normalized) return null;
-  return listThreadAgents().find(record => record.alias === normalized) || null;
 }
 
 export function upsertAgentProfile(input: {
@@ -323,22 +308,6 @@ export function bindThreadAgent(input: {
   return resolved;
 }
 
-export function upsertThreadAgent(input: {
-  threadId: string;
-  alias: string;
-  agentId: string;
-  createdBy: string;
-  guildId?: string | null;
-  channelId?: string | null;
-}): DiscordThreadAgent {
-  upsertAgentProfile({
-    alias: input.alias,
-    agentId: input.agentId,
-    createdBy: input.createdBy,
-  });
-  return bindThreadAgent(input);
-}
-
 export function setAgentProfilePrompt(alias: string, promptOverlay: string | undefined): DiscordAgentProfile | null {
   ensureLoaded();
   const profile = getAgentProfileByAlias(alias);
@@ -369,34 +338,6 @@ export function setAgentProfileThinking(alias: string, thinking: ThinkingLevel |
   profile.updatedAt = new Date().toISOString();
   persist();
   return profile;
-}
-
-export function setThreadAgentPrompt(threadId: string, promptOverlay: string | undefined): DiscordThreadAgent | null {
-  const record = getThreadAgentByThreadId(threadId);
-  if (!record) return null;
-  setAgentProfilePrompt(record.alias, promptOverlay);
-  return getThreadAgentByThreadId(threadId);
-}
-
-export function setThreadAgentModel(threadId: string, model: string | undefined): DiscordThreadAgent | null {
-  const record = getThreadAgentByThreadId(threadId);
-  if (!record) return null;
-  setAgentProfileModel(record.alias, model);
-  return getThreadAgentByThreadId(threadId);
-}
-
-export function setThreadAgentThinking(threadId: string, thinking: ThinkingLevel | undefined): DiscordThreadAgent | null {
-  const record = getThreadAgentByThreadId(threadId);
-  if (!record) return null;
-  setAgentProfileThinking(record.alias, thinking);
-  return getThreadAgentByThreadId(threadId);
-}
-
-export function removeThreadAgent(threadId: string): boolean {
-  ensureLoaded();
-  const deleted = bindingsByThreadId.delete(threadId.trim());
-  if (deleted) persist();
-  return deleted;
 }
 
 export function removeAgentProfile(alias: string): boolean {

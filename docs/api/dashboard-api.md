@@ -17,7 +17,7 @@ Interactive and management features exposed through the dashboard API.
   "id": "abc-123",
   "status": "running",
   "task": "Fix the login bug",
-  "model": "anthropic/claude-opus-4",
+  "model": "anthropic/claude-opus-4-7",
   "startedAt": "2026-02-23T10:00:00Z",
   "output": "Last 5KB of streaming output..."
 }

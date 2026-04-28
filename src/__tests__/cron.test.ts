@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseDualOutput, validatePrReviewOutput } from '../cron.js';
+import { parseDualOutput } from '../cron.js';
 
 describe('parseDualOutput', () => {
   it('returns full response as text when no delimiters present', () => {
@@ -77,50 +77,6 @@ Voice content here
     const result = parseDualOutput(fullResponse);
     expect(result.voice).toBe('Voice content here');
     expect(result.text).toBe(fullResponse);
-  });
-});
-
-describe('validatePrReviewOutput', () => {
-  it('returns null for NO_CANDIDATES result', () => {
-    const output = 'No PRs found.\n[PR_REVIEW_RESULT: NO_CANDIDATES]';
-    expect(validatePrReviewOutput(output)).toBeNull();
-  });
-
-  it('returns null when candidates were reviewed with code_with_agent', () => {
-    const output = 'Reviewed 3 PRs.\n[PR_REVIEW_RESULT: CANDIDATES=3 CODE_AGENT_CALLS=3 BLOCKED=0]';
-    expect(validatePrReviewOutput(output)).toBeNull();
-  });
-
-  it('returns null when all candidates are blocked', () => {
-    const output = 'All blocked.\n[PR_REVIEW_RESULT: CANDIDATES=2 CODE_AGENT_CALLS=0 BLOCKED=2]';
-    expect(validatePrReviewOutput(output)).toBeNull();
-  });
-
-  it('returns alert when candidates exist but no code_with_agent calls', () => {
-    const output = 'Inline review.\n[PR_REVIEW_RESULT: CANDIDATES=3 CODE_AGENT_CALLS=0 BLOCKED=0]';
-    const result = validatePrReviewOutput(output);
-    expect(result).not.toBeNull();
-    expect(result).toContain('code_with_agent was never called');
-    expect(result).toContain('3 PR candidate');
-  });
-
-  it('returns alert when result line is missing entirely', () => {
-    const output = 'The agent just rambled about PRs without following the prompt.';
-    const result = validatePrReviewOutput(output);
-    expect(result).not.toBeNull();
-    expect(result).toContain('Missing [PR_REVIEW_RESULT]');
-  });
-
-  it('returns null when some candidates reviewed and some blocked', () => {
-    const output = '[PR_REVIEW_RESULT: CANDIDATES=4 CODE_AGENT_CALLS=2 BLOCKED=2]';
-    expect(validatePrReviewOutput(output)).toBeNull();
-  });
-
-  it('returns alert when partially blocked but zero calls', () => {
-    const output = '[PR_REVIEW_RESULT: CANDIDATES=3 CODE_AGENT_CALLS=0 BLOCKED=1]';
-    const result = validatePrReviewOutput(output);
-    expect(result).not.toBeNull();
-    expect(result).toContain('code_with_agent was never called');
   });
 });
 

@@ -6,7 +6,7 @@
   <title>SkimpyClaw — Architecture Diagram</title>
   <meta
     name="description"
-    content="Component-level architecture of SkimpyClaw: input channels, gateway, agent runtime, tools, coding-agent CLIs, providers, and local storage."
+    content="Component-level architecture of SkimpyClaw: input channels, gateway, agent runtime, Discord profile routing, tools, coding-agent CLIs, providers, and local storage."
   />
   <meta name="theme-color" content="#d33b36" />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -584,7 +584,7 @@
           <rect class="mask" x="40" y="710" width="400" height="50" rx="6" />
           <rect class="box storage" x="40" y="710" width="400" height="50" rx="6" />
           <text class="label-title" x="240" y="730" text-anchor="middle">~/.skimpyclaw/  (local storage)</text>
-          <text class="label-sub" x="240" y="748" text-anchor="middle">config.json · logs/audit · logs/usage · logs/code-agents · skills/ · agents/</text>
+          <text class="label-sub" x="240" y="748" text-anchor="middle">config.json · discord-thread-agents.json · logs/* · skills/ · agents/</text>
 
           <line class="flow-storage" x1="280" y1="420" x2="200" y2="710" marker-end="url(#arrowhead)"/>
           <line class="flow-storage" x1="370" y1="540" x2="300" y2="710" marker-end="url(#arrowhead)"/>
@@ -597,7 +597,7 @@
         <h3><span class="dot blue"></span> Input Channels</h3>
         <ul>
           <li>Telegram bot — voice, images, history, <code>/new</code></li>
-          <li>Discord bot — threads, attachments, interactive coding sessions</li>
+          <li>Discord bot — threads, attachments, profile aliases, interactive coding sessions</li>
           <li>Web dashboard — audit, cron, usage, templates, skills</li>
           <li>CLI — start, stop, onboard, tools, cron</li>
         </ul>
@@ -608,6 +608,7 @@
           <li>Fastify gateway on <code>:18790</code> with bearer auth</li>
           <li>Agent runner with tool loop, history, and memory</li>
           <li>Unified provider router (Anthropic / Codex / OpenAI-compat)</li>
+          <li>Configured agents + Discord profile routing</li>
           <li>Cron scheduler + heartbeat keep-alive</li>
         </ul>
       </div>
@@ -641,6 +642,7 @@
         <ul>
           <li>Config at <code>~/.skimpyclaw/config.json</code> (0600 perms)</li>
           <li>JSONL logs: audit, usage, code-agents, interactive-sessions</li>
+          <li>Discord profile aliases in <code>discord-thread-agents.json</code></li>
           <li>Skills at <code>~/.skimpyclaw/skills/&lt;name&gt;/SKILL.md</code></li>
           <li>Agent templates at <code>~/.skimpyclaw/agents/&lt;name&gt;/</code></li>
         </ul>

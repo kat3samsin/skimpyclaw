@@ -4,7 +4,7 @@
 
 | Command | Description |
 |---------|-------------|
-| `/start` | Greet and show help |
+| `/start` or `/help` | Greet and show help |
 | `/model <alias\|provider/model\|model-id>` | Switch active model |
 | `/status` | Service status — model, last message, coding agents, cron jobs |
 | `/cron list` | List scheduled jobs |
@@ -29,8 +29,10 @@
 
 ## Discord-specific behavior
 
+- **Reasoning effort** — `/effort <none|low|medium|high|xhigh>` or `/think <...>` changes the current Discord effort override.
+- **Reusable agent profiles** — `/agent` manages Discord aliases such as `@reviewer`; `@alias <message>` invokes a profile directly. See [Agents](/guide/agents).
 - **Interactive approval cards** — When exec approval is needed, Discord sends a message with Approve/Deny buttons (Telegram uses inline keyboards).
-- **Threaded replies** — Coding agent tasks automatically create a Discord thread from the triggering message. Status updates and completion notifications route to the thread. Disable with `threadedReplies: false` in Discord config.
+- **Threaded replies** — Coding agent tasks and Discord agent-profile invocations can create threads from the triggering message. Coding-agent status updates and completion notifications route to the thread. Disable coding-agent thread creation with `threadedReplies: false` in Discord config.
 - **Message chunking** — Long responses are split at paragraph/line boundaries into chunks of 1900 characters (Discord's limit is 2000).
 - **Image and voice support** — Image attachments are analyzed via the model's vision capability. Voice messages are transcribed (Whisper) and optionally replied to with TTS audio.
 

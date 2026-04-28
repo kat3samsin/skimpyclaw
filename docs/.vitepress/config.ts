@@ -6,7 +6,7 @@ export default withMermaid({
   lang: 'en-US',
   title: '👙🦞 SkimpyClaw',
   titleTemplate: ':title | SkimpyClaw Docs',
-  description: 'Lightweight personal AI assistant (~20k LOC). Runs locally.',
+  description: 'Lightweight personal AI assistant (~23k LOC). Runs locally.',
 
   // Use .html extension for compatibility with simple servers
   cleanUrls: false,
@@ -83,6 +83,7 @@ export default withMermaid({
           collapsed: false,
           items: [
             { text: 'Tools', link: '/guide/tools.html' },
+            { text: 'Agents', link: '/guide/agents.html' },
             { text: 'Coding Agents', link: '/guide/coding-agents.html' },
             { text: 'Exec Approval', link: '/guide/exec-approval.html' },
             { text: 'Skills', link: '/guide/skills.html' },
@@ -121,6 +122,8 @@ export default withMermaid({
             { text: 'Config Options', link: '/reference/config-options.html' },
             { text: 'Environment Variables', link: '/reference/environment-variables.html' },
             { text: 'Model Aliases', link: '/reference/model-aliases.html' },
+            { text: 'Model Providers', link: '/reference/providers.html' },
+            { text: 'Coding Agent Execution', link: '/reference/code-agents.html' },
           ]
         }
       ]

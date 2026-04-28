@@ -1,6 +1,6 @@
 # Coding Agents
 
-This document covers how `code_with_agent` executes external coding CLIs.
+This document covers how `code_with_agent` executes external coding CLIs. For configured SkimpyClaw agents and reusable Discord `@alias` profiles, see [Agents](./agents.md).
 
 ## What this tool is
 
@@ -78,8 +78,8 @@ Pass `interactive: true` to `code_with_agent` to start a **bidirectional** codin
 code_with_agent { task: "...", interactive: true }
 ```
 
-- **Discord-only**, `claude` or `codex` agents only.
-- The first turn is started with a stable session UUID (`--session-id` for Claude, `thread_id` for Codex).
+- **Discord-only**, `claude` agents only at runtime today.
+- The first turn is started with a stable session UUID (`--session-id` for Claude).
 - Subsequent messages in the thread are routed directly to `claude --resume <session-id>` instead of the main agent, letting you iterate with the coding agent without spawning a new process each time.
 - Messages are queued per-thread (FIFO) to prevent concurrent `--resume` subprocesses from corrupting session history.
 - Session state is persisted to `~/.skimpyclaw/logs/code-agents/interactive-sessions.json` so sessions survive gateway restarts.

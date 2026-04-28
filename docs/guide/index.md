@@ -9,13 +9,14 @@ Welcome to SkimpyClaw! This guide will help you get up and running with your per
 
 ## What is SkimpyClaw?
 
-SkimpyClaw is a lightweight (~20k LOC) personal AI assistant that runs locally on your machine. It provides:
+SkimpyClaw is a lightweight (~23k LOC) personal AI assistant that runs locally on your machine. It provides:
 
 - **Multi-channel chat** — Telegram and Discord bots with persistent conversation history
 - **Tool-enabled agent** — File read/write, bash, browser (Playwright), MCP tools
+- **Agents** — Multiple configured agent identities with their own prompts, models, effort, and memory
 - **Cron scheduler** — Run prompts or scripts on a schedule
 - **Web dashboard** — Manage everything through a beautiful web interface
-- **Subagents** — Autonomous task delegation with retry and concurrency control
+- **Coding agents** — Delegate coding tasks to Claude Code, Codex, or Kimi CLI workers
 
 ## Quick Start
 
@@ -32,6 +33,7 @@ skimpyclaw start --daemon
 - Review [Security](/guide/security) controls and hardening notes
 - Follow the [Discord Update Documentation Process](/guide/discord-updates) when changing Discord behavior
 - Explore available [Tools](/guide/tools)
+- Configure [Agents](/guide/agents) and optional Discord profile aliases
 - Set up [Cron jobs](/guide/configuration#cron) for scheduled and long-running tasks
 
 ## Getting Help

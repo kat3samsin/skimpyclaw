@@ -69,11 +69,11 @@ priority: 100
 
 ## Interactive Sessions
 
-Interactive coding sessions let Discord users hold a back-and-forth conversation with a running Claude or Codex process across multiple thread messages, without spawning a new process for each reply.
+Interactive coding sessions let Discord users hold a back-and-forth conversation with a running Claude process across multiple thread messages, without spawning a new process for each reply. Codex workers are supported for non-interactive `code_with_agent` tasks, but Codex interactive sessions are still gated off at runtime.
 
 ### How it works
 
-1. `code_with_agent` is called with `interactive: true` (Discord only; `claude` or `codex` agents only).
+1. `code_with_agent` is called with `interactive: true` (Discord only; `claude` agent only today).
 2. `runCodeAgentBackground()` assigns a stable UUID as `cliSessionId` on the `CodeAgentTask` and passes it to `buildCodeAgentArgs()` via the `sessionId` field.
 3. Claude receives `--session-id <uuid>` on the first turn, pinning that UUID to the session.
 4. Before the Discord thread is created, the session is registered in the pending map keyed by task ID (`addPendingSession()`). Once the Discord thread exists, `linkThread()` re-keys it by thread ID and writes it to the main store.
@@ -93,7 +93,7 @@ Interactive coding sessions let Discord users hold a back-and-forth conversation
 `src/code-agents/stream-formatter.ts` converts raw CLI stdout to Discord-ready chunks:
 
 - **Claude**: plain-text output, ANSI stripped, paragraph-aware chunking at ≤1900 chars
-- **Codex**: JSONL stream parsed for `thread.started` (captures `thread_id`), `item.completed` (agent messages, command results, file changes)
+- **Codex**: JSONL stream parsed for non-interactive output formatting (`item.completed` agent messages, command results, file changes)
 
 ### Storage
 
@@ -104,8 +104,8 @@ Sessions persist to `~/.skimpyclaw/logs/code-agents/interactive-sessions.json` (
 ```ts
 interface InteractiveSession {
   discordThreadId: string;
-  cliSessionId: string;               // UUID for claude, thread_id for codex
-  cliAgent: 'claude' | 'codex';
+  cliSessionId: string;               // UUID for claude interactive sessions
+  cliAgent: 'claude' | 'codex';       // persisted type; interactive runtime currently accepts claude only
   status: 'active' | 'errored' | 'archived';
   createdAt: string;                  // ISO 8601
   lastActivityAt: string;             // ISO 8601

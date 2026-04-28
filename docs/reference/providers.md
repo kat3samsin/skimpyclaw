@@ -54,9 +54,9 @@ Both share the same persistent browser profile at `~/.skimpyclaw/browser-profile
 
 - Accepted inputs:
   - configured alias (e.g. `claude-think`)
-  - full provider/model (e.g. `anthropic/claude-sonnet-4-5`)
-  - bare model ID with `-` or `.` (e.g. `claude-sonnet-4-5`)
-- Deprecated model IDs are migrated via provider utils (e.g. Claude 3.5 -> Claude 4.5 aliases).
+  - full provider/model (e.g. `anthropic/claude-sonnet-4-6`)
+  - bare model ID with `-` or `.` (e.g. `claude-sonnet-4-6`)
+- Deprecated model IDs are migrated via provider utils (e.g. Claude 3.5 -> current Claude 4 aliases).
 - Standardized errors:
   - unknown alias: `Unknown model alias: "<value>"`
   - malformed value: `Invalid model selection: "<value>". Use alias, provider/model, or model-id.`

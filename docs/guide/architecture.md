@@ -8,7 +8,7 @@
   </a>
 </p>
 
-The diagram shows the full system at a glance: input channels (Telegram, Discord, Dashboard, CLI, Newspaper) → Fastify gateway → core runtime (agent runner, provider router, cron, heartbeat) → tool executor → tools (built-ins, exec approval, `code_with_agent`, skills) → external providers (Anthropic, Codex, OpenAI-compatible, MCP) and local storage under `~/.skimpyclaw/`.
+The diagram shows the full system at a glance: input channels (Telegram, Discord, Dashboard, CLI, Newspaper) → Fastify gateway → core runtime (agent runner, provider router, Discord profile routing, cron, heartbeat) → tool executor → tools (built-ins, exec approval, `code_with_agent`, skills) → external providers (Anthropic, Codex, OpenAI-compatible, MCP) and local storage under `~/.skimpyclaw/`.
 
 <details>
 <summary>Plain-text summary</summary>
@@ -18,7 +18,7 @@ CHANNELS     Telegram · Discord · Web Dashboard · CLI · Newspaper
                                     ↓
 GATEWAY      Fastify :18790  (bearer auth, dashboard + newspaper + agent routes)
                                     ↓
-CORE         Agent Runner · Provider Router · Cron · Heartbeat
+CORE         Agent Runner · Provider Router · Discord Profile Routing · Cron · Heartbeat
                                     ↓
 TOOLS        Read · Write · Glob · Bash · Fetch · Browser
                 Exec Approval (risk tiers 0–3)
@@ -189,7 +189,7 @@ src/
   channels.ts           # Active channel selection + proactive routing
   channels/
     telegram/           # Telegram bot commands and message handling (Grammy)
-    discord/            # Discord bot commands and message handling (discord.js)
+    discord/            # Discord bot commands, profile aliases, and message handling (discord.js)
   voice.ts              # Voice input/output (TTS/STT via multiple providers)
   digests.ts            # Daily digest generation for cron job article outputs
   skills.ts             # Skill loading, eligibility checks, and prompt injection
@@ -270,7 +270,7 @@ Current adapters:
 - `CodexAdapter`
 - `OpenAIAdapter` (OpenAI-compatible providers including Kimi, MiniMax, OpenRouter, Groq, etc.)
 
-MCP support is adapter-scoped: Anthropic includes MCP tool definitions; Codex/OpenAI-compatible adapters do not.
+MCP support is adapter-scoped: Anthropic and Codex include MCP tool definitions; OpenAI-compatible non-Codex adapters do not.
 
 ## Skills System Flow
 

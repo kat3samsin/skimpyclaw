@@ -21,7 +21,8 @@ Use SkimpyClaw if you live in Telegram or Discord, want to read and own every li
 - **Chat interface** — Telegram and Discord bots with persistent conversation history
 - **Tool-enabled agent** — file read/write, bash, browser (Playwright), MCP tools via mcporter
 - **Multi-modal support** — voice messages (STT/TTS), image analysis
-- **Coding agents** — delegate coding tasks to Claude Code, Codex, or Kimi CLI with `code_with_agent`; Discord threads can also run bidirectional interactive sessions that `--resume` the underlying Claude process
+- **Agents** — configure multiple local agents with their own identity, prompts, model, effort, and memory; Discord adds reusable `/agent` profiles and `@alias <message>` shortcuts
+- **Coding agents** — delegate coding tasks to Claude Code, Codex, or Kimi CLI with `code_with_agent`; Discord threads can also run bidirectional interactive Claude sessions that `--resume` the same process
 - **Cron scheduler** — run agent prompts or shell scripts on a schedule
 - **Web dashboard** — Preact/Vite SPA with status, cron, audit log, memory, templates, config editor, skills, approvals
 - **Heartbeat** — periodic keep-alive with Telegram/Discord alerts
@@ -152,7 +153,7 @@ src/
   tools/                # Tool executors (bash, browser, file tools, path utils, execute context)
   providers/            # Provider registry, adapters, unified tool loop, provider implementations
   code-agents/          # Background coding-agent runtime (executor/parser/registry + interactive sessions)
-  channels/             # Channel adapters/utilities (telegram/discord)
+  channels/             # Channel adapters/utilities (telegram/discord, Discord agent profile routing)
   file-lock.ts          # In-memory file lock for concurrent writes
   audit.ts              # Append-only audit log (trace/event model, JSONL storage)
   cron.ts               # Job scheduling + execution + cron logging
@@ -214,6 +215,7 @@ dist/                   # Compiled output + built dashboard assets
 | [docs/guide/security.md](docs/guide/security.md)           | Security model and runtime safeguards                             |
 | [docs/guide/tools.md](docs/guide/tools.md)                 | Built-in tools, browser tool, MCP integration, code agents       |
 | [docs/guide/dashboard.md](docs/guide/dashboard.md)         | Web dashboard, all HTTP endpoints + API routes                   |
+| [docs/guide/agents.md](docs/guide/agents.md)               | Core agents, prompt directories, Discord profile aliases         |
 | [docs/guide/coding-agents.md](docs/guide/coding-agents.md) | Coding-agent execution model and CLI backends                    |
 | [docs/guide/cli.md](docs/guide/cli.md)                     | CLI commands, service management                                 |
 | [docs/guide/chat-commands.md](docs/guide/chat-commands.md) | Telegram/Discord bot commands                                    |

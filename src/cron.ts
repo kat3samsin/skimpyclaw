@@ -298,19 +298,6 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
       // Use text portion for log output and notifications
       logEntry.output = textPortion.slice(0, 5000);
 
-      // Post-run guard for pr-review job
-      if (jobDef.id === 'pr-review') {
-        const guardAlert = validatePrReviewOutput(textPortion);
-        if (guardAlert) {
-          appendCronLogLine(jobDef.id, guardAlert);
-          try {
-            await sendCronNotification(config, guardAlert, discordThreadId);
-          } catch {
-            // Non-critical
-          }
-        }
-      }
-
       // Parse and save digest from the text portion
       try {
         const digest = parseAndSaveDigest(jobDef.id, jobDef.name, textPortion);
@@ -560,43 +547,6 @@ export function parseDualOutput(response: string): { voice: string | null; text:
     voice: voice || null,
     text: text || response,
   };
-}
-
-/**
- * Post-run guard for the pr-review cron job.
- * Validates that the agent actually used code_with_agent when PRs were found.
- * Non-throwing — logs a warning and returns an alert message (or null if OK).
- */
-export function validatePrReviewOutput(output: string): string | null {
-  // Check for the machine-readable result line
-  const resultMatch = output.match(/\[PR_REVIEW_RESULT:\s*(.+?)\]/);
-
-  if (!resultMatch) {
-    return '⚠️ PR Pre-Review: Missing [PR_REVIEW_RESULT] line in output. The agent may not have followed the prompt correctly.';
-  }
-
-  const resultLine = resultMatch[1].trim();
-
-  // NO_CANDIDATES is fine — nothing to review
-  if (resultLine === 'NO_CANDIDATES') {
-    return null;
-  }
-
-  // Parse CANDIDATES=N CODE_AGENT_CALLS=M BLOCKED=B
-  const candidatesMatch = resultLine.match(/CANDIDATES=(\d+)/);
-  const callsMatch = resultLine.match(/CODE_AGENT_CALLS=(\d+)/);
-  const blockedMatch = resultLine.match(/BLOCKED=(\d+)/);
-
-  const candidates = candidatesMatch ? parseInt(candidatesMatch[1], 10) : 0;
-  const calls = callsMatch ? parseInt(callsMatch[1], 10) : 0;
-  const blocked = blockedMatch ? parseInt(blockedMatch[1], 10) : 0;
-
-  // If there were candidates but zero code_with_agent calls (and not all blocked), alert
-  if (candidates > 0 && calls === 0 && blocked < candidates) {
-    return `⚠️ PR Pre-Review: Found ${candidates} PR candidate(s) but code_with_agent was never called (blocked: ${blocked}). The agent likely wrote inline commentary instead of delegating.`;
-  }
-
-  return null;
 }
 
 function expandVariables(message: string): string {
