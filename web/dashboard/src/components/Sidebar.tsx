@@ -17,6 +17,7 @@ import {
   LuNewspaper,
   LuSearch,
   LuSettings2,
+  LuUserCog,
   LuZap,
 } from 'react-icons/lu';
 
@@ -26,6 +27,7 @@ export type PageId =
   | 'cron'
   | 'memory'
   | 'model'
+  | 'agents'
   | 'coding'
   | 'logs'
   | 'audit'
@@ -71,6 +73,7 @@ const NAV_ITEMS: AnyNavItem[] = [
   { id: 'memory', label: 'Memory', icon: LuDatabase, section: 'settings' },
   { id: 'templates', label: 'Templates', icon: LuFileText, section: 'settings' },
   { id: 'model', label: 'Model', icon: LuCpu, section: 'settings' },
+  { id: 'agents', label: 'Agents', icon: LuUserCog, section: 'settings' },
   { id: 'skills', label: 'Skills', icon: LuZap, section: 'settings' },
   { id: 'cron', label: 'Scheduled Jobs', icon: LuClock3, section: 'settings' },
   { id: 'config', label: 'Config', icon: LuSettings2, section: 'settings' },

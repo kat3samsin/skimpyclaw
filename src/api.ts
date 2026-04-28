@@ -5,7 +5,7 @@ import { readFileSync, writeFileSync, existsSync, readdirSync, statSync, mkdirSy
 import { validateBearerToken } from './utils.js';
 import { join, basename, resolve } from 'path';
 import { homedir } from 'os';
-import type { Config } from './types.js';
+import type { Config, ThinkingLevel } from './types.js';
 import {
   loadConfig,
   loadRawConfig,
@@ -42,6 +42,17 @@ import { initActiveChannel, stopActiveChannel, startActiveChannel } from './chan
 import { setCodeAgentConfig } from './tools.js';
 import { resolveModelSelection } from './model-selection.js';
 import { readSessionEntriesFromFile } from './sessions.js';
+import {
+  getAgentProfileByAlias,
+  listAgentProfiles,
+  listThreadAgentBindings,
+  normalizeThreadAgentAlias,
+  removeAgentProfile,
+  setAgentProfileModel,
+  setAgentProfilePrompt,
+  setAgentProfileThinking,
+  upsertAgentProfile,
+} from './channels/discord/thread-agents.js';
 
 const DEFAULT_MODEL_ALIASES: Record<string, string> = {
   'claude-fast': 'anthropic/claude-haiku-4-5',
@@ -67,6 +78,26 @@ function validateSkillName(name: string): boolean {
 
 function getSkillsDir(cfg: Config): string {
   return cfg.skills?.directory || join(homedir(), '.skimpyclaw', 'skills');
+}
+
+const THINKING_LEVELS = new Set<ThinkingLevel>(['none', 'low', 'medium', 'high', 'xhigh']);
+
+function parseThinkingLevel(value: unknown): ThinkingLevel | undefined {
+  if (typeof value !== 'string') return undefined;
+  const normalized = value.trim().toLowerCase().replace(/^x[-_ ]?high$/, 'xhigh');
+  if (normalized === 'off') return 'none';
+  return THINKING_LEVELS.has(normalized as ThinkingLevel) ? normalized as ThinkingLevel : undefined;
+}
+
+function configuredAgentsSummary(config: Config): Record<string, { name: string; emoji: string; model: string; thinking?: ThinkingLevel }> {
+  return Object.fromEntries(
+    Object.entries(config.agents.list).map(([id, agent]) => [id, {
+      name: agent.identity?.name || id,
+      emoji: agent.identity?.emoji || '',
+      model: agent.model,
+      thinking: agent.thinking,
+    }])
+  );
 }
 
 function resolveCronPromptPath(inputPath: string): string | null {
@@ -475,6 +506,91 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
 
     setCurrentModel(selection.resolved);
     return { model: selection.resolved };
+  });
+
+  // --- Discord Agent Profiles ---
+  fastify.get('/api/dashboard/agent-profiles', async () => {
+    return {
+      profiles: listAgentProfiles(),
+      bindings: listThreadAgentBindings(),
+      configuredAgents: configuredAgentsSummary(runtimeConfig),
+      modelAliases: runtimeConfig.models?.aliases || DEFAULT_MODEL_ALIASES,
+    };
+  });
+
+  fastify.post<{ Body: { alias?: string; agentId?: string } }>('/api/dashboard/agent-profiles', async (request, reply) => {
+    const alias = normalizeThreadAgentAlias(request.body?.alias);
+    const agentId = request.body?.agentId?.trim();
+    if (!alias) return reply.code(400).send({ error: 'Invalid alias' });
+    if (!agentId || !runtimeConfig.agents.list[agentId]) {
+      return reply.code(400).send({ error: 'Unknown configured agent' });
+    }
+
+    try {
+      const profile = upsertAgentProfile({ alias, agentId, createdBy: 'dashboard' });
+      return { profile };
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      return reply.code(400).send({ error: msg });
+    }
+  });
+
+  fastify.put<{
+    Params: { alias: string };
+    Body: { agentId?: string; model?: string | null; thinking?: string | null; promptOverlay?: string | null };
+  }>('/api/dashboard/agent-profiles/:alias', async (request, reply) => {
+    const alias = normalizeThreadAgentAlias(request.params.alias);
+    if (!alias) return reply.code(400).send({ error: 'Invalid alias' });
+    const existing = getAgentProfileByAlias(alias);
+    if (!existing) return reply.code(404).send({ error: 'Agent profile not found' });
+
+    const body = request.body || {};
+    if (typeof body.agentId === 'string') {
+      const agentId = body.agentId.trim();
+      if (!agentId || !runtimeConfig.agents.list[agentId]) {
+        return reply.code(400).send({ error: 'Unknown configured agent' });
+      }
+      upsertAgentProfile({ alias, agentId, createdBy: existing.createdBy || 'dashboard' });
+    }
+
+    if ('model' in body) {
+      const modelInput = typeof body.model === 'string' ? body.model.trim() : '';
+      if (modelInput) {
+        const selection = resolveModelSelection(modelInput, runtimeConfig);
+        if (!selection.ok || !selection.resolved) {
+          return reply.code(400).send({ error: selection.error || 'Invalid model selection' });
+        }
+        setAgentProfileModel(alias, selection.resolved);
+      } else {
+        setAgentProfileModel(alias, undefined);
+      }
+    }
+
+    if ('thinking' in body) {
+      const thinkingInput = typeof body.thinking === 'string' ? body.thinking.trim() : '';
+      if (thinkingInput) {
+        const thinking = parseThinkingLevel(thinkingInput);
+        if (!thinking) return reply.code(400).send({ error: 'Invalid effort' });
+        setAgentProfileThinking(alias, thinking);
+      } else {
+        setAgentProfileThinking(alias, undefined);
+      }
+    }
+
+    if ('promptOverlay' in body) {
+      const promptOverlay = typeof body.promptOverlay === 'string' ? body.promptOverlay : '';
+      setAgentProfilePrompt(alias, promptOverlay);
+    }
+
+    return { profile: getAgentProfileByAlias(alias) };
+  });
+
+  fastify.delete<{ Params: { alias: string } }>('/api/dashboard/agent-profiles/:alias', async (request, reply) => {
+    const alias = normalizeThreadAgentAlias(request.params.alias);
+    if (!alias) return reply.code(400).send({ error: 'Invalid alias' });
+    const deleted = removeAgentProfile(alias);
+    if (!deleted) return reply.code(404).send({ error: 'Agent profile not found' });
+    return { deleted: true };
   });
 
   // --- Templates ---

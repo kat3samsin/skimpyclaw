@@ -75,6 +75,7 @@ export type { ClaudeOutputResult } from './parser.js';
 
 // SKIMPYCLAW_ROOT for workdir default
 const SKIMPYCLAW_ROOT = resolve(import.meta.dirname || process.cwd(), '..', '..');
+const EFFORT_LEVELS = new Set(['none', 'low', 'medium', 'high', 'xhigh']);
 
 /**
  * Execute check_code_agent tool — list all or get details for one agent.
@@ -92,6 +93,7 @@ export function executeCheckCodeAgent(input: Record<string, any>): string {
       task: task.task,
       workdir: task.workdir,
       model: task.model,
+      effort: task.effort,
       startedAt: task.startedAt,
       endedAt: task.endedAt,
       durationSeconds: task.durationSeconds,
@@ -116,7 +118,9 @@ export function executeCheckCodeAgent(input: Record<string, any>): string {
       ? (t.durationSeconds < 60 ? `${t.durationSeconds}s` : `${Math.floor(t.durationSeconds / 60)}m`)
       : (Math.round((Date.now() - new Date(t.startedAt).getTime()) / 1000) + 's');
     const taskPreview = t.task.length > 60 ? t.task.slice(0, 60) + '...' : t.task;
-    return `${t.id}: ${t.status.toUpperCase()} (${t.agent}, ${elapsed}) — ${taskPreview}`;
+    const model = t.model ? `, ${t.model}` : '';
+    const effort = t.effort ? `, effort ${t.effort}` : '';
+    return `${t.id}: ${t.status.toUpperCase()} (${t.agent}${model}${effort}, ${elapsed}) — ${taskPreview}`;
   });
 
   return lines.join('\n');
@@ -177,6 +181,19 @@ export async function executeCodeWithAgent(
   const isModelFromSession = !input.model;
   const modelIncompatible = isModelFromSession && resolvedModel && !isModelCompatibleWithAgent(resolvedModel, agent);
   const modelForAgent = modelIncompatible ? undefined : resolvedModel;
+  const effortInput = typeof input.effort === 'string'
+    ? input.effort
+    : typeof input.thinking === 'string'
+      ? input.thinking
+      : typeof input.reasoning_effort === 'string'
+        ? input.reasoning_effort
+        : undefined;
+  const effort = effortInput
+    ? effortInput.trim().toLowerCase().replace(/^x[-_ ]?high$/, 'xhigh')
+    : undefined;
+  if (effort && !EFFORT_LEVELS.has(effort)) {
+    return `Error: Invalid effort "${effortInput}". Use none, low, medium, high, or xhigh.`;
+  }
 
   const projects = context?.fullConfig?.projects ?? {};
   const rawWorkdir = input.workdir as string | undefined;
@@ -223,6 +240,7 @@ export async function executeCodeWithAgent(
     startedAt: startedAt.toISOString(),
     workdir,
     model: modelForAgent,
+    effort,
     interactive: isInteractive || undefined,
     cliSessionId,
   };
@@ -246,7 +264,7 @@ export async function executeCodeWithAgent(
   // Fire-and-forget: spawn background process
   const configTimeout = context?.fullConfig?.codeAgents?.timeoutMinutes ?? 30;
   const soloTimeout = Math.min(input.timeout_minutes || configTimeout, 60);
-  const resolvedInput = { ...input, model: modelForAgent, timeout_minutes: soloTimeout };
+  const resolvedInput = { ...input, model: modelForAgent, effort, timeout_minutes: soloTimeout };
   runCodeAgentBackground(id, agent, task, workdir, validate, resolvedInput, startedAt, {
     defaultTimeoutMinutes: soloTimeout,
     maxTimeoutMinutes: 60,

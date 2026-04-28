@@ -3,6 +3,8 @@
 
 import type {
   AuditResponse,
+  AgentProfilesResponse,
+  AgentProfile,
   ApprovalsResponse,
   CodeAgentsResponse,
   ConversationDetail,
@@ -135,6 +137,25 @@ export const setModel = (model: string) =>
     method: 'POST',
     body: JSON.stringify({ model }),
   });
+
+// ── Agent Profiles ─────────────────────────────────────────────────
+
+export const getAgentProfiles = () => request<AgentProfilesResponse>('agent-profiles');
+export const createAgentProfile = (alias: string, agentId: string) =>
+  request<{ profile: AgentProfile }>('agent-profiles', {
+    method: 'POST',
+    body: JSON.stringify({ alias, agentId }),
+  });
+export const updateAgentProfile = (
+  alias: string,
+  body: Partial<Pick<AgentProfile, 'agentId' | 'model' | 'thinking' | 'promptOverlay'>>,
+) =>
+  request<{ profile: AgentProfile }>(`agent-profiles/${encodeURIComponent(alias)}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+export const deleteAgentProfile = (alias: string) =>
+  request<{ deleted: boolean }>(`agent-profiles/${encodeURIComponent(alias)}`, { method: 'DELETE' });
 
 // ── Memory ───────────────────────────────────────────────────────────
 

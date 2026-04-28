@@ -594,6 +594,7 @@ export async function runCodeAgentBackground(
           agent,
           workdir,
           model: input.model,
+          effort: input.effort,
           max_turns: input.max_turns,
         });
 
@@ -685,7 +686,7 @@ export async function runCodeAgentBackground(
               }));
             }
           } else {
-            agentOutput = stdout || '(no output)';
+            agentOutput = parseCodexOutput(stdout);
           }
           caTask.status = 'validating';
           caTask.liveOutput = undefined;
@@ -771,5 +772,4 @@ export async function runCodeAgentBackground(
     deleteCodeAgentCanceller(id);
   }
 }
-
 

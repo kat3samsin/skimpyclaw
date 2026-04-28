@@ -21,6 +21,7 @@ export interface CodeAgentTask {
   error?: string;
   workdir: string;
   model?: string;
+  effort?: string;
   retryCount?: number;           // how many internal validation retries have run
   // Cost / token tracking (from Claude CLI result event)
   totalCost?: number;
@@ -49,6 +50,7 @@ export interface BuildCodeAgentArgsInput {
   agent?: string;
   workdir?: string;
   model?: string;
+  effort?: string;
   max_turns?: number;
   sessionId?: string;            // claude --session-id UUID for interactive mode first turn
 }

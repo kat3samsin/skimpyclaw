@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseDualOutput } from '../cron.js';
+import { isRetryableCronAgentError, parseDualOutput } from '../cron.js';
 
 describe('parseDualOutput', () => {
   it('returns full response as text when no delimiters present', () => {
@@ -92,5 +92,18 @@ describe('cron job tool injection', () => {
   it('isCronJob defaults to undefined when not set', () => {
     const ctx: import('../tools/execute-context.js').ExecuteToolContext = {};
     expect(ctx.isCronJob).toBeUndefined();
+  });
+});
+
+describe('isRetryableCronAgentError', () => {
+  it('matches transient Codex and provider connectivity failures', () => {
+    expect(isRetryableCronAgentError(new Error('Codex API 503: upstream connect error'))).toBe(true);
+    expect(isRetryableCronAgentError(new Error('remote connection failure: Connection refused'))).toBe(true);
+    expect(isRetryableCronAgentError(new Error('529 {"type":"error","error":{"type":"overloaded_error"}}'))).toBe(true);
+  });
+
+  it('does not match normal validation errors', () => {
+    expect(isRetryableCronAgentError(new Error('Tool use loop reached maximum iterations'))).toBe(false);
+    expect(isRetryableCronAgentError(new Error('Invalid model selection'))).toBe(false);
   });
 });

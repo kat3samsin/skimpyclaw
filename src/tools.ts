@@ -15,6 +15,7 @@ import {
   TOOL_DEFINITIONS,
   CODE_WITH_AGENT_TOOL,
   CHECK_CODE_AGENT_TOOL,
+  DELEGATE_TO_AGENT_TOOL,
 } from './tools/definitions.js';
 import type { ExecuteToolContext } from './tools/execute-context.js';
 import { executeReadFile, executeWriteFileLocked, executeListDirectory } from './tools/file-tools.js';
@@ -52,6 +53,7 @@ export {
   TOOL_DEFINITIONS,
   CODE_WITH_AGENT_TOOL,
   CHECK_CODE_AGENT_TOOL,
+  DELEGATE_TO_AGENT_TOOL,
   cleanupBrowser,
 };
 export type { ExecuteToolContext };
@@ -307,6 +309,7 @@ export async function getToolDefinitions(config?: ToolConfig, options?: { includ
     if (options?.includeAgentTools) {
       tools.push(injectProjects(CODE_WITH_AGENT_TOOL, options.projects));
       tools.push(CHECK_CODE_AGENT_TOOL);
+      tools.push(DELEGATE_TO_AGENT_TOOL);
     }
     toolDefsCache.set(cacheKey, tools);
     return tools;
@@ -325,6 +328,7 @@ export async function getToolDefinitions(config?: ToolConfig, options?: { includ
     const projects = options.projects;
     tools.push(injectProjects(CODE_WITH_AGENT_TOOL, projects));
     tools.push(CHECK_CODE_AGENT_TOOL);
+    tools.push(DELEGATE_TO_AGENT_TOOL);
   }
 
   toolDefsCache.set(cacheKey, tools);
@@ -347,6 +351,48 @@ async function callMcpTool(server: string, tool: string, args: Record<string, an
   return JSON.stringify(result);
 }
 
+function isPlainObject(value: unknown): value is Record<string, any> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+export function normalizeMcpToolArgsForExecution(
+  server: string,
+  tool: string,
+  args: Record<string, any>,
+): Record<string, any> {
+  if (server !== 'context-a8c' || tool !== 'context-a8c-execute-tool' || isPlainObject(args.params)) {
+    return args;
+  }
+
+  const aliasedParams = ['parameters', 'input', 'arguments']
+    .map(key => args[key])
+    .find(isPlainObject);
+  if (aliasedParams) {
+    const {
+      parameters: _parameters,
+      input: _input,
+      arguments: _arguments,
+      ...rest
+    } = args;
+    return { ...rest, params: aliasedParams };
+  }
+
+  if (typeof args.provider === 'string' && typeof args.tool === 'string') {
+    const params = Object.fromEntries(
+      Object.entries(args).filter(([key]) => !['provider', 'tool', 'params'].includes(key)),
+    );
+    if (Object.keys(params).length > 0) {
+      return {
+        provider: args.provider,
+        tool: args.tool,
+        params,
+      };
+    }
+  }
+
+  return args;
+}
+
 async function executeMcpToolGeneric(fullName: string, args: Record<string, any>): Promise<string> {
   const mapping = mcpToolNameMap.get(fullName);
   let server: string;
@@ -361,6 +407,7 @@ async function executeMcpToolGeneric(fullName: string, args: Record<string, any>
     server = parts[1];
     toolName = parts.slice(2).join('__');
   }
+  const normalizedArgs = normalizeMcpToolArgsForExecution(server, toolName, args);
 
   const isRetryableError = (msg: string) =>
     msg.includes('session') || msg.includes('Session') || msg.includes('ECONNR') ||
@@ -373,7 +420,7 @@ async function executeMcpToolGeneric(fullName: string, args: Record<string, any>
   let lastErr: unknown;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
-      return await callMcpTool(server, toolName, args);
+      return await callMcpTool(server, toolName, normalizedArgs);
     } catch (err) {
       lastErr = err;
       const msg = err instanceof Error ? err.message : String(err);
@@ -439,6 +486,12 @@ export async function executeTool(
     if (name === 'check_code_agent') {
       const { executeCheckCodeAgent } = await import('./code-agents/index.js');
       return executeCheckCodeAgent(input);
+    }
+
+    if (name === 'delegate_to_agent') {
+      const { executeDelegateToAgent } = await import('./tools/agent-delegation.js');
+      if (!context?.fullConfig) return 'Error: delegate_to_agent requires runtime config.';
+      return executeDelegateToAgent(input, context.fullConfig, context);
     }
 
     // Map Claude Code names to internal names for built-in tools

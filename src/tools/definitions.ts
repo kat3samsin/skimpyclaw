@@ -68,6 +68,11 @@ export const CODE_WITH_AGENT_TOOL = {
         type: 'boolean' as const,
         description: 'If true, spawn as an interactive session. Creates a Discord thread and resumes session on follow-up messages. Discord-only; claude or codex only. Default false.',
       },
+      effort: {
+        type: 'string' as const,
+        enum: ['none', 'low', 'medium', 'high', 'xhigh'],
+        description: 'Optional reasoning effort for coding agents that support it.',
+      },
     },
     required: ['task'],
   },
@@ -78,6 +83,33 @@ export const CHECK_CODE_AGENT_TOOL = {
   input_schema: { type: 'object' as const, properties: { id: { type: 'string' as const } } },
 };
 
+export const DELEGATE_TO_AGENT_TOOL = {
+  name: 'delegate_to_agent',
+  input_schema: {
+    type: 'object' as const,
+    properties: {
+      alias: {
+        type: 'string' as const,
+        description: 'Discord agent profile alias to delegate to, without @.',
+      },
+      task: {
+        type: 'string' as const,
+        description: 'Task or question for the target agent profile.',
+      },
+      mode: {
+        type: 'string' as const,
+        enum: ['new_thread'],
+        description: 'Delegation mode. Only new_thread is currently supported.',
+      },
+      wait: {
+        type: 'boolean' as const,
+        description: 'If true, wait for the delegated agent response. Default false.',
+      },
+    },
+    required: ['alias', 'task'],
+  },
+};
+
 // Glob tool reference for dynamic loading
 const GLOB_TOOL = BUILTIN_TOOL_DEFINITIONS.find(t => t.name === 'Glob')!;
 
@@ -86,7 +118,7 @@ const WRITE_TOOL = BUILTIN_TOOL_DEFINITIONS.find(t => t.name === 'Write')!;
 
 // Core tools — always sent. Extended tools added when conversation references them.
 export const CORE_TOOL_DEFINITIONS = [...BUILTIN_TOOL_DEFINITIONS.filter(t => t.name !== 'Glob' && t.name !== 'Write')];
-export const EXTENDED_TOOL_DEFINITIONS = [WRITE_TOOL, GLOB_TOOL, FETCH_TOOL_DEFINITION, BROWSER_TOOL_DEFINITION, CODE_WITH_AGENT_TOOL, CHECK_CODE_AGENT_TOOL];
+export const EXTENDED_TOOL_DEFINITIONS = [WRITE_TOOL, GLOB_TOOL, FETCH_TOOL_DEFINITION, BROWSER_TOOL_DEFINITION, CODE_WITH_AGENT_TOOL, CHECK_CODE_AGENT_TOOL, DELEGATE_TO_AGENT_TOOL];
 
 // Keywords that trigger inclusion of extended tools
 const TOOL_TRIGGERS: Record<string, string[]> = {
@@ -96,6 +128,7 @@ const TOOL_TRIGGERS: Record<string, string[]> = {
   Browser: ['browser', 'browse', 'webpage', 'website', 'click', 'screenshot', 'playwright'],
   code_with_agent: ['code_with_agent', 'delegate', 'subagent', 'sub-agent'],
   check_code_agent: ['check_code_agent', 'agent status', 'agent_id'],
+  delegate_to_agent: ['delegate_to_agent', 'delegate to agent', 'call agent', 'ask agent', '@agent'],
 };
 
 /** Return tool defs filtered by what's been used/mentioned in conversation */

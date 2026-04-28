@@ -201,9 +201,13 @@ export function parseClaudeOutput(stdout: string): ClaudeOutputResult {
 export function parseCodexOutput(stdout: string): string {
   const lines = stdout.trim().split('\n');
   const outputs: string[] = [];
+  let sawJsonEvent = false;
   for (const line of lines) {
     try {
       const obj = JSON.parse(line);
+      if (obj && typeof obj === 'object' && typeof obj.type === 'string') {
+        sawJsonEvent = true;
+      }
       // Standard output_text events
       if (obj.type === 'output_text' || obj.output_text) {
         outputs.push(obj.output_text || obj.text || '');
@@ -216,5 +220,5 @@ export function parseCodexOutput(stdout: string): string {
       if (line.trim()) outputs.push(line);
     }
   }
-  return outputs.join('\n') || stdout || '(no output)';
+  return outputs.join('\n') || (sawJsonEvent ? '(no text output)' : stdout) || '(no output)';
 }

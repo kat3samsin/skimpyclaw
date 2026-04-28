@@ -255,6 +255,10 @@ export async function runAgentTurn(
     discordThreadId: (context?.metadata as any)?.discordThreadId,
     discordChannelId: (context?.metadata as any)?.discordChannelId,
     isDm: (context?.metadata as any)?.isDm === true,
+    threadAgentAlias,
+    delegationDepth: typeof (context?.metadata as any)?.delegationDepth === 'number'
+      ? (context?.metadata as any).delegationDepth
+      : 0,
   };
 
   const runTurn = async (): Promise<string> => {

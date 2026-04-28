@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseClaudeOutput, parseStreamJsonForLive } from '../code-agents/parser.js';
+import { parseClaudeOutput, parseCodexOutput, parseStreamJsonForLive } from '../code-agents/parser.js';
 
 describe('code-agents parser', () => {
   it('parses newer Claude stream item.completed agent_message events', () => {
@@ -39,5 +39,25 @@ describe('code-agents parser', () => {
     expect(live).toContain('Legacy format message');
     expect(live).toContain('New format message');
     expect(live).toContain('[Read]');
+  });
+
+  it('parses Codex stream-json without leaking raw events', () => {
+    const stdout = [
+      JSON.stringify({ type: 'thread.started', thread_id: 't1' }),
+      JSON.stringify({ type: 'turn.started' }),
+      JSON.stringify({
+        type: 'item.completed',
+        item: { id: 'item_1', type: 'agent_message', text: 'Final review text.' },
+      }),
+      JSON.stringify({
+        type: 'item.started',
+        item: { id: 'item_2', type: 'command_execution', command: 'git status', status: 'in_progress' },
+      }),
+    ].join('\n');
+
+    const parsed = parseCodexOutput(stdout);
+    expect(parsed).toBe('Final review text.');
+    expect(parsed).not.toContain('thread.started');
+    expect(parsed).not.toContain('command_execution');
   });
 });

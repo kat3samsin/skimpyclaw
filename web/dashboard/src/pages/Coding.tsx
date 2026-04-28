@@ -60,6 +60,19 @@ function statusIcon(status: CodeAgent['status']) {
   return <LuRefreshCw size={20} />;
 }
 
+function formatAgentLabel(task: CodeAgent): string {
+  return task.agent === 'team-coordinator' ? 'TEAM' : (task.agent?.toUpperCase() || 'CLAUDE');
+}
+
+function formatModelLabel(task: CodeAgent): string {
+  if (!task.model) return `${task.agent || 'agent'} default`;
+  return task.model.includes('/') ? task.model.split('/').slice(1).join('/') : task.model;
+}
+
+function formatEffortLabel(task: CodeAgent): string {
+  return task.effort || 'effort default';
+}
+
 export function Coding() {
   const [agents, setAgents] = useState<CodeAgent[]>([]);
   const [todayCost, setTodayCost] = useState(0);
@@ -216,12 +229,16 @@ export function Coding() {
                   <div class="coding-task-content">
                     <div class="coding-task-pills">
                       <span class="coding-pill id">{task.id}</span>
-                      <span class="coding-pill">{task.agent === 'team-coordinator' ? `TEAM (${children.length})` : task.agent?.toUpperCase() || 'CLAUDE'}</span>
+                      <span class="coding-pill">{task.agent === 'team-coordinator' ? `${formatAgentLabel(task)} (${children.length})` : formatAgentLabel(task)}</span>
+                      <span class="coding-pill model" title={task.model || ''}>{formatModelLabel(task)}</span>
+                      <span class="coding-pill effort">{formatEffortLabel(task)}</span>
                       <span class={`coding-pill status ${cls}`}>{task.status}</span>
                     </div>
                     <Markdown content={task.task} className="coding-task-title markdown-content" />
                     <div class="coding-task-submeta">
-                      {task.model && <span>{task.model}</span>}
+                      <span>{task.model || formatModelLabel(task)}</span>
+                      <span>•</span>
+                      <span>{formatEffortLabel(task)}</span>
                       <span>•</span>
                       <span><LuClock3 size={13} /> {formatElapsed(task)}</span>
                       <span>•</span>
@@ -270,6 +287,9 @@ export function Coding() {
                               <span class="coding-subagent-chevron"><LuChevronDown size={13} /></span>
                               <span class={`coding-subagent-icon ${childCls}`}>{statusIcon(child.status)}</span>
                               <span class="audit-id">{child.id}</span>
+                              <span class="coding-pill">{formatAgentLabel(child)}</span>
+                              <span class="coding-pill model" title={child.model || ''}>{formatModelLabel(child)}</span>
+                              <span class="coding-pill effort">{formatEffortLabel(child)}</span>
                               <span class={`ca-status-badge ${child.status}`}>{child.status}</span>
                               {child.wave != null && <span class="coding-pill">Wave {child.wave + 1}</span>}
                               {child.retryCount ? <span class="coding-pill" style={{ color: '#d4a03c' }}>retry #{child.retryCount}</span> : null}

@@ -11,7 +11,9 @@ import { onApprovalEvent } from '../../exec-approval.js';
 import { KNOWN_COMMANDS } from './types.js';
 import { handleCommand, handleIncomingMessage, handleInteraction, sendApprovalCard } from './handlers.js';
 import { splitToChunks, conversationKey } from './utils.js';
-import { sendToThread, sendToThreadWithVoice } from './threads.js';
+import { sendToThread, sendToThreadWithAttachments, sendToThreadWithVoice, type DiscordTextAttachment } from './threads.js';
+import { registerDelegateToAgentHandler } from '../../tools/agent-delegation.js';
+import { createDiscordAgentDelegateHandler } from './delegation.js';
 
 let client: Client | null = null;
 let config: Config;
@@ -21,6 +23,7 @@ export async function initDiscord(cfg: Config): Promise<boolean> {
   const discord = cfg.channels.discord;
   if (!discord?.enabled || !discord.token) {
     console.log('[discord] Disabled or no token configured');
+    registerDelegateToAgentHandler(null);
     return false;
   }
 
@@ -34,6 +37,7 @@ export async function initDiscord(cfg: Config): Promise<boolean> {
     ],
     partials: [Partials.Channel],
   });
+  registerDelegateToAgentHandler(createDiscordAgentDelegateHandler(() => client));
 
   client.on('messageCreate', (message: Message) => {
     if (message.author.bot) return;
@@ -109,6 +113,7 @@ export async function startDiscord(): Promise<void> {
 export async function stopDiscord(): Promise<void> {
   if (!client) return;
   client.destroy();
+  registerDelegateToAgentHandler(null);
   console.log('[discord] Bot stopped');
 }
 
@@ -137,6 +142,15 @@ async function sendChunked(target: { send: (content: string) => Promise<unknown>
   }
 }
 
+function buildDiscordAttachments(files: DiscordTextAttachment[]) {
+  return files
+    .filter(file => file.content.trim())
+    .map(file => new AttachmentBuilder(Buffer.from(file.content, 'utf-8'), {
+      name: file.name,
+      description: file.description,
+    }));
+}
+
 export async function sendDiscordProactiveMessage(target: string | number, message: string): Promise<void> {
   if (!client || isDiscordSilenced()) return;
 
@@ -150,6 +164,34 @@ export async function sendDiscordProactiveMessage(target: string | number, messa
   const user = await client.users.fetch(targetId).catch(() => null);
   if (user) {
     await sendChunked(user as { send: (content: string) => Promise<unknown> }, message);
+  }
+}
+
+export async function sendDiscordProactiveMessageWithAttachments(
+  target: string | number,
+  message: string,
+  attachments: DiscordTextAttachment[],
+): Promise<void> {
+  if (!client || isDiscordSilenced()) return;
+
+  const targetId = String(target);
+  const chunks = splitToChunks(message || '(No summary generated.)', 1900);
+  const files = buildDiscordAttachments(attachments);
+  const channel = await client.channels.fetch(targetId).catch(() => null);
+  if (channel && 'send' in channel && typeof channel.send === 'function') {
+    await (channel as { send: (opts: unknown) => Promise<unknown> }).send({ content: chunks[0], files });
+    for (let i = 1; i < chunks.length; i++) {
+      await (channel as { send: (content: string) => Promise<unknown> }).send(chunks[i]);
+    }
+    return;
+  }
+
+  const user = await client.users.fetch(targetId).catch(() => null);
+  if (user) {
+    await user.send({ content: chunks[0], files });
+    for (let i = 1; i < chunks.length; i++) {
+      await user.send(chunks[i]);
+    }
   }
 }
 
@@ -182,6 +224,15 @@ export async function sendDiscordProactiveVoice(target: string | number, buffer:
 export async function sendToDiscordThread(threadId: string, message: string): Promise<boolean> {
   if (!client) return false;
   return sendToThread(client, threadId, message);
+}
+
+export async function sendToDiscordThreadWithAttachments(
+  threadId: string,
+  message: string,
+  attachments: DiscordTextAttachment[],
+): Promise<boolean> {
+  if (!client) return false;
+  return sendToThreadWithAttachments(client, threadId, message, attachments);
 }
 
 /**

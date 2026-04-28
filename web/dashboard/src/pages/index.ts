@@ -7,6 +7,7 @@ export { Audit } from './Audit.js';
 export { Approvals } from './Approvals.js';
 export { Memory } from './Memory.js';
 export { Model } from './Model.js';
+export { Agents } from './Agents.js';
 export { Logs } from './Logs.js';
 export { Config } from './Config.js';
 export { Digests } from './Digests.js';

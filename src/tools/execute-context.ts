@@ -35,4 +35,8 @@ export interface ExecuteToolContext {
   discordChannelId?: string;
   /** True when Discord message originated from a DM (threads not supported) */
   isDm?: boolean;
+  /** Discord agent profile alias for the current thread/profile turn */
+  threadAgentAlias?: string;
+  /** Nested agent delegation depth */
+  delegationDepth?: number;
 }

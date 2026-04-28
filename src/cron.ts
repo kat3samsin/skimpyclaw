@@ -150,6 +150,50 @@ function resolveDiscordThreadTarget(jobDef: CronJob): string | undefined {
   return threadId;
 }
 
+const CRON_AGENT_RETRY_DELAYS_MS = [5000, 15000];
+
+export function isRetryableCronAgentError(err: unknown): boolean {
+  const message = toErrorMessage(err).toLowerCase();
+  return [
+    'codex api 503',
+    'upstream connect error',
+    'connection refused',
+    'connection reset',
+    'remote connection failure',
+    'fetch failed',
+    'econnreset',
+    'econnrefused',
+    'etimedout',
+    'overloaded_error',
+    'temporarily unavailable',
+  ].some(pattern => message.includes(pattern));
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function runCronAgentTurnWithRetry(jobId: string, run: () => Promise<string>): Promise<string> {
+  for (let attempt = 0; attempt <= CRON_AGENT_RETRY_DELAYS_MS.length; attempt++) {
+    try {
+      return await run();
+    } catch (err) {
+      if (attempt >= CRON_AGENT_RETRY_DELAYS_MS.length || !isRetryableCronAgentError(err)) {
+        throw err;
+      }
+
+      const delayMs = CRON_AGENT_RETRY_DELAYS_MS[attempt];
+      appendCronLogLine(
+        jobId,
+        `Agent turn transient failure; retrying in ${(delayMs / 1000).toFixed(0)}s (${attempt + 1}/${CRON_AGENT_RETRY_DELAYS_MS.length}): ${toErrorMessage(err).slice(0, 180)}`,
+      );
+      await sleep(delayMs);
+    }
+  }
+
+  throw new Error('Unreachable cron retry state');
+}
+
 export function initCron(config: Config): void {
   // Clear existing jobs
   for (const job of scheduledJobs.values()) {
@@ -273,19 +317,22 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
       const tools = jobDef.payload.tools
         ? { ...jobDef.payload.tools, allowedPaths: resolveAllowedPaths(config, jobDef.payload.tools.allowedPaths) }
         : defaultTools;
-      const response = await runAgentTurn(
-        config.agents.default,
-        message,
-        config,
-        jobDef.model,
-        tools,
-        undefined,
-        {
-          channel: getActiveChannelId() || 'telegram',
-          trigger: 'cron',
-          sessionId: jobDef.id,
-          metadata: { jobName: jobDef.name, isCronJob: true },
-        }
+      const response = await runCronAgentTurnWithRetry(
+        jobDef.id,
+        () => runAgentTurn(
+          config.agents.default,
+          message,
+          config,
+          jobDef.model,
+          tools,
+          undefined,
+          {
+            channel: getActiveChannelId() || 'telegram',
+            trigger: 'cron',
+            sessionId: jobDef.id,
+            metadata: { jobName: jobDef.name, isCronJob: true },
+          },
+        ),
       );
       appendCronLogLine(jobDef.id, `Agent turn completed (${response.length} chars)`);
 

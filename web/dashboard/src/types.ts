@@ -176,6 +176,7 @@ export interface CodeAgent {
   liveOutput?: string;
   error?: string;
   model?: string;
+  effort?: string;
   parentTaskId?: string;
   childTaskIds?: string[];
   subtask?: string;
@@ -206,6 +207,43 @@ export interface ModelResponse {
 
 export interface SetModelResponse {
   model: string;
+}
+
+export type ThinkingLevel = 'none' | 'low' | 'medium' | 'high' | 'xhigh';
+
+export interface AgentProfile {
+  alias: string;
+  agentId: string;
+  model?: string;
+  thinking?: ThinkingLevel;
+  promptOverlay?: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AgentProfileBinding {
+  threadId: string;
+  profileAlias: string;
+  guildId?: string;
+  channelId?: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ConfiguredAgentSummary {
+  name: string;
+  emoji: string;
+  model: string;
+  thinking?: ThinkingLevel;
+}
+
+export interface AgentProfilesResponse {
+  profiles: AgentProfile[];
+  bindings: AgentProfileBinding[];
+  configuredAgents: Record<string, ConfiguredAgentSummary>;
+  modelAliases: Record<string, string>;
 }
 
 export interface Digest {
@@ -342,4 +380,3 @@ export interface ConversationDetail {
   total: number;
   hasMore: boolean;
 }
-

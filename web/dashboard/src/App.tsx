@@ -11,6 +11,7 @@ import {
   Approvals,
   Memory,
   Model,
+  Agents,
   Logs,
   Config,
   Digests,
@@ -28,6 +29,7 @@ const PAGE_IDS: PageId[] = [
   'cron',
   'memory',
   'model',
+  'agents',
   'coding',
   'logs',
   'audit',
@@ -248,6 +250,8 @@ export function App() {
         return <Memory />;
       case 'model':
         return <Model showToast={showToast} />;
+      case 'agents':
+        return <Agents showToast={showToast} />;
       case 'logs':
         return <Logs />;
       case 'config':

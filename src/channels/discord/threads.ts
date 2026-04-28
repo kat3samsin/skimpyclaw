@@ -8,6 +8,12 @@
 import { ChannelType, type Client, type Message, type ThreadChannel } from 'discord.js';
 import { splitToChunks } from './utils.js';
 
+export interface DiscordTextAttachment {
+  name: string;
+  content: string;
+  description?: string;
+}
+
 // taskId → threadId mapping (in-memory, resets on restart)
 const taskThreads = new Map<string, string>();
 
@@ -114,6 +120,48 @@ export async function sendToThread(
     return true;
   } catch (err) {
     console.error(`[discord] Failed to send to thread ${threadId}:`, err);
+    return false;
+  }
+}
+
+/**
+ * Send text plus one or more UTF-8 attachments to a Discord thread.
+ * Keeps the visible message compact while preserving full reports.
+ */
+export async function sendToThreadWithAttachments(
+  client: Client,
+  threadId: string,
+  text: string,
+  attachments: DiscordTextAttachment[] = [],
+): Promise<boolean> {
+  try {
+    const thread = await client.channels.fetch(threadId).catch(() => null);
+    if (!thread) {
+      console.warn(`[discord] Channel/thread ${threadId} not found`);
+      return false;
+    }
+
+    if (!('send' in thread) || typeof (thread as any).send !== 'function') {
+      console.warn(`[discord] Channel ${threadId} is not sendable (type=${thread.type})`);
+      return false;
+    }
+
+    const chunks = splitToChunks(text || '(No summary generated.)', 1900);
+    const { AttachmentBuilder } = await import('discord.js');
+    const files = attachments
+      .filter(file => file.content.trim())
+      .map(file => new AttachmentBuilder(Buffer.from(file.content, 'utf-8'), {
+        name: file.name,
+        description: file.description,
+      }));
+
+    await (thread as any).send({ content: chunks[0], files });
+    for (let i = 1; i < chunks.length; i++) {
+      await (thread as any).send(chunks[i]);
+    }
+    return true;
+  } catch (err) {
+    console.error(`[discord] Failed to send attachments to thread ${threadId}:`, err);
     return false;
   }
 }

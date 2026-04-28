@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { existsSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'fs';
 import { join } from 'path';
-import { executeTool, BUILTIN_TOOL_DEFINITIONS, BROWSER_TOOL_DEFINITION, CODE_WITH_AGENT_TOOL, CHECK_CODE_AGENT_TOOL, getToolDefinitions, fromClaudeCodeName, toClaudeCodeName, buildCodeAgentArgs, getActiveCodeAgents, getRecentCodeAgents, getCodeAgent } from '../tools.js';
+import { executeTool, BUILTIN_TOOL_DEFINITIONS, BROWSER_TOOL_DEFINITION, CODE_WITH_AGENT_TOOL, CHECK_CODE_AGENT_TOOL, DELEGATE_TO_AGENT_TOOL, getToolDefinitions, fromClaudeCodeName, toClaudeCodeName, buildCodeAgentArgs, getActiveCodeAgents, getRecentCodeAgents, getCodeAgent, normalizeMcpToolArgsForExecution } from '../tools.js';
+import { registerDelegateToAgentHandler } from '../tools/agent-delegation.js';
 import { resolveModelAlias } from '../code-agents/utils.js';
 import type { ToolConfig } from '../types.js';
 
@@ -153,6 +154,29 @@ describe('MCP tool name parsing', () => {
     const result = await executeTool('mcp__server__category__subtool', { arg: 'test' }, toolConfig);
     expect(result).toContain('Error:');
     expect(result).not.toContain('Unknown tool');
+  });
+
+  it('normalizes context-a8c execute-tool parameter aliases', () => {
+    expect(normalizeMcpToolArgsForExecution('context-a8c', 'context-a8c-execute-tool', {
+      provider: 'zendesk',
+      tool: 'search',
+      parameters: { query: 'jetpack search' },
+    })).toEqual({
+      provider: 'zendesk',
+      tool: 'search',
+      params: { query: 'jetpack search' },
+    });
+
+    expect(normalizeMcpToolArgsForExecution('context-a8c', 'context-a8c-execute-tool', {
+      provider: 'slack',
+      tool: 'search',
+      query: 'jetpack search',
+      limit: 10,
+    })).toEqual({
+      provider: 'slack',
+      tool: 'search',
+      params: { query: 'jetpack search', limit: 10 },
+    });
   });
 });
 
@@ -511,6 +535,12 @@ describe('code_with_agent', () => {
       expect(args).toContain('gpt-5.3-codex');
     });
 
+    it('builds codex args with effort override', () => {
+      const { args } = buildCodeAgentArgs({ task: 'fix it', agent: 'codex', effort: 'xhigh' });
+      expect(args).toContain('-c');
+      expect(args).toContain('model_reasoning_effort=xhigh');
+    });
+
     it('does not include --allowedTools for codex', () => {
       const { args } = buildCodeAgentArgs({ task: 'fix it', agent: 'codex' });
       expect(args).not.toContain('--allowedTools');
@@ -600,6 +630,59 @@ describe('code_with_agent', () => {
     it('is excluded from getToolDefinitions when includeSpawnSubagent is false', async () => {
       const tools = await getToolDefinitions(toolConfig, { includeMcp: false });
       expect(tools.map(t => t.name)).not.toContain('check_code_agent');
+    });
+  });
+
+  describe('delegate_to_agent tool', () => {
+    afterEach(() => {
+      registerDelegateToAgentHandler(null);
+    });
+
+    it('has expected tool definition', () => {
+      expect(DELEGATE_TO_AGENT_TOOL.name).toBe('delegate_to_agent');
+      expect(DELEGATE_TO_AGENT_TOOL.input_schema.required).toEqual(['alias', 'task']);
+    });
+
+    it('is included in getToolDefinitions when agent tools are enabled', async () => {
+      const tools = await getToolDefinitions(toolConfig, { includeAgentTools: true, includeMcp: false });
+      expect(tools.map(t => t.name)).toContain('delegate_to_agent');
+    });
+
+    it('rejects non-Discord contexts', async () => {
+      const result = await executeTool('delegate_to_agent', {
+        alias: 'reviewer',
+        task: 'review this',
+      }, toolConfig, {
+        fullConfig: { agents: { default: 'main', list: {} } } as any,
+        channel: 'telegram',
+      });
+      expect(result).toContain('Discord-only');
+    });
+
+    it('calls the registered delegation handler for Discord', async () => {
+      registerDelegateToAgentHandler(async (input) => `delegated ${input.alias}: ${input.task}`);
+      const result = await executeTool('delegate_to_agent', {
+        alias: '@Reviewer',
+        task: 'review this',
+      }, toolConfig, {
+        fullConfig: { agents: { default: 'main', list: {} } } as any,
+        channel: 'discord',
+        channelTargetId: '123',
+      });
+      expect(result).toBe('delegated reviewer: review this');
+    });
+
+    it('blocks self delegation', async () => {
+      registerDelegateToAgentHandler(async () => 'should not run');
+      const result = await executeTool('delegate_to_agent', {
+        alias: 'reviewer',
+        task: 'review this',
+      }, toolConfig, {
+        fullConfig: { agents: { default: 'main', list: {} } } as any,
+        channel: 'discord',
+        threadAgentAlias: 'reviewer',
+      });
+      expect(result).toContain('cannot delegate to itself');
     });
   });
 
