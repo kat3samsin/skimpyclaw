@@ -22,3 +22,4 @@ All notable documentation and behavior updates should be recorded here.
 - Interactive sessions: shared `buildCodeAgentSpawnEnv()` helper in `src/code-agents/utils.ts` replaces three copy-pasted `delete CLAUDECODE / GH_TOKEN / GITHUB_TOKEN` blocks across `executor.ts` and `interactive-resume.ts`.
 - Discord: removed `[discord:diag]` debug logs that fired on every inbound message; converted interactive-session intercept to static imports for reduced hot-path overhead.
 - `.gitignore`: added `.playwright-cli/` to stop committing local browser-automation artifacts.
+- Repo cleanup: removed previously tracked Playwright capture artifacts, the unused code-agent worktree helper, stale superpowers/unified-loop planning docs, an obsolete guide-only architecture diagram, the unreferenced root architecture analysis, and the unused docs hero screenshot component/asset.
