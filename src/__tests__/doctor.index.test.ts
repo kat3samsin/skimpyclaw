@@ -29,7 +29,7 @@ describe('doctor index integration', () => {
     finishedAt: '2026-02-12T10:00:02.000Z',
     checks: [
       { name: 'node_version', category: 'environment', ok: true, detail: 'v20.11.0' },
-      { name: 'provider_openai_auth', category: 'provider_auth', ok: false, detail: '401 Unauthorized' },
+      { name: 'provider_anthropic_auth', category: 'provider_auth', ok: false, detail: '401 Unauthorized' },
     ],
   };
 

@@ -12,7 +12,6 @@
 
 - Claude: `claude -p --verbose --output-format stream-json --dangerously-skip-permissions ... <task>`
 - Codex: `codex exec --full-auto --json --color never ... <task>`
-- Kimi: `kimi --yolo -p <task> ...`
 
 ## Execution Flow
 
@@ -20,7 +19,7 @@
 - Orchestration: `src/code-agents/index.ts`
 - Command construction: `src/code-agents/utils.ts`
 
-Normal tool calling (`Read/Write/Bash/Browser`) is separate from coding-agent CLI execution.
+Normal tool calling (`Read/Write/Bash/Fetch`) is separate from coding-agent CLI execution.
 
 ## Validation & Package Manager Detection
 

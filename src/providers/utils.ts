@@ -160,19 +160,16 @@ export function shouldUseCodexAliasProvider(
  * Get provider name from model spec.
  */
 export function getProvider(model: string): string {
-  // Explicit prefix: "openrouter/google/gemini-2.0-flash" → "openrouter"
   const slashIdx = model.indexOf('/');
   if (slashIdx > 0) {
     const prefix = model.slice(0, slashIdx);
-    // Known Anthropic prefix
     if (prefix === 'anthropic') return 'anthropic';
-    // Any other prefix = provider name (openai, openrouter, groq, together, etc.)
+    if (prefix === 'codex') return 'codex';
+    if (prefix === 'openai' && /\bcodex\b/i.test(model.slice(slashIdx + 1))) return 'openai';
     return prefix;
   }
-  // No prefix: infer from model name
   if (model.includes('claude')) return 'anthropic';
-  if (model.includes('gpt')) return 'openai';
-  // Default to anthropic
+  if (model.includes('gpt') || model.includes('codex')) return 'codex';
   return 'anthropic';
 }
 

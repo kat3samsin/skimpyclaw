@@ -16,9 +16,6 @@ At least one provider must be configured:
 |----------|-------------|
 | `CLAUDE_CODE_OAUTH_TOKEN` | Anthropic OAuth token (from `claude setup-token`) |
 | `ANTHROPIC_API_KEY` | Anthropic API key (alternative to OAuth) |
-| `OPENAI_API_KEY` | OpenAI API key |
-| `MINIMAX_API_KEY` | MiniMax API key |
-| `KIMI_API_KEY` | Kimi (Moonshot) API key |
 
 ::: tip
 Codex uses `~/.codex/auth.json` directly -- no env var needed.
@@ -29,6 +26,7 @@ Codex uses `~/.codex/auth.json` directly -- no env var needed.
 | Variable | Description |
 |----------|-------------|
 | `DISCORD_BOT_TOKEN` | Discord bot token |
+| `OPENAI_API_KEY` | Optional OpenAI voice STT/TTS provider key |
 | `LANGFUSE_PUBLIC_KEY` | Langfuse observability public key |
 | `LANGFUSE_SECRET_KEY` | Langfuse observability secret key |
 | `LANGFUSE_BASEURL` | Langfuse server URL |

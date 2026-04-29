@@ -75,16 +75,10 @@ export function checkEligibility(
     if (!toolConfig?.enabled) {
       return { eligible: false, reason: `Tools not enabled (needs: ${reqs.tools.join(', ')})` };
     }
-    const missing: string[] = [];
-    for (const tool of reqs.tools) {
-      const t = tool.toLowerCase();
-      if (t === 'browser') {
-        if (!toolConfig.browser?.enabled) missing.push(tool);
-      }
-      // built-in tools are available whenever tools.enabled is true
-    }
+    const supportedTools = new Set(['read', 'write', 'glob', 'bash', 'fetch', 'code_with_agent', 'check_code_agent', 'delegate_to_agent']);
+    const missing = reqs.tools.filter(tool => !supportedTools.has(tool.toLowerCase()));
     if (missing.length > 0) {
-      return { eligible: false, reason: `Tools not enabled (needs: ${missing.join(', ')})` };
+      return { eligible: false, reason: `Unsupported tools requested: ${missing.join(', ')}` };
     }
   }
 
@@ -176,7 +170,6 @@ export function loadSkills(skillConfig?: SkillConfig, toolConfig?: ToolConfig): 
     entries: skillConfig?.entries,
     enabled: skillConfig?.enabled,
     toolEnabled: toolConfig?.enabled,
-    browserEnabled: toolConfig?.browser?.enabled,
   });
 
   const cached = skillsCache.get(cacheKey);

@@ -227,7 +227,6 @@ describe('runCli', () => {
           codex: { authPath: '~/.codex/auth.json' },
         },
         aliases: {
-          'claude-fast': 'anthropic/claude-haiku-4-5',
           'codex5.1': 'codex/gpt-5.1-codex',
           'codex5.3': 'codex/gpt-5.3-codex',
         },

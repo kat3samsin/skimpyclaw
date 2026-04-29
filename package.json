@@ -53,8 +53,7 @@
     "gray-matter": "^4.0.3",
     "mcporter": "^0.7.3",
     "openai": "^4.47.0",
-    "pdf-parse": "^2.4.5",
-    "playwright": "^1.49.0"
+    "pdf-parse": "^2.4.5"
   },
   "pnpm": {
     "overrides": {

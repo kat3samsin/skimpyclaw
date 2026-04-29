@@ -30,7 +30,7 @@ const cfg: any = {
     default: 'main',
     list: {
       main: {
-        model: 'claude-fast',
+        model: 'anthropic/claude-haiku-4-5',
         identity: { name: 'Bot', emoji: 'x' },
       },
     },

@@ -21,7 +21,7 @@ flowchart LR
   - `isAvailable()`
   - `chat(messages, options, config)`
   - tool-loop adapter methods used by `runToolLoop()`
-- `runToolLoop()` is the single tool execution path across Anthropic, Codex, and OpenAI-compatible providers.
+- `runToolLoop()` is the single tool execution path across Anthropic and Codex.
 - Context compaction behavior is unified through shared context manager utilities used by each adapter.
 
 ## Registry + Adapters
@@ -30,30 +30,18 @@ flowchart LR
 - Adapter implementations:
   - `src/providers/adapters/anthropic-adapter.ts`
   - `src/providers/adapters/codex-adapter.ts`
-  - `src/providers/adapters/openai-adapter.ts`
 - Provider selection is resolved from model input via `resolveProviderRoute()` and model aliases.
 
 ## MCP Support
 
-MCP tools (via mcporter) are available on the Anthropic and Codex adapter paths. OpenAI-compatible non-Codex adapters do not include MCP tools. mcporter spawns MCP servers as child processes and communicates over stdio JSON-RPC. Config at `~/.mcporter/mcporter.json`.
-
-## Browser Tool
-
-Two separate Playwright implementations:
-
-| Context | Implementation | How it works |
-|---------|---------------|--------------|
-| Main agent | `src/tools/browser-tool.ts` | Direct Playwright API, in-process, not MCP |
-| Coding agent (Claude CLI) | `@playwright/mcp` | MCP server passed via `--mcp-config` |
-
-Both share the same persistent browser profile at `~/.skimpyclaw/browser-profile` (cookies, sessions).
+MCP tools (via mcporter) are available on the Anthropic and Codex adapter paths. mcporter spawns MCP servers as child processes and communicates over stdio JSON-RPC. Config at `~/.mcporter/mcporter.json`.
 
 ## Model Selection Contract
 
 `src/model-selection.ts` is the single source of truth for model input parsing:
 
 - Accepted inputs:
-  - configured alias (e.g. `claude-think`)
+  - configured alias (e.g. `codex5.5`)
   - full provider/model (e.g. `anthropic/claude-sonnet-4-6`)
   - bare model ID with `-` or `.` (e.g. `claude-sonnet-4-6`)
 - Deprecated model IDs are migrated via provider utils (e.g. Claude 3.5 -> current Claude 4 aliases).

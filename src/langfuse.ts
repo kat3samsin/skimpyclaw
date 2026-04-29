@@ -30,14 +30,6 @@ export const MODEL_PRICING: Record<string, ModelPricing> = {
   'claude-haiku-4': { inputPerMTok: 1.0, outputPerMTok: 5.0 },
   'claude-opus-4': { inputPerMTok: 15.0, outputPerMTok: 75.0 },
 
-  // OpenAI models (https://developers.openai.com/api/docs/pricing)
-  'gpt-4o': { inputPerMTok: 2.5, outputPerMTok: 10.0 },
-  'gpt-4o-mini': { inputPerMTok: 0.15, outputPerMTok: 0.6 },
-  'gpt-4.1': { inputPerMTok: 2.0, outputPerMTok: 8.0 },
-  'gpt-4.1-mini': { inputPerMTok: 0.4, outputPerMTok: 1.6 },
-  'gpt-4.1-nano': { inputPerMTok: 0.1, outputPerMTok: 0.4 },
-  'gpt-4-turbo': { inputPerMTok: 10.0, outputPerMTok: 30.0 },
-  'gpt-3.5-turbo': { inputPerMTok: 0.5, outputPerMTok: 1.5 },
   // Codex pricing
   'gpt-5.1-codex': { inputPerMTok: 1.25, outputPerMTok: 10.0 },
   'gpt-5.2-codex': { inputPerMTok: 1.75, outputPerMTok: 14.0 },
@@ -46,14 +38,6 @@ export const MODEL_PRICING: Record<string, ModelPricing> = {
   'codex-5.1': { inputPerMTok: 1.25, outputPerMTok: 10.0 },
   'codex-5.2': { inputPerMTok: 1.75, outputPerMTok: 14.0 },
   'codex-5.3': { inputPerMTok: 1.75, outputPerMTok: 14.0 },
-
-  // MiniMax models (https://platform.minimax.io/docs/pricing/pay-as-you-go)
-  'minimax-m2.1': { inputPerMTok: 0.3, outputPerMTok: 1.2 },
-  'minimax-m2.5': { inputPerMTok: 0.3, outputPerMTok: 1.2 },
-  // Kimi/Moonshot models (https://platform.moonshot.ai/docs/pricing/chat.en-US)
-  // kimi-k2.5 series - using cache miss pricing for input (non-cached)
-  'kimi-k2.5': { inputPerMTok: 0.6, outputPerMTok: 3.0 },
-  'kimi-for-coding': { inputPerMTok: 0.6, outputPerMTok: 3.0 }
 };
 
 /** Map of common aliases/shorthand to canonical model IDs in MODEL_PRICING */
@@ -68,26 +52,12 @@ const MODEL_ALIAS_MAP: Record<string, string> = {
   'claude-3.5-sonnet': 'claude-3-5-sonnet',
   'claude-3-opus': 'claude-3-opus',
 
-  // OpenAI aliases
-  gpt4o: 'gpt-4o',
-  'gpt4o-mini': 'gpt-4o-mini',
-  'gpt4.1': 'gpt-4.1',
-  'gpt4.1-mini': 'gpt-4.1-mini',
-  'gpt4.1-nano': 'gpt-4.1-nano',
-  'gpt4-turbo': 'gpt-4-turbo',
-  'gpt35-turbo': 'gpt-3.5-turbo',
-  'gpt-3.5': 'gpt-3.5-turbo',
   'gpt-codex': 'gpt-5.3-codex',
   'codex5.1': 'gpt-5.1-codex',
   'codex5.2': 'gpt-5.2-codex',
   'codex5.3': 'gpt-5.3-codex',
   'codex5.5': 'gpt-5.5',
   codex: 'gpt-5.5',
-  // MiniMax aliases
-  minimax: 'minimax-m2.5',
-
-  // Kimi/Moonshot aliases
-  kimi: 'kimi-k2.5'
 };
 
 /**

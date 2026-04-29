@@ -49,11 +49,6 @@ import {
 } from './anthropic.js';
 
 import {
-  addOpenAIClient,
-  clearOpenAIClients,
-} from './openai.js';
-
-import {
   addResponsesApiProvider,
   isResponsesApiProvider,
   setCodexAuthPath,
@@ -68,11 +63,9 @@ import {
   shouldUseCodexAliasProvider,
 } from './utils.js';
 import Anthropic from '@anthropic-ai/sdk';
-import OpenAI from 'openai';
 
 // Lazy adapter imports (avoid circular deps at module load time)
 import { AnthropicAdapter } from './adapters/anthropic-adapter.js';
-import { OpenAIAdapter } from './adapters/openai-adapter.js';
 import { CodexAdapter } from './adapters/codex-adapter.js';
 
 // Wire provider observability helpers to runtime cost calculator.
@@ -90,8 +83,7 @@ export function getAdapter(provider: string): ProviderAdapter {
   if (provider === 'anthropic') return new AnthropicAdapter();
   // Codex providers are registered dynamically via addResponsesApiProvider
   if (isResponsesApiProvider(provider)) return new CodexAdapter();
-  // Everything else goes through the OpenAI-compatible adapter
-  return new OpenAIAdapter(provider);
+  throw new Error(`Unknown provider "${provider}"`);
 }
 
 interface NormalizedChatRoute {
@@ -133,7 +125,12 @@ function resolveAdapter(
     throw new Error(`Codex provider "${provider}" is configured but auth is unavailable. Run "codex" to re-authenticate.`);
   }
 
-  const adapter = getAdapter(provider);
+  let adapter: ProviderAdapter;
+  try {
+    adapter = getAdapter(provider);
+  } catch {
+    throw new Error(`Unknown provider "${provider}" for model: ${resolvedModel}`);
+  }
   if (adapter.isAvailable()) {
     return { adapter, resolvedModel, chatOpts };
   }
@@ -152,18 +149,6 @@ export {
   chatAnthropic,
   chatWithToolsAnthropic,
 } from './anthropic.js';
-
-// OpenAI
-export {
-  addOpenAIClient,
-  getOpenAIClient,
-  hasOpenAIClient,
-  clearOpenAIClients,
-  resetOpenAIProviderState,
-  isOpenAIAvailable,
-  chatOpenAI,
-  chatWithToolsOpenAI,
-} from './openai.js';
 
 // Codex
 export {
@@ -188,7 +173,6 @@ export async function initProviders(config: Config): Promise<void> {
   // Reset provider state so reloads strictly reflect current config.
   setAnthropicClient(null);
   setUsingOAuth(false);
-  clearOpenAIClients();
   resetCodexProviderState();
 
   const anthropicConfig = config.models.providers.anthropic;
@@ -217,7 +201,7 @@ export async function initProviders(config: Config): Promise<void> {
     }
   }
 
-  // Initialize all non-Anthropic providers
+  // Initialize Codex providers. API-key chat providers are not core.
   for (const [name, providerConfig] of Object.entries(config.models.providers)) {
     if (name === 'anthropic' || !providerConfig) continue;
 
@@ -233,25 +217,6 @@ export async function initProviders(config: Config): Promise<void> {
       }
       continue;
     }
-
-    const apiKey = providerConfig.apiKey;
-    if (!apiKey) continue;
-
-    const opts: Record<string, any> = { apiKey };
-    if (providerConfig.baseURL) {
-      let normalizedBaseURL = providerConfig.baseURL;
-      if (name === 'minimax') {
-        const trimmed = normalizedBaseURL.replace(/\/+$/, '');
-        normalizedBaseURL = trimmed.endsWith('/v1') ? trimmed : `${trimmed}/v1`;
-      }
-      opts.baseURL = normalizedBaseURL;
-    }
-    // Kimi Code API requires a coding-agent User-Agent with version string
-    if (providerConfig.baseURL?.includes('kimi.com')) {
-      opts.defaultHeaders = { 'User-Agent': 'claude-code/2.1.42' };
-    }
-    addOpenAIClient(name, new OpenAI(opts));
-    console.log(`[providers] Initialized ${name}${providerConfig.baseURL ? ` (${providerConfig.baseURL})` : ''}`);
   }
 }
 

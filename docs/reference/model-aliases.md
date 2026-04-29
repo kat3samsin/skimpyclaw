@@ -8,31 +8,19 @@ These are created by the setup wizard:
 
 | Alias | Resolves To |
 |-------|-------------|
-| `claude-fast` | `anthropic/claude-haiku-4-5` |
-| `claude-think` | `anthropic/claude-sonnet-4-6` |
-| `claude-opus` | `anthropic/claude-opus-4-7` |
-| `claude-opus4.6` | `anthropic/claude-opus-4-6` |
-| `claude-opus-4.6` | `anthropic/claude-opus-4-6` |
 | `codex5.1` | `codex/gpt-5.1-codex` |
 | `codex5.2` | `codex/gpt-5.2-codex` |
 | `codex5.3` | `codex/gpt-5.3-codex` |
 | `codex5.5` | `codex/gpt-5.5` |
 | `codex` | `codex/gpt-5.5` |
-| `minimax` | `minimax/MiniMax-M2.5` |
-| `kimi` | `kimi/kimi-for-coding` |
 
-### With OpenAI provider
-
-| Alias | Resolves To |
-|-------|-------------|
-| `gpt-fast` | `openai/gpt-4o-mini` |
-| `gpt` | `openai/gpt-4o` |
+Claude models should be configured with their exact model IDs, such as `anthropic/claude-opus-4-7`, `anthropic/claude-sonnet-4-6`, or `anthropic/claude-haiku-4-5`.
 
 ## Model Selection
 
 Models can be specified three ways:
 
-1. **Alias** -- `claude-fast`
+1. **Alias** -- `codex5.5`
 2. **Full provider/model** -- `anthropic/claude-haiku-4-5`
 3. **Bare model ID** -- `claude-haiku-4-5` (must contain `-` or `.`)
 
@@ -40,12 +28,12 @@ Models can be specified three ways:
 
 **CLI:**
 ```bash
-skimpyclaw model claude-think
+skimpyclaw model anthropic/claude-sonnet-4-6
 ```
 
 **Telegram/Discord:**
 ```
-/model claude-think
+/model anthropic/claude-sonnet-4-6
 ```
 
 **Dashboard API:**
@@ -53,7 +41,7 @@ skimpyclaw model claude-think
 curl -X POST http://localhost:18790/api/dashboard/model \
   -H 'Authorization: Bearer TOKEN' \
   -H 'Content-Type: application/json' \
-  -d '{"model": "claude-think"}'
+  -d '{"model": "anthropic/claude-sonnet-4-6"}'
 ```
 
 ## Deprecated Model Migration

@@ -10,7 +10,6 @@ import {
   fromClaudeCodeName,
   toClaudeCodeName,
   BUILTIN_TOOL_DEFINITIONS,
-  BROWSER_TOOL_DEFINITION,
   FETCH_TOOL_DEFINITION,
   TOOL_DEFINITIONS,
   CODE_WITH_AGENT_TOOL,
@@ -20,7 +19,6 @@ import {
 import type { ExecuteToolContext } from './tools/execute-context.js';
 import { executeReadFile, executeWriteFileLocked, executeListDirectory } from './tools/file-tools.js';
 import { executeBash } from './tools/bash-tool.js';
-import { executeBrowser, cleanupBrowser } from './tools/browser-tool.js';
 import { executeFetch } from './tools/fetch-tool.js';
 
 // Re-export from code-agents module for backward compatibility
@@ -48,13 +46,11 @@ export {
   fromClaudeCodeName,
   toClaudeCodeName,
   BUILTIN_TOOL_DEFINITIONS,
-  BROWSER_TOOL_DEFINITION,
   FETCH_TOOL_DEFINITION,
   TOOL_DEFINITIONS,
   CODE_WITH_AGENT_TOOL,
   CHECK_CODE_AGENT_TOOL,
   DELEGATE_TO_AGENT_TOOL,
-  cleanupBrowser,
 };
 export type { ExecuteToolContext };
 // Re-export types for backward compatibility
@@ -268,7 +264,7 @@ function injectProjects(tool: any, projects?: Record<string, string>): any {
 }
 
 /**
- * Get all available tool definitions: built-ins + browser (if enabled) + MCP (auto-discovered) + agent tools.
+ * Get all available tool definitions: built-ins + fetch + MCP (auto-discovered) + agent tools.
  * This is the primary way to get tools — replaces the static TOOL_DEFINITIONS export.
  * Pass includeAgentTools: true to include code_with_agent and check_code_agent.
  * Results are cached for 60s to avoid rebuilding the array on every agent turn.
@@ -277,7 +273,6 @@ export async function getToolDefinitions(config?: ToolConfig, options?: { includ
   const includeMcp = options?.includeMcp !== false; // default true for backwards compat
   const profile = config?.toolProfile ?? 'full';
   const cacheKey = JSON.stringify({
-    browser: config?.browser?.enabled,
     agentTools: options?.includeAgentTools,
     mcp: includeMcp,
     projects: options?.projects,
@@ -298,12 +293,7 @@ export async function getToolDefinitions(config?: ToolConfig, options?: { includ
     return tools;
   }
 
-  // Include browser tool only when explicitly enabled
-  if (config?.browser?.enabled) {
-    tools.push(BROWSER_TOOL_DEFINITION);
-  }
-
-  // Coding profile: built-ins + browser + code_with_agent + check_code_agent.
+  // Coding profile: built-ins + fetch + code_with_agent + check_code_agent.
   // Skips MCP discovery.
   if (profile === 'coding') {
     if (options?.includeAgentTools) {
@@ -498,11 +488,6 @@ export async function executeTool(
     const normalized = fromClaudeCodeName(name).toLowerCase().replace(/-/g, '_');
 
     switch (normalized) {
-      case '$web_search':
-      case 'web_search':
-      case 'websearch':
-        // Legacy: redirect to Fetch with DuckDuckGo HTML search
-        return await executeFetch({ url: `https://duckduckgo.com/html/?q=${encodeURIComponent(input.query || input.q || input.text || '')}` } as any, config);
       case 'read_file':
         return executeReadFile(input.file_path || input.path, config);
       case 'write_file':
@@ -511,8 +496,6 @@ export async function executeTool(
         return executeListDirectory(input.path, config);
       case 'bash':
         return await executeBash(input.command || input.cmd, input.cwd, config, context);
-      case 'browser':
-        return await executeBrowser(input, config);
       case 'fetch':
         return await executeFetch(input as any, config);
       default:

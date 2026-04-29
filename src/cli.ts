@@ -10,7 +10,7 @@ import type { Config, ToolConfig } from './types.js';
 import { startRuntime } from './service.js';
 import { runSetup, renderGatewayPlist } from './setup.js';
 import { runDoctor as runDoctorCommand } from './doctor/index.js';
-import { executeTool, getToolDefinitions, BUILTIN_TOOL_DEFINITIONS, BROWSER_TOOL_DEFINITION } from './tools.js';
+import { getToolDefinitions, BUILTIN_TOOL_DEFINITIONS } from './tools.js';
 import { formatModelSelectionError, getModelSelectionUsage, resolveModelSelection } from './model-selection.js';
 
 const APP_NAME = 'skimpyclaw';
@@ -42,8 +42,6 @@ Commands:
   cron list               List cron jobs from gateway status
   cron run <id>           Trigger cron job by id
   doctor [--json]         Run preflight checks
-  browser <action> ...    Run browser tool action (open/click/type/select/hover/scroll/waitFor/evaluate/getText/screenshot/wait/close)
-  browser login [url]     Open real Chrome (no automation) for manual login. Cookies persist for agent use.
   tools list              List available tools (built-in + MCP)
   tools install <name>    Add MCP server (--command <cmd> [--args ...] or --url <url>)
   tools remove <name>     Remove MCP server
@@ -563,154 +561,6 @@ async function commandCron(args: string[]): Promise<number> {
   return 1;
 }
 
-async function commandBrowserLogin(args: string[], config: Config): Promise<number> {
-  const url = args[0] || 'about:blank';
-  const toolConfig = getCliToolConfig(config);
-  const profileDir = toolConfig.browser?.profileDir || join(homedir(), '.skimpyclaw', 'browser-profile');
-  const executablePath = toolConfig.browser?.executablePath || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-
-  if (!existsSync(profileDir)) {
-    mkdirSync(profileDir, { recursive: true });
-  }
-
-  console.log(`Opening Chrome for login (profile: ${profileDir})`);
-  console.log('Log in manually, then close the browser window when done.');
-  console.log('Cookies will persist for agent use.');
-
-  const chromeArgs = [
-    `--user-data-dir=${profileDir}`,
-    '--no-first-run',
-    '--no-default-browser-check',
-    url,
-  ];
-
-  const child = spawn(executablePath, chromeArgs, {
-    stdio: 'ignore',
-    detached: false,
-  });
-
-  return new Promise((resolve) => {
-    child.on('exit', (code) => {
-      console.log('Browser closed. Login session saved.');
-      resolve(code ?? 0);
-    });
-    child.on('error', (err) => {
-      console.error(`Failed to launch Chrome: ${err.message}`);
-      resolve(1);
-    });
-  });
-}
-
-async function commandBrowser(args: string[]): Promise<number> {
-  const action = args[0];
-  if (!action) {
-    console.error('Usage: skimpyclaw browser <open|click|type|select|hover|scroll|waitFor|evaluate|getText|screenshot|wait|close|login> ...');
-    return 1;
-  }
-
-  const config = loadConfig();
-
-  if (action.toLowerCase() === 'login') {
-    return commandBrowserLogin(args.slice(1), config);
-  }
-
-  const toolConfig = getCliToolConfig(config);
-
-  if (!toolConfig.browser?.enabled) {
-    console.error('Browser tool is disabled. Enable tools.browser.enabled in config.');
-    return 1;
-  }
-
-  const normalizedAction = action.toLowerCase();
-  const input: Record<string, any> = { action: normalizedAction };
-
-  if (normalizedAction === 'open') {
-    input.url = args[1];
-    if (!input.url) {
-      console.error('Usage: skimpyclaw browser open <url>');
-      return 1;
-    }
-  } else if (normalizedAction === 'click') {
-    input.selector = args[1];
-    if (!input.selector) {
-      console.error('Usage: skimpyclaw browser click <selector>');
-      return 1;
-    }
-  } else if (normalizedAction === 'type') {
-    input.selector = args[1];
-    input.text = args.slice(2).join(' ');
-    if (!input.selector || !input.text) {
-      console.error('Usage: skimpyclaw browser type <selector> <text>');
-      return 1;
-    }
-  } else if (normalizedAction === 'waitfor') {
-    input.selector = args[1];
-    if (hasFlag(args, '--text')) {
-      const idx = args.indexOf('--text');
-      input.text = args[idx + 1];
-    }
-  } else if (normalizedAction === 'screenshot') {
-    input.file_path = args[1];
-  } else if (normalizedAction === 'wait') {
-    const idx = args.indexOf('--ms');
-    if (idx !== -1) input.timeMs = Number(args[idx + 1]);
-  } else if (normalizedAction === 'evaluate') {
-    const scriptIdx = args.indexOf('--script');
-    if (scriptIdx !== -1) {
-      input.script = args.slice(scriptIdx + 1).join(' ');
-    } else {
-      input.script = args[1];
-    }
-    if (!input.script) {
-      console.error('Usage: skimpyclaw browser evaluate --script "document.title"');
-      return 1;
-    }
-  } else if (normalizedAction === 'gettext') {
-    input.selector = args[1]; // optional
-  } else if (normalizedAction === 'scroll') {
-    if (args[1] && !args[1].startsWith('--')) {
-      input.selector = args[1]; // scrollIntoView target
-    }
-    const dirIdx = args.indexOf('--direction');
-    if (dirIdx !== -1) input.direction = args[dirIdx + 1];
-    const amtIdx = args.indexOf('--amount');
-    if (amtIdx !== -1) input.amount = Number(args[amtIdx + 1]);
-  } else if (normalizedAction === 'select') {
-    input.selector = args[1];
-    input.text = args[2];
-    if (!input.selector || !input.text) {
-      console.error('Usage: skimpyclaw browser select <selector> <value>');
-      return 1;
-    }
-  } else if (normalizedAction === 'hover') {
-    input.selector = args[1];
-    if (!input.selector) {
-      console.error('Usage: skimpyclaw browser hover <selector>');
-      return 1;
-    }
-  }
-
-  if (hasFlag(args, '--headful')) input.headless = false;
-  if (hasFlag(args, '--headless')) input.headless = true;
-  const browserIdx = args.indexOf('--browser');
-  if (browserIdx !== -1) input.type = args[browserIdx + 1];
-  const slowIdx = args.indexOf('--slowmo');
-  if (slowIdx !== -1) input.slowMoMs = Number(args[slowIdx + 1]);
-  const uaIdx = args.indexOf('--user-agent');
-  if (uaIdx !== -1) input.userAgent = args[uaIdx + 1];
-  const exeIdx = args.indexOf('--executable');
-  if (exeIdx !== -1) input.executablePath = args[exeIdx + 1];
-  const wIdx = args.indexOf('--width');
-  const hIdx = args.indexOf('--height');
-  if (wIdx !== -1 && hIdx !== -1) {
-    input.viewport = { width: Number(args[wIdx + 1]), height: Number(args[hIdx + 1]) };
-  }
-
-  const result = await executeTool('Browser', input, toolConfig);
-  console.log(result);
-  return result.startsWith('Error') ? 1 : 0;
-}
-
 async function commandTools(args: string[]): Promise<number> {
   const sub = args[0];
 
@@ -721,19 +571,10 @@ async function commandTools(args: string[]): Promise<number> {
 
     // Group tools
     const builtinNames = new Set(BUILTIN_TOOL_DEFINITIONS.map(t => t.name));
-    const browserName = BROWSER_TOOL_DEFINITION.name;
 
     console.log('Built-in tools:');
     for (const t of tools.filter(t => builtinNames.has(t.name))) {
       console.log(`  ${t.name.padEnd(20)} ${(t.description || '').split('\n')[0]}`);
-    }
-
-    const browser = tools.find(t => t.name === browserName);
-    if (browser) {
-      console.log('\nBrowser tool:');
-      console.log(`  ${browser.name.padEnd(20)} ${(browser.description || '').split('\n')[0]}`);
-    } else {
-      console.log('\nBrowser tool: disabled');
     }
 
     const mcpTools = tools.filter(t => t.name.startsWith('mcp__'));
@@ -1026,10 +867,6 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<nu
       const result = await runDoctorCommand({ json });
       console.log(result.output);
       return result.exitCode;
-    }
-
-    if (command === 'browser') {
-      return await commandBrowser(args);
     }
 
     if (command === 'tools') {

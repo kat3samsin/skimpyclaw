@@ -146,7 +146,7 @@ export async function checkEnvVarPatterns(config: Config): Promise<DoctorCheckRe
   for (const [providerName, providerCfg] of Object.entries(config.models.providers || {})) {
     const key = providerCfg?.apiKey || providerCfg?.authToken || '';
     if (!key) continue;
-    if (/openai|anthropic|minimax/i.test(providerName) && !key.startsWith('sk-')) {
+    if (/anthropic/i.test(providerName) && !key.startsWith('sk-')) {
       issues.push(`${providerName} key should usually start with "sk-"`);
     }
   }
@@ -204,19 +204,6 @@ export async function checkProviderAuth(providerName: string, providerConfig: No
   const normalized = providerName.toLowerCase();
 
   try {
-    if (normalized === 'openai') {
-      const res = await fetch(`${providerConfig.baseURL || 'https://api.openai.com/v1'}/models`, {
-        headers: { Authorization: `Bearer ${token}` },
-        signal: AbortSignal.timeout(7000),
-      });
-
-      if (!res.ok) {
-        return fail(name, category, `${res.status} ${res.statusText}`, `Check ${providerName.toUpperCase()}_API_KEY and provider base URL.`);
-      }
-
-      return ok(name, category, `${res.status} ${res.statusText}`);
-    }
-
     if (normalized === 'anthropic') {
       // OAuth tokens can't be validated via API (they use Claude Code's internal refresh flow)
       if (providerConfig.authToken) {
@@ -297,56 +284,6 @@ export async function checkDiscordToken(token: string): Promise<DoctorCheckResul
   }
 }
 
-function isAnyBrowserEnabled(config: Config): boolean {
-  return Boolean(
-    config.channels.telegram?.tools?.browser?.enabled
-    || config.channels.discord?.tools?.browser?.enabled
-    || config.heartbeat?.tools?.browser?.enabled,
-  );
-}
-
-export async function checkBrowserBinaryIfEnabled(config: Config): Promise<DoctorCheckResult> {
-  const name = 'browser_binary_available';
-  const category = 'runtime';
-
-  if (!isAnyBrowserEnabled(config)) {
-    return ok(name, category, 'Browser tools disabled');
-  }
-
-  const explicitPath =
-    config.channels.telegram?.tools?.browser?.executablePath
-    || config.channels.discord?.tools?.browser?.executablePath
-    || config.heartbeat?.tools?.browser?.executablePath;
-
-  if (explicitPath) {
-    if (existsSync(explicitPath)) {
-      return ok(name, category, explicitPath);
-    }
-    return fail(name, category, `Browser executable not found at ${explicitPath}`, 'Fix tools.browser.executablePath or install a supported browser.');
-  }
-
-  const probes = [
-    ['which', ['google-chrome']],
-    ['which', ['chromium']],
-    ['which', ['chromium-browser']],
-    ['which', ['firefox']],
-  ] as const;
-
-  for (const [cmd, args] of probes) {
-    const probe = spawnSync(cmd, args, { encoding: 'utf-8' });
-    if (probe.status === 0 && probe.stdout.trim()) {
-      return ok(name, category, probe.stdout.trim());
-    }
-  }
-
-  const macChrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-  if (existsSync(macChrome)) {
-    return ok(name, category, macChrome);
-  }
-
-  return fail(name, category, 'No supported browser binary found', 'Install Chrome/Chromium/Firefox or set tools.browser.executablePath.');
-}
-
 export async function checkVoiceDependencies(config: Config): Promise<DoctorCheckResult> {
   const name = 'voice_dependencies';
   const category = 'runtime';
@@ -382,22 +319,6 @@ export async function checkVoiceDependencies(config: Config): Promise<DoctorChec
 
   const sttMethod = hasLocalWhisper ? (whisperCli.status === 0 ? 'whisper-cli' : 'whisper') : 'API STT';
   return ok(name, category, `ffmpeg and ${sttMethod} available`);
-}
-
-export async function checkPlaywrightIfBrowserEnabled(config: Config): Promise<DoctorCheckResult> {
-  const name = 'playwright_installed';
-  const category = 'runtime';
-
-  if (!isAnyBrowserEnabled(config)) {
-    return ok(name, category, 'Browser tools disabled');
-  }
-
-  const pw = spawnSync('npx', ['playwright', '--version'], { encoding: 'utf-8', timeout: 10000 });
-  if (pw.status === 0) {
-    return ok(name, category, `Playwright ${(pw.stdout || '').trim()}`);
-  }
-
-  return fail(name, category, 'Playwright not installed', 'Run: npx playwright install chromium');
 }
 
 export async function checkMcpConfig(config: Config): Promise<DoctorCheckResult> {

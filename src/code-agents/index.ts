@@ -138,7 +138,7 @@ export async function executeCodeWithAgent(
   if (!task) return 'Error: task is required';
 
   // Resolve model alias first so agent auto-selection can inspect it.
-  // Fall back to current session model so codex/kimi models auto-select the right CLI.
+  // Fall back to current session model so Codex models auto-select the right CLI.
   let rawModel = input.model as string | undefined;
   if (!rawModel) {
     try {
@@ -155,7 +155,7 @@ export async function executeCodeWithAgent(
   const requestedAgent = input.agent as string | undefined;
   const agent = resolveSelectedCodeAgent(requestedAgent, configDefault, resolvedModel);
   if (!agent) {
-    return `Error: Invalid agent "${requestedAgent}". Must be claude, codex, or kimi.`;
+    return `Error: Invalid agent "${requestedAgent}". Must be claude or codex.`;
   }
 
   // Interactive mode prerequisites: Discord server channel (NOT DM) + claude only.

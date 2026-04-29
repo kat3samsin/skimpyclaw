@@ -43,25 +43,24 @@ When asked about weather or generating a daily briefing:
 `,
   'web-search': `---
 name: web-search
-description: Search the web using the Browser tool. Opens DuckDuckGo, reads results, and returns findings.
+description: Search the web using Fetch against DuckDuckGo HTML results.
 triggers: ["search", "look up", "google", "find online", "web search"]
 priority: 50
 ---
 
 When asked to search the web:
-1. Use the Browser tool to open https://html.duckduckgo.com/html/?q=<URL-encoded query>
-2. Use getText to read the search results page.
-3. If a specific result looks promising, open that URL and extract the relevant content.
+1. Use Fetch on https://html.duckduckgo.com/html/?q=<URL-encoded query>
+2. Read the returned text for relevant result links and snippets.
+3. If a specific result looks promising, Fetch that URL and extract the relevant content.
 4. Summarize findings concisely — include source URLs.
-5. Close the browser when done.
 
 Do NOT fabricate results. If the search returns nothing useful, say so.
 `,
   'duckduckgo-html-search': `---
 name: duckduckgo-html-search
-description: Search the web via DuckDuckGo HTML results using the Browser tool
+description: Search the web via DuckDuckGo HTML results using Fetch
 emoji: 🦆
-tags: [search, web, browser]
+tags: [search, web, fetch]
 priority: 45
 enabled: true
 ---
@@ -71,15 +70,13 @@ enabled: true
 Use this skill when the user asks for web search, source gathering, or lightweight browsing.
 
 ## Priority rule
-DuckDuckGo HTML via Browser is the default search path.
-- Prefer DuckDuckGo first, even if \\\`$web_search\\\` is available.
-- Use \\\`$web_search\\\` only when the user explicitly asks for it, DuckDuckGo is blocked, or Browser is unavailable.
+DuckDuckGo HTML via Fetch is the default search path.
+- Prefer DuckDuckGo first.
 
 ## Default workflow
 1. Build query URL: \\\`https://duckduckgo.com/html/?q=<urlencoded query>\\\`
-2. Open the URL with Browser.
-3. Wait for result anchors (\\\`a.result__a\\\`) or fallback body text.
-4. Extract results using one Browser \\\`evaluate\\\` call when possible.
+2. Fetch the URL.
+3. Extract result titles, URLs, and snippets from the returned HTML/text when possible.
 5. Return only actually extracted items (never pad count).
 
 ## Extraction requirements
@@ -95,13 +92,6 @@ If a field is missing, set it to \\\`UNAVAILABLE\\\`.
 - If the page blocks, fails, or no results render, return \\\`UNAVAILABLE\\\` and state why.
 - Never mix real and invented entries.
 - Include source URLs in output.
-
-## Browser strategy
-- Prefer one-page extraction via \\\`evaluate\\\`:
-  - Collect \\\`a.result__a\\\` for title + href
-  - Collect nearby snippet nodes (\\\`.result__snippet\\\`) when present
-- Use minimal actions: open → waitFor → evaluate → optional screenshot.
-- If selectors change, fallback to visible text extraction and clearly mark reduced confidence.
 
 ## Output format (concise)
 - Query used
@@ -166,7 +156,7 @@ export function buildStarterCronJobs(starters: SetupStarters): Array<Record<stri
   jobs.push({
     id: 'memory-trim',
     name: 'Memory Trim',
-    model: 'claude-fast',
+    model: 'anthropic/claude-haiku-4-5',
     schedule: {
       kind: 'cron',
       expr: '0 0,12 * * *',
@@ -196,13 +186,12 @@ export function buildStarterCronJobs(starters: SetupStarters): Array<Record<stri
       },
       payload: {
         kind: 'agentTurn',
-        message: 'Use the Browser tool to visit https://news.ycombinator.com and fetch today\'s top 10 stories. Reply with title, URL, and 1-line summary for each item.',
+        message: 'Use Fetch to read https://news.ycombinator.com and fetch today\'s top 10 stories. Reply with title, URL, and 1-line summary for each item.',
         tools: {
           enabled: true,
           allowedPaths: [`${homedir()}/.skimpyclaw`],
           maxIterations: 30,
           bashTimeout: 30000,
-          browser: { enabled: true, headless: true },
         },
       },
     });
@@ -219,13 +208,12 @@ export function buildStarterCronJobs(starters: SetupStarters): Array<Record<stri
       },
       payload: {
         kind: 'agentTurn',
-        message: `Use the Browser tool to check current weather and today's forecast for ${starters.weatherLocation}. Keep it concise: current temp/conditions, highs/lows, precipitation chance, and 1 recommendation.`,
+        message: `Use Fetch to check current weather and today's forecast for ${starters.weatherLocation}. Keep it concise: current temp/conditions, highs/lows, precipitation chance, and 1 recommendation.`,
         tools: {
           enabled: true,
           allowedPaths: [`${homedir()}/.skimpyclaw`],
           maxIterations: 30,
           bashTimeout: 30000,
-          browser: { enabled: true, headless: true },
         },
       },
     });

@@ -4,7 +4,7 @@ import { addResponsesApiProvider, chat, initProviders } from '../providers/index
 function baseConfig(providers: Record<string, any>): any {
   return {
     gateway: { port: 18790, mode: 'local' },
-    agents: { default: 'main', list: { main: { identity: { name: 'bot', emoji: 'x' }, model: 'openai/gpt-4o' } } },
+    agents: { default: 'main', list: { main: { identity: { name: 'bot', emoji: 'x' }, model: 'anthropic/claude-sonnet-4-6' } } },
     models: { providers, aliases: {} },
     channels: { telegram: { enabled: false, token: '', allowFrom: [] }, discord: { enabled: false, token: '', allowFrom: [] } },
     cron: { jobs: [] },

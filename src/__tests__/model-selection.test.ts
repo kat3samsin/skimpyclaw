@@ -11,7 +11,6 @@ function mockConfig(): any {
   return {
     models: {
       aliases: {
-        'claude-fast': 'anthropic/claude-haiku-4-5',
         codex5: 'codex/gpt-5.3-codex',
       },
     },
@@ -20,11 +19,11 @@ function mockConfig(): any {
 
 describe('model-selection', () => {
   it('lists aliases sorted', () => {
-    expect(listModelAliases(mockConfig())).toEqual(['claude-fast', 'codex5']);
+    expect(listModelAliases(mockConfig())).toEqual(['codex5']);
   });
 
   it('formats aliases', () => {
-    expect(formatAliases(mockConfig())).toBe('claude-fast, codex5');
+    expect(formatAliases(mockConfig())).toBe('codex5');
   });
 
   it('returns model selection usage string', () => {
@@ -73,7 +72,7 @@ describe('model-selection', () => {
   it('formats model selection errors with aliases and usage', () => {
     const text = formatModelSelectionError('Unknown model alias: "x"', mockConfig());
     expect(text).toContain('Unknown model alias: "x"');
-    expect(text).toContain('Available aliases: claude-fast, codex5');
+    expect(text).toContain('Available aliases: codex5');
     expect(text).toContain('Use alias, provider/model, or model-id.');
   });
 });

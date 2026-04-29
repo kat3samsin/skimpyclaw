@@ -28,7 +28,7 @@ describe('heartbeat prompt path normalization', () => {
       heartbeat: {
         intervalMs: 60000,
         prompt: 'Read /Users/example/HEARTBEAT.md only. Reply HEARTBEAT_OK.',
-        model: 'claude-fast',
+        model: 'anthropic/claude-haiku-4-5',
         tools: {
           enabled: true,
           allowedPaths: ['/Users/example/.skimpyclaw'],
@@ -51,7 +51,7 @@ describe('heartbeat prompt path normalization', () => {
       'main',
       expect.stringContaining('/.skimpyclaw/agents/main/HEARTBEAT.md'),
       config,
-      'claude-fast',
+      'anthropic/claude-haiku-4-5',
       expect.any(Object),
       undefined,
       expect.any(Object)
@@ -64,7 +64,7 @@ describe('heartbeat prompt path normalization', () => {
       heartbeat: {
         intervalMs: 60000,
         prompt: 'Read /workspace/HEARTBEAT.md only. Reply HEARTBEAT_OK.',
-        model: 'claude-fast',
+        model: 'anthropic/claude-haiku-4-5',
         tools: {
           enabled: true,
           allowedPaths: ['/Users/example/.skimpyclaw'],

@@ -60,7 +60,7 @@ When the app writes `~/.skimpyclaw/config.json`, it enforces restrictive `0600` 
         "name": "SkimpyClaw",
         "emoji": "👙🦞"
       },
-      "model": "claude-fast",
+      "model": "anthropic/claude-haiku-4-5",
       "thinking": "medium"
     }
   }
@@ -77,11 +77,11 @@ Each key in `agents.list` is a runnable SkimpyClaw agent. The runtime loads prom
   "list": {
     "main": {
       "identity": { "name": "SkimpyClaw", "emoji": "👙🦞" },
-      "model": "claude-fast"
+      "model": "anthropic/claude-haiku-4-5"
     },
     "reviewer": {
       "identity": { "name": "Reviewer", "emoji": "🔎" },
-      "model": "claude-think",
+      "model": "anthropic/claude-sonnet-4-6",
       "thinking": "high"
     }
   }
@@ -96,25 +96,12 @@ See [Agents](./agents.md) for core agent setup and the Discord `/agent` and `@al
 "models": {
   "providers": {
     "anthropic": { "apiKey": "${ANTHROPIC_API_KEY}" },
-    "openrouter": { 
-      "apiKey": "${OPENROUTER_KEY}", 
-      "baseURL": "https://openrouter.ai/api/v1" 
-    },
     "codex": { 
       "authToken": "codex",
       "authPath": "${HOME}/.codex/auth.json"
-    },
-    "kimi": {
-      "apiKey": "${KIMI_API_KEY}",
-      "baseURL": "https://api.kimi.com/v1"
     }
   },
   "aliases": {
-    "claude-fast": "anthropic/claude-haiku-4-5",
-    "claude-think": "anthropic/claude-sonnet-4-6",
-    "claude-opus": "anthropic/claude-opus-4-7",
-    "claude-opus4.6": "anthropic/claude-opus-4-6",
-    "claude-opus-4.6": "anthropic/claude-opus-4-6",
     "codex5.3": "codex/gpt-5.3-codex",
     "codex5.5": "codex/gpt-5.5",
     "codex": "codex/gpt-5.5"
@@ -123,13 +110,12 @@ See [Agents](./agents.md) for core agent setup and the Discord `/agent` and `@al
 }
 ```
 
-Provider is determined by the prefix before `/` in the model string (e.g., `openrouter/google/gemini-2.0-flash`).
+Provider is determined by the prefix before `/` in the model string, usually `anthropic/...` or `codex/...`.
 
 ### Provider-Specific Notes
 
 - **Anthropic**: Supports both API key and OAuth (Claude Code) authentication
 - **Codex**: Uses ChatGPT backend via `~/.codex/auth.json` (created by `codex` CLI)
-- **Kimi**: Requires `User-Agent` header with version string (handled automatically)
 
 ## Channels
 
@@ -147,12 +133,6 @@ Provider is determined by the prefix before `/` in the model string (e.g., `open
       "allowedPaths": ["${HOME}/.skimpyclaw", "${HOME}/Projects"],
       "maxIterations": 100,
       "bashTimeout": 30000,
-      "browser": {
-        "enabled": true,
-        "type": "chromium",
-        "headless": true,
-        "profileDir": "${HOME}/.skimpyclaw/browser-profile"
-      },
       "execApproval": {
         "enabled": true,
         "ttlMs": 300000,
@@ -201,7 +181,7 @@ Two payload types: `agentTurn` and `script`.
     "sendAsVoice": false,
     "discordThreadId": "123456789012345678"
   },
-  "model": "claude-think"
+  "model": "anthropic/claude-sonnet-4-6"
 }
 ```
 
@@ -252,7 +232,7 @@ Prompt files must live inside `~/.skimpyclaw/prompts/`. Paths outside this direc
 ```
 
 - `maxConcurrent`: Maximum parallel coding agent tasks (default: 5)
-- `defaultAgent`: Default CLI for `code_with_agent` (`claude`, `codex`, or `kimi`)
+- `defaultAgent`: Default CLI for `code_with_agent` (`claude` or `codex`)
 
 ## Heartbeat
 
@@ -260,7 +240,7 @@ Prompt files must live inside `~/.skimpyclaw/prompts/`. Paths outside this direc
 "heartbeat": {
   "intervalMs": 3600000,
   "prompt": "Check for anything urgent. If nothing needs attention, respond with 'HEARTBEAT_OK'.",
-  "model": "claude-fast",
+  "model": "anthropic/claude-haiku-4-5",
   "tools": {
     "enabled": false
   }
@@ -398,7 +378,7 @@ Projects are automatically added to tool `allowedPaths` and can be referenced by
           "name": "SkimpyClaw",
           "emoji": "👙🦞"
         },
-        "model": "claude-fast"
+        "model": "anthropic/claude-haiku-4-5"
       }
     }
   },
@@ -408,11 +388,7 @@ Projects are automatically added to tool `allowedPaths` and can be referenced by
         "apiKey": "${ANTHROPIC_API_KEY}"
       }
     },
-    "aliases": {
-      "claude-fast": "anthropic/claude-haiku-4-5",
-      "claude-think": "anthropic/claude-sonnet-4-6",
-      "claude-opus": "anthropic/claude-opus-4-7"
-    },
+    "aliases": {},
     "promptCaching": true
   },
   "channels": {

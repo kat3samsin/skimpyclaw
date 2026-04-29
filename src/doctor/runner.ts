@@ -11,8 +11,6 @@ import {
   checkProviderAuth,
   checkTelegramToken,
   checkDiscordToken,
-  checkBrowserBinaryIfEnabled,
-  checkPlaywrightIfBrowserEnabled,
   checkVoiceDependencies,
   checkMcpConfig,
   checkGatewayHostBindable,
@@ -138,8 +136,6 @@ export async function runDoctor(): Promise<DoctorRunResult> {
     }
   }
 
-  checks.push(await runSafe('browser_binary_available', 'runtime', () => checkBrowserBinaryIfEnabled(config)));
-  checks.push(await runSafe('playwright_installed', 'runtime', () => checkPlaywrightIfBrowserEnabled(config)));
   checks.push(await runSafe('voice_dependencies', 'runtime', () => checkVoiceDependencies(config)));
   checks.push(await runSafe('mcp_config', 'runtime', () => checkMcpConfig(config)));
   checks.push(await runSafe('gateway_host_bindable', 'runtime', () => checkGatewayHostBindable(config.gateway.host ?? '127.0.0.1')));

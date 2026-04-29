@@ -1,17 +1,17 @@
 # SkimpyClaw 👙🦞
 
-Lightweight personal AI assistant (~23k LOC). Runs locally. Telegram/Discord chat, scheduled routines, a web dashboard, and a tool-enabled agent — all in one tiny service.
+Lightweight personal AI assistant (~21k LOC). Runs locally. Telegram/Discord chat, scheduled routines, a web dashboard, and a tool-enabled agent — all in one tiny service.
 
 ## Why SkimpyClaw vs OpenClaw
 
 Both are personal AI assistants you run yourself. The difference is scope.
 
-|                     | SkimpyClaw (~23k LOC)                   | OpenClaw (~700k LOC)                                     |
+|                     | SkimpyClaw (~21k LOC)                   | OpenClaw (~700k LOC)                                     |
 | ------------------- | --------------------------------------- | -------------------------------------------------------- |
 | **Channels**        | Telegram, Discord                       | WhatsApp, Signal, iMessage, Slack, Teams, Matrix, + more |
 | **Setup**           | `skimpyclaw onboard` → done             | Daemon + wizard + per-channel pairing                    |
 | **Codebase**        | Read it in an afternoon                 | Full platform with extensions, packages, native UI       |
-| **Model support**   | Anthropic, OpenAI, Kimi, MiniMax, Codex | Same + more                                              |
+| **Model support**   | Anthropic, Codex                        | Same + more                                              |
 | **Release cadence** | Move fast, no stability guarantees      | Stable / beta / dev channels                             |
 
 Use SkimpyClaw if you live in Telegram or Discord, want to read and own every line, and don't need 13 channels. Use OpenClaw if you need to support multiple channels like WhatsApp, Signal, iMessage, or Slack — or want a more polished, maintained platform.
@@ -19,10 +19,10 @@ Use SkimpyClaw if you live in Telegram or Discord, want to read and own every li
 ## Features
 
 - **Chat interface** — Telegram and Discord bots with persistent conversation history
-- **Tool-enabled agent** — file read/write, bash, browser (Playwright), MCP tools via mcporter
+- **Tool-enabled agent** — file read/write, bash, fetch, MCP tools via mcporter
 - **Multi-modal support** — voice messages (STT/TTS), image analysis
 - **Agents** — configure multiple local agents with their own identity, prompts, model, effort, and memory; Discord adds reusable `/agent` profiles and `@alias <message>` shortcuts
-- **Coding agents** — delegate coding tasks to Claude Code, Codex, or Kimi CLI with `code_with_agent`; Discord threads can also run bidirectional interactive Claude sessions that `--resume` the same process
+- **Coding agents** — delegate coding tasks to Claude Code or Codex with `code_with_agent`; Discord threads can also run bidirectional interactive Claude sessions that `--resume` the same process
 - **Cron scheduler** — run agent prompts or shell scripts on a schedule
 - **Web dashboard** — Preact/Vite SPA with status, cron, audit log, memory, templates, config editor, skills, approvals
 - **Heartbeat** — periodic keep-alive with Telegram/Discord alerts
@@ -31,7 +31,7 @@ Use SkimpyClaw if you live in Telegram or Discord, want to read and own every li
 - **Voice** — optional TTS/STT support (ElevenLabs, OpenAI, macOS `say`, local Whisper)
 - **Observability** — optional Langfuse tracing per agent turn
 - **Audit logging** — JSONL-based audit traces for all agent interactions
-- **Multiple model providers** — Anthropic, OpenAI, Kimi, MiniMax, Codex (ChatGPT backend), any OpenAI-compatible API
+- **Model providers** — Anthropic and Codex (ChatGPT backend)
 
 ## Architecture
 
@@ -46,7 +46,6 @@ SkimpyClaw routes all model calls through a provider adapter registry in `src/pr
 flowchart LR
   subgraph Channels
     user["Telegram / Discord"]
-    browser["Browser"]
   end
 
   subgraph Gateway["Fastify :18790"]
@@ -68,7 +67,7 @@ flowchart LR
   end
 
   user --> agent
-  browser --> dash --> api --> agent
+  dash --> api --> agent
   cron --> agent
   hb --> agent
   agent --> codeAgents
@@ -77,7 +76,7 @@ flowchart LR
   agent --> approvals
   agent --> registry --> adapters
   adapters --> loop
-  adapters --> models["Anthropic / OpenAI / Codex / OpenAI-compatible"]
+  adapters --> models["Anthropic / Codex"]
   agent --> mcp["MCP Servers"]
   agent --> fs["~/.skimpyclaw"]
 ```
@@ -138,7 +137,6 @@ For the full security model and controls, see [docs/guide/security.md](docs/guid
 - **Frontend:** Preact, Vite, TypeScript
 - **Chat:** grammy (Telegram), discord.js (Discord)
 - **Scheduling:** Croner
-- **Browser:** Playwright
 - **AI SDKs:** Anthropic SDK, OpenAI SDK
 - **Observability:** Langfuse (optional)
 
@@ -150,7 +148,7 @@ src/
   gateway.ts            # Fastify server + top-level routes
   agent.ts              # Prompt assembly, runAgentTurn orchestration, memory writes
   tools.ts              # Tool registry + dispatch
-  tools/                # Tool executors (bash, browser, file tools, path utils, execute context)
+  tools/                # Tool executors (bash, fetch, file tools, path utils, execute context)
   providers/            # Provider registry, adapters, unified tool loop, provider implementations
   code-agents/          # Background coding-agent runtime (executor/parser/registry + interactive sessions)
   channels/             # Channel adapters/utilities (telegram/discord, Discord agent profile routing)
@@ -213,7 +211,7 @@ dist/                   # Compiled output + built dashboard assets
 | [docs/guide/architecture.md](docs/guide/architecture.md)   | Component diagram, runtime flow, startup sequence, source layout |
 | [docs/guide/configuration.md](docs/guide/configuration.md) | Full config reference, all sections with examples                |
 | [docs/guide/security.md](docs/guide/security.md)           | Security model and runtime safeguards                             |
-| [docs/guide/tools.md](docs/guide/tools.md)                 | Built-in tools, browser tool, MCP integration, code agents       |
+| [docs/guide/tools.md](docs/guide/tools.md)                 | Built-in tools, fetch, MCP integration, code agents             |
 | [docs/guide/dashboard.md](docs/guide/dashboard.md)         | Web dashboard, all HTTP endpoints + API routes                   |
 | [docs/guide/agents.md](docs/guide/agents.md)               | Core agents, prompt directories, Discord profile aliases         |
 | [docs/guide/coding-agents.md](docs/guide/coding-agents.md) | Coding-agent execution model and CLI backends                    |

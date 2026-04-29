@@ -124,15 +124,12 @@ export function renderGatewayPlist(): string {
     .replaceAll('__HOME_DIR__', homeDir);
 }
 
-type ProviderChoice = 'anthropic-api' | 'anthropic-oauth' | 'openai-api' | 'codex-oauth' | 'minimax-api' | 'kimi-api';
+type ProviderChoice = 'anthropic-api' | 'anthropic-oauth' | 'codex-oauth';
 
 const PROVIDER_OPTIONS: { key: ProviderChoice; label: string }[] = [
   { key: 'anthropic-api', label: 'Anthropic API key' },
   { key: 'anthropic-oauth', label: 'Anthropic OAuth (Claude Code)' },
-  { key: 'openai-api', label: 'OpenAI API key' },
   { key: 'codex-oauth', label: 'OpenAI Codex OAuth' },
-  { key: 'minimax-api', label: 'MiniMax API key' },
-  { key: 'kimi-api', label: 'Kimi (Moonshot) API key' },
 ];
 
 function detectExistingProviders(config: Record<string, any> | null): Set<ProviderChoice> {
@@ -141,10 +138,7 @@ function detectExistingProviders(config: Record<string, any> | null): Set<Provid
   const providers = config.models.providers;
   if (providers.anthropic?.authToken) existing.add('anthropic-oauth');
   else if (providers.anthropic?.apiKey) existing.add('anthropic-api');
-  if (providers.openai?.apiKey) existing.add('openai-api');
   if (providers.codex || providers.openai?.authToken === 'codex') existing.add('codex-oauth');
-  if (providers.minimax) existing.add('minimax-api');
-  if (providers.kimi) existing.add('kimi-api');
   return existing;
 }
 
@@ -196,18 +190,12 @@ async function askProviders(rl: readline.Interface, existingProviders?: Set<Prov
 interface ProviderSecrets {
   anthropicKey?: string;
   oauthToken?: string;
-  openaiKey?: string;
-  minimaxKey?: string;
-  kimiKey?: string;
 }
 
 /** Map of secret name → config reference string (KEYCHAIN ref or ENV ref). */
 interface SecretRefs {
   anthropicKey?: string;
   oauthToken?: string;
-  openaiKey?: string;
-  minimaxKey?: string;
-  kimiKey?: string;
   telegramToken?: string;
   discordToken?: string;
 }
@@ -218,9 +206,6 @@ const KEYCHAIN_SERVICE = 'skimpyclaw';
 const SECRET_KEYCHAIN_ACCOUNTS: Record<keyof ProviderSecrets | 'telegramToken' | 'discordToken', string> = {
   anthropicKey: 'anthropic-api-key',
   oauthToken: 'anthropic-oauth-token',
-  openaiKey: 'openai-api-key',
-  minimaxKey: 'minimax-api-key',
-  kimiKey: 'kimi-api-key',
   telegramToken: 'telegram-bot-token',
   discordToken: 'discord-bot-token',
 };
@@ -229,9 +214,6 @@ const SECRET_KEYCHAIN_ACCOUNTS: Record<keyof ProviderSecrets | 'telegramToken' |
 const SECRET_ENV_VARS: Record<keyof ProviderSecrets | 'telegramToken' | 'discordToken', string> = {
   anthropicKey: 'ANTHROPIC_API_KEY',
   oauthToken: 'CLAUDE_CODE_OAUTH_TOKEN',
-  openaiKey: 'OPENAI_API_KEY',
-  minimaxKey: 'MINIMAX_API_KEY',
-  kimiKey: 'KIMI_API_KEY',
   telegramToken: 'TELEGRAM_BOT_TOKEN',
   discordToken: 'DISCORD_BOT_TOKEN',
 };
@@ -253,9 +235,6 @@ function storeSecretsSecurely(
   const allSecrets: Array<{ key: keyof SecretRefs; value: string | undefined }> = [
     { key: 'anthropicKey', value: secrets.anthropicKey },
     { key: 'oauthToken', value: secrets.oauthToken },
-    { key: 'openaiKey', value: secrets.openaiKey },
-    { key: 'minimaxKey', value: secrets.minimaxKey },
-    { key: 'kimiKey', value: secrets.kimiKey },
     { key: 'telegramToken', value: telegramToken },
     { key: 'discordToken', value: discordToken },
   ];
@@ -281,7 +260,6 @@ function storeSecretsSecurely(
 }
 
 interface SetupFeatures {
-  browser: boolean;
   voice: boolean;
   mcp: boolean;
 }
@@ -347,45 +325,6 @@ async function collectProviderSecrets(
     }
   }
 
-  if (providers.has('openai-api')) {
-    const existing = env.OPENAI_API_KEY || '';
-    console.log('\n   OpenAI API Key');
-    if (existing) {
-      const input = await ask(rl, `   Enter key [${maskInput(existing)}]: `);
-      secrets.openaiKey = input || existing;
-    } else {
-      console.log('   Get one from: https://platform.openai.com/api-keys');
-      secrets.openaiKey = await ask(rl, '   Enter key: ');
-    }
-    console.log(`   ✓ ${maskInput(secrets.openaiKey!)}`);
-  }
-
-  if (providers.has('minimax-api')) {
-    const existing = env.MINIMAX_API_KEY || '';
-    console.log('\n   MiniMax API Key');
-    if (existing) {
-      const input = await ask(rl, `   Enter key [${maskInput(existing)}]: `);
-      secrets.minimaxKey = input || existing;
-    } else {
-      console.log('   Get one from: https://platform.minimax.io/user-center/basic-information/interface-key');
-      secrets.minimaxKey = await ask(rl, '   Enter key: ');
-    }
-    console.log(`   ✓ ${maskInput(secrets.minimaxKey!)}`);
-  }
-
-  if (providers.has('kimi-api')) {
-    const existing = env.KIMI_API_KEY || '';
-    console.log('\n   Kimi (Moonshot) API Key');
-    if (existing) {
-      const input = await ask(rl, `   Enter key [${maskInput(existing)}]: `);
-      secrets.kimiKey = input || existing;
-    } else {
-      console.log('   Get one from: https://platform.moonshot.cn/console/api-keys');
-      secrets.kimiKey = await ask(rl, '   Enter key: ');
-    }
-    console.log(`   ✓ ${maskInput(secrets.kimiKey!)}`);
-  }
-
   if (providers.has('codex-oauth')) {
     console.log('\n   OpenAI Codex OAuth');
     console.log('   No key needed — uses ~/.codex/auth.json at runtime.');
@@ -405,18 +344,6 @@ function buildProviders(providers: Set<ProviderChoice>, refs?: SecretRefs): Reco
     result.anthropic = { authToken: refs?.oauthToken || '${CLAUDE_CODE_OAUTH_TOKEN}' };
   }
 
-  if (providers.has('openai-api')) {
-    result.openai = { apiKey: refs?.openaiKey || '${OPENAI_API_KEY}', baseURL: 'https://api.openai.com/v1' };
-  }
-
-  if (providers.has('minimax-api')) {
-    result.minimax = { apiKey: refs?.minimaxKey || '${MINIMAX_API_KEY}', baseURL: 'https://api.minimax.io/v1' };
-  }
-
-  if (providers.has('kimi-api')) {
-    result.kimi = { apiKey: refs?.kimiKey || '${KIMI_API_KEY}', baseURL: 'https://api.kimi.com/coding/v1' };
-  }
-
   if (providers.has('codex-oauth')) {
     result.codex = {
       authToken: 'codex',
@@ -430,44 +357,21 @@ function buildProviders(providers: Set<ProviderChoice>, refs?: SecretRefs): Reco
 
 function buildDefaultModel(providers: Set<ProviderChoice>): string {
   const hasAnthropic = providers.has('anthropic-api') || providers.has('anthropic-oauth');
-  if (hasAnthropic) return 'claude-opus';
+  if (hasAnthropic) return 'anthropic/claude-opus-4-7';
   if (providers.has('codex-oauth')) return 'codex/gpt-5.5';
-  if (providers.has('kimi-api')) return 'kimi/kimi-for-coding';
-  if (providers.has('minimax-api')) return 'minimax/MiniMax-M2.5';
-  return 'openai/gpt-4o';
+  return 'anthropic/claude-opus-4-7';
 }
 
 function buildAliases(providers: Set<ProviderChoice>): Record<string, string> {
-  // Always include well-known aliases so users can switch models easily
   const aliases: Record<string, string> = {
-    'claude-fast': 'anthropic/claude-haiku-4-5',
-    'claude-think': 'anthropic/claude-sonnet-4-6',
-    'claude-opus': 'anthropic/claude-opus-4-7',
-    'claude-opus4.6': 'anthropic/claude-opus-4-6',
-    'claude-opus-4.6': 'anthropic/claude-opus-4-6',
     'codex5.1': 'codex/gpt-5.1-codex',
     'codex5.2': 'codex/gpt-5.2-codex',
     'codex5.3': 'codex/gpt-5.3-codex',
     'codex5.5': 'codex/gpt-5.5',
-    'minimax': 'minimax/MiniMax-M2.5',
-    'kimi': 'kimi/kimi-for-coding',
   };
-
-  if (providers.has('openai-api')) {
-    aliases['gpt-fast'] = 'openai/gpt-4o-mini';
-    aliases.gpt = 'openai/gpt-4o';
-  }
 
   if (providers.has('codex-oauth')) {
     aliases.codex = 'codex/gpt-5.5';
-  }
-
-  if (providers.has('minimax-api')) {
-    aliases.minimax = 'minimax/MiniMax-M2.5';
-  }
-
-  if (providers.has('kimi-api')) {
-    aliases.kimi = 'kimi/kimi-for-coding';
   }
 
   return aliases;
@@ -497,18 +401,6 @@ function buildEnvContent(
     }
   }
 
-  if (providers.has('openai-api') && secrets.openaiKey && !isInKeychain('openaiKey')) {
-    lines.push(`OPENAI_API_KEY=${secrets.openaiKey}`);
-  }
-
-  if (providers.has('minimax-api') && secrets.minimaxKey && !isInKeychain('minimaxKey')) {
-    lines.push(`MINIMAX_API_KEY=${secrets.minimaxKey}`);
-  }
-
-  if (providers.has('kimi-api') && secrets.kimiKey && !isInKeychain('kimiKey')) {
-    lines.push(`KIMI_API_KEY=${secrets.kimiKey}`);
-  }
-
   if (!isInKeychain('telegramToken')) {
     lines.push(`TELEGRAM_BOT_TOKEN=${telegramToken}`);
   }
@@ -521,7 +413,7 @@ function buildEnvContent(
 
 export function buildSetupConfig(input: SetupBuildInput): Record<string, unknown> {
   const useDiscord = Boolean(input.discordToken);
-  const features = input.features ?? { browser: false, voice: false, mcp: false };
+  const features = input.features ?? { voice: false, mcp: false };
   const starters = input.starters ?? {
     cronTechNews: false,
     cronWeather: false,
@@ -574,7 +466,6 @@ export function buildSetupConfig(input: SetupBuildInput): Record<string, unknown
           allowedPaths: allPaths,
           maxIterations: 100,
           bashTimeout: 15000,
-          ...(features.browser ? { browser: { type: 'chromium', enabled: true, headless: true } } : {}),
         },
       },
       discord: {
@@ -588,7 +479,6 @@ export function buildSetupConfig(input: SetupBuildInput): Record<string, unknown
           allowedPaths: allPaths,
           maxIterations: 100,
           bashTimeout: 15000,
-          ...(features.browser ? { browser: { type: 'chromium', enabled: true, headless: false } } : {}),
         },
       },
     },
@@ -603,7 +493,6 @@ export function buildSetupConfig(input: SetupBuildInput): Record<string, unknown
         allowedPaths: allPaths,
         maxIterations: 10,
         bashTimeout: 15000,
-        ...(features.browser ? { browser: { enabled: true } } : { browser: { enabled: false } }),
       },
     },
     ...(features.voice ? {
@@ -612,13 +501,6 @@ export function buildSetupConfig(input: SetupBuildInput): Record<string, unknown
         defaultProvider: 'macos',
         providers: {
           macos: { tts: { voice: 'Samantha' } },
-          ...(input.selectedProviders.has('openai-api') ? {
-            openai: {
-              apiKey: '${OPENAI_API_KEY}',
-              baseURL: 'https://api.openai.com/v1',
-              stt: { model: 'whisper-1' },
-            },
-          } : {}),
         },
         channels: {
           telegram: { enabled: true, acceptVoice: true, sendVoice: true },
@@ -683,34 +565,6 @@ async function validateProviderAuth(providers: Set<ProviderChoice>, secrets: Pro
       checks.push({ name: 'Anthropic API', ok: res.ok, detail: res.ok ? 'auth ok' : `HTTP ${res.status}` });
     } catch (err) {
       checks.push({ name: 'Anthropic API', ok: false, detail: toErrorMessage(err) });
-    }
-  }
-
-  if (providers.has('openai-api') && secrets.openaiKey) {
-    try {
-      const res = await quickFetch('https://api.openai.com/v1/models', {
-        headers: { authorization: `Bearer ${secrets.openaiKey}` },
-      });
-      checks.push({ name: 'OpenAI API', ok: res.ok, detail: res.ok ? 'auth ok' : `HTTP ${res.status}` });
-    } catch (err) {
-      checks.push({ name: 'OpenAI API', ok: false, detail: toErrorMessage(err) });
-    }
-  }
-
-  if (providers.has('minimax-api') && secrets.minimaxKey) {
-    try {
-      const res = await quickFetch('https://api.minimax.io/anthropic/v1/messages', {
-        method: 'POST',
-        headers: {
-          authorization: `Bearer ${secrets.minimaxKey}`,
-          'content-type': 'application/json',
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify({ model: 'MiniMax-M2.5', max_tokens: 8, messages: [{ role: 'user', content: 'ping' }] }),
-      });
-      checks.push({ name: 'MiniMax API', ok: res.ok, detail: res.ok ? 'auth ok' : `HTTP ${res.status}` });
-    } catch (err) {
-      checks.push({ name: 'MiniMax API', ok: false, detail: toErrorMessage(err) });
     }
   }
 
@@ -864,43 +718,10 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
     statusOk('Acknowledged');
 
     // 8. Optional Features
-    const existingBrowser = existing.config?.heartbeat?.tools?.browser?.enabled === true
-      || existing.config?.channels?.telegram?.tools?.browser?.enabled === true;
     const existingVoice = existing.config?.voice?.enabled === true;
     sectionHeader('Optional Features');
 
-    // 6a. Browser tool
-    const browserDefault = existingBrowser ? 'Y' : 'N';
-    const enableBrowser = /^y(es)?$/i.test(await ask(rl, `   Enable browser tool? (requires Chrome) [${existingBrowser ? 'Y/n' : 'y/N'}]: `) || browserDefault);
-    if (enableBrowser) {
-      const macChrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-      const which = spawnSync('which', ['google-chrome'], { encoding: 'utf-8' });
-      if (which.status === 0 || existsSync(macChrome)) {
-        statusOk('Chrome detected');
-      } else {
-        statusWarn('Chrome not found — browser tool may not work until Chrome is installed');
-      }
-
-      // Check for Playwright
-      const pw = spawnSync('npx', ['playwright', '--version'], { encoding: 'utf-8', timeout: 10000 });
-      if (pw.status === 0) {
-        statusOk('Playwright detected');
-      } else {
-        console.log('');
-        console.log('   ┌─────────────────────────────────────────────────────────┐');
-        console.log('   │  Browser tool requires Playwright. Install it:          │');
-        console.log('   │                                                         │');
-        console.log('   │    npx playwright install chromium                      │');
-        console.log('   │                                                         │');
-        console.log('   │  Without this, the browser tool will fail at runtime.   │');
-        console.log('   └─────────────────────────────────────────────────────────┘');
-        console.log('');
-      }
-    } else {
-      statusOk('browser disabled');
-    }
-
-    // 6b. Voice/TTS
+    // Voice/TTS
     const voiceDefault = existingVoice ? 'Y' : 'N';
     const enableVoice = /^y(es)?$/i.test(await ask(rl, `   Enable voice/TTS? (requires ffmpeg) [${existingVoice ? 'Y/n' : 'y/N'}]: `) || voiceDefault);
     if (enableVoice) {
@@ -921,15 +742,11 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
       } else {
         console.log('');
         console.log('   ┌─────────────────────────────────────────────────────────┐');
-        console.log('   │  Voice transcription (STT) requires one of:             │');
+        console.log('   │  Voice transcription (STT) requires local whisper.cpp:  │');
         console.log('   │                                                         │');
-        console.log('   │  Option A: Local whisper.cpp (free, recommended)        │');
+        console.log('   │  Local whisper.cpp (free, recommended)                  │');
         console.log('   │    brew install whisper-cpp                             │');
         console.log('   │    whisper-cpp-download-ggml-model small                │');
-        console.log('   │                                                         │');
-        console.log('   │  Option B: OpenAI Whisper API ($0.006/min)              │');
-        console.log('   │    Add OPENAI_API_KEY to ~/.skimpyclaw/.env             │');
-        console.log('   │    Config auto-includes openai.stt if provider selected │');
         console.log('   │                                                         │');
         console.log('   │  Without either, voice messages cannot be transcribed.  │');
         console.log('   └─────────────────────────────────────────────────────────┘');
@@ -939,7 +756,7 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
       statusOk('voice disabled');
     }
 
-    // 6c. MCP tools
+    // MCP tools
     console.log('   Install mcporter: https://github.com/steipete/mcporter');
     const enableMcp = /^y(es)?$/i.test(await ask(rl, '   Enable MCP tools? (requires mcporter at ~/.mcporter/) [y/N]: '));
     if (enableMcp) {
@@ -954,7 +771,6 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
     }
 
     const features: SetupFeatures = {
-      browser: enableBrowser,
       voice: enableVoice,
       mcp: enableMcp,
     };

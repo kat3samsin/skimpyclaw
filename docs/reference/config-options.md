@@ -43,9 +43,7 @@ Each provider key maps to its auth config:
 ```json
 {
   "anthropic": { "authToken": "${CLAUDE_CODE_OAUTH_TOKEN}" },
-  "openai": { "apiKey": "${OPENAI_API_KEY}", "baseURL": "https://api.openai.com/v1" },
-  "codex": { "authToken": "codex", "authPath": "${HOME}/.codex/auth.json", "baseURL": "https://chatgpt.com/backend-api" },
-  "minimax": { "apiKey": "${MINIMAX_API_KEY}", "baseURL": "https://api.minimax.io/v1" }
+  "codex": { "authToken": "codex", "authPath": "${HOME}/.codex/auth.json", "baseURL": "https://chatgpt.com/backend-api" }
 }
 ```
 
@@ -155,10 +153,9 @@ Map of shorthand names to full `provider/model-id`. See [Model Aliases](./model-
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `maxConcurrent` | number | `5` | Max parallel coding agents |
-| `defaultAgent` | string | `claude` | Default CLI: `claude`, `codex`, or `kimi` |
+| `defaultAgent` | string | `claude` | Default CLI: `claude` or `codex` |
 | `timeoutMinutes` | number | `30` | Timeout for `code_with_agent` (max: 60) |
 | `maxTurns` | number | `50` | Max tool-use turns per agent |
-| `skipPlaywright` | boolean | `false` | Skip Playwright MCP for coding agents |
 | `validationCommands` | object | | Per-project validation commands. Keys match project names from `projects` config. Values are shell commands run in the project dir. Overrides auto-detected build+test |
 
 > **Note:** `code_with_agent` requires an external coding CLI on your PATH. See [Coding Agent Execution](./code-agents.md).
@@ -247,20 +244,6 @@ Used by cron jobs, heartbeat, and channel defaults:
 | `enabled` | boolean | `true` | Enable automatic context compaction |
 | `maxContextTokens` | number | `100000` | Token threshold before compaction triggers |
 | `compactionModel` | string | `anthropic/claude-haiku-4-5` | Model used for LLM summarization when compacting |
-
-### `browser`
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `enabled` | boolean | `false` | Enable Playwright browser tool |
-| `type` | string | `chromium` | Browser type: `chromium`, `firefox`, `webkit` |
-| `headless` | boolean | `true` | Run headless |
-| `allowFile` | boolean | | Allow `file://` URLs |
-| `slowMoMs` | number | | Slow-motion delay (ms) |
-| `userAgent` | string | | Custom user agent |
-| `viewport` | object | | `{ width, height }` |
-| `profileDir` | string | | Persistent browser profile directory |
-| `executablePath` | string | | Path to browser executable |
 
 ### `execApproval`
 

@@ -13,6 +13,7 @@ describe('provider utils', () => {
     expect(getProvider('openai/gpt-5.3-codex')).toBe('openai');
     expect(getProvider('codex/gpt-5.3-codex')).toBe('codex');
     expect(getProvider('anthropic/claude-sonnet-4-6')).toBe('anthropic');
+    expect(getProvider('gpt-5.5')).toBe('codex');
   });
 
   it('strips provider prefix when registries are omitted', () => {

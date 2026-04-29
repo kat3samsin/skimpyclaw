@@ -55,15 +55,10 @@ import {
 } from './channels/discord/thread-agents.js';
 
 const DEFAULT_MODEL_ALIASES: Record<string, string> = {
-  'claude-fast': 'anthropic/claude-haiku-4-5',
-  'claude-think': 'anthropic/claude-sonnet-4-6',
-  'claude-opus': 'anthropic/claude-opus-4-7',
   'codex5.1': 'codex/gpt-5.1-codex',
   'codex5.2': 'codex/gpt-5.2-codex',
   'codex5.3': 'codex/gpt-5.3-codex',
   'codex5.5': 'codex/gpt-5.5',
-  minimax: 'minimax/MiniMax-M2.5',
-  kimi: 'kimi/kimi-for-coding',
 };
 
 function validateFilename(filename: string): boolean {
@@ -482,7 +477,7 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
       : DEFAULT_MODEL_ALIASES;
     const currentModel = getCurrentModel()
       || runtimeConfig.agents?.list?.[runtimeConfig.agents?.default]?.model
-      || 'claude-opus';
+      || 'anthropic/claude-opus-4-7';
 
     return {
       current: currentModel,
@@ -900,11 +895,6 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
     const features: Record<string, boolean> = {
       telegram: runtimeConfig.channels.telegram?.enabled ?? false,
       discord: runtimeConfig.channels.discord?.enabled ?? false,
-      browser: Boolean(
-        runtimeConfig.channels.telegram?.tools?.browser?.enabled
-        || runtimeConfig.channels.discord?.tools?.browser?.enabled
-        || runtimeConfig.heartbeat?.tools?.browser?.enabled,
-      ),
       voice: Boolean(runtimeConfig.voice?.enabled),
     };
 

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { existsSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'fs';
 import { join } from 'path';
-import { executeTool, BUILTIN_TOOL_DEFINITIONS, BROWSER_TOOL_DEFINITION, CODE_WITH_AGENT_TOOL, CHECK_CODE_AGENT_TOOL, DELEGATE_TO_AGENT_TOOL, getToolDefinitions, fromClaudeCodeName, toClaudeCodeName, buildCodeAgentArgs, getActiveCodeAgents, getRecentCodeAgents, getCodeAgent, normalizeMcpToolArgsForExecution } from '../tools.js';
+import { executeTool, BUILTIN_TOOL_DEFINITIONS, CODE_WITH_AGENT_TOOL, CHECK_CODE_AGENT_TOOL, DELEGATE_TO_AGENT_TOOL, getToolDefinitions, fromClaudeCodeName, toClaudeCodeName, buildCodeAgentArgs, getActiveCodeAgents, getRecentCodeAgents, getCodeAgent, normalizeMcpToolArgsForExecution } from '../tools.js';
 import { registerDelegateToAgentHandler } from '../tools/agent-delegation.js';
 import { resolveModelAlias } from '../code-agents/utils.js';
 import type { ToolConfig } from '../types.js';
@@ -37,11 +37,6 @@ describe('BUILTIN_TOOL_DEFINITIONS', () => {
     expect(names).toContain('Glob');
     expect(names).toContain('Bash');
   });
-
-  it('exports Browser tool definition separately', () => {
-    expect(BROWSER_TOOL_DEFINITION.name).toBe('Browser');
-    expect(BROWSER_TOOL_DEFINITION.input_schema).toBeDefined();
-  });
 });
 
 describe('getToolDefinitions', () => {
@@ -55,35 +50,12 @@ describe('getToolDefinitions', () => {
     expect(names).toContain('Bash');
   }, 15000);
 
-  it('includes Browser when browser.enabled is true', async () => {
-    const config: ToolConfig = { ...toolConfig, browser: { enabled: true } };
-    const tools = await getToolDefinitions(config, { includeMcp: false });
-    expect(tools.map(t => t.name)).toContain('Browser');
-  });
-
-  it('excludes Browser when browser.enabled is false', async () => {
-    const config: ToolConfig = { ...toolConfig, browser: { enabled: false } };
-    const tools = await getToolDefinitions(config, { includeMcp: false });
-    expect(tools.map(t => t.name)).not.toContain('Browser');
-  });
-
-  it('excludes Browser when no config provided', async () => {
-    const tools = await getToolDefinitions(undefined, { includeMcp: false });
-    expect(tools.map(t => t.name)).not.toContain('Browser');
-  });
-
   describe('tool profiles', () => {
     it('minimal returns built-in tools plus Fetch', async () => {
       const config: ToolConfig = { ...toolConfig, toolProfile: 'minimal' };
       const tools = await getToolDefinitions(config, { includeAgentTools: true, includeMcp: true });
       expect(tools).toHaveLength(5);
       expect(tools.map(t => t.name)).toEqual(['Read', 'Write', 'Glob', 'Bash', 'Fetch']);
-    });
-
-    it('minimal excludes Browser even when browser.enabled is true', async () => {
-      const config: ToolConfig = { ...toolConfig, toolProfile: 'minimal', browser: { enabled: true } };
-      const tools = await getToolDefinitions(config);
-      expect(tools.map(t => t.name)).not.toContain('Browser');
     });
 
     it('minimal excludes MCP tools', async () => {
@@ -365,101 +337,6 @@ describe('bash', () => {
   });
 });
 
-describe('browser', () => {
-  const browserDisabledConfig: ToolConfig = {
-    ...toolConfig,
-    browser: { enabled: false },
-  };
-
-  const browserEnabledConfig: ToolConfig = {
-    ...toolConfig,
-    browser: { enabled: true },
-  };
-
-  const browserWithFileConfig: ToolConfig = {
-    ...toolConfig,
-    browser: { enabled: true, allowFile: true },
-  };
-
-  it('returns error when browser is disabled', async () => {
-    const result = await executeTool('Browser', { action: 'open', url: 'https://example.com' }, browserDisabledConfig);
-    expect(result).toContain('Error: Browser tool is disabled');
-  });
-
-  it('returns error when browser config is missing', async () => {
-    const result = await executeTool('Browser', { action: 'open', url: 'https://example.com' }, toolConfig);
-    expect(result).toContain('Error: Browser tool is disabled');
-  });
-
-  it('blocks file:// URLs when allowFile is false', async () => {
-    const result = await executeTool('Browser', { action: 'open', url: 'file:///etc/passwd' }, browserEnabledConfig);
-    expect(result).toContain('Error: file:// URLs are blocked');
-  });
-
-  it('validates file:// URLs with new URL() parsing', async () => {
-    // file://localhost/etc/passwd should parse to /etc/passwd, which is outside allowedPaths
-    const result = await executeTool('Browser', { action: 'open', url: 'file://localhost/etc/passwd' }, browserWithFileConfig);
-    expect(result).toContain('Error: file:// URLs are blocked');
-  });
-
-  it('returns error for unknown action', async () => {
-    const result = await executeTool('Browser', { action: 'destroy' }, browserEnabledConfig);
-    expect(result).toContain('Error: Unknown browser action "destroy"');
-  });
-
-  it('requires url for open action', async () => {
-    const result = await executeTool('Browser', { action: 'open' }, browserEnabledConfig);
-    expect(result).toContain('Error: url is required');
-  });
-
-  it('requires selector for click action', async () => {
-    const result = await executeTool('Browser', { action: 'click' }, browserEnabledConfig);
-    expect(result).toContain('Error: Browser not open');
-  });
-
-  it('requires selector and text for type action', async () => {
-    const result = await executeTool('Browser', { action: 'type', selector: '#input' }, browserEnabledConfig);
-    expect(result).toContain('Error: Browser not open');
-  });
-
-  it('requires script for evaluate action', async () => {
-    const result = await executeTool('Browser', { action: 'evaluate' }, browserEnabledConfig);
-    expect(result).toContain('Error: Browser not open');
-  });
-
-  it('requires selector for hover action', async () => {
-    const result = await executeTool('Browser', { action: 'hover' }, browserEnabledConfig);
-    expect(result).toContain('Error: Browser not open');
-  });
-
-  it('requires selector and text for select action', async () => {
-    const result = await executeTool('Browser', { action: 'select' }, browserEnabledConfig);
-    expect(result).toContain('Error: Browser not open');
-  });
-
-  it('returns "Browser not open" for actions before open', async () => {
-    for (const action of ['click', 'type', 'waitfor', 'screenshot', 'evaluate', 'gettext', 'scroll', 'select', 'hover']) {
-      const result = await executeTool('Browser', { action }, browserEnabledConfig);
-      expect(result).toContain('Error: Browser not open');
-    }
-  });
-
-  it('handles close when browser is not open', async () => {
-    const result = await executeTool('Browser', { action: 'close' }, browserEnabledConfig);
-    expect(result).toBe('Browser closed.');
-  });
-
-  it('handles case-insensitive actions', async () => {
-    const result = await executeTool('Browser', { action: 'OPEN' }, browserEnabledConfig);
-    expect(result).toContain('Error: url is required');
-  });
-
-  it('maps Browser name correctly', () => {
-    expect(fromClaudeCodeName('Browser')).toBe('browser');
-    expect(toClaudeCodeName('browser')).toBe('Browser');
-  });
-});
-
 describe('code_with_agent', () => {
   describe('tool definition', () => {
     it('has correct name and required fields', () => {
@@ -499,10 +376,10 @@ describe('code_with_agent', () => {
     });
 
     it('builds claude args with model override', () => {
-      const { cmd, args } = buildCodeAgentArgs({ task: 'fix it', model: 'opus' });
+      const { cmd, args } = buildCodeAgentArgs({ task: 'fix it', model: 'claude-opus-4-7' });
       expect(cmd).toContain('claude');
       expect(args).toContain('--model');
-      expect(args).toContain('opus');
+      expect(args).toContain('claude-opus-4-7');
     });
 
     it('builds claude args with custom max_turns', () => {
@@ -587,8 +464,7 @@ describe('code_with_agent', () => {
       expect(resolveModelAlias('gpt-4.1', {})).toBe('gpt-4.1');
     });
 
-    it('supports claude opus 4.6 aliases', () => {
-      expect(resolveModelAlias('opus4.6', {})).toBe('claude-opus-4-6');
+    it('normalizes dotted claude opus 4.6 model id', () => {
       expect(resolveModelAlias('anthropic/claude-opus-4.6', {})).toBe('claude-opus-4-6');
     });
   });

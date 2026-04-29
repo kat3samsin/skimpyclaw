@@ -66,30 +66,7 @@ curl -H "x-api-key: $ANTHROPIC_API_KEY" https://api.anthropic.com/v1/models
 # Update .env with correct key
 ```
 
-## 4. Browser Tool Broken
-
-**Symptom:** Browser tool errors with "browser not found" or similar.
-
-**Causes:**
-
-- Chrome/Chromium not installed
-- `browser.enabled` is true but no browser binary available
-- Wrong `executablePath` in config
-
-**Fix:**
-
-```bash
-# Check if Chrome exists
-ls '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-
-# If not installed
-brew install --cask google-chrome
-
-# Or disable browser if you don't need it
-# Set tools.browser.enabled: false in config
-```
-
-## 5. Voice Not Working
+## 4. Voice Not Working
 
 **Symptom:** Voice messages ignored, transcription fails.
 

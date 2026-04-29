@@ -66,10 +66,9 @@ export interface Config {
   };
   codeAgents?: {
     maxConcurrent?: number;   // Max parallel coding agents (default 5)
-    defaultAgent?: string;    // Default coding agent CLI: "claude" | "codex" | "kimi" (default: "claude")
+    defaultAgent?: string;    // Default coding agent CLI: "claude" | "codex" (default: "claude")
     timeoutMinutes?: number;  // Default timeout for code_with_agent (default: 30, max: 60)
     maxTurns?: number;        // Max tool-use turns per agent (default: 50)
-    skipPlaywright?: boolean; // Skip Playwright MCP for coding agents (default: false)
     /** Per-project validation commands. Keys match project names from `projects` config.
      *  Values are shell commands run in the project dir. Overrides auto-detected build+test. */
     validationCommands?: Record<string, string>;
@@ -170,18 +169,7 @@ export interface ToolConfig {
   contextManagement?: {
     enabled?: boolean;          // default true
     maxContextTokens?: number;  // token threshold before compaction triggers (default: 100000)
-    compactionModel?: string;   // model for LLM summarization (default: anthropic/claude-haiku-3-5)
-  };
-  browser?: {
-    enabled?: boolean;
-    type?: 'chromium' | 'firefox' | 'webkit';
-    headless?: boolean;
-    allowFile?: boolean;
-    slowMoMs?: number;
-    userAgent?: string;
-    viewport?: { width: number; height: number };
-    profileDir?: string;
-    executablePath?: string;
+    compactionModel?: string;   // model for LLM summarization (default: anthropic/claude-haiku-4-5)
   };
   execApproval?: {
     enabled?: boolean;       // default true

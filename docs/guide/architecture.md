@@ -8,7 +8,7 @@
   </a>
 </p>
 
-The diagram shows the full system at a glance: input channels (Telegram, Discord, Dashboard, CLI) → Fastify gateway → core runtime (agent runner, provider router, Discord profile routing, cron, heartbeat) → tool executor → tools (built-ins, exec approval, `code_with_agent`, skills) → external providers (Anthropic, Codex, OpenAI-compatible, MCP) and local storage under `~/.skimpyclaw/`.
+The diagram shows the full system at a glance: input channels (Telegram, Discord, Dashboard, CLI) → Fastify gateway → core runtime (agent runner, provider router, Discord profile routing, cron, heartbeat) → tool executor → tools (built-ins, exec approval, `code_with_agent`, skills) → external providers (Anthropic, Codex, MCP) and local storage under `~/.skimpyclaw/`.
 
 <details>
 <summary>Plain-text summary</summary>
@@ -20,12 +20,12 @@ GATEWAY      Fastify :18790  (bearer auth, dashboard + agent routes)
                                     ↓
 CORE         Agent Runner · Provider Router · Discord Profile Routing · Cron · Heartbeat
                                     ↓
-TOOLS        Read · Write · Glob · Bash · Fetch · Browser
+TOOLS        Read · Write · Glob · Bash · Fetch
                 Exec Approval (risk tiers 0–3)
-                code_with_agent → Claude / Codex / Kimi CLIs
+                code_with_agent → Claude / Codex CLIs
                 Skills (trigger-loaded prompt snippets)
                                     ↓
-PROVIDERS    Anthropic · Codex · OpenAI-compatible · MCP (mcporter)
+PROVIDERS    Anthropic · Codex · MCP (mcporter)
                                     ↓
 STORAGE      ~/.skimpyclaw/  (config · logs · agents · skills)
 ```
@@ -268,9 +268,8 @@ Current adapters:
 
 - `AnthropicAdapter`
 - `CodexAdapter`
-- `OpenAIAdapter` (OpenAI-compatible providers including Kimi, MiniMax, OpenRouter, Groq, etc.)
 
-MCP support is adapter-scoped: Anthropic and Codex include MCP tool definitions; OpenAI-compatible non-Codex adapters do not.
+MCP support is adapter-scoped: Anthropic and Codex include MCP tool definitions.
 
 ## Skills System Flow
 
@@ -303,7 +302,7 @@ sequenceDiagram
   
   U->>A: Request with code task
   A->>T: executeTool('code_with_agent', args)
-  T->>C: Spawn Claude/Codex/Kimi CLI
+  T->>C: Spawn Claude/Codex CLI
   C->>C: Execute coding task
   C->>C: Run pnpm build && pnpm test (if validate=true)
   C-->>T: Return results

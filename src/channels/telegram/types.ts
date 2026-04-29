@@ -6,7 +6,7 @@ import type { Config, ChatMessage, AgentRunContext } from '../../types.js';
 // Command definitions — single source of truth for the / menu and /help
 export const BOT_COMMANDS: { command: string; description: string }[] = [
   { command: 'help', description: 'Show available commands' },
-  { command: 'model', description: 'Switch model (fast/smart/opus)' },
+  { command: 'model', description: 'Switch model' },
   { command: 'status', description: 'Show bot status' },
   { command: 'memory', description: 'View recent memory entries' },
   { command: 'clear', description: 'Clear conversation history' },

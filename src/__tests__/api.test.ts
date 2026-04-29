@@ -977,7 +977,6 @@ describe('Health endpoint', () => {
     expect(body).toHaveProperty('features');
     expect(body.features).toHaveProperty('telegram');
     expect(body.features).toHaveProperty('discord');
-    expect(body.features).toHaveProperty('browser');
     expect(body.features).toHaveProperty('voice');
   });
 

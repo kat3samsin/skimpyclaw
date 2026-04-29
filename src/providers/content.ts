@@ -4,7 +4,7 @@ import type { ContentBlock } from '../types.js';
 
 /**
  * Convert content array to OpenAI vision-compatible format.
- * Preserves images as data URIs for multimodal models (Kimi, MiniMax, etc.).
+ * Preserves images as data URIs for multimodal model formats.
  */
 export function toOpenAIContent(content: string | ContentBlock[]): string | Array<{ type: string; text?: string; image_url?: { url: string } }> {
   if (typeof content === 'string') return content;

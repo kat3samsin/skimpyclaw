@@ -22,11 +22,11 @@ describe('doctor formatters', () => {
         remedy: 'Fix ~/.skimpyclaw/config.json to valid JSON and rerun doctor.',
       },
       {
-        name: 'provider_openai_auth',
+        name: 'provider_anthropic_auth',
         category: 'provider_auth',
         ok: false,
         detail: '401 Unauthorized',
-        remedy: 'Check OPENAI_API_KEY and provider base URL.',
+        remedy: 'Check ANTHROPIC_API_KEY and provider base URL.',
       },
     ],
   } as const;
@@ -40,12 +40,12 @@ describe('doctor formatters', () => {
 
     expect(output).toContain('✓ node_version');
     expect(output).toContain('✗ config_json_valid');
-    expect(output).toContain('✗ provider_openai_auth');
+    expect(output).toContain('✗ provider_anthropic_auth');
 
     expect(output).toContain('Unexpected token } in JSON at position 10');
     expect(output).toContain('401 Unauthorized');
     expect(output).toContain('Fix ~/.skimpyclaw/config.json to valid JSON and rerun doctor.');
-    expect(output).toContain('Check OPENAI_API_KEY and provider base URL.');
+    expect(output).toContain('Check ANTHROPIC_API_KEY and provider base URL.');
   });
 
   it('does not print undefined when a failed check has no remedy', () => {

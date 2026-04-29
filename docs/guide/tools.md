@@ -5,7 +5,6 @@
 | Layer | Tools | When included |
 |-------|-------|---------------|
 | Built-in | Read, Write, Glob, Bash, Fetch | Always (when tools enabled) |
-| Browser | Browser (Playwright) | When `tools.browser.enabled` is true |
 | MCP | Auto-discovered from mcporter | Full tool profile on Anthropic and Codex provider paths |
 | Agent | code_with_agent, check_code_agent | When chatId + config present |
 
@@ -19,7 +18,6 @@ Exact command builders live in `src/code-agents/utils.ts` (`buildCodeAgentArgs`)
 
 - **Claude worker**: `claude -p --verbose --output-format stream-json --dangerously-skip-permissions ... <task>`
 - **Codex worker**: `codex exec --full-auto --json --color never ... <task>`
-- **Kimi worker**: `kimi --yolo -p <task> ...`
 
 Discord interactive coding sessions currently use Claude only.
 
@@ -35,7 +33,7 @@ Related files:
 - **Write** — write a file (restricted to `allowedPaths`, uses file locking for concurrent writes)
 - **Glob** — find files by pattern (restricted to `allowedPaths`)
 - **Bash** — run shell commands (blocked list via `isBashCommandSafe()`)
-- **Fetch** — make HTTP requests and return the response. HTML is auto-converted to plain text. Use for APIs, web search (e.g. `https://duckduckgo.com/html/?q=your+query`), or fetching page content. Prefer over Browser for simple requests
+- **Fetch** — make HTTP requests and return the response. HTML is auto-converted to plain text. Use for APIs, web search (e.g. `https://duckduckgo.com/html/?q=your+query`), or fetching page content
 
 ## Tool config
 
@@ -48,49 +46,6 @@ Tools are configured per-channel or per-cron-job:
   "maxIterations": 20,
   "bashTimeout": 30000
 }
-```
-
-## Browser tool (Playwright)
-
-Optional, disabled by default. Add to your tool config:
-
-```json
-"browser": {
-  "enabled": true,
-  "type": "chromium",
-  "headless": true,
-  "allowFile": false,
-  "slowMoMs": 50,
-  "userAgent": "",
-  "viewport": { "width": 1280, "height": 720 },
-  "profileDir": "${HOME}/.skimpyclaw/browser-profile",
-  "executablePath": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-}
-```
-
-**Actions:** `open(url)`, `click(selector)`, `type(selector,text)`, `select(selector,value)`, `hover(selector)`, `scroll(selector?|direction?|amount?)`, `waitFor(selector|text)`, `evaluate(script)`, `getText(selector?)`, `screenshot(file_path?)`, `wait(timeMs)`, `close()`
-
-**Profile:** Uses a persistent profile directory so logins and cookies are remembered between runs. Default: `~/.skimpyclaw/browser-profile`.
-
-**Security:** `file://` URLs are blocked unless `allowFile: true` and the path is inside `allowedPaths`. Screenshots must be saved inside `allowedPaths`. `evaluate` runs arbitrary JS — same trust model as Bash.
-
-**CLI wrapper:**
-```bash
-skimpyclaw browser open https://example.com
-skimpyclaw browser open https://example.com --browser firefox
-skimpyclaw browser waitFor "h1"
-skimpyclaw browser getText                   # full page text
-skimpyclaw browser getText "h1"              # specific element
-skimpyclaw browser evaluate --script "document.title"
-skimpyclaw browser scroll
-skimpyclaw browser scroll --direction up
-skimpyclaw browser scroll --amount 500
-skimpyclaw browser scroll ".target"          # scroll element into view
-skimpyclaw browser select "#dropdown" "value"
-skimpyclaw browser hover ".menu-item"
-skimpyclaw browser screenshot
-skimpyclaw browser wait --ms 30000           # manual login window
-skimpyclaw browser close
 ```
 
 ## MCP tools (mcporter)

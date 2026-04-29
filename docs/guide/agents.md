@@ -20,11 +20,11 @@ Agents are configured in `~/.skimpyclaw/config.json`:
     "list": {
       "main": {
         "identity": { "name": "SkimpyClaw", "emoji": "👙🦞" },
-        "model": "claude-fast"
+        "model": "anthropic/claude-haiku-4-5"
       },
       "reviewer": {
         "identity": { "name": "Reviewer", "emoji": "🔎" },
-        "model": "claude-think",
+        "model": "anthropic/claude-sonnet-4-6",
         "thinking": "high"
       }
     }
@@ -103,7 +103,7 @@ Attach a text-like file or PDF to the same Discord message. Supported files incl
 
 ```text
 /agent create reviewer main
-/agent model reviewer claude-think
+/agent model reviewer anthropic/claude-sonnet-4-6
 /agent effort reviewer high
 /agent prompt reviewer Focus on correctness issues, missing tests, and risky behavior changes.
 /agent use reviewer Review the current plan before implementation.

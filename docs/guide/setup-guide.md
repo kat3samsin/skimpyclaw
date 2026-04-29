@@ -26,17 +26,16 @@ The `skimpyclaw onboard` command walks you through:
 
 1. **Telegram Bot Token** — paste the token from BotFather
 2. **Your Telegram ID** — must be numeric (send `/start` to @userinfobot)
-3. **Model Providers** — pick at least one. Recommended: Claude Code Max (OAuth, no API key needed) or ChatGPT Plus (uses Codex). Also supports Anthropic API, OpenAI API, MiniMax, and any OpenAI-compatible endpoint.
+3. **Model Providers** — pick at least one. Recommended: Claude Code Max (OAuth, no API key needed) or ChatGPT Plus (uses Codex). Also supports Anthropic API.
 4. **Agent Name** — what the bot calls itself (default: "SkimpyClaw")
 5. **Your Name** — what the bot calls you
 
 ### Optional Features
 
 6. **Allowed paths** — `~/.skimpyclaw` is always included; add extra project paths only if needed.
-7. **Browser tool** — requires Chrome/Chromium. Default: No. Enable if you need web scraping.
-8. **Voice/TTS** — requires ffmpeg and whisper-cli. Default: No. Enable for voice messages.
-9. **MCP tools** — requires mcporter at `~/.mcporter/`. Default: No. Enable for Automattic internal integrations.
-10. **Starter packs** — optional starter cron jobs (HN + weather) and starter skills (code-review + daily-notes).
+7. **Voice/TTS** — requires ffmpeg and whisper-cli. Default: No. Enable for voice messages.
+8. **MCP tools** — requires mcporter at `~/.mcporter/`. Default: No. Enable for Automattic internal integrations.
+9. **Starter packs** — optional starter cron jobs (HN + weather) and starter skills (code-review + daily-notes).
 
 ### Post-Setup
 
@@ -77,56 +76,6 @@ curl http://localhost:18790/health
 ## Optional Features
 
 All optional features are disabled by default. Enable them during `skimpyclaw onboard` or manually in config.
-
----
-
-### Browser Tool (Playwright)
-
-**What it does:** Lets the agent open URLs, click elements, fill forms, take screenshots, and scrape web content.
-
-**Prerequisites:**
-
-| Dependency | Install | Required? |
-|------------|---------|-----------|
-| Playwright | `pnpm add playwright` (in project) or `npx playwright install` | Yes |
-| Chromium | `npx playwright install chromium` | Yes (or Chrome/Firefox) |
-| Chrome (alternative) | Install from google.com/chrome | Optional — use instead of Chromium |
-| Firefox (alternative) | Install from mozilla.org | Optional — set `browser.type: "firefox"` |
-
-**Setup:**
-
-```bash
-# Install Playwright + Chromium
-npx playwright install chromium
-```
-
-**Enable in config** (`~/.skimpyclaw/config.json`):
-
-Add `browser` to any channel's `tools` block:
-
-```json
-"tools": {
-  "enabled": true,
-  "browser": {
-    "enabled": true,
-    "type": "chromium",
-    "headless": true
-  }
-}
-```
-
-Or use a specific browser binary:
-
-```json
-"browser": {
-  "enabled": true,
-  "executablePath": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-}
-```
-
-**Verify:** `skimpyclaw doctor` checks for Playwright and a browser binary.
-
----
 
 ### Voice (STT / TTS)
 

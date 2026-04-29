@@ -56,27 +56,6 @@ skimpyclaw tools install my-server --url http://localhost:3001/sse
 skimpyclaw tools remove my-server
 ```
 
-## Browser
-
-```bash
-skimpyclaw browser open https://example.com
-skimpyclaw browser open https://example.com --browser firefox
-skimpyclaw browser open https://example.com --headful --slowmo 50
-skimpyclaw browser waitFor "h1"
-skimpyclaw browser getText
-skimpyclaw browser getText "h1"
-skimpyclaw browser evaluate --script "document.title"
-skimpyclaw browser scroll
-skimpyclaw browser scroll --direction up
-skimpyclaw browser scroll --amount 500
-skimpyclaw browser scroll ".target"
-skimpyclaw browser select "#dropdown" "value"
-skimpyclaw browser hover ".menu-item"
-skimpyclaw browser screenshot
-skimpyclaw browser wait --ms 30000
-skimpyclaw browser close
-```
-
 ## npm scripts
 
 ```bash

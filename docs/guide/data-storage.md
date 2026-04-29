@@ -25,7 +25,6 @@ All runtime data lives under `~/.skimpyclaw/`.
 │   └── *.json                          # Session records (dashboard-readable)
 │   └── *.jsonl                         # Conversation history (Telegram/Discord)
 ├── discord-thread-agents.json          # Discord profile aliases + thread bindings
-├── browser-profile/                    # Persistent browser profile
 ├── skills/                             # Custom skills directory
 │   └── <skill-name>/
 │       └── SKILL.md                    # Skill definition

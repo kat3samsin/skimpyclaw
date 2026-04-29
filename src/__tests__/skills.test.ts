@@ -234,26 +234,26 @@ describe('checkEligibility', () => {
 
   it('fails on tools requirement when tools not enabled', () => {
     const result = checkEligibility(
-      { name: 'test', description: 'test', requires: { tools: ['Browser'] } },
+      { name: 'test', description: 'test', requires: { tools: ['Fetch'] } },
       { enabled: false, allowedPaths: [] }
     );
     expect(result.eligible).toBe(false);
     expect(result.reason).toContain('Tools not enabled');
   });
 
-  it('fails on browser tool requirement when browser not enabled', () => {
+  it('fails on unsupported tool requirement', () => {
     const result = checkEligibility(
       { name: 'test', description: 'test', requires: { tools: ['Browser'] } },
       { enabled: true, allowedPaths: ['/tmp'] }
     );
     expect(result.eligible).toBe(false);
-    expect(result.reason).toContain('Browser');
+    expect(result.reason).toContain('Unsupported tools requested: Browser');
   });
 
-  it('passes on browser tool requirement when browser enabled', () => {
+  it('passes on fetch tool requirement when tools are enabled', () => {
     const result = checkEligibility(
-      { name: 'test', description: 'test', requires: { tools: ['Browser'] } },
-      { enabled: true, allowedPaths: ['/tmp'], browser: { enabled: true } }
+      { name: 'test', description: 'test', requires: { tools: ['Fetch'] } },
+      { enabled: true, allowedPaths: ['/tmp'] }
     );
     expect(result.eligible).toBe(true);
   });

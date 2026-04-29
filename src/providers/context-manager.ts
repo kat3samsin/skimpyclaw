@@ -36,9 +36,7 @@ const SUMMARY_MAX_TOKENS = 1024; // max tokens for summary response
 // Preferred compaction models in priority order (cheap & fast).
 // Can be overridden via contextManagement.compactionModel in config.
 const COMPACTION_MODEL_CANDIDATES = [
-  'anthropic/claude-haiku-3-5',
-  'openai/gpt-4o-mini',
-  'groq/llama-3.1-8b-instant',
+  'anthropic/claude-haiku-4-5',
 ];
 
 /** Rough token estimate: 1 token ≈ 4 chars of JSON. */
@@ -59,12 +57,10 @@ Output ONLY the summary.`;
  */
 async function pickCompactionModel(config: Config): Promise<string> {
   const { isAnthropicAvailable } = await import('./anthropic.js');
-  const { isOpenAIAvailable } = await import('./openai.js');
 
   for (const candidate of COMPACTION_MODEL_CANDIDATES) {
     const provider = candidate.split('/')[0];
     if (provider === 'anthropic' && isAnthropicAvailable()) return candidate;
-    if (isOpenAIAvailable(provider)) return candidate;
   }
   // Last resort: return the first candidate and let chat() fail → fallback to truncation
   return COMPACTION_MODEL_CANDIDATES[0];
@@ -360,7 +356,7 @@ function serializeCodexMessages(items: any[]): string {
 // =====================================================================
 // Legacy wrapper functions — delegate to generic compactMessages()
 // These preserve backward compatibility for the old provider tool loops
-// (anthropic.ts, codex.ts, openai.ts) until Phase 5 removes them.
+// (anthropic.ts, codex.ts) until Phase 5 removes them.
 // =====================================================================
 
 /**

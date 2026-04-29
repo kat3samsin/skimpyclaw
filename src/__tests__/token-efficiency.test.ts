@@ -149,9 +149,9 @@ describe('token efficiency', () => {
         expect(split).toContain('HTTP/1.1 200 OK');
       });
 
-      it('produces preview + scratch path for Browser', () => {
+      it('produces preview + scratch path for generic tool output', () => {
         const result = 'x\n'.repeat(5000);
-        const split = splitToolResult('browser_snapshot', { action: 'snapshot' }, result);
+        const split = splitToolResult('custom_tool', { action: 'snapshot' }, result);
         expect(split).toContain('Full output saved to');
         expect(split).toContain('.skimpyclaw/s/');
       });

@@ -4,9 +4,9 @@ This document covers how `code_with_agent` executes external coding CLIs. For co
 
 ## What this tool is
 
-- `code_with_agent`: run one coding worker CLI (`claude`, `codex`, or `kimi`)
+- `code_with_agent`: run one coding worker CLI (`claude` or `codex`)
 
-This is separate from in-process tool calling (`Read`, `Write`, `Glob`, `Bash`, `Fetch`, `Browser`).
+This is separate from in-process tool calling (`Read`, `Write`, `Glob`, `Bash`, `Fetch`).
 
 ## Exact CLI commands
 
@@ -30,14 +30,6 @@ codex exec --full-auto --json --color never \
   [-C <workdir>] \
   [-m <model>] \
   <task>
-```
-
-### Kimi worker
-
-```bash
-kimi --yolo -p <task> \
-  [-w <workdir>] \
-  [-m <model>]
 ```
 
 ## Code locations
@@ -93,9 +85,9 @@ To end the session, start a new `code_with_agent` call or close the thread.
 
 ## Selection behavior
 
-- Agent selection supports `claude`, `codex`, `kimi`
+- Agent selection supports `claude` and `codex`
 - `codeAgents.defaultAgent` is used when no explicit `agent` is passed
-- Legacy-like values (`claude-think`, `codex5.3`, etc.) normalize to supported agent IDs
+- Legacy-like values (`claude-coder`, `codex5.3`, etc.) normalize to supported agent IDs
 
 ## Long-running tasks
 

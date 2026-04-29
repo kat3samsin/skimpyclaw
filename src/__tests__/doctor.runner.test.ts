@@ -12,8 +12,6 @@ const {
   mockCheckProviderAuth,
   mockCheckTelegramToken,
   mockCheckDiscordToken,
-  mockCheckBrowserBinaryIfEnabled,
-  mockCheckPlaywrightIfBrowserEnabled,
   mockCheckVoiceDependencies,
   mockCheckMcpConfig,
   mockCheckGatewayHostBindable,
@@ -31,8 +29,6 @@ const {
   mockCheckProviderAuth: vi.fn(),
   mockCheckTelegramToken: vi.fn(),
   mockCheckDiscordToken: vi.fn(),
-  mockCheckBrowserBinaryIfEnabled: vi.fn(),
-  mockCheckPlaywrightIfBrowserEnabled: vi.fn(),
   mockCheckVoiceDependencies: vi.fn(),
   mockCheckMcpConfig: vi.fn(),
   mockCheckGatewayHostBindable: vi.fn(),
@@ -55,8 +51,6 @@ vi.mock('../doctor/checks.js', () => ({
   checkProviderAuth: mockCheckProviderAuth,
   checkTelegramToken: mockCheckTelegramToken,
   checkDiscordToken: mockCheckDiscordToken,
-  checkBrowserBinaryIfEnabled: mockCheckBrowserBinaryIfEnabled,
-  checkPlaywrightIfBrowserEnabled: mockCheckPlaywrightIfBrowserEnabled,
   checkVoiceDependencies: mockCheckVoiceDependencies,
   checkMcpConfig: mockCheckMcpConfig,
   checkGatewayHostBindable: mockCheckGatewayHostBindable,
@@ -76,7 +70,7 @@ describe('doctor runner', () => {
       gateway: { port: 18790 },
       models: {
         providers: {
-          openai: { apiKey: '${OPENAI_API_KEY}' },
+          anthropic: { apiKey: '${ANTHROPIC_API_KEY}' },
         },
       },
       channels: {
@@ -101,8 +95,6 @@ describe('doctor runner', () => {
     mockCheckProviderAuth.mockReset();
     mockCheckTelegramToken.mockReset();
     mockCheckDiscordToken.mockReset();
-    mockCheckBrowserBinaryIfEnabled.mockReset();
-    mockCheckPlaywrightIfBrowserEnabled.mockReset();
     mockCheckVoiceDependencies.mockReset();
     mockCheckMcpConfig.mockReset();
     mockCheckGatewayHostBindable.mockReset();
@@ -116,11 +108,9 @@ describe('doctor runner', () => {
     mockCheckRequiredEnvVars.mockResolvedValue(okCheck('required_env_vars', 'configuration'));
     mockCheckEnvVarPatterns.mockResolvedValue(okCheck('env_var_patterns', 'configuration'));
     mockCheckAllowedPathsWritable.mockResolvedValue(okCheck('allowed_paths_writable', 'configuration'));
-    mockCheckProviderAuth.mockResolvedValue(okCheck('provider_openai_auth', 'provider_auth'));
+    mockCheckProviderAuth.mockResolvedValue(okCheck('provider_anthropic_auth', 'provider_auth'));
     mockCheckTelegramToken.mockResolvedValue(okCheck('telegram_token_valid', 'channels'));
     mockCheckDiscordToken.mockResolvedValue(okCheck('discord_token_valid', 'channels'));
-    mockCheckBrowserBinaryIfEnabled.mockResolvedValue(okCheck('browser_binary_available', 'runtime'));
-    mockCheckPlaywrightIfBrowserEnabled.mockResolvedValue(okCheck('playwright_installed', 'runtime', 'Browser tools disabled'));
     mockCheckVoiceDependencies.mockResolvedValue(okCheck('voice_dependencies', 'runtime', 'Voice disabled'));
     mockCheckMcpConfig.mockResolvedValue(okCheck('mcp_config', 'runtime', 'MCP tools not configured'));
     mockCheckGatewayHostBindable.mockResolvedValue(okCheck('gateway_host_bindable', 'runtime', '127.0.0.1 (always available)'));

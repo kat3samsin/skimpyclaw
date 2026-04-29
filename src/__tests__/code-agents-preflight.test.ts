@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ToolConfig } from '../types.js';
 
-const PRECHECK_ERROR = 'Error: No supported coding CLI found on PATH. Install Codex CLI (`codex`), Claude Code CLI (`claude` or `claude-code`), or Kimi CLI (`kimi`).';
+const PRECHECK_ERROR = 'Error: No supported coding CLI found on PATH. Install Codex CLI (`codex`) or Claude Code CLI (`claude` or `claude-code`).';
 
 const toolConfig: ToolConfig = {
   enabled: true,
