@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
+import { mkdtempSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { homedir } from 'os';
+import { homedir, tmpdir } from 'os';
 import {
   buildCodeAgentSpawnEnv,
   normalizeCodeAgent,
   resolveSelectedCodeAgent,
   getAvailableCodingCliTools,
   getCodingCliPreflightError,
+  readClaudeCodeDefaultModel,
+  resolveCodeAgentModelLabel,
 } from '../code-agents/utils.js';
 
 describe('normalizeCodeAgent', () => {
@@ -80,5 +83,20 @@ describe('buildCodeAgentSpawnEnv', () => {
     expect(env.CLAUDECODE).toBeUndefined();
     expect(env.GH_TOKEN).toBeUndefined();
     expect(env.GITHUB_TOKEN).toBeUndefined();
+  });
+});
+
+describe('code agent model labels', () => {
+  it('reads Claude Code default model from settings', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'skimpyclaw-claude-settings-'));
+    const settingsPath = join(dir, 'settings.json');
+    writeFileSync(settingsPath, JSON.stringify({ model: 'opus[1m]' }));
+
+    expect(readClaudeCodeDefaultModel(settingsPath)).toBe('opus[1m]');
+  });
+
+  it('strips provider prefixes for explicit model labels', () => {
+    expect(resolveCodeAgentModelLabel('claude', 'anthropic/claude-opus-4-7')).toBe('claude-opus-4-7');
+    expect(resolveCodeAgentModelLabel('codex', 'codex/gpt-5.5')).toBe('gpt-5.5');
   });
 });

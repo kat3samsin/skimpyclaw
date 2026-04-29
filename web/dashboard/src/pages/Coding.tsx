@@ -65,6 +65,7 @@ function formatAgentLabel(task: CodeAgent): string {
 }
 
 function formatModelLabel(task: CodeAgent): string {
+  if (task.modelLabel) return task.modelLabel;
   if (!task.model) return `${task.agent || 'agent'} default`;
   return task.model.includes('/') ? task.model.split('/').slice(1).join('/') : task.model;
 }
@@ -230,13 +231,13 @@ export function Coding() {
                     <div class="coding-task-pills">
                       <span class="coding-pill id">{task.id}</span>
                       <span class="coding-pill">{task.agent === 'team-coordinator' ? `${formatAgentLabel(task)} (${children.length})` : formatAgentLabel(task)}</span>
-                      <span class="coding-pill model" title={task.model || ''}>{formatModelLabel(task)}</span>
+                      <span class="coding-pill model" title={task.modelLabel || task.model || ''}>{formatModelLabel(task)}</span>
                       <span class="coding-pill effort">{formatEffortLabel(task)}</span>
                       <span class={`coding-pill status ${cls}`}>{task.status}</span>
                     </div>
                     <Markdown content={task.task} className="coding-task-title markdown-content" />
                     <div class="coding-task-submeta">
-                      <span>{task.model || formatModelLabel(task)}</span>
+                      <span>{formatModelLabel(task)}</span>
                       <span>•</span>
                       <span>{formatEffortLabel(task)}</span>
                       <span>•</span>

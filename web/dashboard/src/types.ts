@@ -176,6 +176,7 @@ export interface CodeAgent {
   liveOutput?: string;
   error?: string;
   model?: string;
+  modelLabel?: string;
   effort?: string;
   parentTaskId?: string;
   childTaskIds?: string[];

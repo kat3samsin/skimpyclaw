@@ -29,6 +29,7 @@ import { redactSecrets } from './security.js';
 import { readAuditTraces } from './audit.js';
 import { getUsageSummary, readUsageRecords } from './usage.js';
 import { getAllCodeAgents, getCodeAgent, cancelCodeAgent } from './tools.js';
+import { withCodeAgentModelLabel } from './code-agents/utils.js';
 import { listApprovals, getApproval, approveRequest, denyRequest } from './exec-approval.js';
 import { getDigests, getDigest, deleteDigest, updateArticleReadStatus } from './digests.js';
 import { loadSkills } from './skills.js';
@@ -930,7 +931,7 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
 
   // --- Code Agents (Multi-Agent) ---
   fastify.get('/api/dashboard/code-agents', async () => {
-    const agents = getAllCodeAgents();
+    const agents = getAllCodeAgents().map(withCodeAgentModelLabel);
     return { agents };
   });
 
@@ -940,7 +941,7 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
     if (!agent) {
       return reply.code(404).send({ error: 'Code agent not found' });
     }
-    return agent;
+    return withCodeAgentModelLabel(agent);
   });
 
   fastify.post<{ Params: { id: string } }>('/api/dashboard/code-agents/:id/cancel', async (request, reply) => {

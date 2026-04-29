@@ -27,6 +27,7 @@ import {
   getCodeAgentConfig,
   buildCodeAgentArgs,
   resolveSelectedCodeAgent,
+  resolveCodeAgentModelLabel,
   isModelCompatibleWithAgent,
   resolveWorkdir,
   resolveModelAlias,
@@ -65,6 +66,7 @@ export {
   getCodeAgentConfig,
   buildCodeAgentArgs,
   resolveSelectedCodeAgent,
+  resolveCodeAgentModelLabel,
   resolveWorkdir,
   resolveModelAlias,
 } from './utils.js';
@@ -93,6 +95,7 @@ export function executeCheckCodeAgent(input: Record<string, any>): string {
       task: task.task,
       workdir: task.workdir,
       model: task.model,
+      modelLabel: task.modelLabel || resolveCodeAgentModelLabel(task.agent, task.model),
       effort: task.effort,
       startedAt: task.startedAt,
       endedAt: task.endedAt,
@@ -118,7 +121,7 @@ export function executeCheckCodeAgent(input: Record<string, any>): string {
       ? (t.durationSeconds < 60 ? `${t.durationSeconds}s` : `${Math.floor(t.durationSeconds / 60)}m`)
       : (Math.round((Date.now() - new Date(t.startedAt).getTime()) / 1000) + 's');
     const taskPreview = t.task.length > 60 ? t.task.slice(0, 60) + '...' : t.task;
-    const model = t.model ? `, ${t.model}` : '';
+    const model = `, ${t.modelLabel || resolveCodeAgentModelLabel(t.agent, t.model)}`;
     const effort = t.effort ? `, effort ${t.effort}` : '';
     return `${t.id}: ${t.status.toUpperCase()} (${t.agent}${model}${effort}, ${elapsed}) — ${taskPreview}`;
   });
@@ -240,6 +243,7 @@ export async function executeCodeWithAgent(
     startedAt: startedAt.toISOString(),
     workdir,
     model: modelForAgent,
+    modelLabel: resolveCodeAgentModelLabel(agent, modelForAgent),
     effort,
     interactive: isInteractive || undefined,
     cliSessionId,

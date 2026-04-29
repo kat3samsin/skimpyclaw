@@ -21,6 +21,7 @@ export interface CodeAgentTask {
   error?: string;
   workdir: string;
   model?: string;
+  modelLabel?: string;          // display-only resolved model label, e.g. Claude Code default
   effort?: string;
   retryCount?: number;           // how many internal validation retries have run
   // Cost / token tracking (from Claude CLI result event)

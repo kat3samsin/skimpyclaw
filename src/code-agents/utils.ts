@@ -1,6 +1,7 @@
 // Code Agent Utilities
 
 import { execSync } from 'child_process';
+import { existsSync, readFileSync } from 'fs';
 import { resolve, join } from 'path';
 import { homedir } from 'os';
 import type { BuildCodeAgentArgsInput, CodeAgentTask } from './types.js';
@@ -121,6 +122,44 @@ export function setCodeAgentConfig(config: Config): void {
 
 export function getCodeAgentConfig(): Config | null {
   return _codeAgentConfig;
+}
+
+function stripProviderPrefix(model: string): string {
+  return model.includes('/') ? model.split('/').slice(1).join('/') : model;
+}
+
+/** Read Claude Code's configured default model, if present. */
+export function readClaudeCodeDefaultModel(
+  settingsPath = join(homedir(), '.claude', 'settings.json')
+): string | undefined {
+  try {
+    if (!existsSync(settingsPath)) return undefined;
+    const settings = JSON.parse(readFileSync(settingsPath, 'utf-8'));
+    const model = settings?.model;
+    return typeof model === 'string' && model.trim() ? model.trim() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Resolve the model text shown in dashboards/reports without changing CLI args. */
+export function resolveCodeAgentModelLabel(agent: string | undefined, model?: string): string {
+  if (model) return stripProviderPrefix(model);
+
+  const normalizedAgent = normalizeCodeAgent(agent);
+  if (normalizedAgent === 'claude') {
+    const defaultModel = readClaudeCodeDefaultModel();
+    return defaultModel ? `${defaultModel} default` : 'claude default';
+  }
+  if (normalizedAgent === 'codex') return 'codex default';
+  return `${agent || 'agent'} default`;
+}
+
+export function withCodeAgentModelLabel(task: CodeAgentTask): CodeAgentTask {
+  return {
+    ...task,
+    modelLabel: task.modelLabel || resolveCodeAgentModelLabel(task.agent, task.model),
+  };
 }
 
 /** Build CLI args for code_with_agent. Exported for testing. */
@@ -329,9 +368,7 @@ function firstMeaningfulLines(value: string, maxChars: number): string {
 
 function formatAgentDisplay(task: CodeAgentTask): string {
   const agent = task.agent === 'team-coordinator' ? 'TEAM' : task.agent.toUpperCase();
-  const model = task.model
-    ? (task.model.includes('/') ? task.model.split('/').slice(1).join('/') : task.model)
-    : `${task.agent} default`;
+  const model = task.modelLabel || resolveCodeAgentModelLabel(task.agent, task.model);
   const effort = task.effort ? ` · effort ${task.effort}` : '';
   return `${agent} · ${model}${effort}`;
 }
@@ -347,7 +384,7 @@ function buildReportMarkdown(task: CodeAgentTask, result: string): string {
     '',
     `- Status: ${task.status}`,
     `- Agent: ${task.agent}`,
-    `- Model: ${task.model || `${task.agent} default`}`,
+    `- Model: ${task.modelLabel || resolveCodeAgentModelLabel(task.agent, task.model)}`,
     `- Effort: ${task.effort || 'default'}`,
     `- Duration: ${formatDuration(task.durationSeconds)}`,
     `- Validation: ${validation}`,
