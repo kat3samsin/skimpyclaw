@@ -570,7 +570,7 @@ async function commandTools(args: string[]): Promise<number> {
     const tools = await getToolDefinitions(toolConfig);
 
     // Group tools
-    const builtinNames = new Set(BUILTIN_TOOL_DEFINITIONS.map(t => t.name));
+    const builtinNames = new Set([...BUILTIN_TOOL_DEFINITIONS.map(t => t.name), 'Fetch']);
 
     console.log('Built-in tools:');
     for (const t of tools.filter(t => builtinNames.has(t.name))) {
