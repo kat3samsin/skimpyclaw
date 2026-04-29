@@ -242,6 +242,14 @@ export function Coding() {
                       <span>{formatEffortLabel(task)}</span>
                       <span>•</span>
                       <span><LuClock3 size={13} /> {formatElapsed(task)}</span>
+                      {task.worktreePath ? (
+                        <>
+                          <span>•</span>
+                          <span title={task.worktreePath}>
+                            worktree{task.worktreeCleanup ? `: ${task.worktreeCleanup.status}` : ''}
+                          </span>
+                        </>
+                      ) : null}
                       <span>•</span>
                       <span class="coding-pill">
                         {task.totalCost != null ? `$${task.totalCost.toFixed(2)}` : '$--'}

@@ -33,6 +33,11 @@ import {
   resolveModelAlias,
   getCodingCliPreflightError,
 } from './utils.js';
+import {
+  normalizeWorktreeRequest,
+  prepareCodeAgentWorktree,
+  shouldUseCodeAgentWorktree,
+} from './worktrees.js';
 import { parseStreamJsonForLive, parseClaudeOutput, parseCodexOutput } from './parser.js';
 
 // Re-export types
@@ -94,6 +99,9 @@ export function executeCheckCodeAgent(input: Record<string, any>): string {
       status: task.status,
       task: task.task,
       workdir: task.workdir,
+      sourceWorkdir: task.sourceWorkdir,
+      worktreePath: task.worktreePath,
+      worktreeRef: task.worktreeRef,
       model: task.model,
       modelLabel: task.modelLabel || resolveCodeAgentModelLabel(task.agent, task.model),
       effort: task.effort,
@@ -230,6 +238,36 @@ export async function executeCodeWithAgent(
   // Create task with unique ID
   const id = getNextCodeAgentId();
   const startedAt = new Date();
+  const worktreeRequest = normalizeWorktreeRequest(input.worktree);
+  const worktreeConfig = context?.fullConfig?.codeAgents?.worktrees;
+  const useWorktree = shouldUseCodeAgentWorktree(task, worktreeRequest, worktreeConfig);
+  const worktreeRequired = worktreeRequest === true || worktreeConfig?.mode === 'always';
+  let executionWorkdir = workdir;
+  let sourceWorkdir: string | undefined;
+  let worktreePath: string | undefined;
+  let worktreeRef: string | undefined;
+  let agentTask = task;
+
+  if (useWorktree) {
+    try {
+      const worktree = prepareCodeAgentWorktree({
+        id,
+        sourceWorkdir: workdir,
+        config: worktreeConfig,
+        required: worktreeRequired,
+      });
+      if (worktree) {
+        executionWorkdir = worktree.runWorkdir;
+        sourceWorkdir = worktree.sourceWorkdir;
+        worktreePath = worktree.worktreePath;
+        worktreeRef = worktree.worktreeRef;
+        agentTask = `${task}\n\nSkimpyClaw worktree isolation:\n- Source checkout: ${sourceWorkdir}\n- Isolated worktree: ${worktreePath}\n- Run all repository commands from the isolated worktree, not the source checkout.\n- If rebasing a branch that is already checked out elsewhere, create a temporary branch in this worktree and report before pushing.`;
+      }
+    } catch (err) {
+      return `Error: ${err instanceof Error ? err.message : String(err)}`;
+    }
+  }
+
   // Interactive mode: generate session UUID up-front so --session-id can pin it.
   const cliSessionId = (isInteractive && agent === 'claude') ? randomUUID() : undefined;
   const caTask: CodeAgentTask = {
@@ -241,7 +279,10 @@ export async function executeCodeWithAgent(
     discordThreadId: context?.discordThreadId,
     discordChannelId: context?.discordChannelId,
     startedAt: startedAt.toISOString(),
-    workdir,
+    workdir: executionWorkdir,
+    sourceWorkdir,
+    worktreePath,
+    worktreeRef,
     model: modelForAgent,
     modelLabel: resolveCodeAgentModelLabel(agent, modelForAgent),
     effort,
@@ -269,16 +310,18 @@ export async function executeCodeWithAgent(
   const configTimeout = context?.fullConfig?.codeAgents?.timeoutMinutes ?? 30;
   const soloTimeout = Math.min(input.timeout_minutes || configTimeout, 60);
   const resolvedInput = { ...input, model: modelForAgent, effort, timeout_minutes: soloTimeout };
-  runCodeAgentBackground(id, agent, task, workdir, validate, resolvedInput, startedAt, {
+  runCodeAgentBackground(id, agent, agentTask, executionWorkdir, validate, resolvedInput, startedAt, {
     defaultTimeoutMinutes: soloTimeout,
     maxTimeoutMinutes: 60,
     validationCommands: context?.fullConfig?.codeAgents?.validationCommands,
+    worktreeConfig,
   }).catch((err) => {
     console.error(`[code-agent] Background error for ${id}:`, err);
   });
 
   const taskPreview = task.length > 100 ? task.slice(0, 100) + '...' : task;
-  return `Started coding agent ${id} (${agent}). Task: ${taskPreview}\n\nUse check_code_agent to poll status.`;
+  const worktreeLine = worktreePath ? `\nWorktree: ${worktreePath}` : '';
+  return `Started coding agent ${id} (${agent}). Task: ${taskPreview}${worktreeLine}\n\nUse check_code_agent to poll status.`;
 }
 
 // Need to import join for the file operations

@@ -18,8 +18,21 @@
 - Tool schema: `src/tools/definitions.ts` (`code_with_agent`)
 - Orchestration: `src/code-agents/index.ts`
 - Command construction: `src/code-agents/utils.ts`
+- Worktree isolation: `src/code-agents/worktrees.ts`
 
 Normal tool calling (`Read/Write/Bash/Fetch`) is separate from coding-agent CLI execution.
+
+## Git Worktrees
+
+`code_with_agent` can run in isolated git worktrees:
+
+- default `worktree: "auto"` creates a detached worktree for review/rebase-style tasks
+- `worktree: true` forces isolation
+- `worktree: false` runs in the original checkout
+
+The default root is `~/.skimpyclaw/worktrees`. Use `codeAgents.worktrees.root` to change it, or `codeAgents.worktrees.mode` to set `off`, `auto`, or `always`.
+
+Cleanup is safe by default: clean worktrees at the original HEAD are removed after completion, while dirty worktrees or worktrees whose HEAD changed are preserved.
 
 ## Validation & Package Manager Detection
 

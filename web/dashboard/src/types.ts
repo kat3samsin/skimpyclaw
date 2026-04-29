@@ -185,6 +185,15 @@ export interface CodeAgent {
   validationPassed?: boolean;
   validationOutput?: string;
   workdir?: string;
+  sourceWorkdir?: string;
+  worktreePath?: string;
+  worktreeRef?: string;
+  worktreeCleanup?: {
+    status: 'removed' | 'preserved' | 'skipped' | 'failed';
+    path?: string;
+    reason?: string;
+    at: string;
+  };
   wave?: number;
   retryCount?: number;
   totalCost?: number;

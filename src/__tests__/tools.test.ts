@@ -348,6 +348,7 @@ describe('code_with_agent', () => {
       const props = Object.keys(CODE_WITH_AGENT_TOOL.input_schema.properties);
       expect(props).toContain('task');
       expect(props).toContain('agent');
+      expect(props).toContain('worktree');
       // workdir, model, max_turns, validate — omitted from schema to save tokens (executor still accepts them)
     });
 

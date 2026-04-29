@@ -33,6 +33,7 @@ import {
   getCodeAgent,
 } from './registry.js';
 import { buildCodeAgentArgs, buildCodeAgentSpawnEnv, notifyCodeAgentResult, resolveModelAlias } from './utils.js';
+import { cleanupCodeAgentWorktree } from './worktrees.js';
 import { parseStreamJsonForLive, parseClaudeOutput, parseCodexOutput } from './parser.js';
 import { startTrace, addEvent, endTrace } from '../audit.js';
 import { buildUsageRecord, recordUsage } from '../usage.js';
@@ -371,6 +372,7 @@ export async function runCodeAgentBackground(
         agent,
         workdir,
         model: input.model,
+        effort: input.effort,
         max_turns: input.max_turns,
         sessionId: caTask.cliSessionId,
       });
@@ -387,6 +389,8 @@ export async function runCodeAgentBackground(
   logWrite(`=== ${id} | ${agent} | ${new Date().toISOString()} ===\n`);
   logWrite(`Task: ${task.slice(0, 500)}\n`);
   logWrite(`Workdir: ${workdir}\n\n`);
+  if (caTask.sourceWorkdir) logWrite(`Source workdir: ${caTask.sourceWorkdir}\n`);
+  if (caTask.worktreePath) logWrite(`Worktree: ${caTask.worktreePath}\n`);
 
   try {
     ensureNotCancelled();
@@ -769,7 +773,15 @@ export async function runCodeAgentBackground(
     activeTimer = null;
     activeProc = null;
     activeExecProc = null;
+    if (caTask.worktreePath && !['running', 'validating', 'pending'].includes(caTask.status)) {
+      caTask.worktreeCleanup = cleanupCodeAgentWorktree({
+        sourceWorkdir: caTask.sourceWorkdir,
+        worktreePath: caTask.worktreePath,
+        worktreeRef: caTask.worktreeRef,
+        config: options?.worktreeConfig,
+      });
+      writeCodeAgentTask(caTask);
+    }
     deleteCodeAgentCanceller(id);
   }
 }
-

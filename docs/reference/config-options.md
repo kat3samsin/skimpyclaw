@@ -156,6 +156,10 @@ Map of shorthand names to full `provider/model-id`. See [Model Aliases](./model-
 | `defaultAgent` | string | `claude` | Default CLI: `claude` or `codex` |
 | `timeoutMinutes` | number | `30` | Timeout for `code_with_agent` (max: 60) |
 | `maxTurns` | number | `50` | Max tool-use turns per agent |
+| `worktrees.enabled` | boolean | `true` | Enable isolated git worktrees for coding agents |
+| `worktrees.mode` | string | `auto` | `off`, `auto`, or `always`; auto isolates PR review/rebase-style tasks |
+| `worktrees.root` | string | `~/.skimpyclaw/worktrees` | Parent directory for generated worktrees |
+| `worktrees.cleanup` | boolean | `true` | Remove clean/unchanged worktrees after completion; preserve dirty or changed-HEAD worktrees |
 | `validationCommands` | object | | Per-project validation commands. Keys match project names from `projects` config. Values are shell commands run in the project dir. Overrides auto-detected build+test |
 
 > **Note:** `code_with_agent` requires an external coding CLI on your PATH. See [Coding Agent Execution](./code-agents.md).

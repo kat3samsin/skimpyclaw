@@ -1,6 +1,7 @@
 // Code Agent Type Definitions
 
 import type { ToolConfig } from '../types.js';
+import type { CodeAgentWorktreeCleanupResult, CodeAgentWorktreeConfig } from './worktrees.js';
 
 export interface CodeAgentTask {
   id: string;                    // "ca-1", "ca-2"
@@ -20,6 +21,10 @@ export interface CodeAgentTask {
   liveOutput?: string;           // last 5KB for streaming
   error?: string;
   workdir: string;
+  sourceWorkdir?: string;        // original checkout when running in an isolated worktree
+  worktreePath?: string;         // git worktree root for isolated code-agent runs
+  worktreeRef?: string;          // ref used to create the worktree
+  worktreeCleanup?: CodeAgentWorktreeCleanupResult;
   model?: string;
   modelLabel?: string;          // display-only resolved model label, e.g. Claude Code default
   effort?: string;
@@ -44,6 +49,8 @@ export interface CodeAgentBackgroundOptions {
   maxTimeoutMinutes?: number;
   /** Per-project validation command overrides from config */
   validationCommands?: Record<string, string>;
+  /** Worktree cleanup config */
+  worktreeConfig?: CodeAgentWorktreeConfig;
 }
 
 export interface BuildCodeAgentArgsInput {

@@ -37,6 +37,19 @@ codex exec --full-auto --json --color never \
 - Tool definitions: `src/tools/definitions.ts`
 - Runtime orchestration: `src/code-agents/index.ts`
 - CLI argument builder: `src/code-agents/utils.ts`
+- Worktree isolation: `src/code-agents/worktrees.ts`
+
+## Worktree Isolation
+
+`code_with_agent` supports `worktree: true | false | "auto"`.
+
+- `auto` is the default. It creates an isolated git worktree for PR review, pull request, compare/diff, and rebase-style tasks.
+- `true` forces a worktree and fails if the workdir is not inside a git repo.
+- `false` runs directly in the requested checkout.
+
+Worktrees are created detached under `~/.skimpyclaw/worktrees/<repo>/<task-id>` by default. The dashboard and reports show both the source checkout and the worktree path. This lets multiple reviews/rebases run in parallel without colliding in the same checkout.
+
+After the agent finishes, SkimpyClaw removes the worktree only when it is clean and still at the original HEAD. Dirty worktrees, rebased branches, or changed HEADs are preserved so useful work is not lost.
 
 ## CLI monitoring
 

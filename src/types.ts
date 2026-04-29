@@ -69,6 +69,12 @@ export interface Config {
     defaultAgent?: string;    // Default coding agent CLI: "claude" | "codex" (default: "claude")
     timeoutMinutes?: number;  // Default timeout for code_with_agent (default: 30, max: 60)
     maxTurns?: number;        // Max tool-use turns per agent (default: 50)
+    worktrees?: {
+      enabled?: boolean;       // Enable isolated git worktrees for safe parallel work (default true)
+      mode?: 'off' | 'auto' | 'always'; // auto isolates review/rebase tasks
+      root?: string;           // Worktree parent directory (default: ~/.skimpyclaw/worktrees)
+      cleanup?: boolean;       // Remove clean/unchanged worktrees after completion (default true)
+    };
     /** Per-project validation commands. Keys match project names from `projects` config.
      *  Values are shell commands run in the project dir. Overrides auto-detected build+test. */
     validationCommands?: Record<string, string>;

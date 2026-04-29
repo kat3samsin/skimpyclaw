@@ -67,6 +67,9 @@ export const CODE_WITH_AGENT_TOOL = {
         enum: ['none', 'low', 'medium', 'high', 'xhigh'],
         description: 'Optional reasoning effort for coding agents that support it.',
       },
+      worktree: {
+        description: 'Use an isolated git worktree for this task. true forces one, false disables it, auto uses one for review/rebase-style tasks. Default auto.',
+      },
     },
     required: ['task'],
   },
