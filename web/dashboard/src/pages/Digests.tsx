@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'preact/hooks';
 import { getDigest, getDigests } from '../api/client.js';
 import type { Digest, DigestResponse } from '../types.js';
-import { LuExternalLink, LuNewspaper, LuRefreshCw } from 'react-icons/lu';
+import { LuExternalLink, LuFileText, LuRefreshCw } from 'react-icons/lu';
 import { Markdown } from '../components/Markdown.js';
 
 export function Digests() {
@@ -60,7 +60,7 @@ export function Digests() {
         </div>
       ) : digests.length === 0 ? (
         <div class="empty-state">
-          <div class="empty-state-icon"><LuNewspaper size={18} /></div>
+          <div class="empty-state-icon"><LuFileText size={18} /></div>
           <div class="empty-state-text">No digests yet</div>
         </div>
       ) : (
@@ -74,7 +74,7 @@ export function Digests() {
                   class={`templates-list-item${selected === d.id ? ' active' : ''}`}
                 >
                   <div class="templates-list-icon">
-                    <LuNewspaper size={14} />
+                    <LuFileText size={14} />
                   </div>
                   <div class="templates-list-content">
                     <div class="templates-list-title">{d.jobName}</div>

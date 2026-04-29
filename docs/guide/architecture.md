@@ -8,15 +8,15 @@
   </a>
 </p>
 
-The diagram shows the full system at a glance: input channels (Telegram, Discord, Dashboard, CLI, Newspaper) → Fastify gateway → core runtime (agent runner, provider router, Discord profile routing, cron, heartbeat) → tool executor → tools (built-ins, exec approval, `code_with_agent`, skills) → external providers (Anthropic, Codex, OpenAI-compatible, MCP) and local storage under `~/.skimpyclaw/`.
+The diagram shows the full system at a glance: input channels (Telegram, Discord, Dashboard, CLI) → Fastify gateway → core runtime (agent runner, provider router, Discord profile routing, cron, heartbeat) → tool executor → tools (built-ins, exec approval, `code_with_agent`, skills) → external providers (Anthropic, Codex, OpenAI-compatible, MCP) and local storage under `~/.skimpyclaw/`.
 
 <details>
 <summary>Plain-text summary</summary>
 
 ```
-CHANNELS     Telegram · Discord · Web Dashboard · CLI · Newspaper
+CHANNELS     Telegram · Discord · Web Dashboard · CLI
                                     ↓
-GATEWAY      Fastify :18790  (bearer auth, dashboard + newspaper + agent routes)
+GATEWAY      Fastify :18790  (bearer auth, dashboard + agent routes)
                                     ↓
 CORE         Agent Runner · Provider Router · Discord Profile Routing · Cron · Heartbeat
                                     ↓

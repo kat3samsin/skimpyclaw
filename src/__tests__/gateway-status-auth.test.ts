@@ -63,30 +63,6 @@ describe('gateway /status auth', () => {
     }
   });
 
-  it('requires auth for POST /api/newspaper/build', async () => {
-    const app = await createGateway(cfg);
-    try {
-      const res = await app.inject({ method: 'POST', url: '/api/newspaper/build' });
-      expect(res.statusCode).toBe(401);
-    } finally {
-      await app.close();
-    }
-  });
-
-  it('allows POST /api/newspaper/build with valid bearer token', async () => {
-    const app = await createGateway(cfg);
-    try {
-      const res = await app.inject({
-        method: 'POST',
-        url: '/api/newspaper/build',
-        headers: { authorization: 'Bearer test-token' },
-      });
-      expect(res.statusCode).not.toBe(401);
-    } finally {
-      await app.close();
-    }
-  });
-
   it('allows /status with valid bearer token', async () => {
     const app = await createGateway(cfg);
     try {
