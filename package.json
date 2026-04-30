@@ -10,7 +10,6 @@
   },
   "files": [
     "dist",
-    "sandbox",
     "templates",
     "com.skimpyclaw.gateway.plist.example",
     "README.md",
@@ -27,7 +26,8 @@
     "docs:preview": "pnpm --dir docs preview",
     "setup": "tsx src/setup.ts",
     "onboard": "tsx src/cli.ts onboard",
-    "build": "tsc && pnpm dashboard:build",
+    "clean": "rm -rf dist",
+    "build": "pnpm clean && tsc && pnpm dashboard:build",
     "release:check": "pnpm build && pnpm test",
     "release:local": "bash ./scripts/release.sh",
     "lint": "eslint \"src/**/*.ts\"",
