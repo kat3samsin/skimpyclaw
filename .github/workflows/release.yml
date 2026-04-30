@@ -46,7 +46,9 @@ jobs:
           fi
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm --dir web/dashboard install --frozen-lockfile
 
       - name: Ensure release tag does not already exist
         run: |

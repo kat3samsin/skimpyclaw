@@ -30,6 +30,7 @@ if [[ "$CURRENT_VERSION" != "$VERSION" ]]; then
   npm version "$VERSION" --no-git-tag-version
 fi
 
+pnpm --dir web/dashboard install --frozen-lockfile
 pnpm build && pnpm test
 npm publish --access public
 
