@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SkimpyClaw Improvement Report</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f8fb;
+      --panel: #ffffff;
+      --ink: #172033;
+      --muted: #627089;
+      --line: #dce3ee;
+      --soft: #eef3f8;
+      --good: #19703e;
+      --warn: #946200;
+      --info: #275f9f;
+      --code: #0f172a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    header {
+      background: #182234;
+      color: #fff;
+      padding: 28px 32px;
+      border-bottom: 4px solid #5fa9dd;
+    }
+    h1 { margin: 0 0 8px; font-size: 28px; line-height: 1.15; }
+    h2 { margin: 0 0 14px; font-size: 20px; }
+    h3 { margin: 18px 0 8px; font-size: 15px; }
+    p { margin: 0 0 10px; }
+    a { color: #1f6fb2; }
+    code {
+      background: #edf2f7;
+      border: 1px solid #d8e0eb;
+      border-radius: 4px;
+      padding: 1px 5px;
+      color: var(--code);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+    }
+    main { max-width: 1180px; margin: 0 auto; padding: 24px 28px 48px; }
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 20px;
+      margin: 0 0 18px;
+      box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+    }
+    table { width: 100%; border-collapse: collapse; margin: 8px 0 0; }
+    th, td { border: 1px solid var(--line); padding: 9px 10px; text-align: left; vertical-align: top; }
+    th { background: var(--soft); font-weight: 650; }
+    ul { margin: 8px 0 0 20px; padding: 0; }
+    li { margin: 4px 0; }
+    .subtle { color: var(--muted); }
+    .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      background: #fbfdff;
+    }
+    .metric { display: block; font-size: 24px; font-weight: 750; line-height: 1.1; }
+    .pill {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-weight: 650;
+      font-size: 12px;
+      border: 1px solid transparent;
+    }
+    .pass { color: var(--good); background: #e8f6ee; border-color: #bfe4cd; }
+    .warn { color: var(--warn); background: #fff5db; border-color: #ead08c; }
+    .info { color: var(--info); background: #e8f2ff; border-color: #bfd8f4; }
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+      background: #0f172a;
+      color: #e5edf7;
+      border-radius: 8px;
+      padding: 12px;
+      overflow: auto;
+    }
+    .toc a { margin-right: 14px; white-space: nowrap; }
+    @media (max-width: 850px) {
+      .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      header { padding: 22px; }
+      main { padding: 18px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>SkimpyClaw Improvement Report</h1>
+    <p>Scope: compact context more reliably, reduce memory/session growth, harden persisted text against token-shaped secrets, and keep the patch small.</p>
+    <p class="subtle">Generated: 2026-05-13 America/Chicago. No push performed.</p>
+  </header>
+
+  <main>
+    <section class="toc">
+      <strong>Jump:</strong>
+      <a href="#summary">Summary</a>
+      <a href="#changes">Changes</a>
+      <a href="#security">Security</a>
+      <a href="#validation">Validation</a>
+      <a href="#features">Feature Suggestions</a>
+      <a href="#local-testing">Local Testing</a>
+    </section>
+
+    <section id="summary">
+      <h2>Executive Summary</h2>
+      <div class="grid">
+        <div class="card"><span class="metric">8</span><span class="subtle">files touched by this pass</span></div>
+        <div class="card"><span class="metric">+191 / -24</span><span class="subtle">small, focused diff</span></div>
+        <div class="card"><span class="metric">797</span><span class="subtle">tests passing</span></div>
+        <div class="card"><span class="metric">0</span><span class="subtle">lint errors</span></div>
+      </div>
+      <p style="margin-top:14px">The patch improves reliability in three places that affect long-running agents: context compaction, daily memory logs, and encrypted conversation sessions. It also adds shared text redaction for common token-shaped secrets before memory/session persistence.</p>
+      <p><span class="pill pass">Ready for local testing</span> <span class="pill info">No product behavior rewrite</span> <span class="pill info">No GitHub push</span></p>
+    </section>
+
+    <section id="changes">
+      <h2>Changes Made</h2>
+      <table>
+        <thead>
+          <tr><th>Area</th><th>Files</th><th>What changed</th><th>Why it matters</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Context compaction</td>
+            <td><code>src/providers/context-manager.ts</code><br><code>src/__tests__/context-manager.test.ts</code></td>
+            <td>Added progressive mechanical compaction after an already compacted context is still oversized. Reset test state now actually replaces the WeakSet.</td>
+            <td>A long tool result in the retained tail could keep the context too large and trigger repeated summarization. Now a second pass truncates tool results instead of asking the LLM to summarize the same compacted history again.</td>
+          </tr>
+          <tr>
+            <td>Agent memory logs</td>
+            <td><code>src/agent.ts</code><br><code>src/__tests__/agent.test.ts</code></td>
+            <td>Added <code>formatMemoryEntry()</code>, capped user/assistant memory fields, capped large tool-call lists, redacted token-shaped secrets, and made memory append failure non-fatal to the model response.</td>
+            <td>Daily memory files should not balloon from large replies or fail an otherwise successful agent turn because disk memory logging failed.</td>
+          </tr>
+          <tr>
+            <td>Encrypted sessions</td>
+            <td><code>src/sessions.ts</code><br><code>src/__tests__/sessions.test.ts</code></td>
+            <td>Capped persisted user, assistant, proactive, and summary text at 50k chars after redaction and before encryption.</td>
+            <td>Session JSONL remains encrypted, but very large messages no longer make every future history load unnecessarily expensive.</td>
+          </tr>
+          <tr>
+            <td>Secret redaction</td>
+            <td><code>src/security.ts</code><br><code>src/__tests__/security.test.ts</code></td>
+            <td>Added <code>redactSecretText()</code> for AWS access keys, GitHub tokens, Slack tokens, private keys, and OpenAI-style <code>sk-</code> tokens.</td>
+            <td>Common accidental paste patterns are removed before memory and session persistence while preserving the rest of the message for audit/debugging.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Implementation Notes</h3>
+      <ul>
+        <li><code>mechanicallyCompact()</code> keeps the recent tail intact when possible, but truncates tail tool results if that is the only way to avoid an oversized compacted context.</li>
+        <li>Memory truncation uses 20k chars per user/assistant field and 50 displayed tool calls, with 1k chars per tool-call line.</li>
+        <li>Session truncation uses 50k chars per persisted text field, after redaction, before encryption.</li>
+        <li>The changes are local to persistence/compaction helpers and tests; no agent routing, provider routing, Discord, cron, or code-agent execution behavior was rewritten.</li>
+      </ul>
+    </section>
+
+    <section id="security">
+      <h2>Security Review</h2>
+      <table>
+        <thead>
+          <tr><th>Check</th><th>Status</th><th>Notes</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>No raw secrets added</td>
+            <td><span class="pill pass">Pass</span></td>
+            <td>Diff scan over changed files found no token-shaped literals after test tokens were built dynamically.</td>
+          </tr>
+          <tr>
+            <td>Session encryption preserved</td>
+            <td><span class="pill pass">Pass</span></td>
+            <td>Existing AES-256-GCM session storage stays intact. Redaction and truncation happen before <code>encryptEntry()</code>.</td>
+          </tr>
+          <tr>
+            <td>Memory persistence safer</td>
+            <td><span class="pill pass">Pass</span></td>
+            <td>Common secrets are redacted before daily memory log writes. Memory write failures now warn instead of failing a completed model response.</td>
+          </tr>
+          <tr>
+            <td>Prompt/data boundary</td>
+            <td><span class="pill pass">Pass</span></td>
+            <td>No changes to tool allowlists, exec approval, provider auth, gateway auth, or path validation.</td>
+          </tr>
+          <tr>
+            <td>Remaining risk</td>
+            <td><span class="pill warn">Known</span></td>
+            <td>Pattern redaction is intentionally conservative. Non-standard secrets can still be persisted if they do not match the known token shapes.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="validation">
+      <h2>Validation</h2>
+      <table>
+        <thead>
+          <tr><th>Command</th><th>Result</th><th>Notes</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>pnpm vitest run src/__tests__/context-manager.test.ts src/__tests__/agent.test.ts src/__tests__/sessions.test.ts src/__tests__/security.test.ts</code></td>
+            <td><span class="pill pass">Pass</span></td>
+            <td>83 tests passed after source changes; 34 focused persistence/security tests passed after final test-token cleanup.</td>
+          </tr>
+          <tr>
+            <td><code>pnpm build && pnpm test</code></td>
+            <td><span class="pill pass">Pass</span></td>
+            <td>Dashboard build succeeded. Vitest: 62 files, 797 tests passed.</td>
+          </tr>
+          <tr>
+            <td><code>pnpm lint</code></td>
+            <td><span class="pill pass">Pass with warnings</span></td>
+            <td>Exit code 0. Existing repo-wide warning-level unused-symbol noise remains: 109 warnings, 0 errors. I did not clean unrelated lint warnings.</td>
+          </tr>
+          <tr>
+            <td><code>git diff --check</code></td>
+            <td><span class="pill pass">Pass</span></td>
+            <td>No whitespace errors in the changed files from this pass.</td>
+          </tr>
+          <tr>
+            <td>Diff secret-pattern scan</td>
+            <td><span class="pill pass">Pass</span></td>
+            <td>No AWS/GitHub/Slack/private-key/OpenAI-style token-shaped literals in the changed diff.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="feature-suggestions">
+      <h2 id="features">Suggested Next Features</h2>
+      <table>
+        <thead>
+          <tr><th>Priority</th><th>Feature</th><th>Why</th><th>Suggested shape</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>P1</td>
+            <td>Retention policy for sessions and memory logs</td>
+            <td>Even capped entries accumulate forever.</td>
+            <td>Add a small cleanup job that keeps N days or max bytes per agent/session, with dry-run logging first.</td>
+          </tr>
+          <tr>
+            <td>P1</td>
+            <td>Security redaction metrics</td>
+            <td>It is useful to know redaction happened without storing the secret.</td>
+            <td>Count redactions per write and expose aggregate counts in logs/dashboard, not the matched value.</td>
+          </tr>
+          <tr>
+            <td>P1</td>
+            <td>Compaction telemetry in dashboard</td>
+            <td>Debugging long runs is easier when compaction method and token deltas are visible.</td>
+            <td>Record compaction method, tokens before/after, model, and iteration in existing audit/usage surfaces.</td>
+          </tr>
+          <tr>
+            <td>P2</td>
+            <td>Session compaction command parity for Discord and Telegram</td>
+            <td>Both channels should have an equivalent, tested manual compact flow.</td>
+            <td>Route both through a shared summarization helper, then store one encrypted summary entry.</td>
+          </tr>
+          <tr>
+            <td>P2</td>
+            <td>Configurable persistence caps</td>
+            <td>The constants are safe defaults, but power users may want stricter limits.</td>
+            <td>Add optional config fields later only if local usage shows the defaults need tuning.</td>
+          </tr>
+          <tr>
+            <td>P2</td>
+            <td>Doctor check for lint warning drift</td>
+            <td>Lint currently exits clean but has a large warning baseline.</td>
+            <td>Add a doctor summary that reports warning count by directory without failing CI.</td>
+          </tr>
+          <tr>
+            <td>P3</td>
+            <td>Memory viewer redaction banner</td>
+            <td>Users should understand why values are missing from persisted logs.</td>
+            <td>When <code>[REDACTED_SECRET]</code> appears, show a small dashboard note explaining redaction.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="local-testing">
+      <h2>Manual Local Testing Steps</h2>
+      <ol>
+        <li>Start SkimpyClaw locally with your usual command.</li>
+        <li>Send a normal chat message and confirm the response still returns.</li>
+        <li>Send a message containing a fake token-shaped value such as a dynamically generated <code>ghp_</code> token. Confirm future memory/session views show <code>[REDACTED_SECRET]</code>, not the token.</li>
+        <li>Run a tool-heavy prompt that produces long output. Confirm the agent continues after compaction and memory files do not grow with full huge responses.</li>
+        <li>Use the dashboard memory/session views to confirm content remains readable, capped, and encrypted session history still loads.</li>
+      </ol>
+    </section>
+
+    <section id="git-state">
+      <h2>Git State Notes</h2>
+      <p>This pass intentionally touched only these files:</p>
+      <div class="mono">src/agent.ts
+src/providers/context-manager.ts
+src/security.ts
+src/sessions.ts
+src/__tests__/agent.test.ts
+src/__tests__/context-manager.test.ts
+src/__tests__/security.test.ts
+src/__tests__/sessions.test.ts</div>
+      <p style="margin-top:12px">The worktree already had unrelated dirty files before this pass, including cron, code-agent, Discord delegation, and package-manager detection changes. I did not revert or normalize those.</p>
+    </section>
+  </main>
+</body>
+</html>
