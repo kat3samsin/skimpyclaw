@@ -13,10 +13,12 @@ import { join } from 'path';
 import { homedir } from 'os';
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'crypto';
 import { getSecureValue, setSecureValue } from './secure-store.js';
+import { redactSecretText } from './security.js';
 import type { ChatMessage } from './types.js';
 
 let SESSIONS_DIR = join(homedir(), '.skimpyclaw', 'sessions');
 export const MAX_HISTORY_PAIRS = 5;
+export const MAX_SESSION_TEXT_CHARS = 50_000;
 
 const ENCRYPTED_PREFIX = 'ENCv1:';
 const SESSION_KEY_SERVICE = 'skimpyclaw-history';
@@ -42,6 +44,12 @@ export interface SessionEntry {
   assistant?: string;
   summary?: true;
   proactive?: true;
+}
+
+function truncateSessionText(value: string): string {
+  const redacted = redactSecretText(value);
+  if (redacted.length <= MAX_SESSION_TEXT_CHARS) return redacted;
+  return `${redacted.slice(0, MAX_SESSION_TEXT_CHARS)}\n[truncated ${redacted.length - MAX_SESSION_TEXT_CHARS} chars]`;
 }
 
 function sessionPath(platform: string, chatId: string | number): string {
@@ -254,8 +262,8 @@ export async function saveExchange(
     const filePath = sessionPath(platform, chatId);
     const entry: SessionEntry = {
       ts: new Date().toISOString(),
-      user: userMsg,
-      assistant: assistantMsg,
+      user: truncateSessionText(userMsg),
+      assistant: truncateSessionText(assistantMsg),
     };
     appendEncryptedEntry(filePath, entry);
   } catch (err) {
@@ -277,7 +285,7 @@ export async function saveProactiveMessage(
     const filePath = sessionPath(platform, chatId);
     const entry: SessionEntry = {
       ts: new Date().toISOString(),
-      user: message,
+      user: truncateSessionText(message),
       proactive: true,
     };
     appendEncryptedEntry(filePath, entry);
@@ -301,7 +309,7 @@ export async function replaceWithSummary(
     const entry: SessionEntry = {
       ts: new Date().toISOString(),
       user: 'Summary of our previous conversation:',
-      assistant: summary,
+      assistant: truncateSessionText(summary),
       summary: true,
     };
 

@@ -121,6 +121,22 @@ export function clearRateLimiter(): void {
 // --- Secrets Redaction ---
 
 const SECRET_KEYS = ['apikey', 'token', 'password', 'secret', 'key'];
+const SECRET_TEXT_PATTERNS = [
+  /AKIA[0-9A-Z]{16}/g,
+  /ghp_[A-Za-z0-9]{36,}/g,
+  /github_pat_[A-Za-z0-9_]{20,}/g,
+  /xox[baprs]-[A-Za-z0-9-]+/g,
+  /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g,
+  /sk-[A-Za-z0-9]{20,}/g,
+];
+
+export function redactSecretText(input: string): string {
+  let redacted = input;
+  for (const pattern of SECRET_TEXT_PATTERNS) {
+    redacted = redacted.replace(pattern, '[REDACTED_SECRET]');
+  }
+  return redacted;
+}
 
 export function redactSecrets(obj: Record<string, any>): Record<string, any> {
   const redacted: Record<string, any> = {};

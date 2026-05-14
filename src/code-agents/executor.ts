@@ -102,11 +102,7 @@ function getWorkspacePatterns(workdir: string): string[] | null {
   }
 }
 
-/**
- * Find which monorepo packages have changed files (git diff).
- * Returns package directories relative to workdir.
- */
-function getChangedPackageDirs(workdir: string): string[] {
+function getChangedFiles(workdir: string): string[] {
   try {
     // Get changed files vs HEAD (staged + unstaged + untracked)
     const diff = execSync(
@@ -115,24 +111,31 @@ function getChangedPackageDirs(workdir: string): string[] {
     ).trim();
     if (!diff) return [];
 
-    const files = [...new Set(diff.split('\n').filter(Boolean))];
-    // Extract unique top-level package directories (e.g. "packages/image-studio/src/foo.ts" → "packages/image-studio")
-    const pkgDirs = new Set<string>();
-    for (const f of files) {
-      const parts = f.split('/');
-      // Look for package.json at each depth to find package boundary
-      for (let depth = 1; depth <= Math.min(parts.length - 1, 4); depth++) {
-        const candidate = parts.slice(0, depth).join('/');
-        if (existsSync(join(workdir, candidate, 'package.json'))) {
-          pkgDirs.add(candidate);
-          break;
-        }
-      }
-    }
-    return [...pkgDirs];
+    return [...new Set(diff.split('\n').filter(Boolean))];
   } catch {
     return [];
   }
+}
+
+/**
+ * Find which monorepo packages have changed files.
+ * Returns package directories relative to workdir.
+ */
+function getChangedPackageDirs(workdir: string, files: string[]): string[] {
+  // Extract unique top-level package directories (e.g. "packages/image-studio/src/foo.ts" → "packages/image-studio")
+  const pkgDirs = new Set<string>();
+  for (const f of files) {
+    const parts = f.split('/');
+    // Look for package.json at each depth to find package boundary
+    for (let depth = 1; depth <= Math.min(parts.length - 1, 4); depth++) {
+      const candidate = parts.slice(0, depth).join('/');
+      if (existsSync(join(workdir, candidate, 'package.json'))) {
+        pkgDirs.add(candidate);
+        break;
+      }
+    }
+  }
+  return [...pkgDirs];
 }
 
 // Reject any value that could break out of an unquoted shell argument.
@@ -146,11 +149,11 @@ const SAFE_PATH_RE = /^[a-zA-Z0-9._-]+(?:\/[a-zA-Z0-9._-]+)*$/;
  * Returns a combined command that builds/tests only affected packages, or null
  * if this doesn't look like a monorepo or no packages were changed.
  */
-function buildMonorepoValidationCommand(workdir: string): string | null {
+function buildMonorepoValidationCommand(workdir: string, changedFiles: string[]): string | null {
   const wsPatterns = getWorkspacePatterns(workdir);
   if (!wsPatterns) return null;
 
-  const changedDirs = getChangedPackageDirs(workdir);
+  const changedDirs = getChangedPackageDirs(workdir, changedFiles);
   if (changedDirs.length === 0) return null;
 
   const pm = detectPackageManager(workdir);
@@ -236,8 +239,11 @@ function findMonorepoRoot(startDir: string): string | null {
  *
  * Resolution order:
  * 1. Per-project override from config `codeAgents.validationCommands`
- * 2. Monorepo auto-detection: scope to changed packages only
+ * 2. Monorepo auto-detection
  *    - Works both when workdir is the repo root AND when it's a package subdir
+ *    - Changed package files use workspace-scoped validation
+ *    - Changed root files use root validation
+ *    - No changed files skip validation
  * 3. Auto-detect from package.json scripts (build + test)
  * 4. Empty string (skip validation) if no scripts found
  */
@@ -252,42 +258,48 @@ export function buildValidationCommand(workdir: string, validationCommands?: Rec
     }
   }
 
-  // 2. Monorepo auto-detection — check workdir and parent dirs
-  const monorepoCmd = buildMonorepoValidationCommand(workdir);
-  if (monorepoCmd) return monorepoCmd;
+  const buildRootValidationCommand = (dir: string): string => {
+    const pm = detectPackageManager(dir);
+    const run = pm === 'npm' ? 'npm run' : pm;
 
-  // Also check if workdir is a subpackage inside a monorepo
-  const monorepoRoot = findMonorepoRoot(workdir);
-  if (monorepoRoot && monorepoRoot !== workdir) {
-    const rootCmd = buildMonorepoValidationCommand(monorepoRoot);
-    if (rootCmd) return rootCmd;
-  }
+    let hasBuild = false;
+    let hasTest = false;
+    try {
+      const pkgPath = join(dir, 'package.json');
+      if (existsSync(pkgPath)) {
+        const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+        const scripts = pkg.scripts || {};
+        hasBuild = !!scripts.build;
+        hasTest = !!scripts.test;
+      }
+    } catch { /* ignore */ }
 
-  // 3. Simple project — use root package.json scripts
-  const pm = detectPackageManager(workdir);
-  const run = pm === 'npm' ? 'npm run' : pm;
+    const parts: string[] = [];
+    if (hasBuild) parts.push(`${run} build`);
+    if (hasTest) parts.push(`${run} test`);
 
-  let hasBuild = false;
-  let hasTest = false;
-  try {
-    const pkgPath = join(workdir, 'package.json');
-    if (existsSync(pkgPath)) {
-      const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
-      const scripts = pkg.scripts || {};
-      hasBuild = !!scripts.build;
-      hasTest = !!scripts.test;
+    return parts.join(' && ');
+  };
+
+  // 2. Monorepo auto-detection — scope to changed packages when possible.
+  //    If workdir or any ancestor is a monorepo, we ALWAYS take this path:
+  //    run scoped commands for changed packages, skip true no-op diffs, or
+  //    run root validation for changed files outside workspace packages.
+  const monorepoRoot = getWorkspacePatterns(workdir) ? workdir : findMonorepoRoot(workdir);
+  if (monorepoRoot) {
+    const changedFiles = getChangedFiles(monorepoRoot);
+    const cmd = buildMonorepoValidationCommand(monorepoRoot, changedFiles);
+    if (cmd) return cmd;
+    if (changedFiles.length > 0) {
+      console.log('[validation] Monorepo: root-level changes detected — running root validation.');
+      return buildRootValidationCommand(monorepoRoot);
     }
-  } catch { /* ignore */ }
-
-  const parts: string[] = [];
-  if (hasBuild) parts.push(`${run} build`);
-  if (hasTest) parts.push(`${run} test`);
-
-  if (parts.length === 0) {
+    console.log('[validation] Monorepo detected with no changed files — skipping validation.');
     return '';
   }
 
-  return parts.join(' && ');
+  // 3. Simple project — use root package.json scripts
+  return buildRootValidationCommand(workdir);
 }
 
 /** Run build/test validation. */

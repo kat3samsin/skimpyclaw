@@ -1,10 +1,22 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { join } from 'path';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'fs';
+import { execFileSync } from 'child_process';
 import { tmpdir } from 'os';
 
 // Import the real functions (no mocks needed — these are pure fs reads)
 import { detectPackageManager, buildValidationCommand } from '../code-agents/executor.js';
+
+function gitInit(dir: string): void {
+  execFileSync('git', ['init', '-q'], { cwd: dir });
+  execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: dir });
+  execFileSync('git', ['config', 'user.name', 'Test'], { cwd: dir });
+}
+
+function gitCommitAll(dir: string, msg: string): void {
+  execFileSync('git', ['add', '-A'], { cwd: dir });
+  execFileSync('git', ['commit', '-q', '-m', msg], { cwd: dir });
+}
 
 describe('detectPackageManager', () => {
   let tempDir: string;
@@ -197,5 +209,90 @@ describe('buildValidationCommand', () => {
     }));
     writeFileSync(join(tempDir, 'yarn.lock'), '# yarn lockfile v1\n');
     expect(buildValidationCommand(tempDir)).toBe('yarn build && yarn test');
+  });
+
+  // Regression: monorepo with no changed packages must NOT fall through to
+  // whole-repo build/test. (Previously, rebases/reviews on wp-calypso ran the
+  // entire jest suite because git diff HEAD was empty after the rebase.)
+  it('returns empty for a monorepo with no changed packages', () => {
+    gitInit(tempDir);
+    writeFileSync(join(tempDir, 'package.json'), JSON.stringify({
+      name: 'monorepo-root',
+      workspaces: ['packages/*'],
+      scripts: { build: 'tsc', test: 'jest' },
+    }));
+    writeFileSync(join(tempDir, 'yarn.lock'), '');
+    mkdirSync(join(tempDir, 'packages', 'a'), { recursive: true });
+    writeFileSync(join(tempDir, 'packages', 'a', 'package.json'), JSON.stringify({
+      name: 'pkg-a',
+      scripts: { build: 'tsc', test: 'jest' },
+    }));
+    gitCommitAll(tempDir, 'init');
+
+    expect(buildValidationCommand(tempDir)).toBe('');
+  });
+
+  it('returns empty when workdir is a subpackage of a monorepo with no changes', () => {
+    gitInit(tempDir);
+    writeFileSync(join(tempDir, 'package.json'), JSON.stringify({
+      name: 'monorepo-root',
+      workspaces: ['packages/*'],
+      scripts: { build: 'tsc', test: 'jest' },
+    }));
+    writeFileSync(join(tempDir, 'yarn.lock'), '');
+    mkdirSync(join(tempDir, 'packages', 'a'), { recursive: true });
+    writeFileSync(join(tempDir, 'packages', 'a', 'package.json'), JSON.stringify({
+      name: 'pkg-a',
+      scripts: { build: 'tsc', test: 'jest' },
+    }));
+    gitCommitAll(tempDir, 'init');
+
+    expect(buildValidationCommand(join(tempDir, 'packages', 'a'))).toBe('');
+  });
+
+  it('runs root validation for monorepo changes outside workspace packages', () => {
+    gitInit(tempDir);
+    writeFileSync(join(tempDir, 'package.json'), JSON.stringify({
+      name: 'monorepo-root',
+      workspaces: ['packages/*'],
+      scripts: { build: 'tsc', test: 'jest' },
+    }));
+    writeFileSync(join(tempDir, 'yarn.lock'), '');
+    mkdirSync(join(tempDir, 'packages', 'a'), { recursive: true });
+    writeFileSync(join(tempDir, 'packages', 'a', 'package.json'), JSON.stringify({
+      name: 'pkg-a',
+      scripts: { build: 'tsc', test: 'jest' },
+    }));
+    gitCommitAll(tempDir, 'init');
+
+    writeFileSync(join(tempDir, 'tsconfig.json'), JSON.stringify({
+      compilerOptions: { strict: true },
+    }));
+
+    expect(buildValidationCommand(tempDir)).toBe('yarn build && yarn test');
+  });
+
+  it('still scopes to changed packages in a monorepo when there are changes', () => {
+    gitInit(tempDir);
+    writeFileSync(join(tempDir, 'package.json'), JSON.stringify({
+      name: 'monorepo-root',
+      workspaces: ['packages/*'],
+      scripts: { build: 'tsc', test: 'jest' },
+    }));
+    writeFileSync(join(tempDir, 'yarn.lock'), '');
+    mkdirSync(join(tempDir, 'packages', 'a'), { recursive: true });
+    writeFileSync(join(tempDir, 'packages', 'a', 'package.json'), JSON.stringify({
+      name: 'pkg-a',
+      scripts: { build: 'tsc', test: 'jest' },
+    }));
+    gitCommitAll(tempDir, 'init');
+
+    // Modify a file in pkg-a
+    writeFileSync(join(tempDir, 'packages', 'a', 'index.ts'), 'export const x = 1;\n');
+    execFileSync('git', ['add', 'packages/a/index.ts'], { cwd: tempDir });
+
+    const cmd = buildValidationCommand(tempDir);
+    expect(cmd).toContain('yarn workspace pkg-a build');
+    expect(cmd).toContain('yarn workspace pkg-a test');
   });
 });

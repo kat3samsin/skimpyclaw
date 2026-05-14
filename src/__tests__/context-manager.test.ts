@@ -11,6 +11,7 @@ import {
   serializeAnthropicMessages,
   serializeOpenAIMessages,
   serializeCodexMessages,
+  resetCompactionState,
 } from '../providers/context-manager.js';
 
 // Mock the chat function used for LLM summarization
@@ -30,6 +31,7 @@ const fullConfig: any = {
 };
 
 beforeEach(() => {
+  resetCompactionState();
   mockChat.mockClear();
   mockChat.mockResolvedValue('Summary of the conversation: the user asked to list files and the assistant ran ls.');
 });
@@ -245,6 +247,25 @@ describe('compactMessages (generic)', () => {
 
     // Last 8 should be preserved
     expect(result.messages.slice(-8)).toEqual(messages.slice(-8));
+  });
+
+  it('uses truncation after an already compacted context is still oversized', async () => {
+    const messages = manyItems(anthropicExchange, 'x'.repeat(10_000));
+    const first = await compactMessages(messages, anthropicFormatHelper, { maxContextTokens: 1_000 }, 1, fullConfig);
+    expect(first.method).toBe('llm');
+
+    mockChat.mockClear();
+    const second = await compactMessages(first.messages, anthropicFormatHelper, { maxContextTokens: 1_000 }, 2, fullConfig);
+
+    expect(second.method).toBe('truncation');
+    expect(mockChat).not.toHaveBeenCalled();
+    expect(second.tokensAfter!).toBeLessThan(first.tokensAfter!);
+    expect(
+      second.messages.some((msg: any) =>
+        Array.isArray(msg.content) &&
+        msg.content.some((block: any) => block.type === 'tool_result' && block.content.includes('[truncated]')),
+      ),
+    ).toBe(true);
   });
 
   it('uses LLM summarization with OpenAI helper', async () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { toOpenAITools, buildSystemParam, addToolCacheBreakpoint, setUsingOAuth } from '../agent.js';
+import { toOpenAITools, buildSystemParam, addToolCacheBreakpoint, setUsingOAuth, formatMemoryEntry } from '../agent.js';
 
 describe('toOpenAITools', () => {
   it('converts Anthropic tool format to OpenAI function format', () => {
@@ -149,5 +149,34 @@ describe('addToolCacheBreakpoint', () => {
   it('handles empty array without error', () => {
     const tools: any[] = [];
     expect(() => addToolCacheBreakpoint(tools)).not.toThrow();
+  });
+});
+
+describe('formatMemoryEntry', () => {
+  it('truncates oversized user and assistant content before writing memory logs', () => {
+    const entry = formatMemoryEntry('u'.repeat(25_000), 'a'.repeat(25_000), []);
+
+    expect(entry).toContain('**User:**');
+    expect(entry).toContain('**Assistant:**');
+    expect(entry).toContain('[truncated 5000 chars]');
+    expect(entry.length).toBeLessThan(41_000);
+  });
+
+  it('caps large tool-call lists in memory logs', () => {
+    const tools = Array.from({ length: 55 }, (_, i) => `Tool ${i} ${'x'.repeat(2_000)}`);
+    const entry = formatMemoryEntry('user', 'assistant', tools);
+
+    expect(entry).toContain('**Tools used (55):**');
+    expect(entry).toContain('[truncated 5 additional tool calls]');
+    expect(entry).toContain('[truncated 1007 chars]');
+  });
+
+  it('redacts token-shaped secrets before writing memory logs', () => {
+    const token = `ghp_${'a'.repeat(36)}`;
+    const entry = formatMemoryEntry(`user ${token}`, `assistant sk-${'b'.repeat(24)}`, []);
+
+    expect(entry).not.toContain(token);
+    expect(entry).not.toContain(`sk-${'b'.repeat(24)}`);
+    expect(entry).toContain('[REDACTED_SECRET]');
   });
 });

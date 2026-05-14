@@ -10,6 +10,7 @@ import {
   setSessionsDir,
   clearSessionKeyCacheForTests,
   MAX_HISTORY_PAIRS,
+  MAX_SESSION_TEXT_CHARS,
 } from '../sessions.js';
 
 let testSessionsDir: string;
@@ -66,6 +67,29 @@ describe('saveExchange', () => {
     expect(lines).toHaveLength(2);
     expect(lines[0].startsWith('ENCv1:')).toBe(true);
     expect(lines[1].startsWith('ENCv1:')).toBe(true);
+  });
+
+  it('truncates oversized persisted messages before they are loaded into history', async () => {
+    await saveExchange('telegram', '223', 'u'.repeat(MAX_SESSION_TEXT_CHARS + 12), 'a'.repeat(MAX_SESSION_TEXT_CHARS + 20));
+
+    const messages = await loadHistory('telegram', '223');
+
+    expect(String(messages[0].content)).toContain('[truncated 12 chars]');
+    expect(String(messages[1].content)).toContain('[truncated 20 chars]');
+    expect(String(messages[0].content).length).toBeLessThan(MAX_SESSION_TEXT_CHARS + 40);
+    expect(String(messages[1].content).length).toBeLessThan(MAX_SESSION_TEXT_CHARS + 40);
+  });
+
+  it('redacts token-shaped secrets before persisting session history', async () => {
+    const token = `ghp_${'a'.repeat(36)}`;
+    await saveExchange('telegram', '224', `user ${token}`, `assistant sk-${'b'.repeat(24)}`);
+
+    const messages = await loadHistory('telegram', '224');
+
+    expect(String(messages[0].content)).not.toContain(token);
+    expect(String(messages[1].content)).not.toContain(`sk-${'b'.repeat(24)}`);
+    expect(String(messages[0].content)).toContain('[REDACTED_SECRET]');
+    expect(String(messages[1].content)).toContain('[REDACTED_SECRET]');
   });
 });
 

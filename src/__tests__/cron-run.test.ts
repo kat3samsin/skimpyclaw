@@ -150,6 +150,45 @@ describe('runCronJob digest chat output', () => {
     expect(sendActiveChannelProactiveMessageMock).not.toHaveBeenCalled();
   });
 
+  it('runs Discord-thread-targeted cron turns with Discord context for delegation', async () => {
+    const digestText = 'No links today';
+    runAgentTurnMock.mockResolvedValue(digestText);
+    parseAndSaveDigestMock.mockReturnValue({ summary: digestText, articles: [] });
+
+    const threadConfig = {
+      ...config,
+      cron: {
+        jobs: [
+          {
+            id: 'tech-digest',
+            name: 'Tech Digest',
+            schedule: { kind: 'cron', expr: '* * * * *', tz: 'UTC' },
+            payload: {
+              kind: 'agentTurn',
+              message: 'digest please',
+              discordThreadId: '123456789012345678',
+            },
+          },
+        ],
+      },
+    } as any;
+
+    await runCronJob('tech-digest', threadConfig);
+
+    const context = runAgentTurnMock.mock.calls[0][6];
+    expect(context).toMatchObject({
+      channel: 'discord',
+      trigger: 'cron',
+      sessionId: 'tech-digest',
+      metadata: {
+        jobName: 'Tech Digest',
+        isCronJob: true,
+        discordThreadId: '123456789012345678',
+        isDm: false,
+      },
+    });
+  });
+
   it('thread id set + failed send does not fall back to active channel', async () => {
     const digestText = 'No links today';
     runAgentTurnMock.mockResolvedValue(digestText);

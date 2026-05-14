@@ -36,6 +36,7 @@ import {
 import {
   normalizeWorktreeRequest,
   prepareCodeAgentWorktree,
+  shouldAutoWorktreeTask,
   shouldUseCodeAgentWorktree,
 } from './worktrees.js';
 import { parseStreamJsonForLive, parseClaudeOutput, parseCodexOutput } from './parser.js';
@@ -233,7 +234,12 @@ export async function executeCodeWithAgent(
   const cliPreflightError = getCodingCliPreflightError();
   if (cliPreflightError) return cliPreflightError;
 
-  const validate = input.validate !== false; // default true
+  // Default: validate. Skip automatically for review/rebase-style tasks (read-only by intent),
+  // unless the caller explicitly set validate. Reuses the same heuristic as auto-worktree.
+  const validateExplicit = input.validate !== undefined;
+  const validate = validateExplicit
+    ? input.validate !== false
+    : !shouldAutoWorktreeTask(task);
 
   // Create task with unique ID
   const id = getNextCodeAgentId();

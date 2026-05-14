@@ -327,10 +327,14 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
           tools,
           undefined,
           {
-            channel: getActiveChannelId() || 'telegram',
+            channel: discordThreadId ? 'discord' : getActiveChannelId() || 'telegram',
             trigger: 'cron',
             sessionId: jobDef.id,
-            metadata: { jobName: jobDef.name, isCronJob: true },
+            metadata: {
+              jobName: jobDef.name,
+              isCronJob: true,
+              ...(discordThreadId ? { discordThreadId, isDm: false } : {}),
+            },
           },
         ),
       );

@@ -4,7 +4,7 @@ import { readFileSync, writeFileSync, appendFileSync, existsSync, mkdirSync, unl
 import { join } from 'path';
 import { homedir } from 'os';
 import { getAgentDir } from './config.js';
-import { buildSafeSystemPrompt, sanitizeUserInput } from './security.js';
+import { buildSafeSystemPrompt, sanitizeUserInput, redactSecretText } from './security.js';
 import { toErrorMessage } from './utils.js';
 import type { Config, ChatMessage, ChatOptions, ToolConfig, AgentRunContext, ContentBlock, ThinkingLevel } from './types.js';
 import { getToolDefinitions, type ExecuteToolContext } from './tools.js';
@@ -108,6 +108,9 @@ export function buildSystemPrompt(agentId: string, skillsContext?: SkillsPromptC
 
 // --- Memory Management ---
 
+const MEMORY_FIELD_MAX_CHARS = 20_000;
+const MEMORY_TOOL_LOG_MAX = 50;
+
 export function getMemoryDir(agentId: string): string {
   return join(getAgentDir(agentId), 'memory', 'logs');
 }
@@ -126,6 +129,26 @@ export function appendToMemory(agentId: string, entry: string): void {
   const path = getTodayMemoryPath(agentId);
   const timestamp = new Date().toISOString();
   appendFileSync(path, `\n## ${timestamp}\n\n${entry}\n`, 'utf-8');
+}
+
+function truncateForMemory(value: string, maxChars: number = MEMORY_FIELD_MAX_CHARS): string {
+  const redacted = redactSecretText(value);
+  if (redacted.length <= maxChars) return redacted;
+  return `${redacted.slice(0, maxChars)}\n[truncated ${redacted.length - maxChars} chars]`;
+}
+
+export function formatMemoryEntry(userMessage: string, assistantMessage: string, toolCalls: string[]): string {
+  let entry = `**User:** ${truncateForMemory(userMessage)}\n\n`;
+  if (toolCalls.length > 0) {
+    const shownTools = toolCalls.slice(0, MEMORY_TOOL_LOG_MAX);
+    entry += `**Tools used (${toolCalls.length}):**\n${shownTools.map(t => `- ${truncateForMemory(t, 1_000)}`).join('\n')}`;
+    if (toolCalls.length > shownTools.length) {
+      entry += `\n- [truncated ${toolCalls.length - shownTools.length} additional tool calls]`;
+    }
+    entry += '\n\n';
+  }
+  entry += `**Assistant:** ${truncateForMemory(assistantMessage)}`;
+  return entry;
 }
 
 // --- Agent Turn ---
@@ -274,13 +297,11 @@ export async function runAgentTurn(
       response = await chat(messages, chatOptions, config);
     }
 
-    // Log to memory with tool usage summary
-    let memoryEntry = `**User:** ${sanitizedMessage}\n\n`;
-    if (toolCalls.length > 0) {
-      memoryEntry += `**Tools used (${toolCalls.length}):**\n${toolCalls.map(t => `- ${t}`).join('\n')}\n\n`;
+    try {
+      appendToMemory(agentId, formatMemoryEntry(sanitizedMessage, response, toolCalls));
+    } catch (err) {
+      console.warn(`[agent] Failed to append memory: ${toErrorMessage(err)}`);
     }
-    memoryEntry += `**Assistant:** ${response}`;
-    appendToMemory(agentId, memoryEntry);
 
     return response;
   };

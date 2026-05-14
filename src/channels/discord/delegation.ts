@@ -74,6 +74,7 @@ function buildRunContext(
       isDm: false,
       discordThreadId: threadAgent.threadId,
       discordChannelId: parentChannelId,
+      isCronJob: context?.isCronJob === true,
       threadAgentAlias: threadAgent.alias,
       threadAgentId: threadAgent.agentId,
       threadAgentModel: threadAgent.model,
@@ -131,7 +132,7 @@ async function resolveDelegationParentChannel(
   client: Client,
   context?: ExecuteToolContext,
 ): Promise<SendableTextChannel | null> {
-  const sourceChannelId = context?.discordChannelId || context?.channelTargetId || context?.sessionId;
+  const sourceChannelId = context?.discordChannelId || context?.discordThreadId || context?.channelTargetId || context?.sessionId;
   if (!sourceChannelId) return null;
 
   const channel = await client.channels.fetch(String(sourceChannelId)).catch(() => null);

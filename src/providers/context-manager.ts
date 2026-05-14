@@ -108,7 +108,40 @@ async function llmSummarize(
 }
 
 // --- Track whether we already compacted for a given conversation ---
-const compactedMarker = new WeakSet<any[]>();
+let compactedMarker = new WeakSet<any[]>();
+
+function truncateToolResults<T>(
+  items: T[],
+  helper: MessageFormatHelper<T>,
+): { items: T[]; changed: boolean } {
+  let changed = false;
+  const truncated = items.map(item => {
+    if (!helper.isToolResult(item)) return item;
+    const next = helper.truncateToolResult(item, RESULT_MAX_CHARS);
+    if (next !== item) changed = true;
+    return next;
+  });
+  return { items: changed ? truncated : items, changed };
+}
+
+function mechanicallyCompact<T>(
+  head: T[],
+  tail: T[],
+  helper: MessageFormatHelper<T>,
+  maxTokens: number,
+): T[] {
+  const truncatedHead = truncateToolResults(head, helper).items;
+  const headOnlyResult = [...truncatedHead, ...tail];
+
+  if (estimateTokens(headOnlyResult as any[]) <= maxTokens) {
+    return headOnlyResult;
+  }
+
+  // A recent tool result can be larger than the full target context. Keep the
+  // tail intact when possible, but shrink tail tool results before sending an
+  // oversized compacted context back into the next model call.
+  return truncateToolResults([...head, ...tail], helper).items;
+}
 
 // =====================================================================
 // Generic compaction — single algorithm, format-agnostic via helper
@@ -140,10 +173,8 @@ export async function compactMessages<T>(
   // to progressively shrink rather than re-summarizing repeatedly.
   if (compactedMarker.has(items as any[])) {
     console.log(`[context-manager] Already compacted, using truncation fallback (iteration ${iteration})`);
-    const truncatedHead = head.map(item =>
-      helper.isToolResult(item) ? helper.truncateToolResult(item, RESULT_MAX_CHARS) : item,
-    );
-    const result = [...truncatedHead, ...tail];
+    const result = mechanicallyCompact(head, tail, helper, maxTokens);
+    compactedMarker.add(result as any[]);
     return { messages: result, compacted: true, method: 'truncation', tokensBefore: estimated, tokensAfter: estimateTokens(result as any[]) };
   }
 
@@ -165,10 +196,8 @@ export async function compactMessages<T>(
   }
 
   // Fallback: mechanical truncation
-  const truncatedHead = head.map(item =>
-    helper.isToolResult(item) ? helper.truncateToolResult(item, RESULT_MAX_CHARS) : item,
-  );
-  const result = [...truncatedHead, ...tail];
+  const result = mechanicallyCompact(head, tail, helper, maxTokens);
+  compactedMarker.add(result as any[]);
   return { messages: result, compacted: true, method: 'truncation', tokensBefore: estimated, tokensAfter: estimateTokens(result as any[]) };
 }
 
@@ -403,6 +432,5 @@ export { serializeAnthropicMessages, serializeOpenAIMessages, serializeCodexMess
 
 /** Reset compaction markers (for testing). */
 export function resetCompactionState(): void {
-  // WeakSet doesn't support clearing, so we replace it
-  // This is a no-op in production; tests should create fresh arrays
+  compactedMarker = new WeakSet<any[]>();
 }
