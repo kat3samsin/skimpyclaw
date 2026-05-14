@@ -48,6 +48,11 @@ Tools are configured per-channel or per-cron-job:
 }
 ```
 
+`maxIterations` is kept for older configs as a soft finalization checkpoint. A
+positive value asks the model for a final answer every N tool-use rounds, but it
+no longer caps the loop or returns a max-iteration error. Automatic context
+compaction keeps long tool runs within the configured context threshold.
+
 ## MCP tools (mcporter)
 
 SkimpyClaw auto-discovers MCP tools at runtime via [mcporter](https://github.com/nicobrinkkemper/mcporter).

@@ -98,22 +98,36 @@ describe('Codex unified tool loop', () => {
     expect(mockCodexFetch).toHaveBeenCalledTimes(1);
   });
 
-  it('stops at max iterations when tool calls continue', async () => {
+  it('uses legacy maxIterations as a finalization checkpoint', async () => {
     toolConfig.maxIterations = 2;
 
     mockCodexFetch.mockResolvedValue('sse-loop');
-    mockParseCodexSSE.mockReturnValue({
-      outputText: '',
-      functionCalls: [{ callId: 'fc_loop', name: 'Read', arguments: '{"path":"a.txt"}' }],
-      response: {
-        usage: { input_tokens: 10, output_tokens: 5 },
-        output: [{ type: 'function_call', call_id: 'fc_loop', name: 'Read', arguments: '{"path":"a.txt"}' }],
-      },
-    });
+    mockParseCodexSSE
+      .mockReturnValueOnce({
+        outputText: '',
+        functionCalls: [{ callId: 'fc_loop_1', name: 'Read', arguments: '{"path":"a.txt"}' }],
+        response: {
+          usage: { input_tokens: 10, output_tokens: 5 },
+          output: [{ type: 'function_call', call_id: 'fc_loop_1', name: 'Read', arguments: '{"path":"a.txt"}' }],
+        },
+      })
+      .mockReturnValueOnce({
+        outputText: '',
+        functionCalls: [{ callId: 'fc_loop_2', name: 'Read', arguments: '{"path":"b.txt"}' }],
+        response: {
+          usage: { input_tokens: 10, output_tokens: 5 },
+          output: [{ type: 'function_call', call_id: 'fc_loop_2', name: 'Read', arguments: '{"path":"b.txt"}' }],
+        },
+      })
+      .mockReturnValueOnce({
+        outputText: 'Done after configured limit',
+        functionCalls: [],
+        response: { usage: { input_tokens: 3, output_tokens: 2 }, output: [] },
+      });
 
     const result = await runToolLoop(adapter, messages, options, config, toolConfig);
 
-    expect(result.response).toContain('maximum iterations');
+    expect(result.response).toBe('Done after configured limit');
     expect(mockCodexFetch).toHaveBeenCalledTimes(3);
     expect(mockCodexFetch.mock.calls[2][0].tools).toBeUndefined();
   });

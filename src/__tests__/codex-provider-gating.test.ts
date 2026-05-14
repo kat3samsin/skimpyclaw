@@ -26,7 +26,7 @@ describe('chatWithToolsCodex unified loop gating', () => {
     maxIterations: 0,
   } as ToolConfig;
 
-  it('uses unified runToolLoop with maxIterations default of 100', async () => {
+  it('uses unified runToolLoop without rewriting legacy maxIterations', async () => {
     mockRunToolLoop.mockResolvedValueOnce({ response: 'unified', toolCalls: [] });
 
     const result = await chatWithToolsCodex({
@@ -37,7 +37,7 @@ describe('chatWithToolsCodex unified loop gating', () => {
     });
 
     expect(mockRunToolLoop).toHaveBeenCalledOnce();
-    expect(mockRunToolLoop.mock.calls[0][4].maxIterations).toBe(100);
+    expect(mockRunToolLoop.mock.calls[0][4].maxIterations).toBe(0);
     expect(result.response).toBe('unified');
   });
 });

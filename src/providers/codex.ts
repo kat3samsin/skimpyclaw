@@ -343,8 +343,5 @@ export async function chatWithToolsCodex(params: ProviderToolChatParams): Promis
   const { runToolLoop } = await import('./tool-loop.js');
   const { CodexAdapter } = await import('./adapters/codex-adapter.js');
   const adapter = new CodexAdapter();
-  const unifiedToolConfig = params.toolConfig.maxIterations
-    ? params.toolConfig
-    : { ...params.toolConfig, maxIterations: 100 };
-  return runToolLoop(adapter, params.messages, params.options, params.config, unifiedToolConfig, params.toolContext);
+  return runToolLoop(adapter, params.messages, params.options, params.config, params.toolConfig, params.toolContext);
 }

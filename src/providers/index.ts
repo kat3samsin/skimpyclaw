@@ -81,6 +81,7 @@ setLangfuseHelpers(calculateUsageCost, isLangfuseEnabled);
  */
 export function getAdapter(provider: string): ProviderAdapter {
   if (provider === 'anthropic') return new AnthropicAdapter();
+  if (provider === 'codex') return new CodexAdapter();
   // Codex providers are registered dynamically via addResponsesApiProvider
   if (isResponsesApiProvider(provider)) return new CodexAdapter();
   throw new Error(`Unknown provider "${provider}"`);
@@ -117,7 +118,7 @@ function resolveAdapter(
   const { resolvedModel, provider, chatOpts, useCodexAliasProvider } = normalizeChatRoute(options, config);
 
   // Codex alias compatibility: openai/*-codex routes to codex when configured
-  if (useCodexAliasProvider || isResponsesApiProvider(provider)) {
+  if (provider === 'codex' || useCodexAliasProvider || isResponsesApiProvider(provider)) {
     const codexAdapter = new CodexAdapter();
     if (codexAdapter.isAvailable()) {
       return { adapter: codexAdapter, resolvedModel, chatOpts };
@@ -205,8 +206,9 @@ export async function initProviders(config: Config): Promise<void> {
   for (const [name, providerConfig] of Object.entries(config.models.providers)) {
     if (name === 'anthropic' || !providerConfig) continue;
 
-    // Codex OAuth uses ChatGPT backend, not OpenAI API
-    if (providerConfig.authToken === 'codex') {
+    // Codex OAuth uses ChatGPT backend, not OpenAI API. Older configs may
+    // only have models.providers.codex.authPath, so keep that shape working.
+    if (providerConfig.authToken === 'codex' || (name === 'codex' && providerConfig.authPath)) {
       if (providerConfig.authPath) setCodexAuthPath(providerConfig.authPath);
       if (providerConfig.baseURL) setCodexBaseUrl(providerConfig.baseURL);
       if (initCodexAuth()) {
@@ -244,11 +246,6 @@ export async function chatWithTools(
 ): Promise<ToolChatResult> {
   const { adapter, resolvedModel, chatOpts } = resolveAdapter(options, config);
 
-  // Codex default: bump maxIterations to 100 if not specified
-  const effectiveToolConfig = (adapter.name === 'codex' && !toolConfig.maxIterations)
-    ? { ...toolConfig, maxIterations: 100 }
-    : toolConfig;
-
   const { runToolLoop } = await import('./tool-loop.js');
-  return runToolLoop(adapter, messages, chatOpts, config, effectiveToolConfig, toolContext);
+  return runToolLoop(adapter, messages, chatOpts, config, toolConfig, toolContext);
 }

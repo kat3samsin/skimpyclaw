@@ -12,7 +12,7 @@ import { ToolCallGuard } from './tool-guard.js';
 import { splitToolResult } from './utils.js';
 import { startTrace, addEvent, endTrace } from '../audit.js';
 import { toErrorMessage } from '../utils.js';
-import { buildToolLogEntry, logIteration, logCompaction, logMaxIterations } from './loop-utils.js';
+import { buildToolLogEntry, logIteration, logCompaction } from './loop-utils.js';
 
 /** Start a Langfuse observation (lazy import to avoid circular deps). Returns null if disabled. */
 async function tryStartObservation(name: string, params: any, type: 'generation' | 'tool') {
@@ -37,7 +37,9 @@ export async function runToolLoop(
   toolConfig: ToolConfig,
   toolContext?: ExecuteToolContext,
 ): Promise<ToolChatResult> {
-  const maxIterations = toolConfig.maxIterations || 20;
+  const finalizationInterval = toolConfig.maxIterations && toolConfig.maxIterations > 0
+    ? toolConfig.maxIterations
+    : undefined;
   const guard = new ToolCallGuard(toolConfig.maxTurnTokens);
   const toolLog: string[] = [];
 
@@ -66,10 +68,24 @@ export async function runToolLoop(
   let totalOutputTokens = 0;
   const totalCost = { input: 0, output: 0, total: 0 };
   let traceStatus: 'ok' | 'error' = 'ok';
+  let pendingFinalizationCheckpoint = false;
+
+  const buildResult = (response: string): ToolChatResult => ({
+    response,
+    toolCalls: toolLog,
+    usage: {
+      prompt_tokens: totalInputTokens,
+      completion_tokens: totalOutputTokens,
+      total_tokens: totalInputTokens + totalOutputTokens,
+    },
+    cost: totalCost.total > 0 ? totalCost : undefined,
+  });
 
   try {
     // Agentic loop
-    for (let i = 0; i < maxIterations; i++) {
+    for (let i = 0; ; i++) {
+      const iteration = i + 1;
+
       // Check abort signal before each iteration
       if (toolContext?.abortSignal?.aborted) {
         return {
@@ -82,7 +98,7 @@ export async function runToolLoop(
       const compactionResult = await adapter.compactMessages(
         providerMessages,
         toolConfig.contextManagement,
-        i + 1,
+        iteration,
         config,
       );
       if (compactionResult.compacted) {
@@ -90,8 +106,20 @@ export async function runToolLoop(
         toolLog.push(`[context compacted via ${compactionResult.method}]`);
       }
 
+      if (pendingFinalizationCheckpoint && adapter.onEmptyFinalResponse) {
+        pendingFinalizationCheckpoint = false;
+        try {
+          const finalized = await adapter.onEmptyFinalResponse(
+            providerMessages, providerToolDefs, options, config,
+          );
+          if (finalized) return buildResult(finalized);
+        } catch (err) {
+          console.warn(`[${adapter.name}] checkpoint finalization pass failed: ${toErrorMessage(err)}`);
+        }
+      }
+
       // Make API call
-      logIteration(adapter.name, i, maxIterations, options.model);
+      logIteration(adapter.name, i, options.model);
 
       const genObs = await tryStartObservation(`${adapter.name}:${options.model}`, {
         input: { messages: providerMessages.messages },
@@ -164,16 +192,7 @@ export async function runToolLoop(
             responseText = '[Model returned empty response — please try again]';
           }
         }
-        return {
-          response: responseText,
-          toolCalls: toolLog,
-          usage: {
-            prompt_tokens: totalInputTokens,
-            completion_tokens: totalOutputTokens,
-            total_tokens: totalInputTokens + totalOutputTokens,
-          },
-          cost: totalCost.total > 0 ? totalCost : undefined,
-        };
+        return buildResult(responseText);
       }
 
       // Append assistant's response to history
@@ -201,31 +220,14 @@ export async function runToolLoop(
           adapter.appendToolResult(providerMessages, tr.toolCallId, tr.result, tr.isError);
         }
       }
-    }
 
-    // Max iterations reached
-    logMaxIterations(adapter.name, maxIterations);
-    let responseText = `Tool use loop reached maximum iterations (${maxIterations}) before the model produced a final answer.`;
-    if (toolLog.length > 0 && adapter.onEmptyFinalResponse) {
-      try {
-        const finalized = await adapter.onEmptyFinalResponse(
-          providerMessages, providerToolDefs, options, config,
-        );
-        if (finalized) responseText = finalized;
-      } catch (err) {
-        console.warn(`[${adapter.name}] max-iteration finalization pass failed: ${toErrorMessage(err)}`);
-      }
+      pendingFinalizationCheckpoint = !!(
+        finalizationInterval
+        && iteration % finalizationInterval === 0
+        && toolLog.length > 0
+        && adapter.onEmptyFinalResponse
+      );
     }
-    return {
-      response: responseText,
-      toolCalls: toolLog,
-      usage: {
-        prompt_tokens: totalInputTokens,
-        completion_tokens: totalOutputTokens,
-        total_tokens: totalInputTokens + totalOutputTokens,
-      },
-      cost: totalCost.total > 0 ? totalCost : undefined,
-    };
   } finally {
     // End the audit trace if we created it
     if (ownTrace) {

@@ -168,7 +168,7 @@ export interface CronPayload {
 export interface ToolConfig {
   enabled: boolean;
   allowedPaths: string[];
-  maxIterations?: number;  // Max tool use rounds (default: 20)
+  maxIterations?: number;  // Legacy finalization checkpoint interval; does not cap tool loops
   bashTimeout?: number;    // Bash command timeout in ms (default: 30000)
   maxTurnTokens?: number;  // Max tokens per agent turn (default: 200000)
   toolProfile?: 'minimal' | 'coding' | 'full';  // Tool set to expose (default: 'full')

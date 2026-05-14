@@ -217,27 +217,37 @@ describe('runToolLoop', () => {
     expect(adapter.appendToolResultCallCount).toBe(1);
   });
 
-  it('should stop at max iterations', async () => {
-    // Return tool calls every time
-    adapter.responses = Array(25).fill({
-      hasToolCalls: true,
-      toolCalls: [
-        {
-          id: 'call-loop',
-          name: 'testTool',
-          args: { param: 'value' },
-          rawArgs: '{"param":"value"}',
-        },
-      ],
-      textContent: '',
-      usage: { inputTokens: 100, outputTokens: 50 },
-      rawResponse: {},
-    });
+  it('should continue past legacy maxIterations until the model returns a final answer', async () => {
+    mockExecuteTool.mockImplementation(async (_name, args) => `tool result ${JSON.stringify(args)}`);
+    adapter.responses = [
+      ...Array.from({ length: 25 }, (_, index) => ({
+        hasToolCalls: true,
+        toolCalls: [
+          {
+            id: `call-loop-${index}`,
+            name: 'testTool',
+            args: { param: `value-${index}` },
+            rawArgs: `{"param":"value-${index}"}`,
+          },
+        ],
+        textContent: '',
+        usage: { inputTokens: 100, outputTokens: 50 },
+        rawResponse: {},
+      })),
+      {
+        hasToolCalls: false,
+        toolCalls: [],
+        textContent: 'Finished after a long tool run',
+        usage: { inputTokens: 100, outputTokens: 50 },
+        rawResponse: {},
+      },
+    ];
 
     const result = await runToolLoop(adapter, messages, options, config, toolConfig);
 
-    expect(result.response).toContain('maximum iterations');
-    expect(adapter.callCount).toBe(20); // maxIterations default
+    expect(result.response).toBe('Finished after a long tool run');
+    expect(adapter.callCount).toBe(26);
+    expect(adapter.compactMessagesCallCount).toBe(26);
   });
 
   it('should handle abort signal', async () => {
@@ -523,16 +533,25 @@ describe('runToolLoop', () => {
       expect(adapter.onEmptyFinalResponse).toHaveBeenCalledTimes(1);
     });
 
-    it('should call onEmptyFinalResponse when max iterations are reached after tool use', async () => {
+    it('should return checkpoint finalization when legacy maxIterations is reached', async () => {
       const customToolConfig = { ...toolConfig, maxIterations: 2 };
       adapter.onEmptyFinalResponse = vi.fn().mockResolvedValue('Best effort final answer');
-      adapter.responses = Array(2).fill({
-        hasToolCalls: true,
-        toolCalls: [{ id: 'call-loop', name: 'testTool', args: { x: 1 }, rawArgs: '{"x":1}' }],
-        textContent: '',
-        usage: { inputTokens: 10, outputTokens: 5 },
-        rawResponse: {},
-      });
+      adapter.responses = [
+        {
+          hasToolCalls: true,
+          toolCalls: [{ id: 'call-loop-1', name: 'testTool', args: { x: 1 }, rawArgs: '{"x":1}' }],
+          textContent: '',
+          usage: { inputTokens: 10, outputTokens: 5 },
+          rawResponse: {},
+        },
+        {
+          hasToolCalls: true,
+          toolCalls: [{ id: 'call-loop-2', name: 'testTool', args: { x: 2 }, rawArgs: '{"x":2}' }],
+          textContent: '',
+          usage: { inputTokens: 10, outputTokens: 5 },
+          rawResponse: {},
+        },
+      ];
 
       const result = await runToolLoop(adapter, messages, options, config, customToolConfig);
 
@@ -541,21 +560,66 @@ describe('runToolLoop', () => {
       expect(adapter.onEmptyFinalResponse).toHaveBeenCalledTimes(1);
     });
 
-    it('should keep a clear max-iteration fallback when finalization returns empty', async () => {
+    it('should continue after checkpoint finalization returns empty', async () => {
       const customToolConfig = { ...toolConfig, maxIterations: 2 };
       adapter.onEmptyFinalResponse = vi.fn().mockResolvedValue(undefined);
-      adapter.responses = Array(2).fill({
-        hasToolCalls: true,
-        toolCalls: [{ id: 'call-loop', name: 'testTool', args: { x: 1 }, rawArgs: '{"x":1}' }],
-        textContent: '',
-        usage: { inputTokens: 10, outputTokens: 5 },
-        rawResponse: {},
-      });
+      adapter.responses = [
+        {
+          hasToolCalls: true,
+          toolCalls: [{ id: 'call-loop-1', name: 'testTool', args: { x: 1 }, rawArgs: '{"x":1}' }],
+          textContent: '',
+          usage: { inputTokens: 10, outputTokens: 5 },
+          rawResponse: {},
+        },
+        {
+          hasToolCalls: true,
+          toolCalls: [{ id: 'call-loop-2', name: 'testTool', args: { x: 2 }, rawArgs: '{"x":2}' }],
+          textContent: '',
+          usage: { inputTokens: 10, outputTokens: 5 },
+          rawResponse: {},
+        },
+        {
+          hasToolCalls: false,
+          toolCalls: [],
+          textContent: 'Final after configured limit',
+          usage: { inputTokens: 10, outputTokens: 5 },
+          rawResponse: {},
+        },
+      ];
 
       const result = await runToolLoop(adapter, messages, options, config, customToolConfig);
 
-      expect(result.response).toContain('maximum iterations');
+      expect(result.response).toBe('Final after configured limit');
+      expect(adapter.callCount).toBe(3);
       expect(adapter.onEmptyFinalResponse).toHaveBeenCalledTimes(1);
+    });
+
+    it('should retry checkpoint finalization every legacy maxIterations interval', async () => {
+      const customToolConfig = { ...toolConfig, maxIterations: 2 };
+      adapter.onEmptyFinalResponse = vi.fn().mockResolvedValue(undefined);
+      mockExecuteTool.mockImplementation(async (_name, args) => `tool result ${JSON.stringify(args)}`);
+      adapter.responses = [
+        ...Array.from({ length: 5 }, (_, index) => ({
+          hasToolCalls: true,
+          toolCalls: [{ id: `call-loop-${index}`, name: 'testTool', args: { x: index }, rawArgs: `{"x":${index}}` }],
+          textContent: '',
+          usage: { inputTokens: 10, outputTokens: 5 },
+          rawResponse: {},
+        })),
+        {
+          hasToolCalls: false,
+          toolCalls: [],
+          textContent: 'Final after repeated checkpoints',
+          usage: { inputTokens: 10, outputTokens: 5 },
+          rawResponse: {},
+        },
+      ];
+
+      const result = await runToolLoop(adapter, messages, options, config, customToolConfig);
+
+      expect(result.response).toBe('Final after repeated checkpoints');
+      expect(adapter.callCount).toBe(6);
+      expect(adapter.onEmptyFinalResponse).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -588,20 +652,30 @@ describe('runToolLoop', () => {
       expect(result.cost?.total).toBeCloseTo(0.009);
     });
 
-    it('should respect custom maxIterations from toolConfig', async () => {
+    it('should ignore legacy custom maxIterations from toolConfig', async () => {
       const customToolConfig = { ...toolConfig, maxIterations: 3 };
-      adapter.responses = Array(5).fill({
-        hasToolCalls: true,
-        toolCalls: [{ id: 'call-x', name: 'testTool', args: { x: 1 }, rawArgs: '{"x":1}' }],
-        textContent: '',
-        usage: { inputTokens: 10, outputTokens: 5 },
-        rawResponse: {},
-      });
+      mockExecuteTool.mockImplementation(async (_name, args) => `tool result ${JSON.stringify(args)}`);
+      adapter.responses = [
+        ...Array.from({ length: 5 }, (_, index) => ({
+          hasToolCalls: true,
+          toolCalls: [{ id: `call-x-${index}`, name: 'testTool', args: { x: index }, rawArgs: `{"x":${index}}` }],
+          textContent: '',
+          usage: { inputTokens: 10, outputTokens: 5 },
+          rawResponse: {},
+        })),
+        {
+          hasToolCalls: false,
+          toolCalls: [],
+          textContent: 'Done after custom limit',
+          usage: { inputTokens: 10, outputTokens: 5 },
+          rawResponse: {},
+        },
+      ];
 
       const result = await runToolLoop(adapter, messages, options, config, customToolConfig);
 
-      expect(result.response).toContain('maximum iterations');
-      expect(adapter.callCount).toBe(3);
+      expect(result.response).toBe('Done after custom limit');
+      expect(adapter.callCount).toBe(6);
     });
   });
 });

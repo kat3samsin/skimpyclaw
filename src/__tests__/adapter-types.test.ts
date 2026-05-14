@@ -73,6 +73,6 @@ describe('loop-utils', () => {
   });
 
   it('logIteration should not throw', () => {
-    expect(() => logIteration('test', 0, 10, 'model-id')).not.toThrow();
+    expect(() => logIteration('test', 0, 'model-id')).not.toThrow();
   });
 });

@@ -22,10 +22,9 @@ export function buildToolLogEntry(
 export function logIteration(
   provider: string,
   iteration: number,
-  maxIterations: number,
   modelId: string,
 ): void {
-  console.log(`[${provider}] Iteration ${iteration + 1}/${maxIterations} (model: ${modelId})`);
+  console.log(`[${provider}] Iteration ${iteration + 1} (model: ${modelId})`);
 }
 
 /**
@@ -37,14 +36,4 @@ export function logCompaction(
   iteration: number,
 ): void {
   console.log(`[${provider}] Compacted messages (${method}) at iteration ${iteration + 1}`);
-}
-
-/**
- * Log max iterations warning.
- */
-export function logMaxIterations(
-  provider: string,
-  maxIterations: number,
-): void {
-  console.warn(`[${provider}] Max iterations (${maxIterations}) reached without final answer`);
 }

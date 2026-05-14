@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addResponsesApiProvider, chat, initProviders } from '../providers/index.js';
+import { addResponsesApiProvider, chat, getAdapter, initProviders } from '../providers/index.js';
 
 function baseConfig(providers: Record<string, any>): any {
   return {
@@ -13,12 +13,25 @@ function baseConfig(providers: Record<string, any>): any {
 }
 
 describe('providers routing errors', () => {
+  it('recognizes direct codex provider routes', () => {
+    expect(getAdapter('codex').name).toBe('codex');
+  });
+
   it('returns a consistent unknown provider error', async () => {
     const cfg = baseConfig({});
     await initProviders(cfg);
     await expect(
       chat([{ role: 'user', content: 'hi' }], { model: 'unknown-provider/model-x' } as any, cfg)
     ).rejects.toThrow('Unknown provider "unknown-provider" for model: unknown-provider/model-x');
+  });
+
+  it('returns codex auth guidance for direct codex routes', async () => {
+    const cfg = baseConfig({});
+    await initProviders(cfg);
+
+    await expect(
+      chat([{ role: 'user', content: 'hi' }], { model: 'codex/gpt-5.5' } as any, cfg)
+    ).rejects.toThrow('Codex provider "codex" is configured but auth is unavailable. Run "codex" to re-authenticate.');
   });
 
   it('returns codex auth guidance for openai codex alias compatibility route', async () => {

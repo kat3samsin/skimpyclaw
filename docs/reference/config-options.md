@@ -236,7 +236,7 @@ Used by cron jobs, heartbeat, and channel defaults:
 |-------|------|---------|-------------|
 | `enabled` | boolean | | Enable tool use |
 | `allowedPaths` | string[] | | Filesystem paths the agent can access |
-| `maxIterations` | number | `20` | Max tool-use loop iterations |
+| `maxIterations` | number | | Legacy finalization checkpoint interval; a positive value asks for a final answer every N tool-use rounds but does not cap the loop |
 | `bashTimeout` | number | `30000` | Bash command timeout (ms) |
 | `maxTurnTokens` | number | `200000` | Max tokens per agent turn |
 | `toolProfile` | string | `full` | Tool set to expose: `minimal`, `coding`, or `full` |
