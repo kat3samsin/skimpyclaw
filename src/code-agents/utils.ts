@@ -1,30 +1,22 @@
 // Code Agent Utilities
 
-import { execSync } from 'child_process';
-import { existsSync, readFileSync } from 'fs';
-import { resolve, join } from 'path';
+import { existsSync, readFileSync, statSync } from 'fs';
+import { resolve, join, sep } from 'path';
 import { homedir } from 'os';
 import type { BuildCodeAgentArgsInput, CodeAgentTask } from './types.js';
 import type { Config } from '../types.js';
 import { buildValidationCommand } from './executor.js';
 import { getCodeAgent } from './registry.js';
+import { findExecutableOnPath, isExecutableOnPath } from '../utils.js';
+import { buildArtifactUrl, registerLocalArtifact } from '../artifacts.js';
 
 // Resolve CLI paths once at import time so spawn doesn't get ENOENT
 function resolveCliPath(name: string): string {
-  try {
-    return execSync(`which ${name}`, { encoding: 'utf-8' }).trim();
-  } catch {
-    return name;
-  }
+  return findExecutableOnPath(name) || name;
 }
 
 function isCommandAvailable(name: string): boolean {
-  try {
-    execSync(`command -v ${name}`, { stdio: 'ignore' });
-    return true;
-  } catch {
-    return false;
-  }
+  return isExecutableOnPath(name);
 }
 
 export const CLAUDE_CLI_PATH = resolveCliPath('claude');
@@ -195,7 +187,7 @@ export function buildCodeAgentArgs(input: BuildCodeAgentArgsInput): { cmd: strin
     '--dangerously-skip-permissions',
     ...toolArgs,
     '--max-turns', maxTurns,
-    '--append-system-prompt', `Output text only. Never use say or TTS. Focus on the coding task. Run ${buildValidationCommand(input.workdir || process.cwd())} to verify changes.`,
+    '--append-system-prompt', buildClaudeSystemPrompt(input.workdir || process.cwd()),
   ];
   // Interactive mode: pin this turn to a known session UUID so follow-ups can --resume it.
   if (input.sessionId) {
@@ -208,6 +200,17 @@ export function buildCodeAgentArgs(input: BuildCodeAgentArgsInput): { cmd: strin
   }
   args.push(input.task);
   return { cmd: CLAUDE_CLI_PATH, args };
+}
+
+function buildClaudeSystemPrompt(workdir: string): string {
+  const validationCommand = buildValidationCommand(workdir);
+  return [
+    'You are a SkimpyClaw code_with_agent subagent. If local Claude Code skills or hooks have subagent skip behavior, follow it.',
+    'Output text only. Never use say or TTS. Focus on the assigned coding task.',
+    'Do not post GitHub comments, PR reviews, issues, messages, or otherwise publish externally unless the assigned task explicitly asks you to post.',
+    'For read-only review or artifact tasks, do not edit product/source code; create the requested local artifact and return its absolute path.',
+    `Run ${validationCommand} to verify changes when you modify code.`,
+  ].join(' ');
 }
 
 /** Format duration as human-readable string. */
@@ -241,13 +244,24 @@ export function buildSoloNotification(task: CodeAgentTask): string {
   }
 }
 
+interface CodeAgentNotificationAttachment {
+  name: string;
+  content: string;
+  description?: string;
+  path?: string;
+}
+
 interface CodeAgentDiscordNotification {
   content: string;
-  attachment?: {
-    name: string;
-    content: string;
-    description?: string;
-  };
+  attachments?: CodeAgentNotificationAttachment[];
+}
+
+const MAX_REVIEW_ARTIFACT_BYTES = 2 * 1024 * 1024;
+
+interface CodeAgentReviewArtifact {
+  name: string;
+  path: string;
+  link: string;
 }
 
 function shorten(value: string, maxChars: number): string {
@@ -263,6 +277,87 @@ function normalizeOutputPaths(value: string, workdir: string): string {
   return value
     .split(`${normalizedWorkdir}/`).join('')
     .split(normalizedWorkdir).join('.');
+}
+
+function isPathInside(path: string, root: string | undefined): boolean {
+  if (!root) return false;
+  const resolvedPath = resolve(path);
+  const resolvedRoot = resolve(root);
+  return resolvedPath === resolvedRoot || resolvedPath.startsWith(`${resolvedRoot}${sep}`);
+}
+
+function extractHtmlPaths(value: string): string[] {
+  const paths = new Set<string>();
+  const patterns = [
+    /\((\/[^)\n]+?\.html)\)/g,
+    /["'](\/[^"'\n]+?\.html)["']/g,
+    /\b(\/[^\s<>"')]+?\.html)\b/g,
+  ];
+
+  for (const pattern of patterns) {
+    for (const match of value.matchAll(pattern)) {
+      try {
+        paths.add(decodeURIComponent(match[1]));
+      } catch {
+        paths.add(match[1]);
+      }
+    }
+  }
+
+  return Array.from(paths);
+}
+
+function readTaskLog(task: CodeAgentTask): string {
+  try {
+    const logPath = join(homedir(), '.skimpyclaw', 'logs', 'code-agents', `${task.id}.log`);
+    if (!existsSync(logPath)) return '';
+    const stat = statSync(logPath);
+    if (!stat.isFile() || stat.size > 10 * 1024 * 1024) return '';
+    return readFileSync(logPath, 'utf-8');
+  } catch {
+    return '';
+  }
+}
+
+function formatLocalMarkdownLink(label: string, path: string): string {
+  const escapedLabel = label.replace(/([\\[\]])/g, '\\$1');
+  const target = /[\s()<>]/.test(path) ? `<${path.replace(/[<>]/g, '')}>` : path;
+  return `[${escapedLabel}](${target})`;
+}
+
+function buildHtmlArtifactLinks(task: CodeAgentTask, result: string): CodeAgentReviewArtifact[] {
+  const allowedRoots = [
+    task.workdir,
+    task.sourceWorkdir,
+    task.worktreePath,
+    join(homedir(), '.skimpyclaw', 'reviews'),
+  ];
+  const candidates = new Set([
+    ...extractHtmlPaths(result),
+    ...extractHtmlPaths(readTaskLog(task)),
+  ]);
+  const artifacts: CodeAgentReviewArtifact[] = [];
+
+  for (const path of candidates) {
+    if (!allowedRoots.some(root => isPathInside(path, root))) continue;
+    try {
+      const stat = statSync(path);
+      if (!stat.isFile() || stat.size <= 0 || stat.size > MAX_REVIEW_ARTIFACT_BYTES) continue;
+      const artifact = registerLocalArtifact(path);
+      if (!artifact) continue;
+      const target = buildArtifactUrl(_codeAgentConfig, artifact) || artifact.path;
+      artifacts.push({
+        name: artifact.name,
+        path: artifact.path,
+        link: formatLocalMarkdownLink(artifact.name, target),
+      });
+      if (artifacts.length >= 3) break;
+    } catch {
+      // The agent may mention stale paths; ignore them.
+    }
+  }
+
+  return artifacts;
 }
 
 function extractStreamJsonText(line: string): string | null {
@@ -441,35 +536,41 @@ export function buildCodeAgentDiscordNotification(task: CodeAgentTask): CodeAgen
       : task.status === 'completed'
         ? 'Validation not run'
         : undefined;
-  const rawResult = normalizeOutputPaths(
-    stripStreamJsonNoise(task.outputPreview || task.liveOutput || task.validationOutput || task.error || ''),
-    task.workdir,
-  );
+  const rawResultForArtifacts = stripStreamJsonNoise(task.outputPreview || task.liveOutput || task.validationOutput || task.error || '');
+  const rawResult = normalizeOutputPaths(rawResultForArtifacts, task.workdir);
   const taskPreview = normalizeOutputPaths(shorten(task.task, 350), task.workdir);
   const summary = buildDiscordResultSummary(task, rawResult);
+  const reviewArtifacts = buildHtmlArtifactLinks(task, rawResultForArtifacts);
+  const showReviewListOnly = reviewArtifacts.length > 0 && task.status === 'completed';
   const contentParts = [
     `${icon} \`${task.id}\` ${status} · ${formatAgentDisplay(task)} · ${dur}`,
     validation ? `**Validation:** ${validation}` : undefined,
     task.retryCount ? `**Retries:** ${task.retryCount}` : undefined,
-    `**Task:** ${taskPreview}`,
-    summary ? `\n${summary}` : undefined,
+    showReviewListOnly ? undefined : `**Task:** ${taskPreview}`,
+    !showReviewListOnly && summary ? `\n${summary}` : undefined,
   ].filter(Boolean);
 
-  const needsAttachment = rawResult.length > 1_200 || task.validationOutput || task.task.length > 350;
-  const attachment = needsAttachment
-    ? {
+  const needsReportAttachment = !showReviewListOnly && (rawResult.length > 1_200 || !!task.validationOutput || task.task.length > 350);
+  const attachments: CodeAgentNotificationAttachment[] = [
+    ...(needsReportAttachment
+      ? [{
         name: `${task.id}-report.md`,
         description: `Full report for ${task.id}`,
         content: buildReportMarkdown(task, rawResult),
-      }
-    : undefined;
+      }]
+      : []),
+  ];
+  const reviewLinks = reviewArtifacts.map(file => file.link);
 
   const content = [
     contentParts.join('\n'),
-    attachment ? '\nFull report attached.' : undefined,
+    reviewLinks.length > 0
+      ? `\n**Reviews**\n${reviewLinks.map((link, index) => `${index + 1}. ${link}`).join('\n')}`
+      : undefined,
+    needsReportAttachment ? 'Full report attached.' : undefined,
   ].filter(Boolean).join('\n');
 
-  return { content, attachment };
+  return { content, attachments: attachments.length > 0 ? attachments : undefined };
 }
 
 function resolveDiscordThreadId(task: CodeAgentTask): string | undefined {
@@ -490,8 +591,8 @@ async function trySendToDiscordThread(task: CodeAgentTask, notification: CodeAge
 
   try {
     const { sendToDiscordThread, sendToDiscordThreadWithAttachments } = await import('../channels/discord/index.js');
-    const sent = notification.attachment
-      ? await sendToDiscordThreadWithAttachments(threadId, notification.content, [notification.attachment])
+    const sent = notification.attachments?.length
+      ? await sendToDiscordThreadWithAttachments(threadId, notification.content, notification.attachments)
       : await sendToDiscordThread(threadId, notification.content);
     if (sent) {
       console.log(`[code-agent] Notification for ${task.id} sent to thread ${threadId}`);
@@ -513,8 +614,8 @@ async function trySendToDiscordChannel(task: CodeAgentTask, notification: CodeAg
 
   try {
     const { sendDiscordProactiveMessage, sendDiscordProactiveMessageWithAttachments } = await import('../channels/discord/index.js');
-    if (notification.attachment) {
-      await sendDiscordProactiveMessageWithAttachments(channelId, notification.content, [notification.attachment]);
+    if (notification.attachments?.length) {
+      await sendDiscordProactiveMessageWithAttachments(channelId, notification.content, notification.attachments);
     } else {
       await sendDiscordProactiveMessage(channelId, notification.content);
     }

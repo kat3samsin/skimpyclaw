@@ -87,6 +87,16 @@ Digests are stored in `logs/digests/<job-id>/YYYY-MM-DD-<digest-id>.json`:
 
 Digest metadata is also indexed in `logs/digests/index.json` to support direct, validated lookup/deletion by digest ID.
 
+## Log cleanup
+
+SkimpyClaw runs log cleanup on startup and exposes the same cleanup through `skimpyclaw logs cleanup`.
+
+- Runtime artifacts older than 30 days are pruned from `logs/audit/`, `logs/usage/`, `logs/cron/`, `logs/digests/`, `logs/code-agents/`, agent `memory/logs/`, and `sessions/`.
+- Chat session JSONL files are trimmed by entry timestamp, so active conversations keep recent messages while dropping entries older than 30 days.
+- Code-agent task logs are pruned only for terminal tasks or orphaned logs; running task logs are kept.
+- Scratch output files under `~/.skimpyclaw/s/` and `~/.skimpyclaw/scratch/` are pruned after 24 hours.
+- `logs/digests/index.json` is repaired after digest cleanup so stale digest IDs are removed.
+
 ## Discord profile format
 
 Discord profile aliases and thread bindings are stored in `discord-thread-agents.json`:

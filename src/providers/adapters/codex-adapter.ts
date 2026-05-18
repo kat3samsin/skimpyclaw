@@ -12,7 +12,7 @@ import type {
 } from '../adapter.js';
 import type { ExecuteToolContext } from '../../tools.js';
 import { contentToText, stripProvider } from '../utils.js';
-import { compactMessages, codexFormatHelper } from '../context-manager.js';
+import { compactMessages, codexFormatHelper, repairCodexFunctionCallOutputs } from '../context-manager.js';
 import { toCodexContent, toCodexToolDefinitions } from '../content.js';
 import { toCostDetails } from '../observability.js';
 import { codexFetch, parseCodexSSE, isCodexAvailable, recordCodexUsage } from '../codex.js';
@@ -35,6 +35,75 @@ function codexReasoning(options: ChatOptions): { effort: CodexReasoningEffort; s
   return { effort: codexReasoningEffort(options.thinking), summary: 'auto' };
 }
 
+function codexTextTypeForRole(role: unknown): 'input_text' | 'output_text' {
+  return role === 'assistant' ? 'output_text' : 'input_text';
+}
+
+function normalizeCodexMessageContent(content: unknown, role: unknown): any[] {
+  const textType = codexTextTypeForRole(role);
+  if (typeof content === 'string') {
+    return [{ type: textType, text: content }];
+  }
+
+  if (!Array.isArray(content)) {
+    return [];
+  }
+
+  return content.map((block) => {
+    if (!block || typeof block !== 'object') {
+      return block;
+    }
+
+    const contentBlock = block as any;
+    if (
+      (contentBlock.type === 'output_text'
+        || contentBlock.type === 'text'
+        || contentBlock.type === 'input_text')
+      && typeof contentBlock.text === 'string'
+    ) {
+      return { ...contentBlock, type: textType };
+    }
+
+    return contentBlock;
+  });
+}
+
+function normalizeCodexInputItems(items: any[]): any[] {
+  const normalized: any[] = [];
+
+  for (const item of items) {
+    if (!item || typeof item !== 'object') {
+      normalized.push(item);
+      continue;
+    }
+
+    if (item.type === 'output_text' && typeof item.text === 'string') {
+      normalized.push({
+        type: 'message',
+        role: 'assistant',
+        content: [{ type: 'output_text', text: item.text }],
+      });
+      continue;
+    }
+
+    if (item.type === 'message') {
+      normalized.push({
+        ...item,
+        content: normalizeCodexMessageContent(item.content, item.role),
+      });
+      continue;
+    }
+
+    normalized.push(item);
+  }
+
+  return normalized;
+}
+
+function prepareCodexInput(items: any[]): any[] {
+  return repairCodexFunctionCallOutputs(normalizeCodexInputItems(items));
+}
+
 export class CodexAdapter implements ProviderAdapter {
   readonly name = 'codex';
 
@@ -53,11 +122,10 @@ export class CodexAdapter implements ProviderAdapter {
         instructions = contentToText(m.content);
         continue;
       }
-      const contentType = m.role === 'assistant' ? 'output_text' : 'input_text';
       input.push({
         type: 'message',
         role: m.role,
-        content: toCodexContent(m.content, contentType),
+        content: toCodexContent(m.content, codexTextTypeForRole(m.role)),
       });
     }
 
@@ -98,11 +166,10 @@ export class CodexAdapter implements ProviderAdapter {
         continue;
       }
 
-      const contentType = m.role === 'assistant' ? 'output_text' : 'input_text';
       input.push({
         type: 'message',
         role: m.role,
-        content: toCodexContent(m.content, contentType),
+        content: toCodexContent(m.content, codexTextTypeForRole(m.role)),
       });
     }
 
@@ -123,6 +190,7 @@ export class CodexAdapter implements ProviderAdapter {
     _config: Config,
   ): Promise<NormalizedResponse> {
     const modelId = stripProvider(options.model);
+    providerMessages.messages = prepareCodexInput(providerMessages.messages);
     const body: any = {
       model: modelId,
       instructions: providerMessages.systemParam || 'You are a helpful assistant.',
@@ -175,9 +243,7 @@ export class CodexAdapter implements ProviderAdapter {
   appendAssistantResponse(providerMessages: ProviderMessages, rawResponse: unknown): void {
     const response = rawResponse as any;
     if (!response?.output || !Array.isArray(response.output)) return;
-    for (const item of response.output) {
-      providerMessages.messages.push(item);
-    }
+    providerMessages.messages.push(...normalizeCodexInputItems(response.output));
   }
 
   appendToolResult(providerMessages: ProviderMessages, toolCallId: string, result: string, _isError?: boolean): void {
@@ -201,7 +267,7 @@ export class CodexAdapter implements ProviderAdapter {
     const modelId = stripProvider(options.model);
 
     // Build a finalization input: existing messages + nudge
-    const finalizeInput = [...providerMessages.messages];
+    const finalizeInput = [...prepareCodexInput(providerMessages.messages)];
     finalizeInput.push({
       type: 'message',
       role: 'user',

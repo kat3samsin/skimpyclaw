@@ -12,6 +12,7 @@ import { runSetup, renderGatewayPlist } from './setup.js';
 import { runDoctor as runDoctorCommand } from './doctor/index.js';
 import { getToolDefinitions, BUILTIN_TOOL_DEFINITIONS } from './tools.js';
 import { formatModelSelectionError, getModelSelectionUsage, resolveModelSelection } from './model-selection.js';
+import { cleanupLogs, formatCleanupSummary } from './log-cleanup.js';
 
 const APP_NAME = 'skimpyclaw';
 const DEFAULT_PORT = 18790;
@@ -31,6 +32,8 @@ Commands:
   logs [--file name]      Show logs (stdout|stderr|app), default stdout
        [--lines N]
        [--follow]
+  logs cleanup [--dry-run]
+                          Prune old runtime artifacts and scratch files
   onboard [--dry-run]     Run onboarding wizard (or validate setup only)
   config                  Show config JSON
   config path             Show config file path
@@ -272,13 +275,17 @@ async function requestGateway(path: string, init?: RequestInit, port?: number): 
     // best effort
   }
 
+  const headers = new Headers(init?.headers);
+  if (init?.body != null && !headers.has('content-type')) {
+    headers.set('content-type', 'application/json');
+  }
+  if (dashboardToken && !headers.has('authorization')) {
+    headers.set('authorization', `Bearer ${dashboardToken}`);
+  }
+
   const res = await fetch(url, {
     ...init,
-    headers: {
-      'content-type': 'application/json',
-      ...(dashboardToken ? { authorization: `Bearer ${dashboardToken}` } : {}),
-      ...(init?.headers || {}),
-    },
+    headers,
     signal: AbortSignal.timeout(5000),
   });
 
@@ -360,6 +367,16 @@ async function commandStatus(): Promise<number> {
 }
 
 function commandLogs(args: string[]): number {
+  if (args[0] === 'cleanup') {
+    const summary = cleanupLogs({ dryRun: hasFlag(args, '--dry-run') });
+    console.log(formatCleanupSummary(summary));
+    if (summary.errors.length > 0) {
+      console.error(summary.errors.join('\n'));
+      return 1;
+    }
+    return 0;
+  }
+
   const logDir = join(homedir(), '.skimpyclaw', 'logs');
   const fileOpt = parseOption(args, '--file', 'stdout');
   const linesOpt = parseOption(args, '--lines', '200');

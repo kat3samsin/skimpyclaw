@@ -142,6 +142,7 @@ export interface CronJob {
   name: string;
   schedule: CronSchedule;
   payload: CronPayload;
+  agent?: string;
   model?: string;
 }
 

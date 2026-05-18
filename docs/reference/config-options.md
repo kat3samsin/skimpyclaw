@@ -105,6 +105,7 @@ Map of shorthand names to full `provider/model-id`. See [Model Aliases](./model-
 |-------|------|-------------|
 | `id` | string | Unique job ID |
 | `name` | string | Human-readable job name |
+| `agent` | string | Agent ID override for this job. Defaults to `agents.default` |
 | `model` | string | Model override for this job |
 | `schedule` | CronSchedule | Schedule config (see below) |
 | `payload` | CronPayload | What to run (see below) |

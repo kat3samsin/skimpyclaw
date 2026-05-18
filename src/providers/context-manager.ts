@@ -143,6 +143,14 @@ function mechanicallyCompact<T>(
   return truncateToolResults([...head, ...tail], helper).items;
 }
 
+function applyPostCompactionRepair<T>(
+  result: T[],
+  original: T[],
+  helper: MessageFormatHelper<T>,
+): T[] {
+  return helper.repairCompactedMessages?.(result, original) ?? result;
+}
+
 // =====================================================================
 // Generic compaction — single algorithm, format-agnostic via helper
 // =====================================================================
@@ -173,7 +181,11 @@ export async function compactMessages<T>(
   // to progressively shrink rather than re-summarizing repeatedly.
   if (compactedMarker.has(items as any[])) {
     console.log(`[context-manager] Already compacted, using truncation fallback (iteration ${iteration})`);
-    const result = mechanicallyCompact(head, tail, helper, maxTokens);
+    const result = applyPostCompactionRepair(
+      mechanicallyCompact(head, tail, helper, maxTokens),
+      items,
+      helper,
+    );
     compactedMarker.add(result as any[]);
     return { messages: result, compacted: true, method: 'truncation', tokensBefore: estimated, tokensAfter: estimateTokens(result as any[]) };
   }
@@ -188,7 +200,7 @@ export async function compactMessages<T>(
     const summary = await llmSummarize(transcript, fullConfig, config?.compactionModel);
     if (summary) {
       const summaryItem = helper.buildSummaryMessage(summary);
-      const result = [summaryItem, ...tail];
+      const result = applyPostCompactionRepair([summaryItem, ...tail], items, helper);
       compactedMarker.add(result as any[]);
       const tokensAfter = estimateTokens(result as any[]);
       return { messages: result, compacted: true, method: 'llm', summary, tokensBefore: estimated, tokensAfter };
@@ -196,7 +208,11 @@ export async function compactMessages<T>(
   }
 
   // Fallback: mechanical truncation
-  const result = mechanicallyCompact(head, tail, helper, maxTokens);
+  const result = applyPostCompactionRepair(
+    mechanicallyCompact(head, tail, helper, maxTokens),
+    items,
+    helper,
+  );
   compactedMarker.add(result as any[]);
   return { messages: result, compacted: true, method: 'truncation', tokensBefore: estimated, tokensAfter: estimateTokens(result as any[]) };
 }
@@ -263,6 +279,71 @@ export const openaiFormatHelper: MessageFormatHelper<any> = {
   },
 };
 
+function getCodexFunctionCallId(item: any): string | undefined {
+  if (typeof item?.call_id === 'string' && item.call_id.length > 0) {
+    return item.call_id;
+  }
+  if (item?.type === 'function_call' && typeof item.id === 'string' && item.id.length > 0) {
+    return item.id;
+  }
+  return undefined;
+}
+
+function normalizeCodexFunctionCall(item: any): any {
+  if (item?.type !== 'function_call' || typeof item.call_id === 'string') {
+    return item;
+  }
+  const callId = getCodexFunctionCallId(item);
+  return callId ? { ...item, call_id: callId } : item;
+}
+
+export function repairCodexFunctionCallOutputs(compacted: any[], original: any[] = compacted): any[] {
+  const originalCalls = new Map<string, any>();
+  for (const item of original) {
+    if (item?.type !== 'function_call') continue;
+    const callId = getCodexFunctionCallId(item);
+    if (!callId || originalCalls.has(callId)) continue;
+    originalCalls.set(callId, normalizeCodexFunctionCall(item));
+  }
+
+  const seenCalls = new Set<string>();
+  const repaired: any[] = [];
+  let changed = false;
+
+  for (const item of compacted) {
+    if (item?.type === 'function_call') {
+      const normalized = normalizeCodexFunctionCall(item);
+      const callId = getCodexFunctionCallId(normalized);
+      if (callId) seenCalls.add(callId);
+      if (normalized !== item) changed = true;
+      repaired.push(normalized);
+      continue;
+    }
+
+    if (item?.type === 'function_call_output') {
+      const callId = getCodexFunctionCallId(item);
+      if (!callId) {
+        changed = true;
+        continue;
+      }
+      if (!seenCalls.has(callId)) {
+        const originalCall = originalCalls.get(callId);
+        if (!originalCall) {
+          changed = true;
+          continue;
+        }
+        repaired.push(originalCall);
+        seenCalls.add(callId);
+        changed = true;
+      }
+    }
+
+    repaired.push(item);
+  }
+
+  return changed ? repaired : compacted;
+}
+
 /** Codex message format helper. */
 export const codexFormatHelper: MessageFormatHelper<any> = {
   isToolResult(item: any): boolean {
@@ -285,6 +366,10 @@ export const codexFormatHelper: MessageFormatHelper<any> = {
       role: 'user',
       content: `[Conversation Summary]\n${summary}`,
     };
+  },
+
+  repairCompactedMessages(compacted: any[], original: any[]): any[] {
+    return repairCodexFunctionCallOutputs(compacted, original);
   },
 };
 

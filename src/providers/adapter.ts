@@ -81,6 +81,9 @@ export interface MessageFormatHelper<T> {
 
   /** Build a summary message that replaces compacted head messages. */
   buildSummaryMessage(summary: string): T;
+
+  /** Repair provider-specific invariants after compaction, if needed. */
+  repairCompactedMessages?(compacted: T[], original: T[]): T[];
 }
 
 /**

@@ -12,7 +12,7 @@ import {
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { existsSync, mkdirSync, writeFileSync, unlinkSync } from 'fs';
-import type { Config, ThinkingLevel } from '../../types.js';
+import type { AbortSignalLike, Config, ThinkingLevel } from '../../types.js';
 import { getCurrentModel, getCurrentThinking, setCurrentModel, setCurrentThinking } from '../../gateway.js';
 import { getCronJobs, runCronJob } from '../../cron.js';
 import { runAgentTurn } from '../../agent.js';
@@ -46,6 +46,7 @@ import {
   startTypingIndicatorForChannel,
 } from './utils.js';
 import { createTaskThread, buildThreadUrl } from './threads.js';
+import { getChiefDailyReaderShortcutReply } from './agent-shortcuts.js';
 import {
   bindThreadAgent,
   getAgentProfileByAlias,
@@ -82,6 +83,8 @@ const THREAD_AGENT_USAGE = [
 
 const THINKING_LEVELS: ThinkingLevel[] = ['none', 'low', 'medium', 'high', 'xhigh'];
 const AGENT_PROMPT_MAX_CHARS = 20_000;
+const AGENT_PROGRESS_UPDATE_MS = 75_000;
+const AGENT_RUN_TIMEOUT_MS = 12 * 60_000;
 
 function parseThinkingLevel(value: string | undefined): ThinkingLevel | null {
   const normalized = (value || '').trim().toLowerCase().replace(/^x[-_ ]?high$/, 'xhigh');
@@ -132,6 +135,46 @@ function formatThreadAgentThreadName(alias: string, taskText?: string): string {
   const suffix = base.length > maxTaskLength ? `${base.slice(0, maxTaskLength - 3).trim()}...` : base;
   return `${alias}: ${suffix}`.slice(0, 100);
 }
+
+function truncateAgentStatusText(value: string, maxChars = 600): string {
+  const normalized = value.replace(/\s+/g, ' ').trim();
+  return normalized.length <= maxChars ? normalized : `${normalized.slice(0, maxChars - 3).trim()}...`;
+}
+
+async function runWithAgentTimeout<T>(label: string, run: (abortSignal: AbortSignalLike) => Promise<T>): Promise<T> {
+  const controller = new AbortController();
+  let timedOut = false;
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+  const runPromise = Promise.resolve().then(() => run(controller.signal));
+  void runPromise.then(
+    () => {
+      if (timedOut) {
+        console.warn(`[discord-thread-agents] ${label} completed after timeout; result discarded.`);
+      }
+    },
+    (err) => {
+      if (timedOut) {
+        console.warn(`[discord-thread-agents] ${label} failed after timeout:`, err);
+      }
+    },
+  );
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeout = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+      reject(new Error(`Agent run timed out after ${Math.round(AGENT_RUN_TIMEOUT_MS / 60_000)} minutes`));
+    }, AGENT_RUN_TIMEOUT_MS);
+    (timeout as { unref?: () => void }).unref?.();
+  });
+
+  try {
+    return await Promise.race([runPromise, timeoutPromise]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
+export const _runWithAgentTimeoutForTesting = runWithAgentTimeout;
 
 function isDiscordThreadChannel(channel: Message['channel']): boolean {
   if (channel.isDMBased()) return false;
@@ -259,32 +302,65 @@ async function runThreadAgentPrompt(
   const prompt = promptText.trim();
   if (!prompt) return;
 
+  const shortcutReply = getChiefDailyReaderShortcutReply(threadAgent.alias, prompt);
+  if (shortcutReply) {
+    await sendLongTextToChannel(sendableChannel(targetChannel), shortcutReply, config);
+    return;
+  }
+
+  const displayAlias = threadAgent.alias || threadAgent.agentId;
   if (options.announceTask) {
     await sendLongTextToChannel(
       sendableChannel(targetChannel),
-      `Task from @${message.author.username || message.author.id}:\n${prompt}`,
+      `@${displayAlias} is gathering context for @${message.author.username || message.author.id}:\n${prompt}`,
+      config,
+    );
+  } else {
+    await sendLongTextToChannel(
+      sendableChannel(targetChannel),
+      `@${displayAlias} is working on this for @${message.author.username || message.author.id}:\n${truncateAgentStatusText(prompt)}`,
+      config,
     );
   }
 
   const stopTyping = startTypingIndicatorForChannel(targetChannel as { sendTyping?: () => Promise<unknown> });
+  const progressTimer = setTimeout(() => {
+    void sendLongTextToChannel(
+      sendableChannel(targetChannel),
+      `@${displayAlias} is still working. I'll post the result here, or an error if it fails.`,
+      config,
+    ).catch((err) => {
+      console.warn(`[discord-thread-agents] Failed to send progress update for @${displayAlias}:`, err);
+    });
+  }, AGENT_PROGRESS_UPDATE_MS);
+  (progressTimer as { unref?: () => void }).unref?.();
   try {
     const key = conversationKeyForChannel(message, targetChannel);
     const history = await getHistory(key);
-    const response = await runAgentTurn(
-      threadAgent.agentId,
-      prompt,
-      config,
-      threadAgent.model || getCurrentModel(),
-      getDiscordToolConfig(config),
-      history,
-      getThreadAgentRunContext(message, threadAgent, targetChannel),
+    const runContext = getThreadAgentRunContext(message, threadAgent, targetChannel);
+    const response = await runWithAgentTimeout(
+      `@${displayAlias}`,
+      (abortSignal) => runAgentTurn(
+        threadAgent.agentId,
+        prompt,
+        config,
+        threadAgent.model || getCurrentModel(),
+        getDiscordToolConfig(config),
+        history,
+        { ...runContext, abortSignal },
+      ),
     );
     await addToHistory(key, prompt, response);
-    await sendLongTextToChannel(sendableChannel(targetChannel), response);
+    await sendLongTextToChannel(sendableChannel(targetChannel), response, config);
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Unknown error';
-    await sendLongTextToChannel(sendableChannel(targetChannel), `Error: ${msg}`);
+    await sendLongTextToChannel(
+      sendableChannel(targetChannel),
+      `@${displayAlias} failed before it could finish.\n\nError: ${msg}`,
+      config,
+    );
   } finally {
+    clearTimeout(progressTimer);
     stopTyping();
   }
 }
@@ -1028,7 +1104,7 @@ export async function handleIncomingMessage(message: Message, config: Config): P
       );
 
       await addToHistory(key, `[Image: ${caption}]`, response);
-      await sendLongText(message, response);
+      await sendLongText(message, response, config);
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Unknown error';
       await message.reply(`Error processing image: ${msg}`);
@@ -1091,7 +1167,7 @@ export async function handleIncomingMessage(message: Message, config: Config): P
 
       const filenames = results.map(r => r.filename).join(', ');
       await addToHistory(key, `[Attachments: ${filenames}] ${userText}`, response);
-      await sendLongText(message, response);
+      await sendLongText(message, response, config);
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Unknown error';
       await message.reply(`Error processing attachment(s): ${msg}`);
@@ -1167,7 +1243,7 @@ export async function handleIncomingMessage(message: Message, config: Config): P
         }
 
         const combined = `> 🎤 ${transcription}\n\n${agentResponse}`;
-        await sendLongText(message, combined);
+        await sendLongText(message, combined, config);
       } finally {
         try {
           unlinkSync(tempPath);
@@ -1227,7 +1303,7 @@ export async function handleIncomingMessage(message: Message, config: Config): P
       getThreadAgentRunContext(message, threadAgent)
     );
     await addToHistory(key, text, response);
-    await sendLongText(message, response);
+    await sendLongText(message, response, config);
 
     // If the response started coding agent(s), create threads for status updates.
     // Only consider tasks started within the current turn (last 2 min) — older

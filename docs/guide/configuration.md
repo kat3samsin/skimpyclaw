@@ -170,6 +170,7 @@ Two payload types: `agentTurn` and `script`.
 {
   "id": "morning",
   "name": "Morning Briefing",
+  "agent": "mayora",
   "schedule": {
     "kind": "cron",
     "expr": "0 8 * * *",
@@ -184,6 +185,8 @@ Two payload types: `agentTurn` and `script`.
   "model": "anthropic/claude-sonnet-4-6"
 }
 ```
+
+Use `agent` to run a cron job with a configured agent from `agents.list`. If omitted, the job uses `agents.default`.
 
 If `payload.discordThreadId` is valid, cron notifications route only to that Discord thread. Delivery failures are logged and do not fall back to the active channel. If the configured thread ID is invalid, SkimpyClaw ignores it and uses normal active-channel delivery.
 

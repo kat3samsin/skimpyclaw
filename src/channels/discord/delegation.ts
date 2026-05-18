@@ -114,7 +114,7 @@ async function runDelegatedAgent(
       buildRunContext(context, threadAgent, parentChannelId),
     );
     await addToHistory(key, task, response);
-    await sendLongTextToChannel(thread, response);
+    await sendLongTextToChannel(thread, response, config);
     return response;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

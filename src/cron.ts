@@ -96,6 +96,17 @@ export function getCronRunStatus(): { running: string[]; recent: CronLogEntry[] 
   };
 }
 
+function resolveCronAgentId(jobDef: CronJob, config: Config): string {
+  const agentId = jobDef.agent || config.agents?.default;
+  if (!agentId) {
+    throw new Error(`Cron job "${jobDef.id}" needs an agent but no default agent is configured`);
+  }
+  if (!config.agents?.list?.[agentId]) {
+    throw new Error(`Cron job "${jobDef.id}" references unknown agent "${agentId}"`);
+  }
+  return agentId;
+}
+
 /**
  * Send a cron notification to the configured target.
  * If discordThreadId is set, only routes to that thread.
@@ -256,7 +267,11 @@ function scheduleJob(jobDef: CronJob, config: Config): void {
     },
     async () => {
       console.log(`[cron] Running job: ${jobDef.name}`);
-      await executeJobPayload(jobDef, config);
+      try {
+        await executeJobPayload(jobDef, config);
+      } catch (err) {
+        console.error(`[cron] Scheduled job "${jobDef.id}" failed: ${toErrorMessage(err)}`);
+      }
     }
   );
 
@@ -292,19 +307,24 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
   // Track synthesized voice for final notification
   let synthesizedVoice: { buffer: Uint8Array; format: string } | null = null;
 
-  // Log start immediately
-  appendCronLogLine(jobDef.id, `=== STARTED: ${jobDef.name} (${jobDef.id}) ===`);
-  appendCronLogLine(jobDef.id, `Model: ${jobDef.model || 'default'}`);
-  appendCronLogLine(jobDef.id, `Payload: ${jobDef.payload.kind}`);
-
-  // Notify channel at start
   try {
-    await sendCronNotification(config, `🔄 Cron starting: ${jobDef.name}`, discordThreadId);
-  } catch {
-    // Non-critical
-  }
+    const resolvedAgentId = jobDef.payload.kind === 'agentTurn'
+      ? resolveCronAgentId(jobDef, config)
+      : 'n/a';
 
-  try {
+    // Log start immediately
+    appendCronLogLine(jobDef.id, `=== STARTED: ${jobDef.name} (${jobDef.id}) ===`);
+    appendCronLogLine(jobDef.id, `Agent: ${resolvedAgentId}`);
+    appendCronLogLine(jobDef.id, `Model: ${jobDef.model || 'default'}`);
+    appendCronLogLine(jobDef.id, `Payload: ${jobDef.payload.kind}`);
+
+    // Notify channel at start
+    try {
+      await sendCronNotification(config, `🔄 Cron starting: ${jobDef.name}`, discordThreadId);
+    } catch {
+      // Non-critical
+    }
+
     if (jobDef.payload.kind === 'agentTurn') {
       const message = expandVariables(resolveMessageSource(jobDef.payload.message || ''));
       appendCronLogLine(jobDef.id, `Agent turn started (prompt: ${message.slice(0, 100)}...)`);
@@ -320,7 +340,7 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
       const response = await runCronAgentTurnWithRetry(
         jobDef.id,
         () => runAgentTurn(
-          config.agents.default,
+          resolvedAgentId,
           message,
           config,
           jobDef.model,

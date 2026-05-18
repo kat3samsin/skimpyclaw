@@ -47,7 +47,9 @@ describe('CodexAdapter', () => {
     expect(result.messages).toHaveLength(2);
     expect(result.messages[0].type).toBe('message');
     expect(result.messages[0].role).toBe('user');
+    expect(result.messages[0].content[0].type).toBe('input_text');
     expect(result.messages[1].role).toBe('assistant');
+    expect(result.messages[1].content[0].type).toBe('output_text');
   });
 
   it('normalizes function calls when arguments are missing', async () => {
@@ -126,6 +128,81 @@ describe('CodexAdapter', () => {
     expect(mockCodexFetch).toHaveBeenCalledWith(expect.objectContaining({
       reasoning: { effort: 'medium', summary: 'auto' },
     }));
+  });
+
+  it('removes orphan function_call_output items before calling Codex', async () => {
+    mockCodexFetch.mockResolvedValue('sse');
+    mockParseCodexSSE.mockReturnValue({
+      outputText: 'ok',
+      functionCalls: [],
+      response: { usage: { input_tokens: 10, output_tokens: 5 } },
+    });
+
+    const userMessage = { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'set book status' }] };
+    const providerMessages = {
+      messages: [
+        userMessage,
+        { type: 'function_call_output', call_id: 'call_missing', output: 'tool result without matching call' },
+      ],
+      systemParam: 'sys',
+    };
+
+    await adapter.call(providerMessages, [], options, config);
+
+    expect(mockCodexFetch).toHaveBeenCalledWith(expect.objectContaining({
+      input: [userMessage],
+    }));
+    expect(providerMessages.messages).toEqual([userMessage]);
+  });
+
+  it('normalizes Codex text items before calling Codex with role-specific content types', async () => {
+    mockCodexFetch.mockResolvedValue('sse');
+    mockParseCodexSSE.mockReturnValue({
+      outputText: 'ok',
+      functionCalls: [],
+      response: { usage: { input_tokens: 10, output_tokens: 5 } },
+    });
+
+    const providerMessages = {
+      messages: [
+        { type: 'message', role: 'user', content: 'hi' },
+        {
+          type: 'message',
+          role: 'user',
+          content: [{ type: 'output_text', text: 'previous user text' }],
+        },
+        { type: 'output_text', text: 'previous assistant text' },
+        {
+          type: 'message',
+          role: 'assistant',
+          content: [{ type: 'input_text', text: 'previous message item' }],
+        },
+      ],
+      systemParam: 'sys',
+    };
+
+    await adapter.call(providerMessages, [], options, config);
+
+    const body = mockCodexFetch.mock.calls[0][0];
+    expect(body.input).toEqual([
+      { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'hi' }] },
+      {
+        type: 'message',
+        role: 'user',
+        content: [{ type: 'input_text', text: 'previous user text' }],
+      },
+      {
+        type: 'message',
+        role: 'assistant',
+        content: [{ type: 'output_text', text: 'previous assistant text' }],
+      },
+      {
+        type: 'message',
+        role: 'assistant',
+        content: [{ type: 'output_text', text: 'previous message item' }],
+      },
+    ]);
+    expect(providerMessages.messages).toEqual(body.input);
   });
 
   describe('onEmptyFinalResponse', () => {

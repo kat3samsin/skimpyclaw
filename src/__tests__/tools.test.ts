@@ -215,9 +215,47 @@ describe('list_directory', () => {
     expect(result).toContain('file');
   });
 
+  it('accepts the Glob schema pattern argument', async () => {
+    const result = await executeTool('Glob', { pattern: TEST_DIR }, toolConfig);
+    expect(result).toContain('hello.txt');
+    expect(result).toContain('file');
+  });
+
+  it('lists the parent directory for a glob-style pattern', async () => {
+    const result = await executeTool('Glob', { pattern: join(TEST_DIR, '*.txt') }, toolConfig);
+    expect(result).toContain('hello.txt');
+    expect(result).toContain('file');
+  });
+
+  it('lists the parent directory for a glob-style path argument', async () => {
+    const result = await executeTool('Glob', { path: join(TEST_DIR, '*.txt') }, toolConfig);
+    expect(result).toContain('hello.txt');
+    expect(result).toContain('file');
+  });
+
   it('rejects listing outside allowed paths', async () => {
     const result = await executeTool('Glob', { path: OUTSIDE_DIR }, toolConfig);
     expect(result).toContain('Error: Path not allowed');
+  });
+
+  it('rejects glob-style patterns outside allowed paths', async () => {
+    const result = await executeTool('Glob', { pattern: join(OUTSIDE_DIR, '*.txt') }, toolConfig);
+    expect(result).toContain('Error: Path not allowed');
+  });
+
+  it('rejects traversal-shaped glob patterns outside allowed paths', async () => {
+    const result = await executeTool('Glob', { pattern: `${TEST_DIR}/../__test_outside__/*.txt` }, toolConfig);
+    expect(result).toContain('Error: Path not allowed');
+  });
+
+  it('rejects relative glob-style patterns outside allowed paths', async () => {
+    const result = await executeTool('Glob', { pattern: '*.txt' }, toolConfig);
+    expect(result).toContain('Error: Path not allowed');
+  });
+
+  it('returns a clear error when path and pattern are missing', async () => {
+    const result = await executeTool('Glob', {}, toolConfig);
+    expect(result).toBe('Error: Missing path or pattern');
   });
 
   it('returns error for nonexistent directory', async () => {
@@ -427,6 +465,10 @@ describe('code_with_agent', () => {
     it('includes --append-system-prompt for claude', () => {
       const { args } = buildCodeAgentArgs({ task: 'fix it' });
       expect(args).toContain('--append-system-prompt');
+      const prompt = args[args.indexOf('--append-system-prompt') + 1];
+      expect(prompt).toContain('SkimpyClaw code_with_agent subagent');
+      expect(prompt).toContain('Do not post GitHub comments');
+      expect(prompt).toContain('For read-only review or artifact tasks');
     });
   });
 

@@ -11,6 +11,7 @@ import { getCronJobs, runCronJob } from './cron.js';
 import { registerDashboardAPI } from './api.js';
 import { registerDashboard } from './dashboard-frontend.js';
 import { ensureDashboardToken } from './config.js';
+import { readRegisteredArtifact } from './artifacts.js';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
@@ -139,6 +140,18 @@ export async function createGateway(cfg: Config): Promise<FastifyInstance> {
   // Reload config (placeholder - requires restart for now)
   fastify.post('/reload', async () => {
     return { status: 'ok', note: 'Restart required for config changes' };
+  });
+
+  fastify.get<{ Params: { id: string; name?: string } }>('/artifacts/:id/:name', async (request, reply) => {
+    const artifact = readRegisteredArtifact(request.params.id);
+    if (!artifact) {
+      reply.code(404).send('Artifact not found');
+      return;
+    }
+    reply
+      .type(artifact.artifact.contentType)
+      .header('Content-Disposition', `inline; filename="${artifact.artifact.name.replace(/"/g, '')}"`)
+      .send(artifact.content);
   });
 
   // Ensure dashboard token exists

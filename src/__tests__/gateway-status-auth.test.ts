@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { mkdtempSync, rmSync, writeFileSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 
 vi.mock('../api.js', () => ({
   registerDashboardAPI: vi.fn(),
@@ -23,6 +26,7 @@ vi.mock('../config.js', () => ({
 }));
 
 const { createGateway } = await import('../gateway.js');
+const { clearRegisteredArtifactsForTesting, registerLocalArtifact } = await import('../artifacts.js');
 
 const cfg: any = {
   gateway: { port: 18790 },
@@ -41,6 +45,7 @@ const cfg: any = {
 describe('gateway /status auth', () => {
   afterEach(async () => {
     vi.clearAllMocks();
+    clearRegisteredArtifactsForTesting();
   });
 
   it('keeps /health unauthenticated', async () => {
@@ -75,6 +80,25 @@ describe('gateway /status auth', () => {
       expect(res.json().status).toBe('ok');
     } finally {
       await app.close();
+    }
+  });
+
+  it('serves registered local artifacts by opaque id', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'skimpy-artifact-route-'));
+    const artifactPath = join(dir, 'review.html');
+    writeFileSync(artifactPath, '<!doctype html><title>Review</title>', 'utf-8');
+    const artifact = registerLocalArtifact(artifactPath);
+    expect(artifact).not.toBeNull();
+
+    const app = await createGateway(cfg);
+    try {
+      const res = await app.inject({ method: 'GET', url: `/artifacts/${artifact!.id}/review.html` });
+      expect(res.statusCode).toBe(200);
+      expect(res.headers['content-type']).toContain('text/html');
+      expect(res.body).toContain('<title>Review</title>');
+    } finally {
+      await app.close();
+      rmSync(dir, { recursive: true, force: true });
     }
   });
 });

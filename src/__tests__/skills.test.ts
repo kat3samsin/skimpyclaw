@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { mkdirSync, writeFileSync, rmSync } from 'fs';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { existsSync, mkdirSync, writeFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { randomUUID } from 'crypto';
@@ -189,6 +189,18 @@ describe('checkEligibility', () => {
     });
     expect(result.eligible).toBe(false);
     expect(result.reason).toContain('Missing binary');
+  });
+
+  it('treats binary requirements as literal names instead of shell commands', () => {
+    const markerPath = join(skillsDir, 'injected-command-ran');
+    const result = checkEligibility({
+      name: 'test',
+      description: 'test',
+      requires: { bins: [`node; touch ${markerPath}`] },
+    });
+
+    expect(result.eligible).toBe(false);
+    expect(existsSync(markerPath)).toBe(false);
   });
 
   it('checks environment variables', () => {

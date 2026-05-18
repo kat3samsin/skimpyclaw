@@ -1,7 +1,7 @@
 // Shared utilities used across modules
 
-import { readFileSync, readdirSync, existsSync } from 'fs';
-import { join } from 'path';
+import { accessSync, constants, existsSync, readFileSync, readdirSync, statSync } from 'fs';
+import { delimiter, join } from 'path';
 import { createHash, timingSafeEqual } from 'crypto';
 
 /**
@@ -19,6 +19,33 @@ export function formatDate(date: Date): string {
  */
 export function toErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+/**
+ * Resolve an executable by name without invoking a shell.
+ */
+export function findExecutableOnPath(name: string, envPath = process.env.PATH): string | null {
+  const candidateName = name.trim();
+  if (!candidateName || candidateName.includes('/') || candidateName.includes('\\') || candidateName.includes('\0')) {
+    return null;
+  }
+
+  for (const dir of (envPath || '').split(delimiter).filter(Boolean)) {
+    const candidate = join(dir, candidateName);
+    try {
+      if (!statSync(candidate).isFile()) continue;
+      accessSync(candidate, constants.X_OK);
+      return candidate;
+    } catch {
+      // Keep scanning PATH.
+    }
+  }
+
+  return null;
+}
+
+export function isExecutableOnPath(name: string, envPath = process.env.PATH): boolean {
+  return findExecutableOnPath(name, envPath) !== null;
 }
 
 /**

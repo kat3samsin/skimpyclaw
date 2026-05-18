@@ -14,6 +14,7 @@ const {
   mockRmSync,
   mockSpawn,
   mockSpawnSync,
+  mockCleanupLogs,
 } = vi.hoisted(() => ({
   mockLoadConfig: vi.fn(),
   mockLoadRawConfig: vi.fn(),
@@ -27,6 +28,7 @@ const {
   mockRmSync: vi.fn(),
   mockSpawn: vi.fn(),
   mockSpawnSync: vi.fn(),
+  mockCleanupLogs: vi.fn(),
 }));
 
 vi.mock('../config.js', () => ({
@@ -46,6 +48,11 @@ vi.mock('../service.js', () => ({
 
 vi.mock('../doctor/index.js', () => ({
   runDoctor: mockRunDoctor,
+}));
+
+vi.mock('../log-cleanup.js', () => ({
+  cleanupLogs: mockCleanupLogs,
+  formatCleanupSummary: (summary: any) => `cleaned:${summary.deletedFiles}:${summary.dryRun}`,
 }));
 
 vi.mock('os', () => ({
@@ -129,6 +136,7 @@ describe('runCli', () => {
     mockRmSync.mockReset();
     mockSpawn.mockReset();
     mockSpawnSync.mockReset();
+    mockCleanupLogs.mockReset();
 
     mockLoadConfig.mockReturnValue({
       gateway: { port: 18790 },
@@ -141,6 +149,14 @@ describe('runCli', () => {
     mockExistsSync.mockReturnValue(false);
     mockSpawnSync.mockReturnValue({ status: 1, stdout: '', stderr: '' });
     mockReadFileSync.mockReturnValue('{}');
+    mockCleanupLogs.mockImplementation((opts: any = {}) => ({
+      dryRun: opts.dryRun === true,
+      scannedFiles: 0,
+      deletedFiles: 2,
+      deletedDirs: 0,
+      freedBytes: 123,
+      errors: [],
+    }));
 
     vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -305,6 +321,7 @@ describe('runCli', () => {
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ message: 'hello world' }),
+        headers: expect.any(Headers),
       })
     );
   });
@@ -323,6 +340,15 @@ describe('runCli', () => {
 
     const runCode = await runCli(['cron', 'run', 'morning']);
     expect(runCode).toBe(0);
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      'http://127.0.0.1:18790/cron/morning/run',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.any(Headers),
+      })
+    );
+    const cronHeaders = fetchMock.mock.calls.at(-1)?.[1]?.headers as Headers;
+    expect(cronHeaders.has('content-type')).toBe(false);
     expect(console.log).toHaveBeenCalledWith('triggered: morning');
   });
 
@@ -344,6 +370,30 @@ describe('runCli', () => {
     expect(mockRunDoctor).toHaveBeenCalledWith({ json: true });
     expect(console.log).toHaveBeenCalledWith('{"ok":false}');
     expect(code).toBe(1);
+  });
+
+  it('runs log cleanup in dry-run mode', async () => {
+    const code = await runCli(['logs', 'cleanup', '--dry-run']);
+
+    expect(code).toBe(0);
+    expect(mockCleanupLogs).toHaveBeenCalledWith({ dryRun: true });
+    expect(console.log).toHaveBeenCalledWith('cleaned:2:true');
+  });
+
+  it('returns non-zero when log cleanup reports errors', async () => {
+    mockCleanupLogs.mockReturnValue({
+      dryRun: false,
+      scannedFiles: 1,
+      deletedFiles: 0,
+      deletedDirs: 0,
+      freedBytes: 0,
+      errors: ['bad.log: nope'],
+    });
+
+    const code = await runCli(['logs', 'cleanup']);
+
+    expect(code).toBe(1);
+    expect(console.error).toHaveBeenCalledWith('bad.log: nope');
   });
 
   it('returns non-zero when doctor command throws', async () => {

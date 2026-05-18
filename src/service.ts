@@ -1,7 +1,4 @@
 import type { FastifyInstance } from 'fastify';
-import { readdirSync, statSync, unlinkSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
 import type { Config } from './types.js';
 import { createGateway } from './gateway.js';
 import { initCron, stopCron } from './cron.js';
@@ -10,27 +7,12 @@ import { initActiveChannel, startActiveChannel, stopActiveChannel } from './chan
 import { initProviders } from './agent.js';
 import { initLangfuse, shutdownLangfuse } from './langfuse.js';
 import { restoreCodeAgentTasks, setCodeAgentConfig } from './tools.js';
+import { cleanupLogs, formatCleanupSummary } from './log-cleanup.js';
 
 export interface SkimpyClawRuntime {
   config: Config;
   gateway: FastifyInstance;
   stop: () => Promise<void>;
-}
-
-/** Clean up old scratch files (observation masking). Keeps files < 24h. */
-function cleanupScratch(): void {
-  try {
-    const dir = join(homedir(), '.skimpyclaw', 'scratch');
-    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
-    let count = 0;
-    for (const f of readdirSync(dir)) {
-      const p = join(dir, f);
-      try {
-        if (statSync(p).mtimeMs < cutoff) { unlinkSync(p); count++; }
-      } catch { /* skip */ }
-    }
-    if (count > 0) console.log(`[scratch] Cleaned up ${count} old file(s)`);
-  } catch { /* dir doesn't exist yet, fine */ }
 }
 
 export async function startRuntime(config: Config): Promise<SkimpyClawRuntime> {
@@ -40,7 +22,10 @@ export async function startRuntime(config: Config): Promise<SkimpyClawRuntime> {
   initProviders(config);
   restoreCodeAgentTasks();
   setCodeAgentConfig(config);
-  cleanupScratch();
+  const cleanup = cleanupLogs();
+  if (cleanup.deletedFiles > 0 || cleanup.deletedDirs > 0 || cleanup.errors.length > 0) {
+    console.log(`[logs] ${formatCleanupSummary(cleanup)}`);
+  }
 
   const port = smokeTest ? (parseInt(process.env.SKIMPYCLAW_SMOKE_PORT || '19999', 10)) : config.gateway.port;
   const gateway = await createGateway(config);

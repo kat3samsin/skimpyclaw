@@ -7,6 +7,7 @@ const {
   sendToDiscordThreadWithVoiceMock,
   parseAndSaveDigestMock,
   synthesizeSpeechMock,
+  cronCallbacks,
 } = vi.hoisted(() => ({
   runAgentTurnMock: vi.fn(),
   sendActiveChannelProactiveMessageMock: vi.fn(async () => true),
@@ -14,6 +15,21 @@ const {
   sendToDiscordThreadWithVoiceMock: vi.fn(async () => false),
   parseAndSaveDigestMock: vi.fn(),
   synthesizeSpeechMock: vi.fn(),
+  cronCallbacks: [] as Array<() => Promise<void>>,
+}));
+
+vi.mock('croner', () => ({
+  Cron: class {
+    constructor(_expr: string, _options: unknown, callback: () => Promise<void>) {
+      cronCallbacks.push(callback);
+    }
+
+    stop(): void {}
+
+    nextRun(): undefined {
+      return undefined;
+    }
+  },
 }));
 
 vi.mock('../agent.js', () => ({
@@ -56,7 +72,7 @@ vi.mock('../env-sanitizer.js', () => ({
   sanitizeCronEnv: () => ({}),
 }));
 
-import { runCronJob } from '../cron.js';
+import { initCron, runCronJob } from '../cron.js';
 
 describe('runCronJob digest chat output', () => {
   const config = {
@@ -76,6 +92,7 @@ describe('runCronJob digest chat output', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    cronCallbacks.length = 0;
   });
 
   it('sends digest summary to chat when digest includes articles', async () => {
@@ -117,6 +134,24 @@ describe('runCronJob digest chat output', () => {
 
     releaseFirstRun();
     await firstRun;
+    warnSpy.mockRestore();
+  });
+
+  it('contains scheduled cron errors after writing the failed job log', async () => {
+    runAgentTurnMock.mockRejectedValue(new Error('boom'));
+    parseAndSaveDigestMock.mockReturnValue({ summary: '', articles: [] });
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    initCron(config);
+
+    expect(cronCallbacks).toHaveLength(1);
+    await expect(cronCallbacks[0]()).resolves.toBeUndefined();
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Scheduled job "tech-digest" failed: boom'),
+    );
+
+    errorSpy.mockRestore();
     warnSpy.mockRestore();
   });
 
@@ -187,6 +222,86 @@ describe('runCronJob digest chat output', () => {
         isDm: false,
       },
     });
+  });
+
+  it('uses a cron job agent override when configured', async () => {
+    const digestText = 'No links today';
+    runAgentTurnMock.mockResolvedValue(digestText);
+    parseAndSaveDigestMock.mockReturnValue({ summary: digestText, articles: [] });
+
+    const mayoraConfig = {
+      ...config,
+      agents: {
+        default: 'default',
+        list: {
+          default: { model: 'claude-sonnet' },
+          mayora: { model: 'codex', identity: { name: 'Mayora', emoji: 'M' } },
+        },
+      },
+      cron: {
+        jobs: [
+          {
+            id: 'tech-digest',
+            name: 'Tech Digest',
+            agent: 'mayora',
+            schedule: { kind: 'cron', expr: '* * * * *', tz: 'UTC' },
+            payload: { kind: 'agentTurn', message: 'digest please' },
+          },
+        ],
+      },
+    } as any;
+
+    await runCronJob('tech-digest', mayoraConfig);
+
+    expect(runAgentTurnMock.mock.calls[0][0]).toBe('mayora');
+  });
+
+  it('fails visibly when a cron job references an unknown agent', async () => {
+    const badConfig = {
+      ...config,
+      agents: {
+        default: 'default',
+        list: {
+          default: { model: 'claude-sonnet' },
+        },
+      },
+      cron: {
+        jobs: [
+          {
+            id: 'tech-digest',
+            name: 'Tech Digest',
+            agent: 'missing-agent',
+            schedule: { kind: 'cron', expr: '* * * * *', tz: 'UTC' },
+            payload: { kind: 'agentTurn', message: 'digest please' },
+          },
+        ],
+      },
+    } as any;
+
+    await expect(runCronJob('tech-digest', badConfig)).rejects.toThrow(
+      'Cron job "tech-digest" references unknown agent "missing-agent"',
+    );
+  });
+
+  it('fails visibly when no cron agent can be resolved', async () => {
+    const badConfig = {
+      ...config,
+      agents: undefined,
+      cron: {
+        jobs: [
+          {
+            id: 'tech-digest',
+            name: 'Tech Digest',
+            schedule: { kind: 'cron', expr: '* * * * *', tz: 'UTC' },
+            payload: { kind: 'agentTurn', message: 'digest please' },
+          },
+        ],
+      },
+    } as any;
+
+    await expect(runCronJob('tech-digest', badConfig)).rejects.toThrow(
+      'Cron job "tech-digest" needs an agent but no default agent is configured',
+    );
   });
 
   it('thread id set + failed send does not fall back to active channel', async () => {

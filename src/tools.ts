@@ -1,7 +1,7 @@
 // Tool definitions and executors for Anthropic API tool_use
 
 import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync } from 'fs';
-import { join, resolve } from 'path';
+import { dirname, join, resolve } from 'path';
 import { homedir } from 'os';
 import { TTLCache } from './cache.js';
 import { toErrorMessage } from './utils.js';
@@ -492,8 +492,11 @@ export async function executeTool(
         return executeReadFile(input.file_path || input.path, config);
       case 'write_file':
         return await executeWriteFileLocked(input.file_path || input.path, input.content, config, context?.lockTaskId);
-      case 'list_directory':
-        return executeListDirectory(input.path, config);
+      case 'list_directory': {
+        const directoryPath = resolveListDirectoryInput(input);
+        if (!directoryPath) return 'Error: Missing path or pattern';
+        return executeListDirectory(directoryPath, config);
+      }
       case 'bash':
         return await executeBash(input.command || input.cmd, input.cwd, config, context);
       case 'fetch':
@@ -504,6 +507,14 @@ export async function executeTool(
   } catch (err) {
     return `Error: ${toErrorMessage(err)}`;
   }
+}
+
+function resolveListDirectoryInput(input: Record<string, any>): string | undefined {
+  const rawPath = input.path ?? input.pattern;
+  if (typeof rawPath !== 'string' || rawPath.length === 0) return undefined;
+  // Glob is a compatibility alias for list_directory; wildcard patterns list their containing directory.
+  const directoryPath = /[*?[\]{}]/.test(rawPath) ? dirname(rawPath) : rawPath;
+  return resolve(directoryPath);
 }
 
 // --- Individual Tool Implementations ---

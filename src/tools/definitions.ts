@@ -34,7 +34,7 @@ export const BUILTIN_TOOL_DEFINITIONS = [
   },
   {
     name: 'Glob',
-    input_schema: { type: 'object' as const, properties: { pattern: {} } },
+    input_schema: { type: 'object' as const, properties: { path: {}, pattern: {} } },
   },
   {
     name: 'Bash',

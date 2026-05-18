@@ -3,12 +3,11 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
-import { execSync } from 'child_process';
 import matter from 'gray-matter';
 import type { SkillFrontmatter, LoadedSkill, SkillConfig, SkillContext } from './skills-types.js';
 import type { ToolConfig } from './types.js';
 import { TTLCache } from './cache.js';
-import { toErrorMessage } from './utils.js';
+import { isExecutableOnPath, toErrorMessage } from './utils.js';
 
 const DEFAULT_SKILLS_DIR = join(homedir(), '.skimpyclaw', 'skills');
 const DEFAULT_PRIORITY = 100;
@@ -22,14 +21,9 @@ const binExistsCache = new Map<string, boolean>();
 function binExists(name: string): boolean {
   const cached = binExistsCache.get(name);
   if (cached !== undefined) return cached;
-  try {
-    execSync(`which ${name}`, { stdio: 'ignore' });
-    binExistsCache.set(name, true);
-    return true;
-  } catch {
-    binExistsCache.set(name, false);
-    return false;
-  }
+  const exists = isExecutableOnPath(name);
+  binExistsCache.set(name, exists);
+  return exists;
 }
 
 /**
@@ -212,6 +206,7 @@ export function loadSkills(skillConfig?: SkillConfig, toolConfig?: ToolConfig): 
 
 export function clearSkillsCache(): void {
   skillsCache.clear();
+  binExistsCache.clear();
 }
 
 /**

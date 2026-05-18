@@ -1,4 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdtempSync, rmSync, writeFileSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
 
 const {
   sendActiveChannelProactiveMessageMock,
@@ -26,9 +29,13 @@ vi.mock('../channels/discord/index.js', () => ({
 }));
 
 import { buildCodeAgentDiscordNotification, notifyCodeAgentResult, setCodeAgentConfig } from '../code-agents/utils.js';
+import { clearRegisteredArtifactsForTesting } from '../artifacts.js';
 
 describe('notifyCodeAgentResult Discord routing', () => {
-  const config = { channels: { active: 'discord' } } as any;
+  const config = {
+    channels: { active: 'discord' },
+    gateway: { port: 18790, host: '127.0.0.1' },
+  } as any;
 
   const completedTask = {
     id: 'ca-1',
@@ -43,12 +50,37 @@ describe('notifyCodeAgentResult Discord routing', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    clearRegisteredArtifactsForTesting();
     setCodeAgentConfig(config);
     sendToDiscordThreadMock.mockResolvedValue(false);
     sendToDiscordThreadWithAttachmentsMock.mockResolvedValue(false);
     sendDiscordProactiveMessageMock.mockResolvedValue(undefined);
     sendDiscordProactiveMessageWithAttachmentsMock.mockResolvedValue(undefined);
     sendActiveChannelProactiveMessageMock.mockResolvedValue(true);
+  });
+
+  it('links generated HTML review artifacts without attaching the HTML body', () => {
+    const workdir = mkdtempSync(join(tmpdir(), 'skimpyclaw-review-artifact-'));
+    try {
+      const artifactPath = join(workdir, 'pr-123-review.html');
+      writeFileSync(artifactPath, '<!doctype html><title>Review</title>', 'utf-8');
+
+      const notification = buildCodeAgentDiscordNotification({
+        ...completedTask,
+        workdir,
+        outputPreview: `Created the local artifact: [pr-123-review.html](${artifactPath})`,
+      });
+
+      expect(notification.content).toContain('**Reviews**');
+      expect(notification.content).toMatch(
+        /\[pr-123-review\.html\]\(http:\/\/127\.0\.0\.1:18790\/artifacts\/[^/]+\/pr-123-review\.html\)/
+      );
+      expect(notification.content).not.toContain('<!doctype html>');
+      expect(notification.content).not.toContain('Attached for Discord preview/download');
+      expect(notification.attachments).toBeUndefined();
+    } finally {
+      rmSync(workdir, { recursive: true, force: true });
+    }
   });
 
   it('falls back from Discord thread to the originating Discord channel', async () => {

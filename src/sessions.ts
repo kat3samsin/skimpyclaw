@@ -46,6 +46,13 @@ export interface SessionEntry {
   proactive?: true;
 }
 
+export interface SessionRetentionTrimResult {
+  scannedEntries: number;
+  deletedEntries: number;
+  deletedFile: boolean;
+  freedBytes: number;
+}
+
 function truncateSessionText(value: string): string {
   const redacted = redactSecretText(value);
   if (redacted.length <= MAX_SESSION_TEXT_CHARS) return redacted;
@@ -204,6 +211,52 @@ export function readSessionEntriesFromFile(filePath: string): SessionEntry[] {
   } catch {
     return [];
   }
+}
+
+export function trimSessionFileForRetention(filePath: string, cutoffMs: number, dryRun = false): SessionRetentionTrimResult {
+  const result: SessionRetentionTrimResult = {
+    scannedEntries: 0,
+    deletedEntries: 0,
+    deletedFile: false,
+    freedBytes: 0,
+  };
+  if (!existsSync(filePath)) return result;
+
+  const content = readFileSync(filePath, 'utf-8');
+  const originalSize = Buffer.byteLength(content, 'utf-8');
+  const lines = content.split('\n').filter(Boolean);
+  const kept: Array<{ entry?: SessionEntry; raw?: string }> = [];
+
+  for (const line of lines) {
+    const parsed = parseLine(line);
+    if (!parsed.entry) {
+      kept.push({ raw: line });
+      continue;
+    }
+
+    result.scannedEntries++;
+    const entryTime = Date.parse(parsed.entry.ts);
+    if (Number.isFinite(entryTime) && entryTime < cutoffMs) {
+      result.deletedEntries++;
+      result.freedBytes += Buffer.byteLength(`${line}\n`, 'utf-8');
+      continue;
+    }
+    kept.push({ entry: parsed.entry });
+  }
+
+  if (result.deletedEntries === 0 || dryRun) return result;
+
+  if (kept.length === 0) {
+    unlinkSync(filePath);
+    result.deletedFile = true;
+    result.freedBytes = originalSize;
+    return result;
+  }
+
+  const rewritten = kept.map((item) => item.entry ? encryptEntry(item.entry) : item.raw).join('\n') + '\n';
+  writeFileSync(filePath, rewritten, 'utf-8');
+  result.freedBytes = Math.max(0, originalSize - Buffer.byteLength(rewritten, 'utf-8'));
+  return result;
 }
 
 /**

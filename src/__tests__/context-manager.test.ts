@@ -8,6 +8,7 @@ import {
   anthropicFormatHelper,
   openaiFormatHelper,
   codexFormatHelper,
+  repairCodexFunctionCallOutputs,
   serializeAnthropicMessages,
   serializeOpenAIMessages,
   serializeCodexMessages,
@@ -328,6 +329,47 @@ describe('compactMessages (generic)', () => {
     for (const item of outputItems) {
       expect(item.output).toContain('[truncated]');
     }
+  });
+
+  it('keeps Codex function_call_output paired when LLM compaction cuts across a call boundary', async () => {
+    const items = [
+      ...Array.from({ length: 12 }, (_, i) => ({
+        type: 'message',
+        role: 'user',
+        content: `old context ${i} ${'x'.repeat(1000)}`,
+      })),
+      { type: 'function_call', call_id: 'fc_boundary', name: 'Bash', arguments: '{"command":"date"}' },
+      { type: 'function_call_output', call_id: 'fc_boundary', output: 'Fri May 15 17:32:00 CDT 2026' },
+      ...Array.from({ length: 7 }, (_, i) => ({
+        type: 'message',
+        role: 'user',
+        content: `recent follow-up ${i}`,
+      })),
+    ];
+
+    const result = await compactMessages(items, codexFormatHelper, { maxContextTokens: 1_000 }, 1, fullConfig);
+
+    expect(result.method).toBe('llm');
+    const outputIndex = result.messages.findIndex(
+      (item: any) => item.type === 'function_call_output' && item.call_id === 'fc_boundary',
+    );
+    expect(outputIndex).toBeGreaterThan(0);
+    expect(result.messages[outputIndex - 1]).toMatchObject({
+      type: 'function_call',
+      call_id: 'fc_boundary',
+      name: 'Bash',
+    });
+  });
+
+  it('drops Codex function_call_output items with no matching call', () => {
+    const repaired = repairCodexFunctionCallOutputs([
+      { type: 'message', role: 'user', content: 'hello' },
+      { type: 'function_call_output', call_id: 'missing_call', output: 'orphaned output' },
+    ]);
+
+    expect(repaired).toEqual([
+      { type: 'message', role: 'user', content: 'hello' },
+    ]);
   });
 
   it('falls back to truncation without fullConfig', async () => {

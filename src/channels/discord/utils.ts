@@ -1,10 +1,12 @@
-import { join } from 'path';
+import { join, sep } from 'path';
 import { homedir } from 'os';
+import { mkdirSync, realpathSync } from 'fs';
 import type { Message } from 'discord.js';
 import type { AgentRunContext, ChatMessage, Config, ToolConfig } from '../../types.js';
 import type { CodeAgentTask } from '../../code-agents/types.js';
 import { resolveAllowedPaths } from '../../config.js';
 import { getAllCodeAgents } from '../../code-agents/registry.js';
+import { buildArtifactUrl, registerLocalArtifact } from '../../artifacts.js';
 import * as sessions from '../../sessions.js';
 import { BOT_COMMANDS, MAX_HISTORY_PAIRS } from './types.js';
 
@@ -196,6 +198,59 @@ export function splitToChunks(text: string, maxLength: number): string[] {
   return chunks.filter(c => c.length > 0);
 }
 
+function defaultArtifactRoots(): string[] {
+  const root = join(homedir(), '.skimpyclaw');
+  const roots = [
+    join(root, 'reports'),
+    join(root, 'reviews'),
+    join(root, 'logs', 'newspaper'),
+  ];
+  for (const artifactRoot of roots) {
+    try {
+      mkdirSync(artifactRoot, { recursive: true });
+    } catch {
+      // Link rewriting is best-effort; missing roots should not break Discord replies.
+    }
+  }
+  return roots;
+}
+
+function resolvePathInside(path: string, root: string): string | null {
+  let resolvedPath;
+  let resolvedRoot;
+  try {
+    resolvedPath = realpathSync(path);
+    resolvedRoot = realpathSync(root);
+  } catch {
+    return null;
+  }
+  return resolvedPath === resolvedRoot || resolvedPath.startsWith(`${resolvedRoot}${sep}`)
+    ? resolvedPath
+    : null;
+}
+
+export function linkLocalHtmlArtifactsForDiscord(
+  text: string,
+  config?: Pick<Config, 'gateway'>,
+  allowedRoots?: string[],
+): string {
+  if (!config?.gateway?.port || !text.includes('.html')) return text;
+  const roots = allowedRoots ?? defaultArtifactRoots();
+
+  return text.replace(/\[([^\]\n]+)\]\((<?)(\/[^)\n]+?\.html)(>?)\)/g, (match, label: string, open: string, rawPath: string, close: string) => {
+    const path = rawPath.trim();
+    if ((open || close) && !(open === '<' && close === '>')) return match;
+    const resolvedPath = roots.map(root => resolvePathInside(path, root)).find((candidate): candidate is string => Boolean(candidate));
+    if (!resolvedPath) return match;
+
+    const artifact = registerLocalArtifact(resolvedPath);
+    if (!artifact) return match;
+
+    const url = buildArtifactUrl(config, artifact);
+    return url ? `[${label}](${url})` : match;
+  });
+}
+
 /**
  * Reply to a message, falling back to channel.send() if reply fails
  * (e.g. Discord rejects replies to system/voice messages).
@@ -212,12 +267,12 @@ export async function safeReply(message: Message, content: string | { files: unk
   }
 }
 
-export async function sendLongText(message: Message, text: string): Promise<void> {
+export async function sendLongText(message: Message, text: string, config?: Pick<Config, 'gateway'>): Promise<void> {
   if (!text || text.trim().length === 0) {
     await safeReply(message, '(No response generated.)');
     return;
   }
-  const chunks = splitToChunks(text, 1900);
+  const chunks = splitToChunks(linkLocalHtmlArtifactsForDiscord(text, config), 1900);
   for (const chunk of chunks) {
     await safeReply(message, chunk);
   }
@@ -226,8 +281,10 @@ export async function sendLongText(message: Message, text: string): Promise<void
 export async function sendLongTextToChannel(
   channel: { send?: (content: string) => Promise<unknown> },
   text: string,
+  config?: Pick<Config, 'gateway'>,
 ): Promise<void> {
-  const content = text && text.trim().length > 0 ? text : '(No response generated.)';
+  const rawContent = text && text.trim().length > 0 ? text : '(No response generated.)';
+  const content = linkLocalHtmlArtifactsForDiscord(rawContent, config);
   const chunks = splitToChunks(content, 1900);
   for (const chunk of chunks) {
     if (typeof channel.send === 'function') {

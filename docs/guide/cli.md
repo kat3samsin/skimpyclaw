@@ -12,6 +12,8 @@ skimpyclaw stop             # Stop macOS launchd daemon
 skimpyclaw restart          # Restart macOS launchd daemon
 skimpyclaw status           # Show service + gateway status
 skimpyclaw logs --file stdout --lines 200 --follow
+skimpyclaw logs cleanup --dry-run # Preview log retention cleanup
+skimpyclaw logs cleanup     # Prune old runtime artifacts and scratch files
 skimpyclaw uninstall        # Remove launch agent, keep ~/.skimpyclaw data
 skimpyclaw uninstall --purge # Remove launch agent and ~/.skimpyclaw data
 ```
