@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { clearRegisteredArtifactsForTesting } from '../artifacts.js';
-import { linkLocalHtmlArtifactsForDiscord } from '../channels/discord/utils.js';
+import { findMissingLocalHtmlArtifactLinks, linkLocalHtmlArtifactsForDiscord } from '../channels/discord/utils.js';
 
 let tempRoot: string | null = null;
 
@@ -50,6 +50,32 @@ describe('linkLocalHtmlArtifactsForDiscord', () => {
 
     expect(result).toBe(input);
     rmSync(outsidePath, { force: true });
+  });
+
+  it('detects missing local HTML artifact links inside allowed roots', () => {
+    const root = makeArtifactRoot();
+    const missingPath = join(root, 'mayora-daily-briefing', '2026-05-18.html');
+
+    const missing = findMissingLocalHtmlArtifactLinks(
+      `Open [Mayora Daily Briefing HTML](${missingPath})`,
+      [root],
+    );
+
+    expect(missing).toEqual([
+      { label: 'Mayora Daily Briefing HTML', path: missingPath },
+    ]);
+  });
+
+  it('ignores missing local HTML links outside allowed roots', () => {
+    const root = makeArtifactRoot();
+    const outsidePath = join(tmpdir(), 'missing-mayora-report.html');
+
+    const missing = findMissingLocalHtmlArtifactLinks(
+      `Open [Outside](${outsidePath})`,
+      [root],
+    );
+
+    expect(missing).toEqual([]);
   });
 
   it('does not register symlinked HTML files that resolve outside allowed roots', () => {

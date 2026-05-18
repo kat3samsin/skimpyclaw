@@ -1,6 +1,6 @@
-import { join, sep } from 'path';
+import { join, resolve, sep } from 'path';
 import { homedir } from 'os';
-import { mkdirSync, realpathSync } from 'fs';
+import { existsSync, mkdirSync, realpathSync } from 'fs';
 import type { Message } from 'discord.js';
 import type { AgentRunContext, ChatMessage, Config, ToolConfig } from '../../types.js';
 import type { CodeAgentTask } from '../../code-agents/types.js';
@@ -227,6 +227,41 @@ function resolvePathInside(path: string, root: string): string | null {
   return resolvedPath === resolvedRoot || resolvedPath.startsWith(`${resolvedRoot}${sep}`)
     ? resolvedPath
     : null;
+}
+
+function resolvePotentialPathInside(path: string, root: string): string | null {
+  if (!existsSync(root)) return null;
+  const resolvedRoot = resolve(root);
+  const resolvedPath = resolve(path);
+  return resolvedPath === resolvedRoot || resolvedPath.startsWith(`${resolvedRoot}${sep}`)
+    ? resolvedPath
+    : null;
+}
+
+export interface LocalHtmlArtifactLink {
+  label: string;
+  path: string;
+}
+
+export function findMissingLocalHtmlArtifactLinks(
+  text: string,
+  allowedRoots?: string[],
+): LocalHtmlArtifactLink[] {
+  if (!text.includes('.html')) return [];
+  const roots = allowedRoots ?? defaultArtifactRoots();
+  const missing: LocalHtmlArtifactLink[] = [];
+
+  text.replace(/\[([^\]\n]+)\]\((<?)(\/[^)\n]+?\.html)(>?)\)/g, (match, label: string, open: string, rawPath: string, close: string) => {
+    const path = rawPath.trim();
+    if ((open || close) && !(open === '<' && close === '>')) return match;
+    const allowedPath = roots.map(root => resolvePotentialPathInside(path, root)).find((candidate): candidate is string => Boolean(candidate));
+    if (allowedPath && !existsSync(allowedPath)) {
+      missing.push({ label, path: allowedPath });
+    }
+    return match;
+  });
+
+  return missing;
 }
 
 export function linkLocalHtmlArtifactsForDiscord(

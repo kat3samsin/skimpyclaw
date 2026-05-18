@@ -40,6 +40,7 @@ import {
   conversationKey,
   buildCodeAgentThreadContext,
   buildHelpText,
+  findMissingLocalHtmlArtifactLinks,
   sendLongText,
   sendLongTextToChannel,
   startTypingIndicator,
@@ -85,6 +86,7 @@ const THINKING_LEVELS: ThinkingLevel[] = ['none', 'low', 'medium', 'high', 'xhig
 const AGENT_PROMPT_MAX_CHARS = 20_000;
 const AGENT_PROGRESS_UPDATE_MS = 75_000;
 const AGENT_RUN_TIMEOUT_MS = 12 * 60_000;
+const MAYORA_ARTIFACT_DIR = '/Users/katre/.skimpyclaw/reports/mayora-daily-briefing';
 
 function parseThinkingLevel(value: string | undefined): ThinkingLevel | null {
   const normalized = (value || '').trim().toLowerCase().replace(/^x[-_ ]?high$/, 'xhigh');
@@ -139,6 +141,48 @@ function formatThreadAgentThreadName(alias: string, taskText?: string): string {
 function truncateAgentStatusText(value: string, maxChars = 600): string {
   const normalized = value.replace(/\s+/g, ' ').trim();
   return normalized.length <= maxChars ? normalized : `${normalized.slice(0, maxChars - 3).trim()}...`;
+}
+
+function requiresMayoraHtmlArtifact(threadAgent: DiscordThreadAgent): boolean {
+  return threadAgent.alias === 'mayor' || threadAgent.alias === 'mayora';
+}
+
+function validateMayoraHtmlArtifactResponse(response: string): { ok: true } | { ok: false; reason: string } {
+  if (!response.includes(MAYORA_ARTIFACT_DIR)) {
+    return {
+      ok: false,
+      reason: `the response did not include a Mayora artifact link under ${MAYORA_ARTIFACT_DIR}`,
+    };
+  }
+
+  const missing = findMissingLocalHtmlArtifactLinks(response)
+    .filter(link => link.path.startsWith(`${MAYORA_ARTIFACT_DIR}/`));
+  if (missing.length > 0) {
+    return {
+      ok: false,
+      reason: `missing file(s): ${missing.map(link => link.path).join(', ')}`,
+    };
+  }
+
+  return { ok: true };
+}
+
+function buildMayoraArtifactRepairPrompt(originalPrompt: string, previousResponse: string, reason: string): string {
+  return [
+    'Your previous response claimed a Mayora Daily Briefing HTML artifact, but SkimpyClaw verified that the artifact was not created.',
+    `Verification failure: ${reason}`,
+    '',
+    'Create the HTML artifact now. Requirements:',
+    '- Read /Users/katre/.skimpyclaw/agents/mayora/HTML_TEMPLATE.html.',
+    '- Write /Users/katre/.skimpyclaw/reports/mayora-daily-briefing/<YYYY-MM-DD>.html using the local briefing date.',
+    '- Verify the file exists after writing it.',
+    '- Reply with [Mayora Daily Briefing HTML](/Users/katre/.skimpyclaw/reports/mayora-daily-briefing/<YYYY-MM-DD>.html) and only 1-3 terse bullets.',
+    '- If you cannot create and verify the file, do not include an HTML link; state the exact blocker instead.',
+    '',
+    `Original request:\n${originalPrompt}`,
+    '',
+    `Previous response:\n${previousResponse}`,
+  ].join('\n');
 }
 
 async function runWithAgentTimeout<T>(label: string, run: (abortSignal: AbortSignalLike) => Promise<T>): Promise<T> {
@@ -338,7 +382,7 @@ async function runThreadAgentPrompt(
     const key = conversationKeyForChannel(message, targetChannel);
     const history = await getHistory(key);
     const runContext = getThreadAgentRunContext(message, threadAgent, targetChannel);
-    const response = await runWithAgentTimeout(
+    let response = await runWithAgentTimeout(
       `@${displayAlias}`,
       (abortSignal) => runAgentTurn(
         threadAgent.agentId,
@@ -350,6 +394,34 @@ async function runThreadAgentPrompt(
         { ...runContext, abortSignal },
       ),
     );
+    if (requiresMayoraHtmlArtifact(threadAgent)) {
+      let validation = validateMayoraHtmlArtifactResponse(response);
+      if (!validation.ok) {
+        const repairPrompt = buildMayoraArtifactRepairPrompt(prompt, response, validation.reason);
+        response = await runWithAgentTimeout(
+          `@${displayAlias} artifact repair`,
+          (abortSignal) => runAgentTurn(
+            threadAgent.agentId,
+            repairPrompt,
+            config,
+            threadAgent.model || getCurrentModel(),
+            getDiscordToolConfig(config),
+            history,
+            { ...runContext, abortSignal },
+          ),
+        );
+        validation = validateMayoraHtmlArtifactResponse(response);
+      }
+
+      if (!validation.ok) {
+        await sendLongTextToChannel(
+          sendableChannel(targetChannel),
+          `@${displayAlias} did not create the required HTML artifact, so I did not post the broken link.\n\n${validation.reason}`,
+          config,
+        );
+        return;
+      }
+    }
     await addToHistory(key, prompt, response);
     await sendLongTextToChannel(sendableChannel(targetChannel), response, config);
   } catch (error) {
