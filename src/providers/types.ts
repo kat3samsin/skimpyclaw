@@ -1,6 +1,6 @@
 // Provider Type Definitions
 
-import type { Config, ChatMessage, ChatOptions, ToolConfig, ContentBlock } from '../types.js';
+import type { Config, ChatMessage, ChatOptions, ToolConfig } from '../types.js';
 import type { ExecuteToolContext } from '../tools/execute-context.js';
 
 export type ContextManagementConfig = NonNullable<ToolConfig['contextManagement']>;

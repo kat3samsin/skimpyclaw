@@ -126,8 +126,6 @@ export function isCodexAvailable(): boolean {
   return codexAuth !== null;
 }
 
-const LANGFUSE_APP_NAME = 'skimpyclaw';
-
 export function recordCodexUsage(params: {
   model: string;
   usage: any;
@@ -152,14 +150,6 @@ export function recordCodexUsage(params: {
     agentId: params.agentId,
     cacheReadTokens: typeof usage?.input_tokens_details?.cached_tokens === 'number' ? usage.input_tokens_details.cached_tokens : undefined,
   }));
-}
-
-async function startGenerationObservation(name: string, attributes: Record<string, any>) {
-  const { isLangfuseEnabled } = await import('../langfuse.js');
-  if (!isLangfuseEnabled()) return null;
-  attributes.metadata = { app: LANGFUSE_APP_NAME, ...attributes.metadata };
-  const { startObservation } = await import('@langfuse/tracing');
-  return startObservation(name, attributes, { asType: 'generation' });
 }
 
 /**
@@ -325,7 +315,6 @@ export function parseCodexSSE(text: string): { outputText: string; functionCalls
 
   // Debug: log when output is empty despite having tokens
   if (!outputText && completedResponse) {
-    const outputTypes = (completedResponse.output || []).map((item: any) => `${item.type}${item.content ? `[${(item.content || []).map((c: any) => c.type).join(',')}]` : ''}`);
     console.warn(`[codex] Empty outputText! status: ${completedResponse.status}, output: ${JSON.stringify(completedResponse.output)?.slice(0, 1000)}, text: ${JSON.stringify(completedResponse.text)?.slice(0, 200)}, reasoning: ${JSON.stringify(completedResponse.reasoning)?.slice(0, 200)}`);
   }
 

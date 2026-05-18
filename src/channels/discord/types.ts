@@ -1,5 +1,3 @@
-import type { ChatMessage } from '../../types.js';
-
 export const BOT_COMMANDS: { command: string; description: string }[] = [
   { command: 'help', description: 'Show available commands' },
   { command: 'model', description: 'Switch model' },

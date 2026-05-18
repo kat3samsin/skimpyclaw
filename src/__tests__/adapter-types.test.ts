@@ -4,7 +4,6 @@
 
 import { describe, it, expect } from 'vitest';
 import type {
-  ProviderAdapter,
   NormalizedResponse,
   NormalizedToolCall,
   ProviderMessages,

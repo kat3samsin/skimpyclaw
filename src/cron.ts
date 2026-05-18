@@ -510,7 +510,7 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
   }
 }
 
-async function executeScript(jobDef: CronJob, config: Config): Promise<string> {
+async function executeScript(jobDef: CronJob, _config: Config): Promise<string> {
   const script = expandVariables(jobDef.payload.script || '');
   if (!script) {
     throw new Error(`Script payload is empty for job: ${jobDef.id}`);

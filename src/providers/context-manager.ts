@@ -55,7 +55,7 @@ Output ONLY the summary.`;
  * Pick the best available compaction model from candidates.
  * Checks which providers are initialized and returns the first match.
  */
-async function pickCompactionModel(config: Config): Promise<string> {
+async function pickCompactionModel(_config: Config): Promise<string> {
   const { isAnthropicAvailable } = await import('./anthropic.js');
 
   for (const candidate of COMPACTION_MODEL_CANDIDATES) {

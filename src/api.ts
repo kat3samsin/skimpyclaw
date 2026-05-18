@@ -673,7 +673,7 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
   });
 
   // --- TODOs ---
-  fastify.get('/api/dashboard/todos', async (request, reply) => {
+  fastify.get('/api/dashboard/todos', async (_request, reply) => {
     const todoPath = getTodoPath();
     if (!existsSync(todoPath)) {
       return reply.code(404).send({ error: `TODO file not found: ${todoPath}` });
@@ -954,7 +954,7 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
   });
 
   // --- Exec Approvals ---
-  fastify.get('/api/dashboard/approvals', async (request) => {
+  fastify.get('/api/dashboard/approvals', async () => {
     const pending = listApprovals();
     const recent = listApprovals({ includeResolved: true, limit: 50 });
     return { pending, recent, now: new Date().toISOString() };

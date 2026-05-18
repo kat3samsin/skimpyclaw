@@ -419,7 +419,7 @@ function getNearbyLines(text: string, url: string): string[] {
   return [];
 }
 
-function extractScore(text: string, url: string, source: string): number | undefined {
+function extractScore(text: string, url: string, _source: string): number | undefined {
   const nearby = getNearbyLines(text, url);
   for (const line of nearby) {
     // Hacker News: "123 points"

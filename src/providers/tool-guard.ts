@@ -16,12 +16,8 @@ export class ToolCallGuard {
   private resultHashes: string[] = [];
   private totalInputTokens = 0;
   private totalOutputTokens = 0;
-  // Kept for future use — not currently enforced
-  private maxTurnTokens: number | undefined;
 
-  constructor(maxTurnTokens?: number) {
-    this.maxTurnTokens = maxTurnTokens;
-  }
+  constructor(_maxTurnTokens?: number) {}
 
   private hash(data: string): string {
     return createHash('md5').update(data).digest('hex').slice(0, 16);

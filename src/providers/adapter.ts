@@ -4,7 +4,7 @@
  * while sharing the same agentic loop orchestration logic.
  */
 
-import type { ChatMessage, ChatOptions, Config, ToolConfig } from '../types.js';
+import type { ChatMessage, ChatOptions, Config } from '../types.js';
 import type { ContextManagementConfig } from './context-manager.js';
 import type { ExecuteToolContext } from '../tools.js';
 

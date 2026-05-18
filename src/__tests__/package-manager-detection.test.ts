@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { join } from 'path';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'fs';
 import { execFileSync } from 'child_process';

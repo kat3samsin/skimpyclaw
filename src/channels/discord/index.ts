@@ -10,7 +10,7 @@ import type { Config } from '../../types.js';
 import { onApprovalEvent } from '../../exec-approval.js';
 import { KNOWN_COMMANDS } from './types.js';
 import { handleCommand, handleIncomingMessage, handleInteraction, sendApprovalCard } from './handlers.js';
-import { splitToChunks, conversationKey } from './utils.js';
+import { splitToChunks } from './utils.js';
 import { sendToThread, sendToThreadWithAttachments, sendToThreadWithVoice, type DiscordTextAttachment } from './threads.js';
 import { registerDelegateToAgentHandler } from '../../tools/agent-delegation.js';
 import { createDiscordAgentDelegateHandler } from './delegation.js';

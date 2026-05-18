@@ -2,12 +2,11 @@
 
 import { readFileSync, writeFileSync, appendFileSync, existsSync, mkdirSync, unlinkSync } from 'fs';
 import { join } from 'path';
-import { homedir } from 'os';
 import { getAgentDir } from './config.js';
 import { buildSafeSystemPrompt, sanitizeUserInput, redactSecretText } from './security.js';
 import { toErrorMessage } from './utils.js';
 import type { Config, ChatMessage, ChatOptions, ToolConfig, AgentRunContext, ContentBlock, ThinkingLevel } from './types.js';
-import { getToolDefinitions, type ExecuteToolContext } from './tools.js';
+import type { ExecuteToolContext } from './tools.js';
 import { startTrace, endTrace } from './audit.js';
 import { loadSkills, getSkillsForContext, formatSkillsPrompt } from './skills.js';
 import type { SkillConfig } from './skills-types.js';
@@ -17,10 +16,8 @@ import { TTLCache } from './cache.js';
 
 // Import from providers module
 import {
-  initProviders,
   chat,
   chatWithTools,
-  setUsingOAuth,
   resolveProviderRoute,
 } from './providers/index.js';
 

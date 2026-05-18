@@ -8,7 +8,6 @@ import { fileURLToPath } from 'url';
 import { spawnSync } from 'child_process';
 import { randomUUID } from 'crypto';
 import { runDoctor as runDoctorChecks } from './doctor/runner.js';
-import { toErrorMessage } from './utils.js';
 import { secureStoreAvailable, setSecureValue } from './secure-store.js';
 import {
   ensureCoreTemplates,
@@ -36,10 +35,6 @@ function sectionHeader(title: string): void {
 
 function statusOk(msg: string): void {
   console.log(`   ${c.green('✓')} ${msg}`);
-}
-
-function statusFail(msg: string): void {
-  console.log(`   ${c.red('✗')} ${msg}`);
 }
 
 function statusWarn(msg: string): void {
@@ -527,53 +522,6 @@ export function buildSetupArtifacts(input: SetupBuildInput): { configJson: strin
     envContent: buildEnvContent(input.telegramToken, input.selectedProviders, input.providerSecrets, input.discordToken, input.secretRefs),
     config,
   };
-}
-
-
-
-async function quickFetch(url: string, init?: RequestInit): Promise<Response> {
-  return await fetch(url, { ...init, signal: AbortSignal.timeout(12000) });
-}
-
-async function validateTelegramToken(token: string): Promise<{ ok: boolean; detail: string }> {
-  try {
-    const res = await quickFetch(`https://api.telegram.org/bot${token}/getMe`);
-    const text = await res.text();
-    if (!res.ok) return { ok: false, detail: `HTTP ${res.status}: ${text.slice(0, 140)}` };
-    const body = JSON.parse(text) as { ok?: boolean; result?: { username?: string } };
-    if (!body.ok) return { ok: false, detail: text.slice(0, 140) };
-    return { ok: true, detail: body.result?.username ? `@${body.result.username}` : 'valid token' };
-  } catch (err) {
-    return { ok: false, detail: toErrorMessage(err) };
-  }
-}
-
-async function validateProviderAuth(providers: Set<ProviderChoice>, secrets: ProviderSecrets): Promise<Array<{ name: string; ok: boolean; detail: string }>> {
-  const checks: Array<{ name: string; ok: boolean; detail: string }> = [];
-
-  if (providers.has('anthropic-api') && secrets.anthropicKey) {
-    try {
-      const res = await quickFetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-api-key': secrets.anthropicKey,
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify({ model: 'claude-3-5-haiku-20241022', max_tokens: 8, messages: [{ role: 'user', content: 'ping' }] }),
-      });
-      checks.push({ name: 'Anthropic API', ok: res.ok, detail: res.ok ? 'auth ok' : `HTTP ${res.status}` });
-    } catch (err) {
-      checks.push({ name: 'Anthropic API', ok: false, detail: toErrorMessage(err) });
-    }
-  }
-
-  if (providers.has('codex-oauth')) {
-    const authPath = join(homedir(), '.codex', 'auth.json');
-    checks.push({ name: 'Codex OAuth', ok: existsSync(authPath), detail: existsSync(authPath) ? authPath : `missing ${authPath}` });
-  }
-
-  return checks;
 }
 
 export async function runSetup(options: SetupOptions = {}): Promise<void> {

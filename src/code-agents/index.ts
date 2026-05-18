@@ -6,26 +6,18 @@ import { randomUUID } from 'crypto';
 import type { ToolConfig } from '../types.js';
 import type { ExecuteToolContext } from '../tools/execute-context.js';
 import { isPathAllowed } from '../tools/path-utils.js';
-import type { CodeAgentTask, CodeAgentBackgroundOptions } from './types.js';
-import { CODE_AGENT_TIMEOUT_MS } from './types.js';
+import type { CodeAgentTask } from './types.js';
 import {
   getNextCodeAgentId,
   storeCodeAgentTask,
   writeCodeAgentTask,
   getActiveCodeAgents,
   getRecentCodeAgents,
-  getAllCodeAgents,
   getCodeAgent,
-  cancelCodeAgent,
-  restoreCodeAgentTasks,
-  getCodeAgentsDir,
 } from './registry.js';
-import { runCodeAgentBackground, runValidation } from './executor.js';
+import { runCodeAgentBackground } from './executor.js';
 import { addPendingSession } from './interactive-sessions.js';
 import {
-  setCodeAgentConfig,
-  getCodeAgentConfig,
-  buildCodeAgentArgs,
   resolveSelectedCodeAgent,
   resolveCodeAgentModelLabel,
   isModelCompatibleWithAgent,
@@ -39,7 +31,6 @@ import {
   shouldAutoWorktreeTask,
   shouldUseCodeAgentWorktree,
 } from './worktrees.js';
-import { parseStreamJsonForLive, parseClaudeOutput, parseCodexOutput } from './parser.js';
 
 // Re-export types
 export type {
@@ -329,6 +320,3 @@ export async function executeCodeWithAgent(
   const worktreeLine = worktreePath ? `\nWorktree: ${worktreePath}` : '';
   return `Started coding agent ${id} (${agent}). Task: ${taskPreview}${worktreeLine}\n\nUse check_code_agent to poll status.`;
 }
-
-// Need to import join for the file operations
-import { join } from 'path';

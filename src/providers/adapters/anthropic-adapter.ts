@@ -87,7 +87,7 @@ export class AnthropicAdapter implements ProviderAdapter {
     return (textContent as any)?.text || '';
   }
 
-  buildMessages(messages: ChatMessage[], options: ChatOptions, config: Config): ProviderMessages {
+  buildMessages(messages: ChatMessage[], _options: ChatOptions, config: Config): ProviderMessages {
     const cacheEnabled = config.models?.promptCaching !== false;
     const systemMessage = messages.find(m => m.role === 'system');
     const systemParam = buildSystemParam(contentToText(systemMessage?.content || ''), cacheEnabled);
@@ -119,7 +119,7 @@ export class AnthropicAdapter implements ProviderAdapter {
     providerMessages: ProviderMessages,
     toolDefs: any[],
     options: ChatOptions,
-    config: Config,
+    _config: Config,
   ): Promise<NormalizedResponse> {
     const client = getAnthropicClient();
     if (!client) {

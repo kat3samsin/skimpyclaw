@@ -1,12 +1,11 @@
 // Telegram Utilities
 
 import type { Context } from 'grammy';
-import { existsSync, readdirSync, statSync, readFileSync } from 'fs';
+import { existsSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import type { Config, ChatMessage, ToolConfig, AgentRunContext } from '../../types.js';
 import { resolveAllowedPaths } from '../../config.js';
-import type { SkillConfig } from '../../skills-types.js';
 import { state, MAX_HISTORY_PAIRS, BOT_COMMANDS, type MemoryFileInfo } from './types.js';
 import * as sessions from '../../sessions.js';
 

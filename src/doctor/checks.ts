@@ -321,7 +321,7 @@ export async function checkVoiceDependencies(config: Config): Promise<DoctorChec
   return ok(name, category, `ffmpeg and ${sttMethod} available`);
 }
 
-export async function checkMcpConfig(config: Config): Promise<DoctorCheckResult> {
+export async function checkMcpConfig(_config: Config): Promise<DoctorCheckResult> {
   const name = 'mcp_config';
   const category = 'runtime';
 

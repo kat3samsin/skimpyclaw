@@ -1269,7 +1269,7 @@ export async function handleIncomingMessage(message: Message, config: Config): P
   const isDm = message.channel.isDMBased();
   if (isPrefixedCommand || isDm) {
     const commandText = isPrefixedCommand ? text.slice(1).trim() : text;
-    const [commandPart, ...cmdArgs] = commandText.split(/\s+/);
+    const [commandPart] = commandText.split(/\s+/);
     const command = (commandPart || '').toLowerCase();
     if (!KNOWN_COMMANDS.has(command)) {
       if (isPrefixedCommand) {

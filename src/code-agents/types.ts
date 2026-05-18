@@ -1,6 +1,5 @@
 // Code Agent Type Definitions
 
-import type { ToolConfig } from '../types.js';
 import type { CodeAgentWorktreeCleanupResult, CodeAgentWorktreeConfig } from './worktrees.js';
 
 export interface CodeAgentTask {

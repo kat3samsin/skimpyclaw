@@ -6,7 +6,6 @@ import { homedir } from 'os';
 import type { BuildCodeAgentArgsInput, CodeAgentTask } from './types.js';
 import type { Config } from '../types.js';
 import { buildValidationCommand } from './executor.js';
-import { getCodeAgent } from './registry.js';
 import { findExecutableOnPath, isExecutableOnPath } from '../utils.js';
 import { buildArtifactUrl, registerLocalArtifact } from '../artifacts.js';
 

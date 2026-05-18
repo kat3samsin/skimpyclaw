@@ -5,7 +5,7 @@
  * to those threads instead of the main channel.
  */
 
-import { ChannelType, type Client, type Message, type ThreadChannel } from 'discord.js';
+import type { Client, Message } from 'discord.js';
 import { splitToChunks } from './utils.js';
 
 export interface DiscordTextAttachment {

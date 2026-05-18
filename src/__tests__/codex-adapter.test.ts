@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ChatMessage, ChatOptions, Config, ToolConfig } from '../types.js';
+import type { ChatMessage, ChatOptions, Config } from '../types.js';
 import { CodexAdapter } from '../providers/adapters/codex-adapter.js';
 
 const { mockCodexFetch, mockParseCodexSSE, mockRecordCodexUsage } = vi.hoisted(() => ({

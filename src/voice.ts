@@ -1,5 +1,5 @@
 // Voice transcription — local Whisper CLI (free) with API fallback
-import { existsSync, readFileSync, writeFileSync, unlinkSync, readdirSync } from 'fs';
+import { existsSync, readFileSync, unlinkSync, readdirSync } from 'fs';
 import { execSync, spawnSync } from 'child_process';
 import { basename, dirname, join } from 'path';
 import { tmpdir } from 'os';

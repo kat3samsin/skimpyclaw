@@ -4,7 +4,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import matter from 'gray-matter';
-import type { SkillFrontmatter, LoadedSkill, SkillConfig, SkillContext } from './skills-types.js';
+import type { SkillFrontmatter, LoadedSkill, SkillConfig } from './skills-types.js';
 import type { ToolConfig } from './types.js';
 import { TTLCache } from './cache.js';
 import { isExecutableOnPath, toErrorMessage } from './utils.js';

@@ -18,21 +18,18 @@ function ensureNodeInPath(env: Record<string, string | undefined>): void {
   }
 }
 
-// SKIMPYCLAW_ROOT for log paths
-const SKIMPYCLAW_ROOT = join(import.meta.dirname || process.cwd(), '..', '..');
-import type { CodeAgentTask, CodeAgentBackgroundOptions, ValidationResult } from './types.js';
+import type { CodeAgentBackgroundOptions, ValidationResult } from './types.js';
 import { toErrorMessage } from '../utils.js';
-import { CODE_AGENT_TIMEOUT_MS, VALIDATE_TIMEOUT_MS } from './types.js';
+import { VALIDATE_TIMEOUT_MS } from './types.js';
 import {
   getCodeAgentsDir,
   ensureCodeAgentsDir,
   writeCodeAgentTask,
-  storeCodeAgentTask,
   setCodeAgentCanceller,
   deleteCodeAgentCanceller,
   getCodeAgent,
 } from './registry.js';
-import { buildCodeAgentArgs, buildCodeAgentSpawnEnv, notifyCodeAgentResult, resolveModelAlias } from './utils.js';
+import { buildCodeAgentArgs, buildCodeAgentSpawnEnv, notifyCodeAgentResult } from './utils.js';
 import { cleanupCodeAgentWorktree } from './worktrees.js';
 import { parseStreamJsonForLive, parseClaudeOutput, parseCodexOutput } from './parser.js';
 import { startTrace, addEvent, endTrace } from '../audit.js';

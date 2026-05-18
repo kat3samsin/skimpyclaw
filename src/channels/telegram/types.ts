@@ -1,7 +1,6 @@
 // Telegram Channel Types
 
-import type { Context } from 'grammy';
-import type { Config, ChatMessage, AgentRunContext } from '../../types.js';
+import type { Config, ChatMessage } from '../../types.js';
 
 // Command definitions — single source of truth for the / menu and /help
 export const BOT_COMMANDS: { command: string; description: string }[] = [

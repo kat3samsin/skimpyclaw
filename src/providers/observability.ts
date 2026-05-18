@@ -1,17 +1,12 @@
 // Observability Helpers for Providers
 
-import type { calculateUsageCost as CalculateUsageCost, isLangfuseEnabled as IsLangfuseEnabled } from '../langfuse.js';
+import type { calculateUsageCost as CalculateUsageCost } from '../langfuse.js';
 
 // Lazy imports to avoid circular dependencies
 let calculateUsageCostFn: typeof CalculateUsageCost | undefined;
-let isLangfuseEnabledFn: typeof IsLangfuseEnabled | undefined;
 
-export function setLangfuseHelpers(
-  calcCost: typeof CalculateUsageCost,
-  isEnabled: typeof IsLangfuseEnabled
-): void {
+export function setLangfuseHelpers(calcCost: typeof CalculateUsageCost): void {
   calculateUsageCostFn = calcCost;
-  isLangfuseEnabledFn = isEnabled;
 }
 
 /** Build Langfuse costDetails from model + token usage. Returns undefined if no pricing data. */

@@ -1,6 +1,6 @@
 // Tool definitions and executors for Anthropic API tool_use
 
-import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { dirname, join, resolve } from 'path';
 import { homedir } from 'os';
 import { TTLCache } from './cache.js';

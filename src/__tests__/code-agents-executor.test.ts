@@ -1,5 +1,4 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { EventEmitter } from 'events';
 
 // Mock all heavy dependencies before importing
 vi.mock('../code-agents/registry.js', () => {

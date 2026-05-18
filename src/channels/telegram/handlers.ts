@@ -16,20 +16,16 @@ import { loadRawConfig, saveConfig } from '../../config.js';
 import { readFileSync } from 'fs';
 import { runAgentTurn } from '../../agent.js';
 import { formatAliases, formatModelSelectionError, getModelSelectionUsage, resolveModelSelection } from '../../model-selection.js';
-import { state, LAUNCHD_LABEL, BOT_COMMANDS } from './types.js';
+import { state, LAUNCHD_LABEL } from './types.js';
 import {
   buildHelpText,
   getHistory,
-  addToHistory,
   clearHistory,
   getRunContext,
-  getDefaultTelegramToolConfig,
   getTelegramDefaultChatId,
   getRecentMemoryFiles,
   startTypingIndicator,
   sendLongMessage,
-  sendLongMessageHtml,
-  escapeHtml,
 } from './utils.js';
 
 // Handler functions for each command
@@ -166,7 +162,7 @@ export async function handleHeartbeat(ctx: Context, cfg: Config): Promise<void> 
   }
 }
 
-export async function handleRestart(ctx: Context, cfg: Config): Promise<void> {
+export async function handleRestart(ctx: Context, _cfg: Config): Promise<void> {
   const isLaunchd = !!process.env.SKIMPYCLAW_LAUNCHD;
   if (isLaunchd) {
     await ctx.reply('🦞 Restarting via launchd...');
@@ -185,11 +181,11 @@ export async function handleRestart(ctx: Context, cfg: Config): Promise<void> {
   }
 }
 
-export async function handleTasks(ctx: Context, cfg: Config): Promise<void> {
+export async function handleTasks(ctx: Context, _cfg: Config): Promise<void> {
   await ctx.reply('Use /agents to list active coding agents, or /cron to manage scheduled tasks.');
 }
 
-export async function handleCancel(ctx: Context, cfg: Config): Promise<void> {
+export async function handleCancel(ctx: Context, _cfg: Config): Promise<void> {
   await ctx.reply('Use the dashboard to cancel coding agents, or /cron to manage scheduled tasks.');
 }
 
@@ -284,7 +280,7 @@ export async function handleSkill(ctx: Context, cfg: Config): Promise<void> {
   await sendLongMessage(ctx, detail);
 }
 
-export async function handleApprovals(ctx: Context, cfg: Config): Promise<void> {
+export async function handleApprovals(ctx: Context, _cfg: Config): Promise<void> {
   const pending = listApprovals();
   if (pending.length === 0) {
     await ctx.reply('No pending exec approvals.');
@@ -313,7 +309,7 @@ export async function handleApprovals(ctx: Context, cfg: Config): Promise<void> 
   }
 }
 
-export async function handleApprove(ctx: Context, cfg: Config): Promise<void> {
+export async function handleApprove(ctx: Context, _cfg: Config): Promise<void> {
   const id = String(ctx.match || '').trim();
   if (!id) {
     await ctx.reply('Usage: /approve <id>');
@@ -333,7 +329,7 @@ export async function handleApprove(ctx: Context, cfg: Config): Promise<void> {
   }
 }
 
-export async function handleDeny(ctx: Context, cfg: Config): Promise<void> {
+export async function handleDeny(ctx: Context, _cfg: Config): Promise<void> {
   const id = String(ctx.match || '').trim();
   if (!id) {
     await ctx.reply('Usage: /deny <id>');
@@ -353,7 +349,7 @@ export async function handleDeny(ctx: Context, cfg: Config): Promise<void> {
   }
 }
 
-export async function handleClear(ctx: Context, cfg: Config): Promise<void> {
+export async function handleClear(ctx: Context, _cfg: Config): Promise<void> {
   const chatId = ctx.chat?.id;
   if (chatId) await clearHistory(chatId);
   await ctx.reply('Conversation cleared. Starting fresh.');
@@ -396,13 +392,13 @@ export async function handleCompact(ctx: Context, cfg: Config): Promise<void> {
   }
 }
 
-export async function handleSilence(ctx: Context, cfg: Config): Promise<void> {
+export async function handleSilence(ctx: Context, _cfg: Config): Promise<void> {
   const minutes = parseInt(String(ctx.match || '')) || 30;
   state.silenceUntil = new Date(Date.now() + minutes * 60 * 1000);
   await ctx.reply(`Proactive messages silenced until ${state.silenceUntil.toLocaleTimeString()}`);
 }
 
-export async function handleMemory(ctx: Context, cfg: Config): Promise<void> {
+export async function handleMemory(ctx: Context, _cfg: Config): Promise<void> {
   const arg = String(ctx.match || '').trim();
   const recentFiles = getRecentMemoryFiles(10);
 

@@ -3,7 +3,7 @@
 import { writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
-import type { ChatMessage, ContentBlock, ChatOptions, Config, ThinkingLevel } from '../types.js';
+import type { ContentBlock, Config, ThinkingLevel } from '../types.js';
 
 // Anti-hallucination instructions injected between the Claude Code identity
 // block and the actual system prompt. Prevents the model from roleplaying
@@ -293,13 +293,13 @@ export function splitToolResult(
     const errNote = errLines.length > 0 ? errLines.slice(0, 3).join('\n') + '\n' : '';
     const preview = result.slice(0, 600);
     const truncNote = result.length > 600 ? `\n... (${result.length} chars total)` : '';
-    return `${exitInfo}${errNote}${preview}${truncNote}\nFull output saved to ${scratchPath} — use Read tool to retrieve.`;
+    return `${exitInfo}${errNote}${preview}${truncNote}\nFull output saved to ${shortPath} — use Read tool to retrieve.`;
   }
 
   // All other tools: include preview so the model has usable data
   const preview = result.slice(0, 800);
   const truncNote = result.length > 800 ? `\n... (${result.length} chars total)` : '';
-  return `${preview}${truncNote}\nFull output saved to ${scratchPath} — use Read tool to retrieve.`;
+  return `${preview}${truncNote}\nFull output saved to ${shortPath} — use Read tool to retrieve.`;
 
 }
 

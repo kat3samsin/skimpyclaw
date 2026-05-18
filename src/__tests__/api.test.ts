@@ -336,7 +336,7 @@ vi.mock('../usage.js', () => ({
     week: { totalCost: 2.50, totalInputTokens: 50000, totalOutputTokens: 25000, totalCalls: 15, byModel: {} },
     month: { totalCost: 8.00, totalInputTokens: 200000, totalOutputTokens: 100000, totalCalls: 50, byModel: {} },
   }),
-  readUsageRecords: (opts: any) => ({
+  readUsageRecords: (_opts: any) => ({
     records: [
       { id: 'test-1', timestamp: '2026-02-21T10:00:00Z', model: 'claude-sonnet-4-5', provider: 'anthropic', inputTokens: 1000, outputTokens: 500, totalTokens: 1500, inputCost: 0.003, outputCost: 0.0075, totalCost: 0.0105, trigger: 'telegram' },
     ],

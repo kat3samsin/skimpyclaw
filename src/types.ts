@@ -267,9 +267,7 @@ export interface ChatOptions {
 
 export interface AbortSignalLike {
   readonly aborted: boolean;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   addEventListener?: (...args: any[]) => void;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   removeEventListener?: (...args: any[]) => void;
 }
 

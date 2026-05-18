@@ -37,7 +37,7 @@ class MockAdapter implements ProviderAdapter {
   responses: NormalizedResponse[] = [];
   currentResponseIndex = 0;
 
-  buildMessages(messages: ChatMessage[], options: ChatOptions, config: Config): ProviderMessages {
+  buildMessages(messages: ChatMessage[], _options: ChatOptions, _config: Config): ProviderMessages {
     this.buildMessagesCallCount++;
     return {
       messages: messages.filter(m => m.role !== 'system'),
@@ -51,10 +51,10 @@ class MockAdapter implements ProviderAdapter {
   }
 
   async call(
-    messages: ProviderMessages,
-    toolDefs: any[],
-    options: ChatOptions,
-    config: Config,
+    _messages: ProviderMessages,
+    _toolDefs: any[],
+    _options: ChatOptions,
+    _config: Config,
   ): Promise<NormalizedResponse> {
     this.callCount++;
     const response = this.responses[this.currentResponseIndex] || {
@@ -89,9 +89,9 @@ class MockAdapter implements ProviderAdapter {
 
   async compactMessages(
     messages: ProviderMessages,
-    config: any,
-    iteration: number,
-    fullConfig?: Config,
+    _config: any,
+    _iteration: number,
+    _fullConfig?: Config,
   ): Promise<CompactionResult<any>> {
     this.compactMessagesCallCount++;
     return {
@@ -100,7 +100,7 @@ class MockAdapter implements ProviderAdapter {
     };
   }
 
-  recordUsage(model: string, usage: unknown, trigger?: string, agentId?: string): void {
+  recordUsage(_model: string, _usage: unknown, _trigger?: string, _agentId?: string): void {
     this.recordUsageCallCount++;
   }
 }

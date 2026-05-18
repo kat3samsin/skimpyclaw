@@ -1,35 +1,29 @@
 // Telegram bot using Grammy
 
-import { Bot, Context, GrammyError, HttpError, InputFile } from 'grammy';
+import { Bot, GrammyError, HttpError, InputFile } from 'grammy';
 import { run, RunnerHandle } from '@grammyjs/runner';
-import type { Config, ChatMessage } from '../../types.js';
+import type { Config } from '../../types.js';
 import { isAllowed, isRateLimited } from '../../security.js';
 import { runAgentTurn } from '../../agent.js';
 
 import { getCurrentModel } from '../../gateway.js';
 import { getApproval, approveRequest, denyRequest } from '../../exec-approval.js';
-import { loadSkills } from '../../skills.js';
 import { transcribeAudio, synthesizeSpeech } from '../../voice.js';
 import { existsSync, mkdirSync, writeFileSync, unlinkSync } from 'fs';
 import { join } from 'path';
-import { homedir, tmpdir } from 'os';
-import { spawnSync } from 'child_process';
+import { tmpdir } from 'os';
 
-import { state, BOT_COMMANDS, LAUNCHD_LABEL } from './types.js';
+import { state, BOT_COMMANDS } from './types.js';
 import {
   getHistory,
   addToHistory,
-  clearHistory,
   getRunContext,
   getDefaultTelegramToolConfig,
-  getRecentMemoryFiles,
   startTypingIndicator,
   sendLongMessage,
   sendLongMessageHtml,
   escapeHtml,
   markdownToTelegramHtml,
-  buildHelpText,
-  getTelegramDefaultChatId,
 } from './utils.js';
 
 import { commandHandlers, subscribeToApprovalEvents } from './handlers.js';

@@ -502,7 +502,7 @@ export function consumeApproval(id: string): void {
  */
 export function cleanupExpired(): void {
   const now = Date.now();
-  for (const [id, approval] of approvals) {
+  for (const approval of approvals.values()) {
     if (approval.status === 'pending' && approval.expiresAt.getTime() <= now) {
       const resolvedAt = new Date(now);
       approval.history.push({ from: 'pending', to: 'expired', at: resolvedAt });

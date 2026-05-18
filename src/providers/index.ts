@@ -5,9 +5,9 @@
 
 import type { Config, ChatMessage, ChatOptions, ToolConfig } from '../types.js';
 import type { ExecuteToolContext } from '../tools/execute-context.js';
-import type { ToolChatResult, ProviderChatParams, ProviderToolChatParams } from './types.js';
+import type { ToolChatResult } from './types.js';
 import type { ProviderAdapter } from './adapter.js';
-import { calculateUsageCost, isLangfuseEnabled } from '../langfuse.js';
+import { calculateUsageCost } from '../langfuse.js';
 
 // Re-export types
 export type { ToolChatResult, ProviderChatParams, ProviderToolChatParams } from './types.js';
@@ -69,7 +69,7 @@ import { AnthropicAdapter } from './adapters/anthropic-adapter.js';
 import { CodexAdapter } from './adapters/codex-adapter.js';
 
 // Wire provider observability helpers to runtime cost calculator.
-setLangfuseHelpers(calculateUsageCost, isLangfuseEnabled);
+setLangfuseHelpers(calculateUsageCost);
 
 // ---------------------------------------------------------------------------
 // Provider Registry
@@ -244,7 +244,7 @@ export async function chatWithTools(
   toolConfig: ToolConfig,
   toolContext?: ExecuteToolContext
 ): Promise<ToolChatResult> {
-  const { adapter, resolvedModel, chatOpts } = resolveAdapter(options, config);
+  const { adapter, chatOpts } = resolveAdapter(options, config);
 
   const { runToolLoop } = await import('./tool-loop.js');
   return runToolLoop(adapter, messages, chatOpts, config, toolConfig, toolContext);
