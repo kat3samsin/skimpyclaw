@@ -20,7 +20,7 @@ export async function startRuntime(config: Config): Promise<SkimpyClawRuntime> {
 
   initLangfuse(config);
   initProviders(config);
-  restoreCodeAgentTasks();
+  restoreCodeAgentTasks(config.codeAgents?.worktrees ?? {});
   setCodeAgentConfig(config);
   const cleanup = cleanupLogs();
   if (cleanup.deletedFiles > 0 || cleanup.deletedDirs > 0 || cleanup.errors.length > 0) {

@@ -1,9 +1,10 @@
 // Code Agent Registry - Task storage and management
 
-import { existsSync, mkdirSync, writeFileSync, readdirSync } from 'fs';
+import { existsSync, mkdirSync, writeFileSync, readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import type { CodeAgentTask } from './types.js';
+import { cleanupCodeAgentWorktree, type CodeAgentWorktreeConfig } from './worktrees.js';
 
 const CODE_AGENTS_DIR = join(homedir(), '.skimpyclaw', 'logs', 'code-agents');
 
@@ -121,7 +122,7 @@ export function cancelCodeAgent(id: string): CodeAgentTask | null {
 }
 
 /** Restore code agent tasks from disk on startup. */
-export function restoreCodeAgentTasks(): void {
+export function restoreCodeAgentTasks(worktreeConfig?: CodeAgentWorktreeConfig): void {
   try {
     if (!existsSync(CODE_AGENTS_DIR)) return;
     const files = readdirSync(CODE_AGENTS_DIR).filter(f => /^ca-\d+\.json$/.test(f));
@@ -138,6 +139,20 @@ export function restoreCodeAgentTasks(): void {
           task.durationSeconds = Math.round(elapsed / 1000);
           writeCodeAgentTask(task);
         }
+        if (
+          worktreeConfig &&
+          task.worktreePath &&
+          !task.worktreeCleanup &&
+          !['running', 'validating', 'pending'].includes(task.status)
+        ) {
+          task.worktreeCleanup = cleanupCodeAgentWorktree({
+            sourceWorkdir: task.sourceWorkdir,
+            worktreePath: task.worktreePath,
+            worktreeRef: task.worktreeRef,
+            config: worktreeConfig,
+          });
+          writeCodeAgentTask(task);
+        }
         codeAgentTasks.set(task.id, task);
         const num = parseInt(task.id.replace('ca-', ''), 10);
         if (num > maxCounter) maxCounter = num;
@@ -146,6 +161,3 @@ export function restoreCodeAgentTasks(): void {
     codeAgentCounter = maxCounter;
   } catch { /* best effort */ }
 }
-
-// Need to import readFileSync for restoreCodeAgentTasks
-import { readFileSync } from 'fs';
