@@ -313,8 +313,9 @@ export function parseCodexSSE(text: string): { outputText: string; functionCalls
     if (textContent) outputText = textContent;
   }
 
-  // Debug: log when output is empty despite having tokens
-  if (!outputText && completedResponse) {
+  // Debug: log when Codex produced neither final text nor tool calls.
+  // Tool-call-only turns are expected in the agentic loop.
+  if (!outputText && functionCalls.length === 0 && completedResponse) {
     console.warn(`[codex] Empty outputText! status: ${completedResponse.status}, output: ${JSON.stringify(completedResponse.output)?.slice(0, 1000)}, text: ${JSON.stringify(completedResponse.text)?.slice(0, 200)}, reasoning: ${JSON.stringify(completedResponse.reasoning)?.slice(0, 200)}`);
   }
 
