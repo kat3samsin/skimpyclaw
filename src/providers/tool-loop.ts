@@ -172,8 +172,9 @@ export async function runToolLoop(
         let responseText = response.textContent;
         // Fallback when model returned no text
         if (!responseText) {
-          console.warn(`[${adapter.name}] empty text response (stop_reason: ${(response.rawResponse as any)?.stop_reason}, content blocks: ${JSON.stringify(((response.rawResponse as any)?.content || []).map((b: any) => b.type))})`);
+          const emptyResponseDetail = `stop_reason: ${(response.rawResponse as any)?.stop_reason}, content blocks: ${JSON.stringify(((response.rawResponse as any)?.content || []).map((b: any) => b.type))}`;
           if (toolLog.length > 0) {
+            console.log(`[${adapter.name}] empty text response after ${toolLog.length} tool calls (${emptyResponseDetail})`);
             // Let adapter attempt a finalization pass (e.g. Codex re-asks without tools)
             if (adapter.onEmptyFinalResponse) {
               try {
@@ -189,6 +190,7 @@ export async function runToolLoop(
               responseText = `[Completed with ${toolLog.length} tool calls, no text response]`;
             }
           } else {
+            console.warn(`[${adapter.name}] empty text response (${emptyResponseDetail})`);
             responseText = '[Model returned empty response — please try again]';
           }
         }
