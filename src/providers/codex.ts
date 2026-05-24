@@ -11,10 +11,12 @@ const DEFAULT_CODEX_HOME = join(homedir(), '.codex');
 const DEFAULT_CODEX_AUTH_PATH = join(DEFAULT_CODEX_HOME, 'auth.json');
 const DEFAULT_CODEX_BASE_URL = 'https://chatgpt.com/backend-api';
 const DEFAULT_CODEX_FETCH_TIMEOUT_MS = 120_000;
+const DEFAULT_CODEX_FETCH_RETRY_DELAYS_MS = [1_000, 3_000];
 
 let codexAuthPath = DEFAULT_CODEX_AUTH_PATH;
 let codexBaseUrl = DEFAULT_CODEX_BASE_URL;
 let codexAuth: { accessToken: string; accountId: string } | null = null;
+let codexFetchRetryDelaysMs = [...DEFAULT_CODEX_FETCH_RETRY_DELAYS_MS];
 
 // Set of providers that use the Codex Responses API
 const responsesApiProviders = new Set<string>();
@@ -32,6 +34,7 @@ export function resetCodexProviderState(): void {
   codexAuthPath = DEFAULT_CODEX_AUTH_PATH;
   codexBaseUrl = DEFAULT_CODEX_BASE_URL;
   codexAuth = null;
+  codexFetchRetryDelaysMs = [...DEFAULT_CODEX_FETCH_RETRY_DELAYS_MS];
 }
 
 export function setCodexAuthPath(path: string): void {
@@ -40,6 +43,10 @@ export function setCodexAuthPath(path: string): void {
 
 export function setCodexBaseUrl(url: string): void {
   codexBaseUrl = url;
+}
+
+export function setCodexFetchRetryDelaysForTesting(delays: number[]): void {
+  codexFetchRetryDelaysMs = delays;
 }
 
 interface CodexAuth {
@@ -152,6 +159,50 @@ export function recordCodexUsage(params: {
   }));
 }
 
+async function sleep(ms: number): Promise<void> {
+  await new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function errorMessageWithCause(error: unknown): string {
+  if (!(error instanceof Error)) return String(error);
+
+  const parts = [error.message];
+  const cause = (error as Error & { cause?: unknown }).cause;
+  if (cause instanceof Error && cause.message && cause.message !== error.message) {
+    parts.push(`cause: ${cause.message}`);
+  }
+  return parts.join('; ');
+}
+
+function isRetryableCodexFetchError(error: unknown): boolean {
+  const message = errorMessageWithCause(error).toLowerCase();
+  return [
+    'fetch failed',
+    'socket',
+    'network',
+    'terminated',
+    'econnreset',
+    'econnrefused',
+    'etimedout',
+    'eai_again',
+    'enotfound',
+    'connect timeout',
+    'und_err_connect_timeout',
+    'codex api 429',
+    'codex api 500',
+    'codex api 502',
+    'codex api 503',
+    'codex api 504',
+    'codex api 529',
+    'overloaded_error',
+    'temporarily unavailable',
+  ].some(pattern => message.includes(pattern));
+}
+
+function formatCodexFetchError(error: unknown, url: string): string {
+  return `Codex fetch failed for ${url}: ${errorMessageWithCause(error)}`;
+}
+
 /**
  * Make a single Codex API call. Returns raw SSE text.
  */
@@ -161,36 +212,52 @@ export async function codexFetch(body: any, timeoutMs: number = DEFAULT_CODEX_FE
   }
 
   const baseUrl = codexBaseUrl || DEFAULT_CODEX_BASE_URL;
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), Math.max(1_000, timeoutMs));
-  try {
-    const response = await fetch(`${baseUrl}/codex/responses`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${codexAuth.accessToken}`,
-        'chatgpt-account-id': codexAuth.accountId,
-        'OpenAI-Beta': 'responses=experimental',
-        'originator': 'codex_cli_rs',
-      },
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    });
+  const url = `${baseUrl}/codex/responses`;
 
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => 'unknown');
-      throw new Error(`Codex API ${response.status}: ${errorText}`);
-    }
+  for (let attempt = 0; attempt <= codexFetchRetryDelaysMs.length; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), Math.max(1_000, timeoutMs));
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${codexAuth.accessToken}`,
+          'chatgpt-account-id': codexAuth.accountId,
+          'OpenAI-Beta': 'responses=experimental',
+          'originator': 'codex_cli_rs',
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
 
-    return response.text();
-  } catch (error) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error(`Codex request timed out after ${Math.round(timeoutMs / 1000)}s`);
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'unknown');
+        throw new Error(`Codex API ${response.status}: ${errorText}`);
+      }
+
+      return response.text();
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw new Error(`Codex request timed out after ${Math.round(timeoutMs / 1000)}s`);
+      }
+
+      if (attempt >= codexFetchRetryDelaysMs.length || !isRetryableCodexFetchError(error)) {
+        throw new Error(formatCodexFetchError(error, url));
+      }
+
+      const delayMs = codexFetchRetryDelaysMs[attempt];
+      console.warn(
+        `[codex] Transient fetch failure; retrying in ${Math.round(delayMs / 1000)}s ` +
+        `(${attempt + 1}/${codexFetchRetryDelaysMs.length}): ${formatCodexFetchError(error, url)}`,
+      );
+      await sleep(delayMs);
+    } finally {
+      clearTimeout(timeoutId);
     }
-    throw error;
-  } finally {
-    clearTimeout(timeoutId);
   }
+
+  throw new Error('Unreachable Codex fetch retry state');
 }
 
 /**
