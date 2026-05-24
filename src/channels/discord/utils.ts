@@ -269,10 +269,10 @@ export function linkLocalHtmlArtifactsForDiscord(
   config?: Pick<Config, 'gateway'>,
   allowedRoots?: string[],
 ): string {
-  if (!config?.gateway?.port || !text.includes('.html')) return text;
+  if (!config?.gateway?.port || !/\.(?:html?|mp3|ogg|wav|m4a|aiff?|aif)\b/i.test(text)) return text;
   const roots = allowedRoots ?? defaultArtifactRoots();
 
-  return text.replace(/\[([^\]\n]+)\]\((<?)(\/[^)\n]+?\.html)(>?)\)/g, (match, label: string, open: string, rawPath: string, close: string) => {
+  return text.replace(/\[([^\]\n]+)\]\((<?)(\/[^)\n]+?\.(?:html?|mp3|ogg|wav|m4a|aiff?|aif))(>?)\)/gi, (match, label: string, open: string, rawPath: string, close: string) => {
     const path = rawPath.trim();
     if ((open || close) && !(open === '<' && close === '>')) return match;
     const resolvedPath = roots.map(root => resolvePathInside(path, root)).find((candidate): candidate is string => Boolean(candidate));

@@ -175,6 +175,7 @@ function buildMayoraArtifactRepairPrompt(originalPrompt: string, previousRespons
     'Create the HTML artifact now. Requirements:',
     '- Read /Users/katre/.skimpyclaw/agents/mayora/HTML_TEMPLATE.html.',
     '- Write /Users/katre/.skimpyclaw/reports/mayora-daily-briefing/<YYYY-MM-DD>.html using the local briefing date.',
+    '- Use the navigable Mayora template structure and include a Voice Briefing link if a voice file URL or path is available.',
     '- Verify the file exists after writing it.',
     '- Reply with [Mayora Daily Briefing HTML](/Users/katre/.skimpyclaw/reports/mayora-daily-briefing/<YYYY-MM-DD>.html) and only 1-3 terse bullets.',
     '- If you cannot create and verify the file, do not include an HTML link; state the exact blocker instead.',

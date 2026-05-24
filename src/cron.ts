@@ -2,7 +2,7 @@
 
 import { Cron } from 'croner';
 import { exec } from 'child_process';
-import { existsSync, mkdirSync, appendFileSync, readFileSync, watch, type FSWatcher } from 'fs';
+import { existsSync, mkdirSync, appendFileSync, readFileSync, watch, writeFileSync, type FSWatcher } from 'fs';
 import { join, resolve } from 'path';
 import { getLogsDir, getConfigPath, loadConfig, resolveAllowedPaths } from './config.js';
 import type { Config, CronJob, ToolConfig } from './types.js';
@@ -13,8 +13,10 @@ import { sendActiveChannelProactiveMessage, sendActiveChannelProactiveVoice, get
 import { sendToDiscordThread, sendToDiscordThreadWithVoice } from './channels/discord/index.js';
 import { parseAndSaveDigest } from './digests.js';
 import { synthesizeSpeech } from './voice.js';
-import { toErrorMessage } from './utils.js';
+import { formatDate, toErrorMessage } from './utils.js';
 import { sanitizeCronEnv } from './env-sanitizer.js';
+import { buildArtifactUrl, registerLocalArtifact } from './artifacts.js';
+import { linkLocalHtmlArtifactsForDiscord } from './channels/discord/utils.js';
 
 function safeTimezone(tz: string | undefined): string {
   const fallback = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
@@ -50,6 +52,13 @@ interface CronLogEntry {
   output?: string;
 }
 
+interface CronVoiceArtifact {
+  buffer: Uint8Array;
+  format: string;
+  path?: string;
+  url?: string;
+}
+
 function getCronLogDir(): string {
   const dir = join(getLogsDir(), 'cron');
   if (!existsSync(dir)) {
@@ -83,6 +92,82 @@ function appendCronLogLine(jobId: string, line: string): void {
   const logPath = getCronLogPath(jobId);
   const timestamp = new Date().toISOString();
   appendFileSync(logPath, `[${timestamp}] ${line}\n`);
+}
+
+function safeArtifactExtension(format: string): string {
+  const ext = format.toLowerCase().replace(/[^a-z0-9]/g, '');
+  return ext || 'audio';
+}
+
+function saveCronVoiceArtifact(
+  jobDef: CronJob,
+  logEntry: CronLogEntry,
+  voice: { buffer: Uint8Array; format: string },
+  config: Config,
+): Pick<CronVoiceArtifact, 'path' | 'url'> | null {
+  if (!config.gateway?.port) return null;
+
+  const startedAt = new Date(logEntry.startedAt);
+  const date = Number.isNaN(startedAt.getTime()) ? formatDate(new Date()) : formatDate(startedAt);
+  const ext = safeArtifactExtension(voice.format);
+  const dir = join(homedir(), '.skimpyclaw', 'reports', 'voice', jobDef.id);
+  const path = join(dir, `${date}.${ext}`);
+
+  try {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(path, Buffer.from(voice.buffer));
+    const artifact = registerLocalArtifact(path);
+    const url = artifact ? buildArtifactUrl(config, artifact) ?? undefined : undefined;
+    return { path, url };
+  } catch (err) {
+    appendCronLogLine(jobDef.id, `Voice artifact save failed: ${toErrorMessage(err).slice(0, 180)}`);
+    return null;
+  }
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function injectVoiceLinkIntoMayoraHtml(text: string, voiceUrl: string, jobId: string): void {
+  if (!text.includes('mayora-daily-briefing') || !voiceUrl) return;
+
+  const reportDir = join(homedir(), '.skimpyclaw', 'reports', 'mayora-daily-briefing');
+  const pathPattern = new RegExp(`${escapeRegExp(reportDir)}\\/[^\\s)>"']+\\.html`, 'g');
+  const paths = [...new Set(text.match(pathPattern) ?? [])];
+  if (paths.length === 0) return;
+
+  const linkHtml = `<a href="${escapeHtml(voiceUrl)}">Open voice file</a>`;
+  const voiceBlock = `<section class="voice-link" data-voice-link><h2>Voice Briefing</h2><p>${linkHtml}</p></section>`;
+
+  for (const path of paths) {
+    try {
+      if (!existsSync(path)) continue;
+      const html = readFileSync(path, 'utf-8');
+      let next = html;
+      if (html.includes('data-voice-link')) {
+        next = html.replace(/<section class="voice-link" data-voice-link>[\s\S]*?<\/section>/, voiceBlock);
+      } else if (html.includes('{{VOICE_LINK}}')) {
+        next = html.replace('{{VOICE_LINK}}', voiceBlock);
+      } else if (!html.includes(voiceUrl)) {
+        next = html.replace('</header>', `</header>\n\n    ${voiceBlock}`);
+      }
+      if (next !== html) {
+        writeFileSync(path, next);
+        appendCronLogLine(jobId, `Voice link injected into Mayora HTML: ${path}`);
+      }
+    } catch (err) {
+      appendCronLogLine(jobId, `Voice link injection failed for ${path}: ${toErrorMessage(err).slice(0, 180)}`);
+    }
+  }
 }
 
 // Track currently running jobs for status queries
@@ -121,17 +206,19 @@ async function sendCronNotification(
   voiceBuffer?: Uint8Array,
   voiceFormat?: string,
 ): Promise<boolean> {
+  const linkedMessage = linkLocalHtmlArtifactsForDiscord(message, config);
+
   if (discordThreadId) {
     try {
       // Use voice-enabled sender for Discord threads if voice is provided
       if (voiceBuffer && voiceFormat) {
-        const sent = await sendToDiscordThreadWithVoice(discordThreadId, message, voiceBuffer, voiceFormat);
+        const sent = await sendToDiscordThreadWithVoice(discordThreadId, linkedMessage, voiceBuffer, voiceFormat);
         if (sent) return true;
         console.error(`[cron] Failed to send to Discord thread ${discordThreadId} with voice; active-channel fallback disabled for thread-targeted jobs`);
         return false;
       }
 
-      const sent = await sendToDiscordThread(discordThreadId, message);
+      const sent = await sendToDiscordThread(discordThreadId, linkedMessage);
       if (sent) return true;
       console.error(`[cron] Failed to send to Discord thread ${discordThreadId}; active-channel fallback disabled for thread-targeted jobs`);
       return false;
@@ -147,7 +234,7 @@ async function sendCronNotification(
     // Send voice to active channel if provided
     await sendActiveChannelProactiveVoice(config, voiceBuffer, voiceFormat);
   }
-  return sendActiveChannelProactiveMessage(config, message);
+  return sendActiveChannelProactiveMessage(config, linkedMessage);
 }
 
 function resolveDiscordThreadTarget(jobDef: CronJob): string | undefined {
@@ -305,7 +392,7 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
   const discordThreadId = resolveDiscordThreadTarget(jobDef);
 
   // Track synthesized voice for final notification
-  let synthesizedVoice: { buffer: Uint8Array; format: string } | null = null;
+  let synthesizedVoice: CronVoiceArtifact | null = null;
 
   try {
     const resolvedAgentId = jobDef.payload.kind === 'agentTurn'
@@ -405,8 +492,15 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
           appendCronLogLine(jobDef.id, `Synthesizing voice (${voicePortion ? 'voice portion' : 'full text fallback'})...`);
           const speech = await synthesizeSpeech(voiceContent, config.voice);
           appendCronLogLine(jobDef.id, `Voice synthesized (${speech.format}, ${speech.provider}, ${speech.buffer.length} bytes)`);
+          const voiceArtifact = saveCronVoiceArtifact(jobDef, logEntry, speech, config);
+          if (voiceArtifact?.path) {
+            appendCronLogLine(jobDef.id, `Voice artifact saved: ${voiceArtifact.path}`);
+          }
+          if (voiceArtifact?.url) {
+            injectVoiceLinkIntoMayoraHtml(textPortion, voiceArtifact.url, jobDef.id);
+          }
           // Store for final notification instead of sending immediately
-          synthesizedVoice = { buffer: speech.buffer, format: speech.format };
+          synthesizedVoice = { buffer: speech.buffer, format: speech.format, ...(voiceArtifact ?? {}) };
           appendCronLogLine(jobDef.id, 'Voice stored for final notification');
         } catch (voiceErr) {
           const errMsg = voiceErr instanceof Error ? voiceErr.message : String(voiceErr);
@@ -483,6 +577,9 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
           ? logEntry.output.slice(0, 4000) + '...'
           : logEntry.output;
         notification += `\n\n${output}`;
+      }
+      if (synthesizedVoice?.url) {
+        notification += `\n\nVoice file: ${synthesizedVoice.url}`;
       }
 
       // Include synthesized voice if available

@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
+import { join } from 'path';
 
 const {
   runAgentTurnMock,
@@ -8,6 +10,7 @@ const {
   parseAndSaveDigestMock,
   synthesizeSpeechMock,
   cronCallbacks,
+  testHome,
 } = vi.hoisted(() => ({
   runAgentTurnMock: vi.fn(),
   sendActiveChannelProactiveMessageMock: vi.fn(async () => true),
@@ -16,6 +19,12 @@ const {
   parseAndSaveDigestMock: vi.fn(),
   synthesizeSpeechMock: vi.fn(),
   cronCallbacks: [] as Array<() => Promise<void>>,
+  testHome: (() => {
+    const { mkdtempSync } = require('fs');
+    const { tmpdir } = require('os');
+    const { join } = require('path');
+    return mkdtempSync(join(tmpdir(), 'skimpy-cron-home-'));
+  })(),
 }));
 
 vi.mock('croner', () => ({
@@ -72,7 +81,20 @@ vi.mock('../env-sanitizer.js', () => ({
   sanitizeCronEnv: () => ({}),
 }));
 
+vi.mock('node:os', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:os')>();
+  return { ...actual, homedir: () => testHome };
+});
+
 import { initCron, runCronJob } from '../cron.js';
+
+function localDate(): string {
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
 describe('runCronJob digest chat output', () => {
   const config = {
@@ -93,6 +115,10 @@ describe('runCronJob digest chat output', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     cronCallbacks.length = 0;
+  });
+
+  afterAll(() => {
+    rmSync(testHome, { recursive: true, force: true });
   });
 
   it('sends digest summary to chat when digest includes articles', async () => {
@@ -426,6 +452,66 @@ describe('runCronJob digest chat output', () => {
     );
     // Start notification goes to Discord thread, final notification goes to Discord thread with voice
     expect(sendActiveChannelProactiveMessageMock).not.toHaveBeenCalled();
+  });
+
+  it('saves a voice artifact link and injects it into Mayora HTML', async () => {
+    const date = localDate();
+    const htmlDir = join(testHome, '.skimpyclaw', 'reports', 'mayora-daily-briefing');
+    const htmlPath = join(htmlDir, `${date}.html`);
+    mkdirSync(htmlDir, { recursive: true });
+    writeFileSync(htmlPath, '<!doctype html><header></header><main>Brief</main>', 'utf-8');
+
+    const text = `[Mayora Daily Briefing HTML](${htmlPath})\nFull detail`;
+    runAgentTurnMock.mockResolvedValue(`---VOICE---\nShort voice\n---TEXT---\n${text}`);
+    parseAndSaveDigestMock.mockReturnValue({ summary: text, articles: [] });
+    sendToDiscordThreadMock.mockResolvedValue(true);
+    sendToDiscordThreadWithVoiceMock.mockResolvedValue(true);
+    synthesizeSpeechMock.mockResolvedValue({
+      buffer: new Uint8Array([1, 2, 3]),
+      format: 'mp3',
+      provider: 'test-provider',
+    });
+
+    const voiceConfig = {
+      ...config,
+      gateway: { port: 18790, host: '127.0.0.1', mode: 'local' },
+      voice: {
+        provider: 'test-provider',
+        apiKey: 'test-key',
+      },
+      cron: {
+        jobs: [
+          {
+            id: 'morning',
+            name: 'Morning Routine',
+            agent: 'mayora',
+            schedule: { kind: 'cron', expr: '* * * * *', tz: 'UTC' },
+            payload: {
+              kind: 'agentTurn',
+              message: 'digest please',
+              sendAsVoice: true,
+              discordThreadId: '123456789012345678',
+            },
+          },
+        ],
+      },
+      agents: {
+        default: 'default',
+        list: {
+          default: { model: 'claude-sonnet' },
+          mayora: { model: 'codex', identity: { name: 'Mayora', emoji: 'M' } },
+        },
+      },
+    } as any;
+
+    await runCronJob('morning', voiceConfig);
+
+    const voicePath = join(testHome, '.skimpyclaw', 'reports', 'voice', 'morning', `${date}.mp3`);
+    expect(existsSync(voicePath)).toBe(true);
+    const finalCall = sendToDiscordThreadWithVoiceMock.mock.calls.at(-1) as unknown as [string, string, Uint8Array, string];
+    const finalMessage = finalCall[1];
+    expect(finalMessage).toMatch(/Voice file: http:\/\/127\.0\.0\.1:18790\/artifacts\/[^/]+\/\d{4}-\d{2}-\d{2}\.mp3/);
+    expect(readFileSync(htmlPath, 'utf-8')).toMatch(/<a href="http:\/\/127\.0\.0\.1:18790\/artifacts\/[^/]+\/\d{4}-\d{2}-\d{2}\.mp3">Open voice file<\/a>/);
   });
 
   it('sends voice to active channel when Discord thread is not configured', async () => {

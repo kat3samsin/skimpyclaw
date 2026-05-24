@@ -21,6 +21,11 @@ function getArtifactContentType(path: string): string {
   if (ext === '.md') return 'text/markdown; charset=utf-8';
   if (ext === '.txt' || ext === '.log') return 'text/plain; charset=utf-8';
   if (ext === '.json') return 'application/json; charset=utf-8';
+  if (ext === '.mp3') return 'audio/mpeg';
+  if (ext === '.ogg') return 'audio/ogg';
+  if (ext === '.wav') return 'audio/wav';
+  if (ext === '.m4a') return 'audio/mp4';
+  if (ext === '.aiff' || ext === '.aif') return 'audio/aiff';
   return 'application/octet-stream';
 }
 
