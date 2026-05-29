@@ -1,7 +1,8 @@
 // Code Agents - Public API
 // Background multi-agent coding task execution
 
-import { resolve } from 'path';
+import { join, resolve } from 'path';
+import { homedir } from 'os';
 import { randomUUID } from 'crypto';
 import type { ToolConfig } from '../types.js';
 import type { ExecuteToolContext } from '../tools/execute-context.js';
@@ -31,6 +32,8 @@ import {
   shouldAutoWorktreeTask,
   shouldUseCodeAgentWorktree,
 } from './worktrees.js';
+
+const CODE_AGENT_REVIEW_DIR = join(homedir(), '.skimpyclaw', 'reviews');
 
 // Re-export types
 export type {
@@ -258,7 +261,7 @@ export async function executeCodeWithAgent(
         sourceWorkdir = worktree.sourceWorkdir;
         worktreePath = worktree.worktreePath;
         worktreeRef = worktree.worktreeRef;
-        agentTask = `${task}\n\nSkimpyClaw worktree isolation:\n- Source checkout: ${sourceWorkdir}\n- Isolated worktree: ${worktreePath}\n- Run all repository commands from the isolated worktree, not the source checkout.\n- For read-only review or report tasks, write generated artifacts outside the worktree, for example under ~/.skimpyclaw/reviews, so the worktree stays clean for cleanup.\n- If rebasing a branch that is already checked out elsewhere, create a temporary branch in this worktree and report before pushing.`;
+        agentTask = `${task}\n\nSkimpyClaw worktree isolation:\n- Source checkout: ${sourceWorkdir}\n- Isolated worktree: ${worktreePath}\n- Run all repository commands from the isolated worktree, not the source checkout.\n- For read-only review or report tasks, write generated HTML artifacts under ${CODE_AGENT_REVIEW_DIR}. Do not write review artifacts to /tmp, /private/tmp, or inside the worktree. Return the absolute ${CODE_AGENT_REVIEW_DIR}/... path in the final answer.\n- If rebasing a branch that is already checked out elsewhere, create a temporary branch in this worktree and report before pushing.`;
       }
     } catch (err) {
       return `Error: ${err instanceof Error ? err.message : String(err)}`;

@@ -86,7 +86,7 @@ vi.mock('node:os', async (importOriginal) => {
   return { ...actual, homedir: () => testHome };
 });
 
-import { initCron, runCronJob } from '../cron.js';
+import { initCron, runCronJob, triggerCronJob } from '../cron.js';
 
 function localDate(): string {
   const date = new Date();
@@ -95,6 +95,8 @@ function localDate(): string {
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 }
+
+const TEST_DISCORD_THREAD_ID = '123456789'.repeat(2);
 
 describe('runCronJob digest chat output', () => {
   const config = {
@@ -140,6 +142,58 @@ describe('runCronJob digest chat output', () => {
     await runCronJob('tech-digest', config);
 
     expect(sendActiveChannelProactiveMessageMock).not.toHaveBeenCalledWith(config, digestText);
+  });
+
+  it('resolves a manual cron run by normalized display name', async () => {
+    const digestText = '1. Story https://example.com/story';
+    const aliasConfig = {
+      ...config,
+      cron: {
+        jobs: [
+          {
+            ...config.cron.jobs[0],
+            name: 'Tech News',
+          },
+        ],
+      },
+    } as any;
+    runAgentTurnMock.mockResolvedValue(digestText);
+    parseAndSaveDigestMock.mockReturnValue({ summary: digestText, articles: [{ id: 'a1' }] });
+
+    await runCronJob('tech-news', aliasConfig);
+
+    expect(parseAndSaveDigestMock).toHaveBeenCalledWith('tech-digest', 'Tech News', digestText);
+  });
+
+  it('triggers a manual cron run without waiting for completion', async () => {
+    let releaseRun = () => {};
+    const aliasConfig = {
+      ...config,
+      cron: {
+        jobs: [
+          {
+            ...config.cron.jobs[0],
+            name: 'Tech News',
+          },
+        ],
+      },
+    } as any;
+    runAgentTurnMock.mockImplementation(() => new Promise<string>(resolve => {
+      releaseRun = () => resolve('1. Story https://example.com/story');
+    }));
+    parseAndSaveDigestMock.mockReturnValue({ summary: '1. Story https://example.com/story', articles: [{ id: 'a1' }] });
+
+    const job = triggerCronJob('tech-news', aliasConfig);
+
+    expect(job).toEqual({ id: 'tech-digest', name: 'Tech News' });
+    await vi.waitFor(() => {
+      expect(runAgentTurnMock).toHaveBeenCalledTimes(1);
+    });
+
+    releaseRun();
+    await vi.waitFor(() => {
+      expect(parseAndSaveDigestMock).toHaveBeenCalledWith('tech-digest', 'Tech News', '1. Story https://example.com/story');
+    });
   });
 
   it('skips overlapping execution for the same job id', async () => {
@@ -198,7 +252,7 @@ describe('runCronJob digest chat output', () => {
             payload: {
               kind: 'agentTurn',
               message: 'digest please',
-              discordThreadId: '123456789012345678',
+              discordThreadId: TEST_DISCORD_THREAD_ID,
             },
           },
         ],
@@ -227,7 +281,7 @@ describe('runCronJob digest chat output', () => {
             payload: {
               kind: 'agentTurn',
               message: 'digest please',
-              discordThreadId: '123456789012345678',
+              discordThreadId: TEST_DISCORD_THREAD_ID,
             },
           },
         ],
@@ -244,7 +298,7 @@ describe('runCronJob digest chat output', () => {
       metadata: {
         jobName: 'Tech Digest',
         isCronJob: true,
-        discordThreadId: '123456789012345678',
+        discordThreadId: TEST_DISCORD_THREAD_ID,
         isDm: false,
       },
     });
@@ -347,7 +401,7 @@ describe('runCronJob digest chat output', () => {
             payload: {
               kind: 'agentTurn',
               message: 'digest please',
-              discordThreadId: '123456789012345678',
+              discordThreadId: TEST_DISCORD_THREAD_ID,
             },
           },
         ],
@@ -434,7 +488,7 @@ describe('runCronJob digest chat output', () => {
               kind: 'agentTurn',
               message: 'digest please',
               sendAsVoice: true,
-              discordThreadId: '123456789012345678',
+              discordThreadId: TEST_DISCORD_THREAD_ID,
             },
           },
         ],
@@ -445,7 +499,7 @@ describe('runCronJob digest chat output', () => {
 
     expect(synthesizeSpeechMock).toHaveBeenCalledWith(digestText, voiceConfig.voice);
     expect(sendToDiscordThreadWithVoiceMock).toHaveBeenCalledWith(
-      '123456789012345678',
+      TEST_DISCORD_THREAD_ID,
       expect.stringContaining('Cron: Tech Digest'),
       new Uint8Array([1, 2, 3]),
       'mp3',
@@ -490,7 +544,7 @@ describe('runCronJob digest chat output', () => {
               kind: 'agentTurn',
               message: 'digest please',
               sendAsVoice: true,
-              discordThreadId: '123456789012345678',
+              discordThreadId: TEST_DISCORD_THREAD_ID,
             },
           },
         ],
@@ -512,6 +566,72 @@ describe('runCronJob digest chat output', () => {
     const finalMessage = finalCall[1];
     expect(finalMessage).toMatch(/Voice file: http:\/\/127\.0\.0\.1:18790\/artifacts\/[^/]+\/\d{4}-\d{2}-\d{2}\.mp3/);
     expect(readFileSync(htmlPath, 'utf-8')).toMatch(/<a href="http:\/\/127\.0\.0\.1:18790\/artifacts\/[^/]+\/\d{4}-\d{2}-\d{2}\.mp3">Open voice file<\/a>/);
+  });
+
+  it('creates a fallback Mayora HTML artifact when the agent links a missing file', async () => {
+    const date = localDate();
+    const htmlDir = join(testHome, '.skimpyclaw', 'reports', 'mayora-daily-briefing');
+    const htmlPath = join(htmlDir, `${date}.html`);
+    rmSync(htmlPath, { force: true });
+
+    const text = [
+      `[Mayora Daily Briefing HTML](${htmlPath})`,
+      '',
+      '## Recommended task now',
+      '',
+      '**Fix Reader Chat theme style leakage.**',
+    ].join('\n');
+    runAgentTurnMock.mockResolvedValue(`---VOICE---\nShort voice\n---TEXT---\n${text}`);
+    parseAndSaveDigestMock.mockReturnValue({ summary: text, articles: [] });
+    sendToDiscordThreadMock.mockResolvedValue(true);
+    sendToDiscordThreadWithVoiceMock.mockResolvedValue(true);
+    synthesizeSpeechMock.mockResolvedValue({
+      buffer: new Uint8Array([1, 2, 3]),
+      format: 'mp3',
+      provider: 'test-provider',
+    });
+
+    const voiceConfig = {
+      ...config,
+      gateway: { port: 18790, host: '127.0.0.1', mode: 'local' },
+      voice: {
+        provider: 'test-provider',
+        apiKey: 'test-key',
+      },
+      cron: {
+        jobs: [
+          {
+            id: 'morning',
+            name: 'Morning Routine',
+            agent: 'mayora',
+            schedule: { kind: 'cron', expr: '* * * * *', tz: 'UTC' },
+            payload: {
+              kind: 'agentTurn',
+              message: 'digest please',
+              sendAsVoice: true,
+              discordThreadId: TEST_DISCORD_THREAD_ID,
+            },
+          },
+        ],
+      },
+      agents: {
+        default: 'default',
+        list: {
+          default: { model: 'claude-sonnet' },
+          mayora: { model: 'codex', identity: { name: 'Mayora', emoji: 'M' } },
+        },
+      },
+    } as any;
+
+    await runCronJob('morning', voiceConfig);
+
+    const html = readFileSync(htmlPath, 'utf-8');
+    expect(html).toContain('Fix Reader Chat theme style leakage.');
+    expect(html).toContain('Artifact status');
+    expect(html).toMatch(/<a href="http:\/\/127\.0\.0\.1:18790\/artifacts\/[^/]+\/\d{4}-\d{2}-\d{2}\.mp3">Open voice file<\/a>/);
+
+    const finalCall = sendToDiscordThreadWithVoiceMock.mock.calls.at(-1) as unknown as [string, string, Uint8Array, string];
+    expect(finalCall[1]).toContain(`http://127.0.0.1:18790/reports/mayora-daily-briefing/${date}.html`);
   });
 
   it('sends voice to active channel when Discord thread is not configured', async () => {

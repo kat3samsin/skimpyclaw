@@ -1,13 +1,14 @@
 // Gateway HTTP server for health checks and control
 
 import Fastify, { FastifyInstance } from 'fastify';
-import { existsSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
+import { homedir } from 'os';
 import { fileURLToPath } from 'url';
-import { join } from 'path';
+import { isAbsolute, join, relative, resolve } from 'path';
 import type { Config, GatewayStatus, ThinkingLevel } from './types.js';
-import { validateBearerToken } from './utils.js';
+import { formatDate, validateBearerToken } from './utils.js';
 import { runAgentTurn } from './agent.js';
-import { getCronJobs, runCronJob } from './cron.js';
+import { getCronJobs, triggerCronJob } from './cron.js';
 import { registerDashboardAPI } from './api.js';
 import { registerDashboard } from './dashboard-frontend.js';
 import { ensureDashboardToken } from './config.js';
@@ -21,6 +22,59 @@ function resolveDashboardDistDir(): string {
     return packageDistDashboard;
   }
   return join(process.cwd(), 'dist', 'dashboard');
+}
+
+function getReportsRoot(): string {
+  return resolve(process.env.SKIMPYCLAW_REPORTS_DIR || join(homedir(), '.skimpyclaw', 'reports'));
+}
+
+function resolveReportKindRoot(kind: string): string | null {
+  if (!/^[a-z0-9][a-z0-9-]*$/i.test(kind)) return null;
+  const reportsRoot = getReportsRoot();
+  const kindRoot = resolve(reportsRoot, kind);
+  const rel = relative(reportsRoot, kindRoot);
+  if (!rel || rel.startsWith('..') || isAbsolute(rel) || rel.includes('/')) return null;
+  return kindRoot;
+}
+
+function resolveReportPath(kind: string, name: string): string | null {
+  const kindRoot = resolveReportKindRoot(kind);
+  if (!kindRoot) return null;
+  const fileName = name === 'today.html' ? `${formatDate(new Date())}.html` : name;
+  if (!/^\d{4}-\d{2}-\d{2}\.html$/.test(fileName)) return null;
+
+  const filePath = resolve(kindRoot, fileName);
+  const rel = relative(kindRoot, filePath);
+  if (!rel || rel.startsWith('..') || isAbsolute(rel) || rel.includes('/')) return null;
+  return filePath;
+}
+
+function resolveReportIndexRedirect(kind: string, name: string): { date: string } | null {
+  const kindRoot = resolveReportKindRoot(kind);
+  if (!kindRoot) return null;
+  const fileName = name === 'today.html' ? `${formatDate(new Date())}.html` : name;
+  if (!/^\d{4}-\d{2}-\d{2}\.html$/.test(fileName)) return null;
+
+  const date = fileName.slice(0, -'.html'.length);
+  const filePath = resolve(kindRoot, date, 'index.html');
+  const rel = relative(kindRoot, filePath);
+  if (rel !== `${date}/index.html` || isAbsolute(rel) || !existsSync(filePath)) return null;
+  return { date };
+}
+
+function resolveReportSectionPath(kind: string, dateOrToday: string, page: string): string | null {
+  const kindRoot = resolveReportKindRoot(kind);
+  if (!kindRoot) return null;
+  const date = dateOrToday === 'today' ? formatDate(new Date()) : dateOrToday;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+  if (!/^[a-z0-9][a-z0-9-]*\.html$/i.test(page)) return null;
+
+  const filePath = resolve(kindRoot, date, page);
+  const rel = relative(kindRoot, filePath);
+  if (!rel || rel.startsWith('..') || isAbsolute(rel)) return null;
+  const parts = rel.split('/');
+  if (parts.length !== 2 || parts[0] !== date || parts[1] !== page) return null;
+  return filePath;
 }
 
 let config: Config;
@@ -129,8 +183,8 @@ export async function createGateway(cfg: Config): Promise<FastifyInstance> {
     const { id } = request.params;
 
     try {
-      await runCronJob(id, config);
-      return { status: 'triggered', id };
+      const job = triggerCronJob(id, config);
+      return { status: 'triggered', id: job.id };
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Unknown error';
       return reply.code(404).send({ error: msg });
@@ -152,6 +206,35 @@ export async function createGateway(cfg: Config): Promise<FastifyInstance> {
       .type(artifact.artifact.contentType)
       .header('Content-Disposition', `inline; filename="${artifact.artifact.name.replace(/"/g, '')}"`)
       .send(artifact.content);
+  });
+
+  fastify.get<{ Params: { kind: string; name: string } }>('/reports/:kind/:name', async (request, reply) => {
+    const redirect = resolveReportIndexRedirect(request.params.kind, request.params.name);
+    if (redirect) {
+      return reply.redirect(`/reports/${request.params.kind}/${redirect.date}/index.html`);
+    }
+
+    const filePath = resolveReportPath(request.params.kind, request.params.name);
+    if (!filePath || !existsSync(filePath)) {
+      reply.code(404).send('Report not found');
+      return;
+    }
+    reply
+      .type('text/html; charset=utf-8')
+      .header('Content-Disposition', `inline; filename="${request.params.name.replace(/"/g, '')}"`)
+      .send(readFileSync(filePath));
+  });
+
+  fastify.get<{ Params: { kind: string; date: string; page: string } }>('/reports/:kind/:date/:page', async (request, reply) => {
+    const filePath = resolveReportSectionPath(request.params.kind, request.params.date, request.params.page);
+    if (!filePath || !existsSync(filePath)) {
+      reply.code(404).send('Report not found');
+      return;
+    }
+    reply
+      .type('text/html; charset=utf-8')
+      .header('Content-Disposition', `inline; filename="${request.params.page.replace(/"/g, '')}"`)
+      .send(readFileSync(filePath));
   });
 
   // Ensure dashboard token exists

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'fs';
-import { tmpdir } from 'os';
-import { join } from 'path';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
+import { homedir, tmpdir } from 'os';
+import { basename, join } from 'path';
 
 const {
   sendActiveChannelProactiveMessageMock,
@@ -83,6 +83,36 @@ describe('notifyCodeAgentResult Discord routing', () => {
     }
   });
 
+  it('copies review HTML from temp storage into ~/.skimpyclaw/reviews before linking it', () => {
+    const workdir = mkdtempSync(join(tmpdir(), 'skimpyclaw-review-source-'));
+    const tempDir = mkdtempSync(join(tmpdir(), 'skimpyclaw-private-review-'));
+    let copiedPath = '';
+    try {
+      const artifactPath = join(tempDir, 'pr-temp-copy-review.html');
+      copiedPath = join(homedir(), '.skimpyclaw', 'reviews', basename(artifactPath));
+      rmSync(copiedPath, { force: true });
+      writeFileSync(artifactPath, '<!doctype html><title>Temp Review</title>', 'utf-8');
+
+      const notification = buildCodeAgentDiscordNotification({
+        ...completedTask,
+        workdir,
+        outputPreview: `Artifact: [pr-temp-copy-review.html](${artifactPath})`,
+      });
+
+      expect(existsSync(copiedPath)).toBe(true);
+      expect(notification.content).toContain('**Reviews**');
+      expect(notification.content).toMatch(
+        /\[pr-temp-copy-review\.html\]\(http:\/\/127\.0\.0\.1:18790\/artifacts\/[^/]+\/pr-temp-copy-review\.html\)/
+      );
+      expect(notification.content).not.toContain(artifactPath);
+      expect(notification.attachments).toBeUndefined();
+    } finally {
+      rmSync(workdir, { recursive: true, force: true });
+      rmSync(tempDir, { recursive: true, force: true });
+      if (copiedPath) rmSync(copiedPath, { force: true });
+    }
+  });
+
   it('falls back from Discord thread to the originating Discord channel', async () => {
     await notifyCodeAgentResult({
         ...completedTask,
@@ -126,7 +156,7 @@ describe('notifyCodeAgentResult Discord routing', () => {
     );
   });
 
-  it('sends compact Discord summary with full report attachment for long output', async () => {
+  it('sends long output directly to Discord instead of attaching a markdown report', async () => {
     const longOutput = [
       'Findings',
       '',
@@ -153,17 +183,15 @@ describe('notifyCodeAgentResult Discord routing', () => {
       outputPreview: longOutput,
     });
 
-    expect(sendToDiscordThreadWithAttachmentsMock).toHaveBeenCalledWith(
+    expect(sendToDiscordThreadMock).toHaveBeenCalledWith(
       'thread-1',
       expect.stringContaining('`ca-1` completed · CLAUDE · claude-opus-4-6 · effort xhigh'),
-      [expect.objectContaining({
-        name: 'ca-1-report.md',
-        content: expect.stringContaining('## Result'),
-      })],
     );
-    const message = (sendToDiscordThreadWithAttachmentsMock.mock.calls[0] as unknown[])[1] as string;
-    expect(message.length).toBeLessThan(1900);
-    expect(message).toContain('Full report attached.');
+    expect(sendToDiscordThreadWithAttachmentsMock).not.toHaveBeenCalled();
+    const message = (sendToDiscordThreadMock.mock.calls[0] as unknown[])[1] as string;
+    expect(message).toContain('**Full Result**');
+    expect(message).toContain('Details Details');
+    expect(message).not.toContain('Full report attached.');
   });
 
   it('strips raw Codex stream-json from Discord summary', () => {

@@ -14,7 +14,7 @@ import { tmpdir } from 'os';
 import { existsSync, mkdirSync, writeFileSync, unlinkSync } from 'fs';
 import type { AbortSignalLike, Config, ThinkingLevel } from '../../types.js';
 import { getCurrentModel, getCurrentThinking, setCurrentModel, setCurrentThinking } from '../../gateway.js';
-import { getCronJobs, runCronJob } from '../../cron.js';
+import { getCronJobs, triggerCronJob } from '../../cron.js';
 import { runAgentTurn } from '../../agent.js';
 import { runHeartbeatCheck } from '../../heartbeat.js';
 import { isAllowed, isRateLimited } from '../../security.js';
@@ -915,8 +915,8 @@ export async function handleCommand(
         return;
       }
       try {
-        await runCronJob(jobId, config);
-        await message.reply(`Triggered: ${jobId}`);
+        const job = triggerCronJob(jobId, config);
+        await message.reply(`Triggered: ${job.id}`);
       } catch (error) {
         const msg = error instanceof Error ? error.message : 'Unknown error';
         await message.reply(`Error: ${msg}`);

@@ -39,6 +39,11 @@ interface ScheduledJob {
 const scheduledJobs: Map<string, ScheduledJob> = new Map();
 let configWatcher: FSWatcher | null = null;
 
+export interface CronRunTarget {
+  id: string;
+  name: string;
+}
+
 // --- Cron Logging ---
 
 interface CronLogEntry {
@@ -137,10 +142,166 @@ function escapeHtml(value: string): string {
     .replace(/"/g, '&quot;');
 }
 
+function getMayoraReportDir(): string {
+  return join(homedir(), '.skimpyclaw', 'reports', 'mayora-daily-briefing');
+}
+
+function replaceTemplateSlot(template: string, slot: string, value: string): string {
+  return template.split(`{{${slot}}}`).join(value);
+}
+
+function displayDateFromIsoDate(date: string): string {
+  const match = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return date;
+  const [, year, month, day] = match;
+  return new Date(Number(year), Number(month) - 1, Number(day)).toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function renderMayoraInlineText(value: string): string {
+  let rendered = escapeHtml(value);
+  rendered = rendered.replace(/\[([^\]\n]+)\]\(([^)\n]+)\)/g, (_match, label: string, url: string) => {
+    const trimmedUrl = url.trim();
+    if (!/^(https?:\/\/|\/)/.test(trimmedUrl)) return label;
+    return `<a href="${escapeHtml(trimmedUrl)}">${label}</a>`;
+  });
+  return rendered
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/(^|[\s(])(https?:\/\/[^\s<)]+)/g, (_match, prefix: string, url: string) =>
+      `${prefix}<a href="${escapeHtml(url)}">${escapeHtml(url)}</a>`,
+    );
+}
+
+function renderMayoraTextAsHtml(text: string, artifactPath: string): string {
+  const blocks = text
+    .replace(/\r\n/g, '\n')
+    .split(/\n{2,}/)
+    .map(block => block.trim())
+    .filter(block => block && !block.includes(`[Mayora Daily Briefing HTML](${artifactPath})`));
+  const html: string[] = [];
+
+  for (const block of blocks) {
+    if (block === '---') {
+      html.push('<hr />');
+      continue;
+    }
+    const heading = block.match(/^(#{2,4})\s+(.+)$/);
+    if (heading) {
+      const level = heading[1].length === 2 ? 'h2' : 'h3';
+      html.push(`<${level}>${renderMayoraInlineText(heading[2])}</${level}>`);
+      continue;
+    }
+
+    const lines = block.split('\n').map(line => line.trim()).filter(Boolean);
+    if (lines.every(line => /^[-*]\s+/.test(line))) {
+      html.push(`<ul>${lines.map(line => `<li>${renderMayoraInlineText(line.replace(/^[-*]\s+/, ''))}</li>`).join('')}</ul>`);
+      continue;
+    }
+    if (lines.every(line => /^\d+\.\s+/.test(line))) {
+      html.push(`<ol>${lines.map(line => `<li>${renderMayoraInlineText(line.replace(/^\d+\.\s+/, ''))}</li>`).join('')}</ol>`);
+      continue;
+    }
+    if (block.startsWith('>')) {
+      html.push(`<blockquote>${renderMayoraInlineText(block.replace(/^>\s?/, ''))}</blockquote>`);
+      continue;
+    }
+
+    html.push(`<p>${lines.map(renderMayoraInlineText).join('<br>')}</p>`);
+  }
+
+  return `<section class="work"><h2>Briefing</h2>\n${html.join('\n')}\n</section>`;
+}
+
+function buildMayoraFallbackHtml(path: string, text: string, logEntry: CronLogEntry): string {
+  const date = path.match(/(\d{4}-\d{2}-\d{2})\.html$/)?.[1] ?? formatDate(new Date(logEntry.startedAt));
+  const title = displayDateFromIsoDate(date);
+  const generatedAt = new Date().toLocaleString();
+  const startedAt = new Date(logEntry.startedAt).toLocaleString();
+  const mainContent = renderMayoraTextAsHtml(text, path);
+  const sourceFreshness = [
+    `<div><strong>Morning run</strong><br>${escapeHtml(logEntry.jobName)} completed before this HTML fallback was created.</div>`,
+    `<div><strong>Started</strong><br>${escapeHtml(startedAt)}</div>`,
+    `<div><strong>Generated</strong><br>${escapeHtml(generatedAt)}</div>`,
+  ].join('\n');
+  const sideContent = [
+    '<section class="watch">',
+    '<h2>Artifact status</h2>',
+    '<p>This file was generated automatically from Mayora\'s completed text response because the agent did not write the HTML file itself.</p>',
+    `<p class="meta">Path: <code>${escapeHtml(path)}</code></p>`,
+    '</section>',
+  ].join('\n');
+
+  let template: string;
+  try {
+    template = readFileSync(join(homedir(), '.skimpyclaw', 'agents', 'mayora', 'HTML_TEMPLATE.html'), 'utf-8');
+  } catch {
+    template = [
+      '<!doctype html><html lang="en"><head><meta charset="utf-8" />',
+      '<meta name="viewport" content="width=device-width, initial-scale=1" />',
+      '<title>{{TITLE}}</title></head><body><main>',
+      '<header><h1>{{TITLE}}</h1><p>{{SUBTITLE}}</p></header>',
+      '{{VOICE_LINK}}<div>{{SOURCE_FRESHNESS}}</div>{{MAIN_CONTENT}}<aside>{{SIDE_CONTENT}}</aside>',
+      '</main></body></html>',
+    ].join('');
+  }
+
+  return [
+    ['TITLE', title],
+    ['SUBTITLE', `Morning briefing for Katrina, backfilled from the completed ${logEntry.jobName} text output.`],
+    ['VOICE_LINK', ''],
+    ['SOURCE_FRESHNESS', sourceFreshness],
+    ['MAIN_CONTENT', mainContent],
+    ['SIDE_CONTENT', sideContent],
+  ].reduce((html, [slot, value]) => replaceTemplateSlot(html, slot, value), template);
+}
+
+function extractMayoraHtmlPaths(text: string, fallbackDate: string): string[] {
+  const reportDir = getMayoraReportDir();
+  const pathPattern = new RegExp(`${escapeRegExp(reportDir)}\\/[^\\s)>"']+\\.html`, 'g');
+  const paths = new Set(text.match(pathPattern) ?? []);
+  const dateMatch = text.match(/mayora-daily-briefing\/(\d{4}-\d{2}-\d{2})\.html/);
+  if (dateMatch) {
+    paths.add(join(reportDir, `${dateMatch[1]}.html`));
+  }
+  if (paths.size === 0) {
+    paths.add(join(reportDir, `${fallbackDate}.html`));
+  }
+  return [...paths];
+}
+
+function ensureMayoraHtmlArtifact(jobDef: CronJob, agentId: string, logEntry: CronLogEntry, text: string): string {
+  const isMayoraBriefing = jobDef.id === 'morning' || agentId === 'mayora' || text.includes('mayora-daily-briefing');
+  if (!isMayoraBriefing) return text;
+
+  const startedAt = new Date(logEntry.startedAt);
+  const fallbackDate = Number.isNaN(startedAt.getTime()) ? formatDate(new Date()) : formatDate(startedAt);
+  const paths = extractMayoraHtmlPaths(text, fallbackDate);
+  const primaryPath = paths[0];
+
+  for (const path of paths) {
+    if (existsSync(path)) continue;
+    try {
+      mkdirSync(getMayoraReportDir(), { recursive: true });
+      writeFileSync(path, buildMayoraFallbackHtml(path, text, logEntry), 'utf-8');
+      appendCronLogLine(jobDef.id, `Mayora HTML fallback created: ${path}`);
+    } catch (err) {
+      appendCronLogLine(jobDef.id, `Mayora HTML fallback failed for ${path}: ${toErrorMessage(err).slice(0, 180)}`);
+    }
+  }
+
+  return text.includes(primaryPath)
+    ? text
+    : `[Mayora Daily Briefing HTML](${primaryPath})\n\n${text}`;
+}
+
 function injectVoiceLinkIntoMayoraHtml(text: string, voiceUrl: string, jobId: string): void {
   if (!text.includes('mayora-daily-briefing') || !voiceUrl) return;
 
-  const reportDir = join(homedir(), '.skimpyclaw', 'reports', 'mayora-daily-briefing');
+  const reportDir = getMayoraReportDir();
   const pathPattern = new RegExp(`${escapeRegExp(reportDir)}\\/[^\\s)>"']+\\.html`, 'g');
   const paths = [...new Set(text.match(pathPattern) ?? [])];
   if (paths.length === 0) return;
@@ -448,7 +609,8 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
       appendCronLogLine(jobDef.id, `Agent turn completed (${response.length} chars)`);
 
       // Parse dual output (voice + text) if delimiters present
-      const { voice: voicePortion, text: textPortion } = parseDualOutput(response);
+      const { voice: voicePortion, text: parsedTextPortion } = parseDualOutput(response);
+      const textPortion = ensureMayoraHtmlArtifact(jobDef, resolvedAgentId, logEntry, parsedTextPortion);
       if (voicePortion) {
         appendCronLogLine(jobDef.id, `Dual output parsed: voice=${voicePortion.length} chars, text=${textPortion.length} chars`);
       }
@@ -745,12 +907,50 @@ export function getCronJobs(): { id: string; name: string; nextRun?: Date }[] {
 }
 
 export async function runCronJob(id: string, config: Config): Promise<void> {
-  const jobDef = config.cron.jobs.find(j => j.id === id);
-  if (!jobDef) {
-    throw new Error(`Cron job not found: ${id}`);
-  }
+  const jobDef = resolveCronJob(id, config);
 
   await executeJobPayload(jobDef, config);
+}
+
+export function triggerCronJob(id: string, config: Config): CronRunTarget {
+  const jobDef = resolveCronJob(id, config);
+
+  void executeJobPayload(jobDef, config).catch((error) => {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error(`[cron] Manual job "${jobDef.id}" failed: ${msg}`);
+  });
+
+  return { id: jobDef.id, name: jobDef.name };
+}
+
+function resolveCronJob(id: string, config: Config): CronJob {
+  const exact = config.cron.jobs.find(j => j.id === id);
+  if (exact) {
+    return exact;
+  }
+
+  const normalizedId = normalizeCronLookup(id);
+  const normalizedMatches = config.cron.jobs.filter(j =>
+    normalizeCronLookup(j.id) === normalizedId || normalizeCronLookup(j.name) === normalizedId,
+  );
+
+  if (normalizedMatches.length === 1) {
+    return normalizedMatches[0];
+  }
+
+  if (normalizedMatches.length > 1) {
+    throw new Error(`Cron job lookup is ambiguous: ${id}`);
+  }
+
+  throw new Error(`Cron job not found: ${id}`);
+}
+
+function normalizeCronLookup(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 }
 
 export interface CronJobDetail {

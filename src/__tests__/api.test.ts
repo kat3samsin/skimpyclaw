@@ -176,9 +176,10 @@ vi.mock('../cron.js', () => ({
       model: j.model,
       nextRun: new Date('2026-02-06T09:00:00Z'),
     })),
-  runCronJob: async (id: string, config: any) => {
+  triggerCronJob: (id: string, config: any) => {
     const job = config.cron.jobs.find((j: any) => j.id === id);
     if (!job) throw new Error(`Cron job not found: ${id}`);
+    return { id: job.id, name: job.name };
   },
   initCron: (...args: any[]) => mockInitCron(...args),
 }));

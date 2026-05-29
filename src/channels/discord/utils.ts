@@ -1,4 +1,4 @@
-import { join, resolve, sep } from 'path';
+import { join, relative, resolve, sep } from 'path';
 import { homedir } from 'os';
 import { existsSync, mkdirSync, realpathSync } from 'fs';
 import type { Message } from 'discord.js';
@@ -238,6 +238,45 @@ function resolvePotentialPathInside(path: string, root: string): string | null {
     : null;
 }
 
+function buildGatewayBaseUrl(config: Pick<Config, 'gateway'>): string | null {
+  const port = config.gateway.port;
+  if (!port) return null;
+  const configuredHost = config.gateway.publicHost?.trim() || config.gateway.host?.trim();
+  const host = configuredHost && configuredHost !== '0.0.0.0' && configuredHost !== '::'
+    ? configuredHost
+    : '127.0.0.1';
+  const urlHost = host.includes(':') && !host.startsWith('[') ? `[${host}]` : host;
+  return `http://${urlHost}:${port}`;
+}
+
+function buildReportUrlForLocalPath(
+  config: Pick<Config, 'gateway'>,
+  resolvedPath: string,
+  root: string,
+): string | null {
+  const baseUrl = buildGatewayBaseUrl(config);
+  if (!baseUrl) return null;
+
+  let relPath;
+  try {
+    relPath = relative(realpathSync(root), resolvedPath).split(sep).join('/');
+  } catch {
+    return null;
+  }
+
+  const flat = relPath.match(/^([a-z0-9][a-z0-9-]*)\/(\d{4}-\d{2}-\d{2})\.html$/i);
+  if (flat) {
+    return `${baseUrl}/reports/${flat[1]}/${flat[2]}.html`;
+  }
+
+  const page = relPath.match(/^([a-z0-9][a-z0-9-]*)\/(\d{4}-\d{2}-\d{2})\/([a-z0-9][a-z0-9-]*\.html)$/i);
+  if (page) {
+    return `${baseUrl}/reports/${page[1]}/${page[2]}/${page[3]}`;
+  }
+
+  return null;
+}
+
 export interface LocalHtmlArtifactLink {
   label: string;
   path: string;
@@ -275,10 +314,18 @@ export function linkLocalHtmlArtifactsForDiscord(
   return text.replace(/\[([^\]\n]+)\]\((<?)(\/[^)\n]+?\.(?:html?|mp3|ogg|wav|m4a|aiff?|aif))(>?)\)/gi, (match, label: string, open: string, rawPath: string, close: string) => {
     const path = rawPath.trim();
     if ((open || close) && !(open === '<' && close === '>')) return match;
-    const resolvedPath = roots.map(root => resolvePathInside(path, root)).find((candidate): candidate is string => Boolean(candidate));
-    if (!resolvedPath) return match;
+    const resolved = roots
+      .map(root => {
+        const resolvedPath = resolvePathInside(path, root);
+        return resolvedPath ? { root, path: resolvedPath } : null;
+      })
+      .find((candidate): candidate is { root: string; path: string } => Boolean(candidate));
+    if (!resolved) return match;
 
-    const artifact = registerLocalArtifact(resolvedPath);
+    const reportUrl = buildReportUrlForLocalPath(config, resolved.path, resolved.root);
+    if (reportUrl) return `[${label}](${reportUrl})`;
+
+    const artifact = registerLocalArtifact(resolved.path);
     if (!artifact) return match;
 
     const url = buildArtifactUrl(config, artifact);

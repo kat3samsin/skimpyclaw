@@ -406,11 +406,24 @@ async function executeMcpToolGeneric(fullName: string, args: Record<string, any>
     msg.includes('timed out') || msg.includes('Premature') ||
     msg.includes('-32603') || msg.includes('-32001') || msg.includes('-32000');
 
+  const isRetryableResult = (msg: string) =>
+    msg.includes('Access forbidden') ||
+    msg.includes('access forbidden') ||
+    msg.includes('provider access is forbidden');
+
   const MAX_RETRIES = 2;
   let lastErr: unknown;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
-      return await callMcpTool(server, toolName, normalizedArgs);
+      const result = await callMcpTool(server, toolName, normalizedArgs);
+      if (attempt < MAX_RETRIES && isRetryableResult(result)) {
+        const delay = (attempt + 1) * 2000;
+        console.warn(`[mcp] Tool call returned retryable result (${result.slice(0, 100)}), reconnecting (attempt ${attempt + 1}/${MAX_RETRIES})...`);
+        await new Promise(r => setTimeout(r, delay));
+        await reconnectMcp();
+        continue;
+      }
+      return result;
     } catch (err) {
       lastErr = err;
       const msg = err instanceof Error ? err.message : String(err);

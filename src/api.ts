@@ -22,7 +22,7 @@ import {
   getAgentTemplateContent,
   saveAgentTemplate,
 } from './agent.js';
-import { getCronJobs, getCronJobDetails, runCronJob } from './cron.js';
+import { getCronJobs, getCronJobDetails, triggerCronJob } from './cron.js';
 import { getCurrentModel, setCurrentModel, getLastMessage, setGatewayConfig } from './gateway.js';
 import { redactSecrets } from './security.js';
 
@@ -462,8 +462,8 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
   fastify.post<{ Params: { id: string } }>('/api/dashboard/cron/:id/run', async (request, reply) => {
     const { id } = request.params;
     try {
-      await runCronJob(id, runtimeConfig);
-      return { status: 'triggered', id };
+      const job = triggerCronJob(id, runtimeConfig);
+      return { status: 'triggered', id: job.id };
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Unknown error';
       return reply.code(404).send({ error: msg });

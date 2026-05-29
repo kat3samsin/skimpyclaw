@@ -37,6 +37,7 @@ export interface Config {
   gateway: {
     port: number;
     host?: string;  // Bind address (default: '127.0.0.1')
+    publicHost?: string; // Host used in generated links when bind host is local/all-interfaces
     mode: 'local' | 'remote';
   };
   agents: {

@@ -5,7 +5,7 @@ import { InlineKeyboard } from 'grammy';
 import { spawnSync } from 'child_process';
 import type { Config } from '../../types.js';
 import { getCurrentModel, setCurrentModel, getLastMessage } from '../../gateway.js';
-import { getCronJobs, runCronJob } from '../../cron.js';
+import { getCronJobs, triggerCronJob } from '../../cron.js';
 import { runHeartbeatCheck } from '../../heartbeat.js';
 
 import { getActiveCodeAgents, getRecentCodeAgents } from '../../code-agents/index.js';
@@ -137,8 +137,8 @@ export async function handleCron(ctx: Context, cfg: Config): Promise<void> {
 
     await ctx.replyWithChatAction('typing');
     try {
-      await runCronJob(jobId, cfg);
-      await ctx.reply(`Triggered: ${jobId}`);
+      const job = triggerCronJob(jobId, cfg);
+      await ctx.reply(`Triggered: ${job.id}`);
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Unknown error';
       await ctx.reply(`Error: ${msg}`);

@@ -1,8 +1,8 @@
 // Code Agent Utilities
 
-import { existsSync, readFileSync, statSync } from 'fs';
-import { resolve, join, sep } from 'path';
-import { homedir } from 'os';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync } from 'fs';
+import { basename, resolve, join, sep } from 'path';
+import { homedir, tmpdir } from 'os';
 import type { BuildCodeAgentArgsInput, CodeAgentTask } from './types.js';
 import type { Config } from '../types.js';
 import { buildValidationCommand } from './executor.js';
@@ -207,7 +207,7 @@ function buildClaudeSystemPrompt(workdir: string): string {
     'You are a SkimpyClaw code_with_agent subagent. If local Claude Code skills or hooks have subagent skip behavior, follow it.',
     'Output text only. Never use say or TTS. Focus on the assigned coding task.',
     'Do not post GitHub comments, PR reviews, issues, messages, or otherwise publish externally unless the assigned task explicitly asks you to post.',
-    'For read-only review or artifact tasks, do not edit product/source code; create the requested local artifact and return its absolute path.',
+    `For read-only review or artifact tasks, do not edit product/source code; write generated HTML artifacts under ${REVIEW_ARTIFACT_DIR}, never /tmp, /private/tmp, or the worktree, and return the absolute ${REVIEW_ARTIFACT_DIR}/... path.`,
     `Run ${validationCommand} to verify changes when you modify code.`,
   ].join(' ');
 }
@@ -256,11 +256,13 @@ interface CodeAgentDiscordNotification {
 }
 
 const MAX_REVIEW_ARTIFACT_BYTES = 2 * 1024 * 1024;
+const REVIEW_ARTIFACT_DIR = join(homedir(), '.skimpyclaw', 'reviews');
 
 interface CodeAgentReviewArtifact {
   name: string;
   path: string;
   link: string;
+  sourcePath: string;
 }
 
 function shorten(value: string, maxChars: number): string {
@@ -325,11 +327,20 @@ function formatLocalMarkdownLink(label: string, path: string): string {
 }
 
 function buildHtmlArtifactLinks(task: CodeAgentTask, result: string): CodeAgentReviewArtifact[] {
+  try {
+    mkdirSync(REVIEW_ARTIFACT_DIR, { recursive: true });
+  } catch {
+    // Best effort. If this fails, fall through and only link existing artifacts.
+  }
+
   const allowedRoots = [
     task.workdir,
     task.sourceWorkdir,
     task.worktreePath,
-    join(homedir(), '.skimpyclaw', 'reviews'),
+    REVIEW_ARTIFACT_DIR,
+    tmpdir(),
+    '/tmp',
+    '/private/tmp',
   ];
   const candidates = new Set([
     ...extractHtmlPaths(result),
@@ -342,13 +353,21 @@ function buildHtmlArtifactLinks(task: CodeAgentTask, result: string): CodeAgentR
     try {
       const stat = statSync(path);
       if (!stat.isFile() || stat.size <= 0 || stat.size > MAX_REVIEW_ARTIFACT_BYTES) continue;
-      const artifact = registerLocalArtifact(path);
+      let artifactPath = path;
+      if (!isPathInside(path, REVIEW_ARTIFACT_DIR)) {
+        const name = basename(path).replace(/[^a-zA-Z0-9._-]/g, '-');
+        if (!/\.html?$/i.test(name)) continue;
+        artifactPath = join(REVIEW_ARTIFACT_DIR, name);
+        copyFileSync(path, artifactPath);
+      }
+      const artifact = registerLocalArtifact(artifactPath);
       if (!artifact) continue;
       const target = buildArtifactUrl(_codeAgentConfig, artifact) || artifact.path;
       artifacts.push({
         name: artifact.name,
         path: artifact.path,
         link: formatLocalMarkdownLink(artifact.name, target),
+        sourcePath: path,
       });
       if (artifacts.length >= 3) break;
     } catch {
@@ -357,6 +376,23 @@ function buildHtmlArtifactLinks(task: CodeAgentTask, result: string): CodeAgentR
   }
 
   return artifacts;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function rewriteReviewArtifactPaths(value: string, artifacts: CodeAgentReviewArtifact[]): string {
+  let rewritten = value;
+  for (const artifact of artifacts) {
+    const source = escapeRegExp(artifact.sourcePath);
+    rewritten = rewritten.replace(
+      new RegExp(`\\[([^\\]\\n]+)\\]\\(${source}\\)`, 'g'),
+      artifact.link,
+    );
+    rewritten = rewritten.split(artifact.sourcePath).join(artifact.path);
+  }
+  return rewritten;
 }
 
 function extractStreamJsonText(line: string): string | null {
@@ -467,35 +503,12 @@ function formatAgentDisplay(task: CodeAgentTask): string {
   return `${agent} · ${model}${effort}`;
 }
 
-function buildReportMarkdown(task: CodeAgentTask, result: string): string {
-  const validation = task.validationPassed === true
-    ? 'pass'
-    : task.validationPassed === false
-      ? 'fail'
-      : 'not run';
-  return [
-    `# Code Agent ${task.id}`,
-    '',
-    `- Status: ${task.status}`,
-    `- Agent: ${task.agent}`,
-    `- Model: ${task.modelLabel || resolveCodeAgentModelLabel(task.agent, task.model)}`,
-    `- Effort: ${task.effort || 'default'}`,
-    `- Duration: ${formatDuration(task.durationSeconds)}`,
-    `- Validation: ${validation}`,
-    `- Workdir: ${task.workdir}`,
-    task.sourceWorkdir ? `- Source Workdir: ${task.sourceWorkdir}` : '',
-    task.worktreePath ? `- Worktree: ${task.worktreePath}` : '',
-    task.worktreeCleanup ? `- Worktree Cleanup: ${task.worktreeCleanup.status}${task.worktreeCleanup.reason ? ` (${task.worktreeCleanup.reason})` : ''}` : '',
-    '',
-    '## Task',
-    '',
-    task.task,
-    '',
-    '## Result',
-    '',
+function buildDirectDiscordReport(task: CodeAgentTask, result: string): string {
+  const lines = [
     result || task.error || '(No result captured.)',
-    task.validationOutput ? `\n## Validation Output\n\n${task.validationOutput}` : '',
-  ].filter(Boolean).join('\n');
+    task.validationOutput ? `\n**Validation Output**\n${task.validationOutput}` : '',
+  ].filter(Boolean);
+  return lines.join('\n');
 }
 
 function buildDiscordResultSummary(task: CodeAgentTask, result: string): string {
@@ -536,29 +549,22 @@ export function buildCodeAgentDiscordNotification(task: CodeAgentTask): CodeAgen
         ? 'Validation not run'
         : undefined;
   const rawResultForArtifacts = stripStreamJsonNoise(task.outputPreview || task.liveOutput || task.validationOutput || task.error || '');
-  const rawResult = normalizeOutputPaths(rawResultForArtifacts, task.workdir);
+  const reviewArtifacts = buildHtmlArtifactLinks(task, rawResultForArtifacts);
+  const rawResult = normalizeOutputPaths(
+    rewriteReviewArtifactPaths(rawResultForArtifacts, reviewArtifacts),
+    task.workdir,
+  );
   const taskPreview = normalizeOutputPaths(shorten(task.task, 350), task.workdir);
   const summary = buildDiscordResultSummary(task, rawResult);
-  const reviewArtifacts = buildHtmlArtifactLinks(task, rawResultForArtifacts);
-  const showReviewListOnly = reviewArtifacts.length > 0 && task.status === 'completed';
   const contentParts = [
     `${icon} \`${task.id}\` ${status} · ${formatAgentDisplay(task)} · ${dur}`,
     validation ? `**Validation:** ${validation}` : undefined,
     task.retryCount ? `**Retries:** ${task.retryCount}` : undefined,
-    showReviewListOnly ? undefined : `**Task:** ${taskPreview}`,
-    !showReviewListOnly && summary ? `\n${summary}` : undefined,
+    `**Task:** ${taskPreview}`,
+    summary ? `\n${summary}` : undefined,
   ].filter(Boolean);
 
-  const needsReportAttachment = !showReviewListOnly && (rawResult.length > 1_200 || !!task.validationOutput || task.task.length > 350);
-  const attachments: CodeAgentNotificationAttachment[] = [
-    ...(needsReportAttachment
-      ? [{
-        name: `${task.id}-report.md`,
-        description: `Full report for ${task.id}`,
-        content: buildReportMarkdown(task, rawResult),
-      }]
-      : []),
-  ];
+  const needsDirectReport = rawResult.length > 1_200 || !!task.validationOutput || task.task.length > 350;
   const reviewLinks = reviewArtifacts.map(file => file.link);
 
   const content = [
@@ -566,10 +572,10 @@ export function buildCodeAgentDiscordNotification(task: CodeAgentTask): CodeAgen
     reviewLinks.length > 0
       ? `\n**Reviews**\n${reviewLinks.map((link, index) => `${index + 1}. ${link}`).join('\n')}`
       : undefined,
-    needsReportAttachment ? 'Full report attached.' : undefined,
+    needsDirectReport ? `\n**Full Result**\n${buildDirectDiscordReport(task, rawResult)}` : undefined,
   ].filter(Boolean).join('\n');
 
-  return { content, attachments: attachments.length > 0 ? attachments : undefined };
+  return { content };
 }
 
 function resolveDiscordThreadId(task: CodeAgentTask): string | undefined {

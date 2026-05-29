@@ -21,7 +21,7 @@ function makeArtifactRoot(): string {
 }
 
 describe('linkLocalHtmlArtifactsForDiscord', () => {
-  it('rewrites safe local HTML report links to gateway artifact links', () => {
+  it('rewrites dated local HTML report links to stable gateway report links', () => {
     const root = makeArtifactRoot();
     const reportPath = join(root, 'chief-daily-reader', '2026-05-17.html');
     mkdirSync(join(root, 'chief-daily-reader'), { recursive: true });
@@ -33,7 +33,38 @@ describe('linkLocalHtmlArtifactsForDiscord', () => {
       [root],
     );
 
-    expect(result).toMatch(/\[Chief Daily Reader\]\(http:\/\/127\.0\.0\.1:18790\/artifacts\/[^/]+\/2026-05-17\.html\)/);
+    expect(result).toBe('Open [Chief Daily Reader](http://127.0.0.1:18790/reports/chief-daily-reader/2026-05-17.html)');
+  });
+
+  it('uses publicHost for stable report links', () => {
+    const root = makeArtifactRoot();
+    const reportPath = join(root, 'chief-daily-reader', '2026-05-17.html');
+    mkdirSync(join(root, 'chief-daily-reader'), { recursive: true });
+    writeFileSync(reportPath, '<!doctype html><title>Chief</title>', 'utf-8');
+
+    const result = linkLocalHtmlArtifactsForDiscord(
+      `Open [Chief Daily Reader](${reportPath})`,
+      { gateway: { port: 18790, host: '0.0.0.0', publicHost: 'reports.example.test', mode: 'local' } },
+      [root],
+    );
+
+    expect(result).toBe('Open [Chief Daily Reader](http://reports.example.test:18790/reports/chief-daily-reader/2026-05-17.html)');
+  });
+
+  it('rewrites dated local HTML section report links to stable gateway report links', () => {
+    const root = makeArtifactRoot();
+    const reportDir = join(root, 'chief-daily-reader', '2026-05-17');
+    const reportPath = join(reportDir, 'news.html');
+    mkdirSync(reportDir, { recursive: true });
+    writeFileSync(reportPath, '<!doctype html><title>Chief News</title>', 'utf-8');
+
+    const result = linkLocalHtmlArtifactsForDiscord(
+      `Open [Chief News](${reportPath})`,
+      { gateway: { port: 18790, host: '127.0.0.1', mode: 'local' } },
+      [root],
+    );
+
+    expect(result).toBe('Open [Chief News](http://127.0.0.1:18790/reports/chief-daily-reader/2026-05-17/news.html)');
   });
 
   it('leaves local HTML links outside allowed artifact roots unchanged', () => {
