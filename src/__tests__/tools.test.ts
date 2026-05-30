@@ -280,6 +280,11 @@ describe('bash', () => {
     expect(result).toContain('Shell control operators are blocked');
   });
 
+  it('allows shell-looking characters inside quoted arguments', async () => {
+    const result = await executeTool('Bash', { command: 'printf \"hello|world\"' }, toolConfig);
+    expect(result.trim()).toBe('hello|world');
+  });
+
   it('blocks dangerous commands via exec approval', async () => {
     const result = await executeTool('Bash', { command: `rm -rf ${TEST_DIR}` }, toolConfig);
     expect(result).toContain('⛔');

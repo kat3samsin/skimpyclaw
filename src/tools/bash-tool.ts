@@ -14,7 +14,38 @@ import { isPathAllowed } from './path-utils.js';
 import { validateBashPaths } from './bash-path-validation.js';
 import { sanitizeExecEnv } from '../env-sanitizer.js';
 
-const SHELL_CONTROL_PATTERN = /[|&;<>()`$\n]/;
+const SHELL_CONTROL_CHARS = new Set(['|', '&', ';', '<', '>', '(', ')', '`', '$']);
+
+function hasUnquotedShellControl(command: string): boolean {
+  let quote: '"' | "'" | null = null;
+
+  for (let i = 0; i < command.length; i++) {
+    const ch = command[i];
+
+    // Keep Bash calls single-line even when a newline is inside quotes; multiline
+    // snippets/heredocs are too easy to mistake for shell mode.
+    if (ch === '\n' || ch === '\r') return true;
+
+    if (ch === '\\' && quote !== "'") {
+      if (i + 1 < command.length) i++;
+      continue;
+    }
+
+    if (quote) {
+      if (ch === quote) quote = null;
+      continue;
+    }
+
+    if (ch === '"' || ch === "'") {
+      quote = ch;
+      continue;
+    }
+
+    if (SHELL_CONTROL_CHARS.has(ch)) return true;
+  }
+
+  return false;
+}
 
 function tokenizeCommand(command: string): string[] | null {
   const tokens: string[] = [];
@@ -121,7 +152,7 @@ export async function executeBash(command: string, cwd: string | undefined, conf
     }
   }
 
-  if (SHELL_CONTROL_PATTERN.test(command)) {
+  if (hasUnquotedShellControl(command)) {
     return 'Error: Shell control operators are blocked in safe mode. Run a single executable with explicit arguments (no pipes, redirects, chaining, or subshell expansion).';
   }
 
