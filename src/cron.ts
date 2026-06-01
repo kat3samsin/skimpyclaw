@@ -1,7 +1,7 @@
 // Cron scheduler using croner
 
 import { Cron } from 'croner';
-import { exec } from 'child_process';
+import { spawn } from 'child_process';
 import { existsSync, mkdirSync, appendFileSync, readFileSync, watch, writeFileSync, type FSWatcher } from 'fs';
 import { join, resolve } from 'path';
 import { getLogsDir, getConfigPath, loadConfig, resolveAllowedPaths } from './config.js';
@@ -784,24 +784,79 @@ async function executeScript(jobDef: CronJob, _config: Config): Promise<string> 
 
   return new Promise((resolve, reject) => {
     const startTime = Date.now();
+    let stdout = '';
+    let stderr = '';
+    let timedOut = false;
+    let settled = false;
+    let timeout: ReturnType<typeof setTimeout>;
+    let sigkillTimer: ReturnType<typeof setTimeout> | null = null;
     console.log(`[cron:script] Running: ${script.slice(0, 100)}${script.length > 100 ? '...' : ''}`);
     if (cwd) console.log(`[cron:script] cwd: ${cwd}`);
 
-    const child = exec(script, {
+    const child = spawn(script, {
       cwd: cwd || undefined,
-      timeout: timeoutMs,
       env: sanitizeCronEnv(),
-      maxBuffer: 10 * 1024 * 1024, // 10MB output buffer
-    }, (error, stdout, stderr) => {
-      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      shell: true,
+      detached: true,
+    });
+    const maxBuffer = 10 * 1024 * 1024; // 10MB output buffer
 
-      if (error) {
-        console.error(`[cron:script] Failed after ${elapsed}s: ${error.message}`);
-        if (stderr) console.error(`[cron:script] stderr: ${stderr.slice(0, 500)}`);
-        reject(error);
+    const clearTimers = () => {
+      clearTimeout(timeout);
+      if (sigkillTimer) clearTimeout(sigkillTimer);
+    };
+
+    const fail = (error: Error) => {
+      if (settled) return;
+      settled = true;
+      clearTimers();
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      console.error(`[cron:script] Failed after ${elapsed}s: ${error.message}`);
+      if (stderr) console.error(`[cron:script] stderr: ${stderr.slice(0, 500)}`);
+      reject(error);
+    };
+
+    timeout = setTimeout(() => {
+      timedOut = true;
+      if (child.pid) {
+        killScriptProcessTree(child.pid, 'SIGTERM');
+        sigkillTimer = setTimeout(() => killScriptProcessTree(child.pid!, 'SIGKILL'), 5000);
+      }
+    }, timeoutMs);
+
+    child.stdout.on('data', (chunk: Buffer) => {
+      stdout += chunk.toString();
+      if (stdout.length + stderr.length > maxBuffer) {
+        if (child.pid) killScriptProcessTree(child.pid, 'SIGTERM');
+        fail(new Error(`Script output exceeded maxBuffer of ${maxBuffer} bytes`));
+      }
+    });
+
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString();
+      if (stdout.length + stderr.length > maxBuffer) {
+        if (child.pid) killScriptProcessTree(child.pid, 'SIGTERM');
+        fail(new Error(`Script output exceeded maxBuffer of ${maxBuffer} bytes`));
+      }
+    });
+
+    child.on('error', (error) => {
+      fail(error);
+    });
+
+    child.on('close', (code, signal) => {
+      clearTimers();
+      if (settled) return;
+
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      if (timedOut) {
+        fail(new Error(`Script timed out after ${timeoutMs}ms`));
         return;
       }
-
+      if (code !== 0) {
+        fail(new Error(`Command failed: ${script}${stderr ? `\n${stderr}` : ''}${signal ? `\nSignal: ${signal}` : ''}`));
+        return;
+      }
       console.log(`[cron:script] Completed in ${elapsed}s`);
       if (stdout) {
         const lines = stdout.trim().split('\n');
@@ -818,6 +873,18 @@ async function executeScript(jobDef: CronJob, _config: Config): Promise<string> 
       console.log(`[cron:script] PID: ${child.pid}`);
     }
   });
+}
+
+export function killScriptProcessTree(pid: number, signal: NodeJS.Signals): void {
+  try {
+    process.kill(-pid, signal);
+  } catch {
+    try {
+      process.kill(pid, signal);
+    } catch {
+      // Process already exited.
+    }
+  }
 }
 
 

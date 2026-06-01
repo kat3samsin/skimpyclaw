@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { isRetryableCronAgentError, parseDualOutput } from '../cron.js';
+import { describe, it, expect, vi } from 'vitest';
+import { isRetryableCronAgentError, killScriptProcessTree, parseDualOutput } from '../cron.js';
 
 describe('parseDualOutput', () => {
   it('returns full response as text when no delimiters present', () => {
@@ -105,5 +105,21 @@ describe('isRetryableCronAgentError', () => {
   it('does not match normal validation errors', () => {
     expect(isRetryableCronAgentError(new Error('Tool use loop reached maximum iterations'))).toBe(false);
     expect(isRetryableCronAgentError(new Error('Invalid model selection'))).toBe(false);
+  });
+});
+
+describe('killScriptProcessTree', () => {
+  it('targets the process group before falling back to the shell process', () => {
+    const killSpy = vi.spyOn(process, 'kill')
+      .mockImplementationOnce(() => {
+        throw new Error('missing process group');
+      })
+      .mockImplementationOnce(() => true);
+
+    killScriptProcessTree(1234, 'SIGTERM');
+
+    expect(killSpy).toHaveBeenNthCalledWith(1, -1234, 'SIGTERM');
+    expect(killSpy).toHaveBeenNthCalledWith(2, 1234, 'SIGTERM');
+    killSpy.mockRestore();
   });
 });
