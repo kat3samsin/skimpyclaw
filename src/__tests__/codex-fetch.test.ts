@@ -23,11 +23,7 @@ function fakeJwt(payload: Record<string, unknown>): string {
   return `${base64UrlJson({ alg: 'none' })}.${base64UrlJson(payload)}.signature`;
 }
 
-function initFakeCodexAuth(): void {
-  const dir = mkdtempSync(join(tmpdir(), 'skimpyclaw-codex-fetch-'));
-  tempDirs.push(dir);
-  const token = fakeJwt({ exp: Math.floor(Date.now() / 1000) + 3600 });
-  const authPath = join(dir, 'auth.json');
+function writeFakeCodexAuth(authPath: string, token: string): void {
   writeFileSync(authPath, JSON.stringify({
     auth_mode: 'chatgpt',
     tokens: {
@@ -35,8 +31,17 @@ function initFakeCodexAuth(): void {
       account_id: 'acct-test',
     },
   }), 'utf-8');
+}
+
+function initFakeCodexAuth(): { authPath: string; token: string } {
+  const dir = mkdtempSync(join(tmpdir(), 'skimpyclaw-codex-fetch-'));
+  tempDirs.push(dir);
+  const token = fakeJwt({ exp: Math.floor(Date.now() / 1000) + 3600 });
+  const authPath = join(dir, 'auth.json');
+  writeFakeCodexAuth(authPath, token);
 
   initCodexAuth(authPath, 'https://codex.test/backend-api');
+  return { authPath, token };
 }
 
 afterEach(() => {
@@ -87,5 +92,25 @@ describe('codexFetch', () => {
 
     expect(result).toBe('data: [DONE]\n\n');
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('reloads Codex auth from disk once when the cached token is expired server-side', async () => {
+    const { authPath, token: staleToken } = initFakeCodexAuth();
+    const refreshedToken = fakeJwt({ exp: Math.floor(Date.now() / 1000) + 7200 });
+    writeFakeCodexAuth(authPath, refreshedToken);
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        error: { message: 'Provided authentication token is expired. Please try signing in again.', code: 'token_expired' },
+        status: 401,
+      }), { status: 401 }))
+      .mockResolvedValueOnce(new Response('data: [DONE]\n\n', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await codexFetch({ model: 'gpt-5.5' });
+
+    expect(result).toBe('data: [DONE]\n\n');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0][1]?.headers.Authorization).toBe(`Bearer ${staleToken}`);
+    expect(fetchMock.mock.calls[1][1]?.headers.Authorization).toBe(`Bearer ${refreshedToken}`);
   });
 });

@@ -199,6 +199,14 @@ function isRetryableCodexFetchError(error: unknown): boolean {
   ].some(pattern => message.includes(pattern));
 }
 
+function isExpiredCodexAuthResponse(status: number, body: string): boolean {
+  const normalized = body.toLowerCase();
+  return status === 401 && (
+    normalized.includes('token_expired') ||
+    normalized.includes('authentication token is expired')
+  );
+}
+
 function formatCodexFetchError(error: unknown, url: string): string {
   return `Codex fetch failed for ${url}: ${errorMessageWithCause(error)}`;
 }
@@ -218,21 +226,43 @@ export async function codexFetch(body: any, timeoutMs: number = DEFAULT_CODEX_FE
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), Math.max(1_000, timeoutMs));
     try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${codexAuth.accessToken}`,
-          'chatgpt-account-id': codexAuth.accountId,
-          'OpenAI-Beta': 'responses=experimental',
-          'originator': 'codex_cli_rs',
-        },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      });
+      const fetchWithCurrentAuth = () => {
+        if (!codexAuth) {
+          throw new Error('Codex auth not initialized. Run "codex" CLI to authenticate.');
+        }
+
+        return fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${codexAuth.accessToken}`,
+            'chatgpt-account-id': codexAuth.accountId,
+            'OpenAI-Beta': 'responses=experimental',
+            'originator': 'codex_cli_rs',
+          },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        });
+      };
+
+      let response = await fetchWithCurrentAuth();
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => 'unknown');
+        if (isExpiredCodexAuthResponse(response.status, errorText)) {
+          const staleToken = codexAuth.accessToken;
+          const refreshedAuth = loadCodexAuth();
+          if (refreshedAuth && refreshedAuth.accessToken !== staleToken) {
+            console.warn('[codex] Cached token expired; reloaded Codex auth from disk and retrying once');
+            codexAuth = refreshedAuth;
+            response = await fetchWithCurrentAuth();
+            if (response.ok) {
+              return response.text();
+            }
+            const retryErrorText = await response.text().catch(() => 'unknown');
+            throw new Error(`Codex API ${response.status}: ${retryErrorText}`);
+          }
+        }
         throw new Error(`Codex API ${response.status}: ${errorText}`);
       }
 
