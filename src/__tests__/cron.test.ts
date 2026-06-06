@@ -1,5 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
-import { isRetryableCronAgentError, killScriptProcessTree, parseDualOutput } from '../cron.js';
+import {
+  isRetryableCronAgentError,
+  killScriptProcessTree,
+  parseDualOutput,
+  runAgentTurnWithTimeout,
+} from '../cron.js';
 
 describe('parseDualOutput', () => {
   it('returns full response as text when no delimiters present', () => {
@@ -105,6 +110,97 @@ describe('isRetryableCronAgentError', () => {
   it('does not match normal validation errors', () => {
     expect(isRetryableCronAgentError(new Error('Tool use loop reached maximum iterations'))).toBe(false);
     expect(isRetryableCronAgentError(new Error('Invalid model selection'))).toBe(false);
+  });
+});
+
+describe('runAgentTurnWithTimeout', () => {
+  it('runs without an abort signal and returns the result when timeoutMs is unset', async () => {
+    let receivedSignal: unknown = 'unset';
+    let calls = 0;
+    const result = await runAgentTurnWithTimeout(undefined, (signal) => {
+      calls++;
+      receivedSignal = signal;
+      return Promise.resolve('ok');
+    });
+    expect(result).toBe('ok');
+    expect(calls).toBe(1);
+    expect(receivedSignal).toBeUndefined();
+  });
+
+  it('treats timeoutMs <= 0 as no timeout (default behavior unchanged)', async () => {
+    let receivedSignal: unknown = 'unset';
+    const result = await runAgentTurnWithTimeout(0, (signal) => {
+      receivedSignal = signal;
+      return Promise.resolve('ok');
+    });
+    expect(result).toBe('ok');
+    expect(receivedSignal).toBeUndefined();
+  });
+
+  it('passes an abort signal and returns the result when the run finishes in time', async () => {
+    let onTimeoutCalled = false;
+    let abortedDuringRun = true;
+    const result = await runAgentTurnWithTimeout(
+      10_000,
+      (signal) => {
+        abortedDuringRun = signal?.aborted ?? true;
+        return Promise.resolve('done');
+      },
+      () => {
+        onTimeoutCalled = true;
+      },
+    );
+    expect(result).toBe('done');
+    expect(abortedDuringRun).toBe(false);
+    expect(onTimeoutCalled).toBe(false);
+  });
+
+  it('aborts the signal and throws a timeout error when the run exceeds timeoutMs', async () => {
+    let onTimeoutCalled = false;
+    let observedAbort = false;
+    // Mirror the tool loop: on abort it returns a "[Cancelled ...]" string rather
+    // than throwing, so the helper must detect the timeout after the run resolves.
+    const run = (signal?: { aborted: boolean }) =>
+      new Promise<string>((resolve) => {
+        const check = () => {
+          if (signal?.aborted) {
+            observedAbort = true;
+            resolve('[Cancelled after 2 tool calls]');
+          } else {
+            setTimeout(check, 2);
+          }
+        };
+        check();
+      });
+
+    await expect(
+      runAgentTurnWithTimeout(20, run, () => {
+        onTimeoutCalled = true;
+      }),
+    ).rejects.toThrow('Agent turn timed out after 20ms');
+    expect(onTimeoutCalled).toBe(true);
+    expect(observedAbort).toBe(true);
+  });
+
+  it('reports a timeout even when the aborted run rejects', async () => {
+    const run = (signal?: { aborted: boolean }) =>
+      new Promise<string>((_, reject) => {
+        const check = () => {
+          if (signal?.aborted) reject(new Error('fetch failed'));
+          else setTimeout(check, 2);
+        };
+        check();
+      });
+
+    await expect(runAgentTurnWithTimeout(20, run)).rejects.toThrow(
+      'Agent turn timed out after 20ms',
+    );
+  });
+
+  it('propagates the original error when the run fails before timing out', async () => {
+    await expect(
+      runAgentTurnWithTimeout(10_000, () => Promise.reject(new Error('boom'))),
+    ).rejects.toThrow('boom');
   });
 });
 

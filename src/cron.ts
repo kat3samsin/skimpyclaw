@@ -5,7 +5,7 @@ import { spawn } from 'child_process';
 import { existsSync, mkdirSync, appendFileSync, readFileSync, watch, writeFileSync, type FSWatcher } from 'fs';
 import { join, resolve } from 'path';
 import { getLogsDir, getConfigPath, loadConfig, resolveAllowedPaths } from './config.js';
-import type { Config, CronJob, ToolConfig } from './types.js';
+import type { AbortSignalLike, Config, CronJob, ToolConfig } from './types.js';
 import { homedir } from 'node:os';
 import { runAgentTurn } from './agent.js';
 import { startTrace, addEvent, endTrace } from './audit.js';
@@ -453,6 +453,64 @@ async function runCronAgentTurnWithRetry(jobId: string, run: () => Promise<strin
   throw new Error('Unreachable cron retry state');
 }
 
+/**
+ * Run an agent turn with an optional wall-clock timeout.
+ *
+ * When `timeoutMs` is set, an AbortController is created and its signal is passed
+ * to `run` so the tool loop can observe cancellation between iterations. We do NOT
+ * use Promise.race here: racing would resolve while the underlying agent turn kept
+ * executing (orphaned), which is how cron jobs ended up running for hours and
+ * overlapping. Instead we abort the signal, let the run return on its own, then
+ * throw a timeout error so an aborted/cancelled run is never reported as success.
+ * The timer is always cleared once the run settles (completion or failure).
+ *
+ * When `timeoutMs` is unset (or <= 0), behavior is unchanged: `run` is invoked
+ * with no abort signal and its result/error is returned/propagated as-is.
+ */
+export async function runAgentTurnWithTimeout(
+  timeoutMs: number | undefined,
+  run: (abortSignal?: AbortSignalLike) => Promise<string>,
+  onTimeout?: () => void,
+): Promise<string> {
+  if (!timeoutMs || timeoutMs <= 0) {
+    return run();
+  }
+
+  const controller = new AbortController();
+  let timedOut = false;
+  let timer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+    try {
+      onTimeout?.();
+    } catch {
+      // Logging callback failures must not mask the timeout.
+    }
+  }, timeoutMs);
+  (timer as { unref?: () => void }).unref?.();
+
+  try {
+    const result = await run(controller.signal);
+    // The tool loop returns a "[Cancelled ...]" string on abort rather than
+    // throwing, so check the flag after the run returns to avoid reporting a
+    // timed-out turn as success.
+    if (timedOut) {
+      throw new Error(`Agent turn timed out after ${timeoutMs}ms`);
+    }
+    return result;
+  } catch (err) {
+    if (timedOut) {
+      throw new Error(`Agent turn timed out after ${timeoutMs}ms`);
+    }
+    throw err;
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+      timer = null;
+    }
+  }
+}
+
 export function initCron(config: Config): void {
   // Clear existing jobs
   for (const job of scheduledJobs.values()) {
@@ -585,25 +643,33 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
       const tools = jobDef.payload.tools
         ? { ...jobDef.payload.tools, allowedPaths: resolveAllowedPaths(config, jobDef.payload.tools.allowedPaths) }
         : defaultTools;
-      const response = await runCronAgentTurnWithRetry(
-        jobDef.id,
-        () => runAgentTurn(
-          resolvedAgentId,
-          message,
-          config,
-          jobDef.model,
-          tools,
-          undefined,
-          {
-            channel: discordThreadId ? 'discord' : getActiveChannelId() || 'telegram',
-            trigger: 'cron',
-            sessionId: jobDef.id,
-            metadata: {
-              jobName: jobDef.name,
-              isCronJob: true,
-              ...(discordThreadId ? { discordThreadId, isDm: false } : {}),
+      const response = await runAgentTurnWithTimeout(
+        jobDef.payload.timeoutMs,
+        (abortSignal) => runCronAgentTurnWithRetry(
+          jobDef.id,
+          () => runAgentTurn(
+            resolvedAgentId,
+            message,
+            config,
+            jobDef.model,
+            tools,
+            undefined,
+            {
+              channel: discordThreadId ? 'discord' : getActiveChannelId() || 'telegram',
+              trigger: 'cron',
+              sessionId: jobDef.id,
+              ...(abortSignal ? { abortSignal } : {}),
+              metadata: {
+                jobName: jobDef.name,
+                isCronJob: true,
+                ...(discordThreadId ? { discordThreadId, isDm: false } : {}),
+              },
             },
-          },
+          ),
+        ),
+        () => appendCronLogLine(
+          jobDef.id,
+          `Agent turn timed out after ${jobDef.payload.timeoutMs}ms; aborting`,
         ),
       );
       appendCronLogLine(jobDef.id, `Agent turn completed (${response.length} chars)`);
