@@ -27,6 +27,7 @@ import {
   getActiveChannelId,
   initActiveChannel,
   sendActiveChannelProactiveMessage,
+  startActiveChannel,
 } from '../channels.js';
 
 function makeConfig(overrides: Record<string, any> = {}): any {
@@ -98,5 +99,29 @@ describe('channels manager', () => {
     const sent = await sendActiveChannelProactiveMessage(cfg, 'hello');
     expect(sent).toBe(true);
     expect(telegramMock.sendProactiveMessage).toHaveBeenCalledWith(12345, 'hello');
+  });
+
+  it('does not crash runtime startup when the active channel cannot connect', async () => {
+    const error = new Error('getaddrinfo ENOTFOUND discord.com');
+    discordMock.startDiscord.mockRejectedValueOnce(error);
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const cfg = makeConfig({
+      channels: {
+        active: 'discord',
+        telegram: { enabled: false, token: '', allowFrom: [] },
+        discord: { enabled: true, token: 'dc', allowFrom: ['42'] },
+      },
+    });
+
+    await initActiveChannel(cfg);
+    await expect(startActiveChannel()).resolves.toBeUndefined();
+
+    expect(discordMock.stopDiscord).toHaveBeenCalledTimes(1);
+    expect(getActiveChannelId()).toBeNull();
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Failed to start discord channel'),
+      error,
+    );
+    consoleErrorSpy.mockRestore();
   });
 });

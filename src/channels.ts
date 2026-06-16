@@ -98,7 +98,20 @@ export async function initActiveChannel(config: Config): Promise<ChannelId | nul
 
 export async function startActiveChannel(): Promise<void> {
   if (!activeAdapter) return;
-  await activeAdapter.start();
+
+  const channelId = activeChannelId;
+  try {
+    await activeAdapter.start();
+  } catch (err) {
+    console.error(`[channels] Failed to start ${channelId ?? 'active'} channel; continuing without chat channel:`, err);
+    try {
+      await activeAdapter.stop();
+    } catch (stopErr) {
+      console.error(`[channels] Failed to stop ${channelId ?? 'active'} channel after start failure:`, stopErr);
+    }
+    activeChannelId = null;
+    activeAdapter = null;
+  }
 }
 
 export async function stopActiveChannel(): Promise<void> {
