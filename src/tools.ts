@@ -109,22 +109,37 @@ function startMcpHealthCheck(): void {
       toolDefsCache.clear();
     }
   }, MCP_REDISCOVERY_INTERVAL_MS);
+  // Don't keep the process alive solely for the health check, and avoid
+  // registering it as a fresh listener on each runtime construction path.
+  if (typeof mcpHealthInterval?.unref === 'function') {
+    mcpHealthInterval.unref();
+  }
 }
 
 async function getMcpRuntime(): Promise<any> {
-  if (!mcpRuntime) {
+  if (mcpRuntime) return mcpRuntime;
+  if (inflightRuntime) return inflightRuntime;
+  inflightRuntime = (async () => {
     const { createRuntime } = await import('mcporter');
     mcpRuntime = await createRuntime({
       configPath: join(homedir(), '.mcporter', 'mcporter.json'),
     });
     startMcpHealthCheck();
-  }
-  return mcpRuntime;
+    return mcpRuntime;
+  })().finally(() => {
+    inflightRuntime = null;
+  });
+  return inflightRuntime;
 }
 
 // --- MCP Auto-Discovery ---
 
 let discoveredMcpTools: any[] | null = null;
+/** Single-flight guards to prevent concurrent MCP work from registering
+ *  duplicate socket listeners on the same mcporter runtime. */
+let inflightDiscovery: Promise<any[]> | null = null;
+let inflightReconnect: Promise<void> | null = null;
+let inflightRuntime: Promise<any> | null = null;
 
 /** Sanitize a name to match OpenAI/Codex tool name pattern: [a-zA-Z0-9_-] */
 function sanitizeToolName(name: string): string {
@@ -164,7 +179,12 @@ export async function discoverMcpTools(): Promise<any[]> {
   // Re-discover if cache is older than the rediscovery interval
   const stale = mcpLastDiscoveredAt > 0 && (Date.now() - mcpLastDiscoveredAt) > MCP_REDISCOVERY_INTERVAL_MS;
   if (discoveredMcpTools !== null && !stale) return discoveredMcpTools;
+  // Single-flight: if another caller is already discovering, await that
+  // instead of spawning a parallel listTools fan-out (which would attach
+  // duplicate socket listeners to the shared mcporter runtime).
+  if (inflightDiscovery) return inflightDiscovery;
 
+  inflightDiscovery = (async () => {
   const tools: any[] = [];
   mcpToolNameMap.clear();
 
@@ -213,6 +233,10 @@ export async function discoverMcpTools(): Promise<any[]> {
   mcpLastDiscoveredAt = Date.now();
   console.log(`[mcp] Discovered ${tools.length} tools: ${tools.map((t: any) => t.name).join(', ')}`);
   return tools;
+  })().finally(() => {
+    inflightDiscovery = null;
+  });
+  return inflightDiscovery;
 }
 
 export function clearMcpToolCache(): void {
@@ -224,22 +248,31 @@ const toolDefsCache = new TTLCache<any[]>(60_000);
 
 /** Force-reconnect the MCP runtime (clears cached runtime and tool discovery). */
 export async function reconnectMcp(): Promise<void> {
-  console.log('[mcp] Reconnecting...');
-  if (mcpRuntime) {
-    await mcpRuntime.close().catch(() => {});
-    mcpRuntime = null;
-  }
-  discoveredMcpTools = null;
-  mcpToolNameMap.clear();
-  mcpFallbackCache = null;
-  toolDefsCache.clear();
-  try {
-    await getMcpRuntime();
-    const tools = await discoverMcpTools();
-    console.log(`[mcp] Reconnected — ${tools.length} tools discovered`);
-  } catch (err) {
-    console.error('[mcp] Reconnect failed:', err instanceof Error ? err.message : err);
-  }
+  // Single-flight: overlapping reconnect calls would each close+recreate the
+  // runtime and re-trigger discovery, piling duplicate listeners onto the new
+  // mcporter sockets. Coalesce concurrent callers onto one reconnect.
+  if (inflightReconnect) return inflightReconnect;
+  inflightReconnect = (async () => {
+    console.log('[mcp] Reconnecting...');
+    if (mcpRuntime) {
+      await mcpRuntime.close().catch(() => {});
+      mcpRuntime = null;
+    }
+    discoveredMcpTools = null;
+    mcpToolNameMap.clear();
+    mcpFallbackCache = null;
+    toolDefsCache.clear();
+    try {
+      await getMcpRuntime();
+      const tools = await discoverMcpTools();
+      console.log(`[mcp] Reconnected — ${tools.length} tools discovered`);
+    } catch (err) {
+      console.error('[mcp] Reconnect failed:', err instanceof Error ? err.message : err);
+    }
+  })().finally(() => {
+    inflightReconnect = null;
+  });
+  return inflightReconnect;
 }
 
 /** Inject project names into a tool's workdir description, or return the tool unchanged. */
@@ -449,6 +482,9 @@ export async function cleanupMcp(): Promise<void> {
     await mcpRuntime.close().catch(() => {});
     mcpRuntime = null;
   }
+  inflightDiscovery = null;
+  inflightReconnect = null;
+  inflightRuntime = null;
 }
 
 // --- Tool Executor ---
