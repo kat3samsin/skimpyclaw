@@ -23,7 +23,9 @@ const {
     const { mkdtempSync } = require('fs');
     const { tmpdir } = require('os');
     const { join } = require('path');
-    return mkdtempSync(join(tmpdir(), 'skimpy-cron-home-'));
+    const dir = mkdtempSync(join(tmpdir(), 'skimpy-cron-home-'));
+    process.env.SKIMPYCLAW_OBSIDIAN_VAULT_ROOT = join(dir, 'vault');
+    return dir;
   })(),
 }));
 
@@ -94,6 +96,25 @@ function localDate(): string {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+function writeObsidianDailyOutputs(): string[] {
+  const now = new Date();
+  const filename = `${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}-${now.getFullYear()}.md`;
+  const vault = process.env.SKIMPYCLAW_OBSIDIAN_VAULT_ROOT!;
+  const paths = [
+    join(vault, '2. Areas', 'Daily Notes', filename),
+    join(vault, '2. Areas', 'Daily Digests', filename),
+  ];
+  const created: string[] = [];
+  for (const path of paths) {
+    if (!existsSync(path)) {
+      mkdirSync(join(path, '..'), { recursive: true });
+      writeFileSync(path, '# test\n', 'utf-8');
+      created.push(path);
+    }
+  }
+  return created;
 }
 
 const TEST_DISCORD_THREAD_ID = '123456789'.repeat(2);
@@ -558,14 +579,21 @@ describe('runCronJob digest chat output', () => {
       },
     } as any;
 
-    await runCronJob('morning', voiceConfig);
+    const created = writeObsidianDailyOutputs();
+    try {
+      await runCronJob('morning', voiceConfig);
 
-    const voicePath = join(testHome, '.skimpyclaw', 'reports', 'voice', 'morning', `${date}.mp3`);
-    expect(existsSync(voicePath)).toBe(true);
-    const finalCall = sendToDiscordThreadWithVoiceMock.mock.calls.at(-1) as unknown as [string, string, Uint8Array, string];
-    const finalMessage = finalCall[1];
-    expect(finalMessage).toMatch(/Voice file: http:\/\/127\.0\.0\.1:18790\/artifacts\/[^/]+\/\d{4}-\d{2}-\d{2}\.mp3/);
-    expect(readFileSync(htmlPath, 'utf-8')).toMatch(/<a href="http:\/\/127\.0\.0\.1:18790\/artifacts\/[^/]+\/\d{4}-\d{2}-\d{2}\.mp3">Open voice file<\/a>/);
+      const voicePath = join(testHome, '.skimpyclaw', 'reports', 'voice', 'morning', `${date}.mp3`);
+      expect(existsSync(voicePath)).toBe(true);
+      const finalCall = sendToDiscordThreadWithVoiceMock.mock.calls.at(-1) as unknown as [string, string, Uint8Array, string];
+      const finalMessage = finalCall[1];
+      expect(finalMessage).toMatch(/Voice file: http:\/\/127\.0\.0\.1:18790\/artifacts\/[^/]+\/\d{4}-\d{2}-\d{2}\.mp3/);
+      const updatedHtml = readFileSync(htmlPath, 'utf-8');
+      expect(updatedHtml).toMatch(/<audio controls preload="metadata" src="http:\/\/127\.0\.0\.1:18790\/artifacts\/[^/]+\/\d{4}-\d{2}-\d{2}\.mp3"><\/audio>/);
+      expect(updatedHtml).toMatch(/<a class="voice-open-link" href="http:\/\/127\.0\.0\.1:18790\/artifacts\/[^/]+\/\d{4}-\d{2}-\d{2}\.mp3">Open voice file<\/a>/);
+    } finally {
+      for (const path of created) rmSync(path, { force: true });
+    }
   });
 
   it('creates a fallback Mayora HTML artifact when the agent links a missing file', async () => {
@@ -580,6 +608,16 @@ describe('runCronJob digest chat output', () => {
       '## Recommended task now',
       '',
       '**Fix Reader Chat theme style leakage.**',
+      '',
+      'Context:',
+      '1. First ordered item',
+      '2. Second ordered item',
+      'Links:',
+      '- One link',
+      '- Another link',
+      '3. Third ordered item',
+      'Suggested reply:',
+      '> Quote me',
     ].join('\n');
     runAgentTurnMock.mockResolvedValue(`---VOICE---\nShort voice\n---TEXT---\n${text}`);
     parseAndSaveDigestMock.mockReturnValue({ summary: text, articles: [] });
@@ -623,15 +661,119 @@ describe('runCronJob digest chat output', () => {
       },
     } as any;
 
-    await runCronJob('morning', voiceConfig);
+    const created = writeObsidianDailyOutputs();
+    try {
+      await runCronJob('morning', voiceConfig);
 
-    const html = readFileSync(htmlPath, 'utf-8');
-    expect(html).toContain('Fix Reader Chat theme style leakage.');
-    expect(html).toContain('Artifact status');
-    expect(html).toMatch(/<a href="http:\/\/127\.0\.0\.1:18790\/artifacts\/[^/]+\/\d{4}-\d{2}-\d{2}\.mp3">Open voice file<\/a>/);
+      const html = readFileSync(htmlPath, 'utf-8');
+      expect(html).toContain('Fix Reader Chat theme style leakage.');
+      expect(html).toContain('<p>Context:</p>');
+      expect(html).toContain('<ol><li>First ordered item</li><li>Second ordered item</li></ol>');
+      expect(html).toContain('<ul><li>One link</li><li>Another link</li></ul>');
+      expect(html).toContain('<ol start="3"><li>Third ordered item</li></ol>');
+      expect(html).toContain('<blockquote>Quote me</blockquote>');
+      expect(html).toContain('Artifact status');
+      expect(html).toMatch(/<audio controls preload="metadata" src="http:\/\/127\.0\.0\.1:18790\/artifacts\/[^/]+\/\d{4}-\d{2}-\d{2}\.mp3"><\/audio>/);
+      expect(html).toMatch(/<a class="voice-open-link" href="http:\/\/127\.0\.0\.1:18790\/artifacts\/[^/]+\/\d{4}-\d{2}-\d{2}\.mp3">Open voice file<\/a>/);
 
-    const finalCall = sendToDiscordThreadWithVoiceMock.mock.calls.at(-1) as unknown as [string, string, Uint8Array, string];
-    expect(finalCall[1]).toContain(`http://127.0.0.1:18790/reports/mayora-daily-briefing/${date}.html`);
+      const finalCall = sendToDiscordThreadWithVoiceMock.mock.calls.at(-1) as unknown as [string, string, Uint8Array, string];
+      expect(finalCall[1]).toContain(`http://127.0.0.1:18790/reports/mayora-daily-briefing/${date}.html`);
+    } finally {
+      for (const path of created) rmSync(path, { force: true });
+    }
+  });
+
+
+  it('creates fallback Obsidian daily outputs when the morning routine does not write them', async () => {
+    const text = 'Morning briefing without vault writes';
+    runAgentTurnMock.mockResolvedValue(text);
+    parseAndSaveDigestMock.mockReturnValue({ summary: text, articles: [] });
+    const now = new Date();
+    const filename = `${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}-${now.getFullYear()}.md`;
+    const vault = process.env.SKIMPYCLAW_OBSIDIAN_VAULT_ROOT!;
+    const notePath = join(vault, '2. Areas', 'Daily Notes', filename);
+    const digestPath = join(vault, '2. Areas', 'Daily Digests', filename);
+    rmSync(notePath, { force: true });
+    rmSync(digestPath, { force: true });
+
+    const morningConfig = {
+      ...config,
+      cron: {
+        jobs: [
+          {
+            id: 'morning',
+            name: 'Morning Routine',
+            agent: 'mayora',
+            schedule: { kind: 'cron', expr: '* * * * *', tz: 'UTC' },
+            payload: { kind: 'agentTurn', message: 'morning please' },
+          },
+        ],
+      },
+      agents: {
+        default: 'default',
+        list: {
+          default: { model: 'claude-sonnet' },
+          mayora: { model: 'codex', identity: { name: 'Mayora', emoji: 'M' } },
+        },
+      },
+    } as any;
+
+    try {
+      await expect(runCronJob('morning', morningConfig)).resolves.toBeUndefined();
+      expect(readFileSync(notePath, 'utf-8')).toContain('Morning Routine fallback');
+      expect(readFileSync(digestPath, 'utf-8')).toContain(text);
+    } finally {
+      rmSync(notePath, { force: true });
+      rmSync(digestPath, { force: true });
+    }
+  });
+
+  it('passes the morning routine when Obsidian daily outputs exist', async () => {
+    const now = new Date();
+    const filename = `${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}-${now.getFullYear()}.md`;
+    const vault = process.env.SKIMPYCLAW_OBSIDIAN_VAULT_ROOT!;
+    const notePath = join(vault, '2. Areas', 'Daily Notes', filename);
+    const digestPath = join(vault, '2. Areas', 'Daily Digests', filename);
+    const created: string[] = [];
+    for (const path of [notePath, digestPath]) {
+      if (!existsSync(path)) {
+        mkdirSync(join(path, '..'), { recursive: true });
+        writeFileSync(path, '# test\n', 'utf-8');
+        created.push(path);
+      }
+    }
+
+    try {
+      const text = 'Morning briefing with vault writes';
+      runAgentTurnMock.mockResolvedValue(text);
+      parseAndSaveDigestMock.mockReturnValue({ summary: text, articles: [] });
+
+      const morningConfig = {
+        ...config,
+        cron: {
+          jobs: [
+            {
+              id: 'morning',
+              name: 'Morning Routine',
+              agent: 'mayora',
+              schedule: { kind: 'cron', expr: '* * * * *', tz: 'UTC' },
+              payload: { kind: 'agentTurn', message: 'morning please' },
+            },
+          ],
+        },
+        agents: {
+          default: 'default',
+          list: {
+            default: { model: 'claude-sonnet' },
+            mayora: { model: 'codex', identity: { name: 'Mayora', emoji: 'M' } },
+          },
+        },
+      } as any;
+
+      await expect(runCronJob('morning', morningConfig)).resolves.toBeUndefined();
+    } finally {
+      for (const path of created) rmSync(path, { force: true });
+    }
   });
 
   it('sends voice to active channel when Discord thread is not configured', async () => {

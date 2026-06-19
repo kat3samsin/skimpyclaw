@@ -3,7 +3,7 @@
 import { Cron } from 'croner';
 import { spawn } from 'child_process';
 import { existsSync, mkdirSync, appendFileSync, readFileSync, watch, writeFileSync, type FSWatcher } from 'fs';
-import { join, resolve } from 'path';
+import { dirname, join, resolve } from 'path';
 import { getLogsDir, getConfigPath, loadConfig, resolveAllowedPaths } from './config.js';
 import type { AbortSignalLike, Config, CronJob, ToolConfig } from './types.js';
 import { homedir } from 'node:os';
@@ -150,6 +150,11 @@ function replaceTemplateSlot(template: string, slot: string, value: string): str
   return template.split(`{{${slot}}}`).join(value);
 }
 
+function renderMayoraVoiceBlock(safeVoiceUrl: string): string {
+  const linkHtml = `<a class="voice-open-link" href="${safeVoiceUrl}">Open voice file</a>`;
+  return `<section class="voice-link" data-voice-link><h2>Voice Briefing</h2><audio controls preload="metadata" src="${safeVoiceUrl}"></audio><p>${linkHtml}</p></section>`;
+}
+
 function displayDateFromIsoDate(date: string): string {
   const match = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) return date;
@@ -176,6 +181,74 @@ function renderMayoraInlineText(value: string): string {
     );
 }
 
+function renderMayoraLineGroups(lines: string[]): string[] {
+  const html: string[] = [];
+  let paragraph: string[] = [];
+  let list: { kind: 'ol' | 'ul'; items: string[]; start?: string } | null = null;
+  let quote: string[] = [];
+
+  const flushParagraph = () => {
+    if (paragraph.length === 0) return;
+    html.push(`<p>${paragraph.map(renderMayoraInlineText).join('<br>')}</p>`);
+    paragraph = [];
+  };
+  const flushList = () => {
+    if (!list) return;
+    const start = list.kind === 'ol' && list.start && list.start !== '1' ? ` start="${list.start}"` : '';
+    html.push(`<${list.kind}${start}>${list.items.map(item => `<li>${renderMayoraInlineText(item)}</li>`).join('')}</${list.kind}>`);
+    list = null;
+  };
+  const flushQuote = () => {
+    if (quote.length === 0) return;
+    html.push(`<blockquote>${quote.map(renderMayoraInlineText).join('<br>')}</blockquote>`);
+    quote = [];
+  };
+  const flushAll = () => {
+    flushParagraph();
+    flushList();
+    flushQuote();
+  };
+
+  for (const line of lines) {
+    const heading = line.match(/^(#{2,4})\s+(.+)$/);
+    if (heading) {
+      flushAll();
+      const level = heading[1].length === 2 ? 'h2' : 'h3';
+      html.push(`<${level}>${renderMayoraInlineText(heading[2])}</${level}>`);
+      continue;
+    }
+
+    const quoteLine = line.match(/^>\s?(.+)$/);
+    if (quoteLine) {
+      flushParagraph();
+      flushList();
+      quote.push(quoteLine[1]);
+      continue;
+    }
+
+    const ordered = line.match(/^(\d+)\.\s+(.+)$/);
+    const unordered = line.match(/^[-*]\s+(.+)$/);
+    if (ordered || unordered) {
+      flushParagraph();
+      flushQuote();
+      const kind = ordered ? 'ol' : 'ul';
+      if (!list || list.kind !== kind) {
+        flushList();
+        list = { kind, items: [], start: ordered?.[1] };
+      }
+      list.items.push(ordered?.[2] ?? unordered?.[1] ?? line);
+      continue;
+    }
+
+    flushList();
+    flushQuote();
+    paragraph.push(line);
+  }
+
+  flushAll();
+  return html;
+}
+
 function renderMayoraTextAsHtml(text: string, artifactPath: string): string {
   const blocks = text
     .replace(/\r\n/g, '\n')
@@ -189,28 +262,8 @@ function renderMayoraTextAsHtml(text: string, artifactPath: string): string {
       html.push('<hr />');
       continue;
     }
-    const heading = block.match(/^(#{2,4})\s+(.+)$/);
-    if (heading) {
-      const level = heading[1].length === 2 ? 'h2' : 'h3';
-      html.push(`<${level}>${renderMayoraInlineText(heading[2])}</${level}>`);
-      continue;
-    }
-
     const lines = block.split('\n').map(line => line.trim()).filter(Boolean);
-    if (lines.every(line => /^[-*]\s+/.test(line))) {
-      html.push(`<ul>${lines.map(line => `<li>${renderMayoraInlineText(line.replace(/^[-*]\s+/, ''))}</li>`).join('')}</ul>`);
-      continue;
-    }
-    if (lines.every(line => /^\d+\.\s+/.test(line))) {
-      html.push(`<ol>${lines.map(line => `<li>${renderMayoraInlineText(line.replace(/^\d+\.\s+/, ''))}</li>`).join('')}</ol>`);
-      continue;
-    }
-    if (block.startsWith('>')) {
-      html.push(`<blockquote>${renderMayoraInlineText(block.replace(/^>\s?/, ''))}</blockquote>`);
-      continue;
-    }
-
-    html.push(`<p>${lines.map(renderMayoraInlineText).join('<br>')}</p>`);
+    html.push(...renderMayoraLineGroups(lines));
   }
 
   return `<section class="work"><h2>Briefing</h2>\n${html.join('\n')}\n</section>`;
@@ -244,7 +297,8 @@ function buildMayoraFallbackHtml(path: string, text: string, logEntry: CronLogEn
       '<meta name="viewport" content="width=device-width, initial-scale=1" />',
       '<title>{{TITLE}}</title></head><body><main>',
       '<header><h1>{{TITLE}}</h1><p>{{SUBTITLE}}</p></header>',
-      '{{VOICE_LINK}}<div>{{SOURCE_FRESHNESS}}</div>{{MAIN_CONTENT}}<aside>{{SIDE_CONTENT}}</aside>',
+      '<section class="voice-link" data-voice-link hidden><h2>Voice Briefing</h2><audio controls preload="metadata" src="{{VOICE_URL}}"></audio><p><a class="voice-open-link" href="{{VOICE_URL}}">Open voice file</a></p></section>',
+      '<div>{{SOURCE_FRESHNESS}}</div>{{MAIN_CONTENT}}<aside>{{SIDE_CONTENT}}</aside>',
       '</main></body></html>',
     ].join('');
   }
@@ -252,6 +306,7 @@ function buildMayoraFallbackHtml(path: string, text: string, logEntry: CronLogEn
   return [
     ['TITLE', title],
     ['SUBTITLE', `Morning briefing for Katrina, backfilled from the completed ${logEntry.jobName} text output.`],
+    ['VOICE_URL', ''],
     ['VOICE_LINK', ''],
     ['SOURCE_FRESHNESS', sourceFreshness],
     ['MAIN_CONTENT', mainContent],
@@ -306,16 +361,20 @@ function injectVoiceLinkIntoMayoraHtml(text: string, voiceUrl: string, jobId: st
   const paths = [...new Set(text.match(pathPattern) ?? [])];
   if (paths.length === 0) return;
 
-  const linkHtml = `<a href="${escapeHtml(voiceUrl)}">Open voice file</a>`;
-  const voiceBlock = `<section class="voice-link" data-voice-link><h2>Voice Briefing</h2><p>${linkHtml}</p></section>`;
+  const safeVoiceUrl = escapeHtml(voiceUrl);
+  const voiceBlock = renderMayoraVoiceBlock(safeVoiceUrl);
 
   for (const path of paths) {
     try {
       if (!existsSync(path)) continue;
       const html = readFileSync(path, 'utf-8');
       let next = html;
-      if (html.includes('data-voice-link')) {
-        next = html.replace(/<section class="voice-link" data-voice-link>[\s\S]*?<\/section>/, voiceBlock);
+      if (html.includes('{{VOICE_URL}}')) {
+        next = html
+          .replace('<section class="voice-link" data-voice-link hidden>', '<section class="voice-link" data-voice-link>')
+          .replace(/\{\{VOICE_URL\}\}/g, safeVoiceUrl);
+      } else if (html.includes('data-voice-link')) {
+        next = html.replace(/<section class="voice-link" data-voice-link(?: hidden)?>[\s\S]*?<\/section>/, voiceBlock);
       } else if (html.includes('{{VOICE_LINK}}')) {
         next = html.replace('{{VOICE_LINK}}', voiceBlock);
       } else if (!html.includes(voiceUrl)) {
@@ -407,6 +466,174 @@ function resolveDiscordThreadTarget(jobDef: CronJob): string | undefined {
     return undefined;
   }
   return threadId;
+}
+
+const DEFAULT_OBSIDIAN_VAULT_ROOT = '/Users/katre/Library/Mobile Documents/iCloud~md~obsidian/Documents/2ndBrain';
+
+function obsidianVaultRoot(): string {
+  return process.env.SKIMPYCLAW_OBSIDIAN_VAULT_ROOT || DEFAULT_OBSIDIAN_VAULT_ROOT;
+}
+
+function localDateParts(date = new Date()): { yyyy: string; mm: string; dd: string } {
+  return {
+    yyyy: String(date.getFullYear()),
+    mm: String(date.getMonth() + 1).padStart(2, '0'),
+    dd: String(date.getDate()).padStart(2, '0'),
+  };
+}
+
+function obsidianDailyOutputPaths(date = new Date()): { note: string; digest: string; filename: string } {
+  const { yyyy, mm, dd } = localDateParts(date);
+  const filename = `${mm}-${dd}-${yyyy}.md`;
+  return {
+    filename,
+    note: join(obsidianVaultRoot(), '2. Areas', 'Daily Notes', filename),
+    digest: join(obsidianVaultRoot(), '2. Areas', 'Daily Digests', filename),
+  };
+}
+
+function obsidianDisplayDate(date = new Date()): string {
+  return date.toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function isMorningRoutine(jobDef: CronJob): boolean {
+  return jobDef.id === 'morning' || (jobDef.name || '').toLowerCase() === 'morning routine';
+}
+
+function cleanMorningBriefingText(text: string): string {
+  return text
+    .replace(/^\[Mayora Daily Briefing HTML\]\([^)]+\)\s*(?:[—-][^\n]*)?\n+/m, '')
+    .trim();
+}
+
+function extractMarkdownSection(text: string, heading: string): string {
+  const pattern = new RegExp(`^##\\s+${escapeRegExp(heading)}\\s*$([\\s\\S]*?)(?=^##\\s+|(?![\\s\\S]))`, 'im');
+  return pattern.exec(text)?.[1]?.trim() || '';
+}
+
+function checklistItemsFromText(text: string): string[] {
+  const seen = new Set<string>();
+  const items: string[] = [];
+  for (const match of text.matchAll(/^\s*[-*]\s+\[\s\]\s+(.+)$/gm)) {
+    const item = match[1]?.trim();
+    if (!item || seen.has(item)) continue;
+    seen.add(item);
+    items.push(item);
+    if (items.length >= 12) break;
+  }
+  return items;
+}
+
+function writeMissingFile(path: string, content: string): void {
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, content, 'utf-8');
+}
+
+function buildFallbackDailyDigest(text: string, date = new Date()): string {
+  const body = cleanMorningBriefingText(text);
+  return [
+    `# Daily Digest: ${obsidianDisplayDate(date)}`,
+    '',
+    body || 'Morning briefing completed, but no text output was available for the digest fallback.',
+    '',
+  ].join('\n');
+}
+
+function buildFallbackDailyNote(text: string, digestFilename: string, date = new Date()): string {
+  const digestStem = digestFilename.replace(/\.md$/, '');
+  const schedule = extractMarkdownSection(text, 'Schedule');
+  const checklist = checklistItemsFromText(text);
+  const workItems = checklist.length > 0
+    ? checklist.map(item => `- [ ] ${item}`).join('\n')
+    : '- [ ] Review today\'s Daily Digest.';
+
+  return [
+    '#daily-notes',
+    '',
+    `# Daily Note: ${obsidianDisplayDate(date)}`,
+    '',
+    'steps:: 0',
+    'running:: 0',
+    'miles:: 0',
+    'weights:: 0',
+    'protein:: 0',
+    'calories:: 0',
+    '',
+    `> [[Dashboard]] | [[Reading]] | [[2. Areas/Daily Digests/${digestStem}|Daily Digest]]`,
+    '',
+    '---',
+    '',
+    '## SCHEDULE',
+    '',
+    schedule || '- Check calendar.',
+    '',
+    '---',
+    '',
+    '## TODO',
+    '',
+    '### Work',
+    '',
+    workItems,
+    '',
+    '### Habits',
+    '',
+    '- [ ] Log steps.',
+    '- [ ] Log running.',
+    '- [ ] Log miles.',
+    '- [ ] Log weights.',
+    '- [ ] Log protein.',
+    '- [ ] Log calories.',
+    '',
+    '---',
+    '',
+    '## NOTES',
+    '',
+    '- Created by Morning Routine fallback because the agent response did not write the vault file directly.',
+    '',
+  ].join('\n');
+}
+
+function ensureMorningVaultOutputs(jobDef: CronJob, text: string): void {
+  if (!isMorningRoutine(jobDef)) return;
+
+  const paths = obsidianDailyOutputPaths();
+  const created: string[] = [];
+
+  if (!existsSync(paths.digest)) {
+    writeMissingFile(paths.digest, buildFallbackDailyDigest(text));
+    created.push('Daily Digest');
+  }
+
+  if (!existsSync(paths.note)) {
+    writeMissingFile(paths.note, buildFallbackDailyNote(text, paths.filename));
+    created.push('Daily Note');
+  }
+
+  if (created.length > 0) {
+    appendCronLogLine(jobDef.id, `Created missing Obsidian vault outputs: ${created.join(', ')} (${paths.filename})`);
+  }
+}
+
+function assertMorningVaultOutputs(jobDef: CronJob): void {
+  if (!isMorningRoutine(jobDef)) return;
+
+  const paths = obsidianDailyOutputPaths();
+  const missing = [
+    ['Daily Note', paths.note] as const,
+    ['Daily Digest', paths.digest] as const,
+  ].filter(([, path]) => !existsSync(path));
+
+  if (missing.length === 0) {
+    appendCronLogLine(jobDef.id, `Verified Obsidian vault outputs: ${paths.filename}`);
+    return;
+  }
+
+  const detail = missing.map(([label, path]) => `${label} missing at ${path}`).join('; ');
+  throw new Error(`Morning Routine did not create required Obsidian vault outputs for ${paths.filename}: ${detail}`);
 }
 
 const CRON_AGENT_RETRY_DELAYS_MS = [5000, 15000];
@@ -712,6 +939,9 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
         appendCronLogLine(jobDef.id, `Failed to save digest: ${errMsg}`);
       }
 
+      ensureMorningVaultOutputs(jobDef, textPortion);
+      assertMorningVaultOutputs(jobDef);
+
       // Synthesize voice if configured (stored for final notification)
       if (jobDef.payload.sendAsVoice && config.voice) {
         try {
@@ -867,15 +1097,15 @@ async function executeScript(jobDef: CronJob, _config: Config): Promise<string> 
     });
     const maxBuffer = 10 * 1024 * 1024; // 10MB output buffer
 
-    const clearTimers = () => {
+    const clearTimers = (options?: { keepSigkillTimer?: boolean }) => {
       clearTimeout(timeout);
-      if (sigkillTimer) clearTimeout(sigkillTimer);
+      if (!options?.keepSigkillTimer && sigkillTimer) clearTimeout(sigkillTimer);
     };
 
-    const fail = (error: Error) => {
+    const fail = (error: Error, options?: { keepSigkillTimer?: boolean }) => {
       if (settled) return;
       settled = true;
-      clearTimers();
+      clearTimers(options);
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
       console.error(`[cron:script] Failed after ${elapsed}s: ${error.message}`);
       if (stderr) console.error(`[cron:script] stderr: ${stderr.slice(0, 500)}`);
@@ -887,7 +1117,9 @@ async function executeScript(jobDef: CronJob, _config: Config): Promise<string> 
       if (child.pid) {
         killScriptProcessTree(child.pid, 'SIGTERM');
         sigkillTimer = setTimeout(() => killScriptProcessTree(child.pid!, 'SIGKILL'), 5000);
+        (sigkillTimer as { unref?: () => void }).unref?.();
       }
+      fail(new Error(`Script timed out after ${timeoutMs}ms`), { keepSigkillTimer: true });
     }, timeoutMs);
 
     child.stdout.on('data', (chunk: Buffer) => {
@@ -916,7 +1148,6 @@ async function executeScript(jobDef: CronJob, _config: Config): Promise<string> 
 
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
       if (timedOut) {
-        fail(new Error(`Script timed out after ${timeoutMs}ms`));
         return;
       }
       if (code !== 0) {
