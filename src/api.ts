@@ -771,8 +771,9 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
 
   // --- Config ---
   fastify.get('/api/dashboard/config', async () => {
-    // Reload from disk each time to get fresh state
-    const freshConfig = loadConfig();
+    // Reload the raw config so dashboard display preserves ${VAR}/KEYCHAIN refs
+    // and does not warn on optional missing env vars.
+    const freshConfig = loadRawConfig();
     const redacted = redactSecrets(freshConfig as unknown as Record<string, any>);
     return { config: redacted };
   });

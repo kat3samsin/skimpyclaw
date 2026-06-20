@@ -109,7 +109,22 @@ vi.mock('../config.js', () => ({
   loadConfig: () => {
     // Read from disk to get fresh state (mirrors real behavior)
     const { readFileSync } = require('fs');
-    return JSON.parse(readFileSync(CONFIG_PATH, 'utf-8'));
+    const expandEnvVars = (obj: any): any => {
+      if (typeof obj === 'string') {
+        return obj.replace(/\$\{([^}]+)\}/g, (_: string, key: string) => {
+          if (process.env[key] === undefined) {
+            console.warn(`[config] env var \${${key}} is not set`);
+          }
+          return process.env[key] || '';
+        });
+      }
+      if (Array.isArray(obj)) return obj.map(expandEnvVars);
+      if (obj && typeof obj === 'object') {
+        return Object.fromEntries(Object.entries(obj).map(([key, value]) => [key, expandEnvVars(value)]));
+      }
+      return obj;
+    };
+    return expandEnvVars(JSON.parse(readFileSync(CONFIG_PATH, 'utf-8')));
   },
   loadRawConfig: () => {
     // Read from disk without env expansion
@@ -823,6 +838,23 @@ describe('Config endpoints', () => {
     if (discord) {
       expect(discord.token).toBe('[REDACTED]');
     }
+  });
+
+  it('GET /api/dashboard/config preserves env refs without expanding missing vars', async () => {
+    delete process.env.OPENAI_API_KEY;
+    const configWithEnvRef = JSON.parse(JSON.stringify(TEST_CONFIG));
+    configWithEnvRef.models.aliases.fromEnv = '${OPENAI_API_KEY}';
+    writeFileSync(CONFIG_PATH, JSON.stringify(configWithEnvRef, null, 2));
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const res = await inject({ method: 'GET', url: '/api/dashboard/config' });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.config.models.aliases.fromEnv).toBe('${OPENAI_API_KEY}');
+    expect(body.config.models.providers.anthropic.apiKey).toBe('[REDACTED]');
+    expect(warnSpy).not.toHaveBeenCalledWith('[config] env var ${OPENAI_API_KEY} is not set');
+    warnSpy.mockRestore();
   });
 
   it('PUT /api/dashboard/config saves valid config', async () => {
