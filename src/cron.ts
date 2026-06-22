@@ -32,7 +32,10 @@ function safeTimezone(tz: string | undefined): string {
 interface ScheduledJob {
   id: string;
   name: string;
-  job: Cron;
+  job: {
+    stop(): void;
+    nextRun(): Date | null | undefined;
+  };
   nextRun?: Date;
 }
 
@@ -788,24 +791,61 @@ function scheduleJob(jobDef: CronJob, config: Config): void {
     console.log(`[cron] Skipping disabled job: ${jobDef.id}`);
     return;
   }
+
+  const runScheduledJob = async () => {
+    console.log(`[cron] Running job: ${jobDef.name}`);
+    try {
+      await executeJobPayload(jobDef, config);
+    } catch (err) {
+      console.error(`[cron] Scheduled job "${jobDef.id}" failed: ${toErrorMessage(err)}`);
+    }
+  };
+
+  if (jobDef.schedule.kind === 'interval') {
+    const intervalMs = jobDef.schedule.ms;
+    if (!Number.isFinite(intervalMs) || intervalMs === undefined || intervalMs <= 0) {
+      console.warn(`[cron] Invalid interval schedule for ${jobDef.id}: ms must be a positive number`);
+      return;
+    }
+
+    let nextRun = new Date(Date.now() + intervalMs);
+    const timer = setInterval(() => {
+      nextRun = new Date(Date.now() + intervalMs);
+      void runScheduledJob();
+    }, intervalMs);
+
+    const intervalJob = {
+      stop: () => clearInterval(timer),
+      nextRun: () => nextRun,
+    };
+
+    scheduledJobs.set(jobDef.id, {
+      id: jobDef.id,
+      name: jobDef.name,
+      job: intervalJob,
+      nextRun,
+    });
+
+    console.log(`[cron] Scheduled: ${jobDef.name} (every ${intervalMs}ms)`);
+    return;
+  }
+
   if (jobDef.schedule.kind !== 'cron') {
     console.warn(`[cron] Unsupported schedule kind: ${jobDef.schedule.kind}`);
     return;
   }
 
+  if (!jobDef.schedule.expr) {
+    console.warn(`[cron] Invalid cron schedule for ${jobDef.id}: expr is required`);
+    return;
+  }
+
   const cronJob = new Cron(
-    jobDef.schedule.expr!,
+    jobDef.schedule.expr,
     {
       timezone: safeTimezone(jobDef.schedule.tz),
     },
-    async () => {
-      console.log(`[cron] Running job: ${jobDef.name}`);
-      try {
-        await executeJobPayload(jobDef, config);
-      } catch (err) {
-        console.error(`[cron] Scheduled job "${jobDef.id}" failed: ${toErrorMessage(err)}`);
-      }
-    }
+    runScheduledJob,
   );
 
   scheduledJobs.set(jobDef.id, {
@@ -1320,7 +1360,7 @@ function normalizeCronLookup(value: string): string {
 export interface CronJobDetail {
   id: string;
   name: string;
-  schedule: { kind: string; expr?: string; tz?: string };
+  schedule: { kind: string; expr?: string; ms?: number; tz?: string };
   payload: { kind: string; message?: string };
   model?: string;
   nextRun?: Date;
@@ -1335,6 +1375,7 @@ export function getCronJobDetails(config: Config): CronJobDetail[] {
       schedule: {
         kind: jobDef.schedule.kind,
         expr: jobDef.schedule.expr,
+        ms: jobDef.schedule.ms,
         tz: jobDef.schedule.tz,
       },
       payload: {

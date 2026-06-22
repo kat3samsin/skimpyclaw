@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
@@ -88,7 +88,7 @@ vi.mock('node:os', async (importOriginal) => {
   return { ...actual, homedir: () => testHome };
 });
 
-import { initCron, runCronJob, triggerCronJob } from '../cron.js';
+import { getCronJobDetails, getCronJobs, initCron, runCronJob, stopCron, triggerCronJob } from '../cron.js';
 
 function localDate(): string {
   const date = new Date();
@@ -138,6 +138,11 @@ describe('runCronJob digest chat output', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     cronCallbacks.length = 0;
+  });
+
+  afterEach(() => {
+    stopCron();
+    vi.useRealTimers();
   });
 
   afterAll(() => {
@@ -253,6 +258,52 @@ describe('runCronJob digest chat output', () => {
     );
 
     errorSpy.mockRestore();
+    warnSpy.mockRestore();
+  });
+
+  it('schedules interval jobs and reports their next run safely', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-22T00:00:00.000Z'));
+
+    const intervalConfig = {
+      ...config,
+      cron: {
+        jobs: [
+          {
+            id: 'interval-digest',
+            name: 'Interval Digest',
+            schedule: { kind: 'interval', ms: 5000 },
+            payload: { kind: 'agentTurn', message: 'digest please' },
+          },
+        ],
+      },
+    } as any;
+    runAgentTurnMock.mockResolvedValue('No links today');
+    parseAndSaveDigestMock.mockReturnValue({ summary: 'No links today', articles: [] });
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    initCron(intervalConfig);
+
+    expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining('Unsupported schedule kind: interval'));
+    expect(getCronJobs()).toEqual([
+      {
+        id: 'interval-digest',
+        name: 'Interval Digest',
+        nextRun: new Date('2026-06-22T00:00:05.000Z'),
+      },
+    ]);
+    expect(getCronJobDetails(intervalConfig)[0].schedule).toEqual({
+      kind: 'interval',
+      expr: undefined,
+      ms: 5000,
+      tz: undefined,
+    });
+
+    await vi.advanceTimersByTimeAsync(5000);
+
+    expect(runAgentTurnMock).toHaveBeenCalledTimes(1);
+    expect(getCronJobs()[0].nextRun).toEqual(new Date('2026-06-22T00:00:10.000Z'));
+
     warnSpy.mockRestore();
   });
 
