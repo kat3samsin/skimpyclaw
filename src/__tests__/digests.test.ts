@@ -88,4 +88,52 @@ describe('digests index path resolution', () => {
     expect(digest.articles[0]?.title).toBe('Direct article title');
     expect(digest.articles[0]?.url).toBe('https://example.com/news/direct-article');
   });
+
+  it('ignores source error diagnostics when digest sources are unavailable', () => {
+    const digest = parseAndSaveDigest(
+      'ph-digest',
+      'Reddit PH Evening Digest',
+      [
+        '🇵🇭 r/Philippines',
+        '',
+        'UNAVAILABLE (RuntimeError)',
+        '',
+        '💬 r/ChikaPH',
+        '',
+        'UNAVAILABLE (RuntimeError)',
+        '',
+        '🎤 r/bini_ph',
+        '',
+        'UNAVAILABLE (RuntimeError)',
+        '',
+        'Source errors:',
+        '- r/Philippines: RSS RuntimeError: HTTPError: 403 Client Error: Blocked for url: https://www.reddit.com/r/Philippines/top.rss?t=day; HTTPError: 429 Client Error: Too Many Requests for url: https://old.reddit.com/r/Philippines/top/.rss?t=day',
+        '- r/ChikaPH: RSS RuntimeError: HTTPError: 429 Client Error: Too Many Requests for url: https://www.reddit.com/r/ChikaPH/top.rss?t=day; JSON RuntimeError: HTTPError: HTTP Error 403: Blocked',
+        '',
+        '[ph_digest] UNAVAILABLE: no Reddit PH posts retrieved; all sources failed',
+      ].join('\n'),
+    );
+
+    expect(digest.articles).toHaveLength(0);
+  });
+
+  it('preserves real article URLs before source error diagnostics', () => {
+    const digest = parseAndSaveDigest(
+      'ph-digest',
+      'Reddit PH Evening Digest',
+      [
+        '🇵🇭 r/Philippines',
+        '',
+        '1. [Real PH story](https://example.com/real-ph-story)',
+        '',
+        'Source errors:',
+        '- r/ChikaPH: HTTPError: 429 Client Error for url: https://www.reddit.com/r/ChikaPH/top.rss?t=day',
+      ].join('\n'),
+    );
+
+    expect(digest.articles).toHaveLength(1);
+    expect(digest.articles[0]?.title).toBe('Real PH story');
+    expect(digest.articles[0]?.url).toBe('https://example.com/real-ph-story');
+  });
+
 });

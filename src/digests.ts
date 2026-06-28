@@ -451,8 +451,15 @@ function extractComments(text: string, url: string): number | undefined {
   return undefined;
 }
 
+function stripDiagnosticSections(text: string): string {
+  const diagnosticHeading = /^\s*Source errors?:\s*$/im.exec(text);
+  if (!diagnosticHeading) return text;
+  return text.slice(0, diagnosticHeading.index).trimEnd();
+}
+
 function parseDigestContent(text: string): ParsedArticle[] {
-  const urls = extractUrls(text);
+  const digestText = stripDiagnosticSections(text);
+  const urls = extractUrls(digestText);
   const seen = new Set<string>();
   const articles: ParsedArticle[] = [];
 
@@ -461,9 +468,9 @@ function parseDigestContent(text: string): ParsedArticle[] {
     seen.add(url);
 
     const source = detectSource(url);
-    const title = extractTitleForUrl(text, url);
-    const score = extractScore(text, url, source);
-    const comments = extractComments(text, url);
+    const title = extractTitleForUrl(digestText, url);
+    const score = extractScore(digestText, url, source);
+    const comments = extractComments(digestText, url);
 
     articles.push({
       title,
