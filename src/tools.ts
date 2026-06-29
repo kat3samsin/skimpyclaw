@@ -60,20 +60,17 @@ export type { CodeAgentTask } from './code-agents/index.js';
 
 let mcpRuntime: any = null;
 let mcpHealthInterval: ReturnType<typeof setInterval> | null = null;
+let mcpHealthCheckInFlight = false;
 
 /** Last time MCP tools were successfully discovered (epoch ms) */
 let mcpLastDiscoveredAt = 0;
 /** How often to re-validate MCP tools (5 minutes) */
 const MCP_REDISCOVERY_INTERVAL_MS = 5 * 60 * 1000;
 
-/**
- * MCP health check — periodically re-discovers tools to detect daemon restarts.
- * Runs every 5 minutes. If the runtime is stale (daemon died), clears caches
- * so the next getToolDefinitions() call triggers fresh discovery.
- */
-function startMcpHealthCheck(): void {
-  if (mcpHealthInterval) return;
-  mcpHealthInterval = setInterval(async () => {
+async function runMcpHealthCheck(): Promise<void> {
+  if (mcpHealthCheckInFlight) return;
+  mcpHealthCheckInFlight = true;
+  try {
     try {
       const runtime = await getMcpRuntime();
       const servers = runtime.listServers();
@@ -108,6 +105,24 @@ function startMcpHealthCheck(): void {
       mcpToolNameMap.clear();
       toolDefsCache.clear();
     }
+  } finally {
+    mcpHealthCheckInFlight = false;
+  }
+}
+
+export async function _runMcpHealthCheckForTesting(): Promise<void> {
+  await runMcpHealthCheck();
+}
+
+/**
+ * MCP health check — periodically re-discovers tools to detect daemon restarts.
+ * Runs every 5 minutes. If the runtime is stale (daemon died), clears caches
+ * so the next getToolDefinitions() call triggers fresh discovery.
+ */
+function startMcpHealthCheck(): void {
+  if (mcpHealthInterval) return;
+  mcpHealthInterval = setInterval(() => {
+    void runMcpHealthCheck();
   }, MCP_REDISCOVERY_INTERVAL_MS);
   // Don't keep the process alive solely for the health check, and avoid
   // registering it as a fresh listener on each runtime construction path.

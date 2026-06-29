@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 // Mock mcporter so we can count how many times listTools is invoked when
 // many concurrent callers ask for MCP discovery simultaneously.
 const listToolsCalls = { count: 0 };
+const listToolsConcurrent = { current: 0, max: 0 };
 const closeCalls = { count: 0 };
 
 vi.mock('mcporter', () => {
@@ -12,8 +13,11 @@ vi.mock('mcporter', () => {
         listServers: () => ['fake-server'],
         listTools: vi.fn(async () => {
           listToolsCalls.count += 1;
+          listToolsConcurrent.current += 1;
+          listToolsConcurrent.max = Math.max(listToolsConcurrent.max, listToolsConcurrent.current);
           // Slow enough that overlapping callers would normally race.
           await new Promise(r => setTimeout(r, 30));
+          listToolsConcurrent.current -= 1;
           return [
             { name: 'do-thing', description: 'd', inputSchema: { type: 'object', properties: {} } },
           ];
@@ -30,6 +34,8 @@ vi.mock('mcporter', () => {
 describe('MCP single-flight guards', () => {
   beforeEach(async () => {
     listToolsCalls.count = 0;
+    listToolsConcurrent.current = 0;
+    listToolsConcurrent.max = 0;
     closeCalls.count = 0;
     const tools = await import('../tools.js');
     await tools.cleanupMcp();
@@ -75,5 +81,24 @@ describe('MCP single-flight guards', () => {
     // Exactly one close (the prior runtime) and one fresh discovery pass.
     expect(closeCalls.count).toBe(1);
     expect(listToolsCalls.count).toBe(2);
+  });
+
+  it('skips overlapping MCP health-check ticks', async () => {
+    const tools = await import('../tools.js');
+    await tools.discoverMcpTools();
+
+    listToolsCalls.count = 0;
+    listToolsConcurrent.current = 0;
+    listToolsConcurrent.max = 0;
+
+    await Promise.all([
+      tools._runMcpHealthCheckForTesting(),
+      tools._runMcpHealthCheckForTesting(),
+      tools._runMcpHealthCheckForTesting(),
+      tools._runMcpHealthCheckForTesting(),
+    ]);
+
+    expect(listToolsCalls.count).toBe(1);
+    expect(listToolsConcurrent.max).toBe(1);
   });
 });
