@@ -10,7 +10,7 @@ import type { ExecuteToolContext } from './tools.js';
 import { startTrace, endTrace } from './audit.js';
 import { loadSkills, getSkillsForContext, formatSkillsPrompt } from './skills.js';
 import type { SkillConfig } from './skills-types.js';
-import { getLangfuseConfig, isLangfuseEnabled } from './langfuse.js';
+import { getLangfuseConfig, isLangfuseEnabled, sanitizeLangfusePayload } from './langfuse.js';
 import { startActiveObservation, updateActiveTrace } from '@langfuse/tracing';
 import { TTLCache } from './cache.js';
 
@@ -326,6 +326,8 @@ export async function runAgentTurn(
     channel: context?.channel,
     ...context?.metadata,
   };
+  const langfuseTraceInput = sanitizeLangfusePayload(traceInput);
+  const langfuseTraceMetadata = sanitizeLangfusePayload(traceMetadata);
 
   return startActiveObservation(
     traceName,
@@ -334,27 +336,27 @@ export async function runAgentTurn(
         name: traceName,
         userId: context?.userId,
         sessionId: context?.sessionId,
-        input: traceInput,
-        metadata: traceMetadata,
+        input: langfuseTraceInput,
+        metadata: langfuseTraceMetadata,
         tags: [...new Set([...(context?.tags || []), LANGFUSE_APP_TAG])],
         environment: lfConfig?.environment,
         release: lfConfig?.release,
       });
 
       agentObs.update({
-        input: traceInput,
-        metadata: traceMetadata,
+        input: langfuseTraceInput,
+        metadata: langfuseTraceMetadata,
         environment: lfConfig?.environment,
       });
 
       try {
         const result = await runTurn();
         agentObs.update({
-          output: { response: result, toolCalls },
+          output: sanitizeLangfusePayload({ response: result, toolCalls }),
           metadata: { toolCallsCount: toolCalls.length },
         });
         updateActiveTrace({
-          output: { response: result },
+          output: sanitizeLangfusePayload({ response: result }),
           metadata: { toolCallsCount: toolCalls.length },
         });
         await endTrace(auditTraceId, 'ok');
@@ -364,9 +366,9 @@ export async function runAgentTurn(
         agentObs.update({
           level: 'ERROR',
           statusMessage: errorMessage,
-          output: { error: errorMessage },
+          output: sanitizeLangfusePayload({ error: errorMessage }),
         });
-        updateActiveTrace({ output: { error: errorMessage } });
+        updateActiveTrace({ output: sanitizeLangfusePayload({ error: errorMessage }) });
         await endTrace(auditTraceId, 'error');
         throw err;
       }

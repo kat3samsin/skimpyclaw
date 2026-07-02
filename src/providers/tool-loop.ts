@@ -13,6 +13,7 @@ import { splitToolResult } from './utils.js';
 import { startTrace, addEvent, endTrace } from '../audit.js';
 import { toErrorMessage } from '../utils.js';
 import { buildToolLogEntry, logIteration, logCompaction } from './loop-utils.js';
+import { sanitizeLangfusePayload } from '../langfuse.js';
 
 /** Start a Langfuse observation (lazy import to avoid circular deps). Returns null if disabled. */
 async function tryStartObservation(name: string, params: any, type: 'generation' | 'tool') {
@@ -20,7 +21,7 @@ async function tryStartObservation(name: string, params: any, type: 'generation'
     const { isLangfuseEnabled } = await import('../langfuse.js');
     if (!isLangfuseEnabled()) return null;
     const { startObservation } = await import('@langfuse/tracing');
-    return startObservation(name, params, { asType: type } as any);
+    return startObservation(name, sanitizeLangfusePayload(params), { asType: type } as any);
   } catch {
     return null;
   }
@@ -122,7 +123,7 @@ export async function runToolLoop(
       logIteration(adapter.name, i, options.model);
 
       const genObs = await tryStartObservation(`${adapter.name}:${options.model}`, {
-        input: { messages: providerMessages.messages },
+        input: sanitizeLangfusePayload({ messages: providerMessages.messages }),
         model: options.model,
         modelParameters: { max_tokens: options.maxTokens },
         metadata: { provider: adapter.name, iteration: i + 1 },
@@ -157,11 +158,15 @@ export async function runToolLoop(
           response.usage?.outputTokens ?? 0,
         );
 
-        genObs?.update({ output: response.textContent });
+        genObs?.update({ output: sanitizeLangfusePayload(response.textContent) });
         genObs?.end();
       } catch (err) {
         const errorMessage = toErrorMessage(err);
-        genObs?.update({ level: 'ERROR', statusMessage: errorMessage, output: { error: errorMessage } });
+        genObs?.update({
+          level: 'ERROR',
+          statusMessage: errorMessage,
+          output: sanitizeLangfusePayload({ error: errorMessage }),
+        });
         genObs?.end();
         traceStatus = 'error';
         throw err;
@@ -276,7 +281,10 @@ async function executeToolCall(
   // Execute tool
   const toolObs = await tryStartObservation(
     `tool:${toolCall.name}`,
-    { input: toolCall.args, metadata: { app: 'skimpyclaw', tool: toolCall.name } },
+    {
+      input: sanitizeLangfusePayload(toolCall.args),
+      metadata: { app: 'skimpyclaw', tool: toolCall.name },
+    },
     'tool',
   );
   const toolStart = Date.now();
@@ -289,7 +297,7 @@ async function executeToolCall(
     console.log(`[${providerName}:tools] <- ${resultPreview}`);
     toolLog.push(buildToolLogEntry(toolCall.name, inputStr, resultPreview));
 
-    toolObs?.update({ output: result });
+    toolObs?.update({ output: sanitizeLangfusePayload(result) });
     toolObs?.end();
 
     // Record audit event
@@ -312,7 +320,11 @@ async function executeToolCall(
     return { toolCallId: toolCall.id, result: finalResult, isError: false };
   } catch (err) {
     const errorMessage = toErrorMessage(err);
-    toolObs?.update({ level: 'ERROR', statusMessage: errorMessage, output: { error: errorMessage } });
+    toolObs?.update({
+      level: 'ERROR',
+      statusMessage: errorMessage,
+      output: sanitizeLangfusePayload({ error: errorMessage }),
+    });
     toolObs?.end();
 
     if (toolContext?.auditTraceId) {
