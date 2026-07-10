@@ -26,6 +26,13 @@ function runScan(dir: string, localSha: string, remoteSha: string) {
   });
 }
 
+function runScanMode(dir: string, args: string[]) {
+  return spawnSync('bash', [SCRIPT_PATH, ...args], {
+    cwd: dir,
+    encoding: 'utf-8',
+  });
+}
+
 describe('pre-push secret scan', () => {
   let repo: string;
   let baseSha: string;
@@ -85,7 +92,10 @@ describe('pre-push secret scan', () => {
   });
 
   it('blocks a secret in a file Git classifies as binary', () => {
-    writeFileSync(join(repo, 'binary.bin'), Buffer.from(`\0${FAKE_GITHUB_TOKEN}\n`));
+    writeFileSync(join(repo, 'binary.bin'), Buffer.concat([
+      Buffer.from([0xff, 0x00]),
+      Buffer.from(`${FAKE_GITHUB_TOKEN}\n`),
+    ]));
     git(repo, ['add', 'binary.bin']);
     git(repo, ['commit', '-q', '-m', 'add binary secret']);
     const tipSha = git(repo, ['rev-parse', 'HEAD']);
@@ -115,5 +125,27 @@ describe('pre-push secret scan', () => {
 
     expect(result.status).not.toBe(0);
     expect(`${result.stdout}${result.stderr}`).toContain('Unable to enumerate pushed commits');
+  });
+
+  it('blocks a secret in an explicit CI commit range', () => {
+    const tipSha = commitFile(repo, 'secret.txt', `${FAKE_GITHUB_TOKEN}\n`, 'add secret');
+
+    const result = runScanMode(repo, ['--range', baseSha, tipSha]);
+
+    expect(result.status).toBe(1);
+    const output = `${result.stdout}${result.stderr}`;
+    expect(output).toContain('Potential secret match');
+    expect(output).not.toContain(FAKE_GITHUB_TOKEN);
+  });
+
+  it('blocks an add-then-delete secret during a full-history scan', () => {
+    commitFile(repo, 'secret.txt', `${FAKE_GITHUB_TOKEN}\n`, 'add secret');
+    git(repo, ['rm', 'secret.txt']);
+    git(repo, ['commit', '-q', '-m', 'remove secret']);
+
+    const result = runScanMode(repo, ['--all']);
+
+    expect(result.status).toBe(1);
+    expect(`${result.stdout}${result.stderr}`).toContain('Potential secret match');
   });
 });

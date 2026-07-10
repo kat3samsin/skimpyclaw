@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+export LC_ALL=C
 
 # Lightweight pre-push secret scan.
 # Scans added lines in every commit being introduced for common credential patterns.
@@ -61,6 +62,25 @@ scan_revisions() {
     scan_commit "$commit" || return $?
   done <"$commits_file"
 }
+
+case "${1:-}" in
+  --range)
+    if [[ $# -ne 3 ]]; then
+      echo "Usage: $0 --range <base-sha> <head-sha>" >&2
+      exit 2
+    fi
+    scan_revisions "${2}..${3}"
+    exit $?
+    ;;
+  --all)
+    if [[ $# -ne 1 ]]; then
+      echo "Usage: $0 --all" >&2
+      exit 2
+    fi
+    scan_revisions --all
+    exit $?
+    ;;
+esac
 
 if [[ "${1:-}" == "--pre-push" ]]; then
   shift

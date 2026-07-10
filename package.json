@@ -37,6 +37,7 @@
     "build": "pnpm clean && tsc -p tsconfig.build.json && pnpm dashboard:build",
     "release:check": "pnpm build && pnpm test && pnpm dashboard:test",
     "release:local": "bash ./scripts/release.sh",
+    "security:audit": "pnpm audit --audit-level=low --registry=https://registry.npmjs.org && pnpm --dir web/dashboard audit --audit-level=low --registry=https://registry.npmjs.org && pnpm --dir docs audit --audit-level=low --registry=https://registry.npmjs.org",
     "lint": "eslint \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
