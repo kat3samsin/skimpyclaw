@@ -20,8 +20,11 @@ import { runConversationTurn } from '../../conversation-queue.js';
 let client: Client | null = null;
 let config: Config;
 let silenceUntil: Date | null = null;
+let unsubscribeApprovalEvents: (() => void) | null = null;
 
 export async function initDiscord(cfg: Config): Promise<boolean> {
+  unsubscribeApprovalEvents?.();
+  unsubscribeApprovalEvents = null;
   const discord = cfg.channels.discord;
   if (!discord?.enabled || !discord.token) {
     console.log('[discord] Disabled or no token configured');
@@ -98,7 +101,7 @@ export async function initDiscord(cfg: Config): Promise<boolean> {
   });
 
   // Subscribe to approval-created events
-  onApprovalEvent('created', (event) => {
+  unsubscribeApprovalEvents = onApprovalEvent('created', (event) => {
     if (!client) return;
     const { approval } = event;
     const meta = approval.channelMeta;
@@ -129,6 +132,8 @@ export async function startDiscord(): Promise<void> {
 }
 
 export async function stopDiscord(): Promise<void> {
+  unsubscribeApprovalEvents?.();
+  unsubscribeApprovalEvents = null;
   if (!client) return;
   client.destroy();
   registerDelegateToAgentHandler(null);
