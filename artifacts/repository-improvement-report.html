@@ -163,6 +163,16 @@
       <div class="card"><div class="label">Developer experience</div><div class="metric">4/10</div><div class="bar"><span style="width:40%"></span></div><div class="metric-note">Rich docs, but clean bootstrap, package-manager pinning, doctor command, and current lint are broken.</div></div>
       <div class="card"><div class="label">Production readiness</div><div class="metric">4/10</div><div class="bar"><span style="width:40%"></span></div><div class="metric-note">Release source/order, packaging, smoke isolation, dependencies, and licensing all need work.</div></div>
     </div>
+    <h3 style="margin-top:22px">Final audit scores</h3>
+    <div class="scores">
+      <div class="card"><div class="label">Security</div><div class="metric">9/10</div><div class="bar"><span style="width:90%"></span></div><div class="metric-note">Known dependency findings are zero; secret, path, generated-HTML, credential, fetch, and release boundaries now have regression coverage. Private vulnerability intake still needs an owner-side setting.</div></div>
+      <div class="card"><div class="label">Reliability</div><div class="metric">9/10</div><div class="bar"><span style="width:90%"></span></div><div class="metric-note">Cancellation, process draining, scheduling, shutdown, listener, timer, ordering, and release failure paths now settle deterministically. Coding-agent termination remains deferred pending fixtures.</div></div>
+      <div class="card"><div class="label">Maintainability</div><div class="metric">8/10</div><div class="bar"><span style="width:80%"></span></div><div class="metric-note">Shared lifecycle and boundary helpers replace duplicated behavior; contributor, security, REST, model, and toolchain documentation now match verified behavior.</div></div>
+      <div class="card"><div class="label">Performance</div><div class="metric">8/10</div><div class="bar"><span style="width:80%"></span></div><div class="metric-note">Voice synthesis, code-agent streams, log tails, and context accounting are bounded. Interactive-resume output policy remains a product decision.</div></div>
+      <div class="card"><div class="label">Test quality</div><div class="metric">8/10</div><div class="bar"><span style="width:80%"></span></div><div class="metric-note">CI runs 976 backend and 54 dashboard tests on both supported Node families with measured coverage floors. Dashboard breadth remains low at 9.53% lines.</div></div>
+      <div class="card"><div class="label">Developer experience</div><div class="metric">9/10</div><div class="bar"><span style="width:90%"></span></div><div class="metric-note">Bootstrap, doctor, pinned package management, current lint, docs link enforcement, smoke isolation, and aggregate CI are reproducible.</div></div>
+      <div class="card"><div class="label">Production readiness</div><div class="metric">8/10</div><div class="bar"><span style="width:80%"></span></div><div class="metric-note">Build, test, audit, smoke, package, release, and history checks pass from the finished branch. License identity and private disclosure intake remain owner decisions.</div></div>
+    </div>
   </section>
 
   <section id="backlog">
@@ -217,6 +227,12 @@
 
   <section id="history">
     <h2>Iteration history</h2>
+    <div class="history-entry">
+      <h3>Phase 3 · Final audit · Completed</h3>
+      <p>Re-reviewed the completed architecture and diff, reran supported-runtime CI, documentation, dependency, packaging, smoke, workflow, shell, and secret-history checks, and verified the final working-tree boundary.</p>
+      <p><b>New findings:</b> the audit promoted and completed <code>SEC-008</code>, <code>SEC-009</code>, <code>SEC-010</code>, and <code>REL-014</code>. No additional High- or Medium-confidence actionable item remained after their regression suites and the broad final gates passed.</p>
+      <p><b>Stopping reason:</b> the remaining four backlog items require behavioral fixtures, a product output contract, a copyright-holder decision, or a repository-owner security setting. Continuing automatically would cross those decision boundaries.</p>
+    </div>
     <div class="history-entry">
       <h3>REL-014 · Drain timed-out cron process groups · Completed</h3>
       <p><b>Files:</b> cron script timeout lifecycle, one deterministic resistant-descendant regression, and this report.</p>
@@ -565,12 +581,24 @@
     <div class="command"><code>vitest run cron-run.test.ts -t "drains a timed-out script"</code><span class="pill fail">1</span><span>REL-014 regression proved timeout rejection released the overlap guard before process-group escalation</span></div>
     <div class="command"><code>vitest run cron-run.test.ts &amp;&amp; eslint &amp;&amp; pnpm typecheck</code><span class="pill pass">0</span><span>All 28 cron tests and static checks passed after REL-014</span></div>
     <div class="command"><code>Node 24.15.0 · pnpm build &amp;&amp; pnpm test</code><span class="pill pass">0</span><span>Production build and all 80 files / 976 tests passed after REL-014</span></div>
+    <div class="command"><code>ambient pnpm wrapper · pnpm exec / nested build pnpm</code><span class="pill fail">1</span><span>No source check ran: separate global pnpm shims rejected the pinned lockfile/toolchain; supported pinned invocations below supersede this environment failure</span></div>
+    <div class="command"><code>Node 22.20.0 · pnpm run ci</code><span class="pill pass">0</span><span>Lint, production build, 976 backend tests, 54 dashboard tests, and both coverage floors passed</span></div>
+    <div class="command"><code>Node 24.15.0 · pnpm build &amp;&amp; pnpm test</code><span class="pill pass">0</span><span>Mandated production build and all 976 backend tests passed</span></div>
+    <div class="command"><code>Node 24.15.0 · docs build &amp;&amp; security:audit</code><span class="pill pass">0</span><span>VitePress built and root, dashboard, and docs audits each reported zero known vulnerabilities</span></div>
+    <div class="command"><code>scripts/smoke-test.sh</code><span class="pill pass">0</span><span>Isolated temporary-home gateway, authenticated status, and cron checks passed</span></div>
+    <div class="command"><code>npm pack --dry-run --json</code><span class="pill pass">0</span><span>186 files, 309,821-byte archive, 1,241,608 bytes unpacked, zero compiled tests; LICENSE remains blocked as PKG-002</span></div>
+    <div class="command"><code>bash -n scripts/*.sh &amp;&amp; Ruby YAML parse</code><span class="pill pass">0</span><span>All shell scripts and both GitHub workflow files parsed successfully; an initial ad hoc js-yaml import was unavailable and was superseded by the installed parser</span></div>
+    <div class="command"><code>secret-scan --range origin/trunk..HEAD</code><span class="pill pass">0</span><span>All 36 commits introduced by this branch passed</span></div>
+    <div class="command"><code>secret-scan --all (single-branch no-local clone)</code><span class="pill pass">0</span><span>All 478 commits reachable from this branch passed in an isolated clone</span></div>
+    <div class="command"><code>secret-scan --all (shared local repository)</code><span class="pill fail">1</span><span>Known 2018 test key exists only on the unrelated local jetpack-sidebar branch; it is not reachable from this branch or a remote ref</span></div>
+    <div class="command"><code>tidy -quiet -errors repository-improvement-report.html</code><span class="pill fail">1</span><span>Warning-only exit: no structural HTML errors; 14 expected warnings identify the empty CSS score-bar spans</span></div>
+    <div class="command"><code>in-app browser visual and CSP runtime QA</code><span class="pill open">Blocked</span><span>The configured browser surface reported no available browser; the browser skill prohibits substituting an unrelated backend. Route-level CSP regressions remain green.</span></div>
   </section>
 
   <section id="git">
     <h2>Git history and publication</h2>
     <div class="grid">
-      <div class="card"><div class="label">Commits created</div><div class="metric">35</div><div class="metric-note"><code>c613d618a5</code> · dependencies; <code>2c644b3ebc</code> · paths; <code>5dd45f1547</code> · scan; <code>dbd7bf3c93</code> · token storage; <code>8b36411447</code> · Ajv scope; <code>f9d5eeb0b1</code> · token budget; <code>7926b47d95</code> · conversation ordering; <code>4717cf3d89</code> · cancellation drain; <code>0bd63cd39c</code> · release guard; <code>81c5cf4d99</code> · durable release; <code>4bf76635f9</code> · complete CI gate; <code>00b61702a1</code> · package contents; <code>7dade20b1d</code> · duplicate cron IDs; <code>40580930bd</code> · approval listeners; <code>81e44877d4</code> · lifecycle timers; <code>6c32d656ec</code> · cron overflow drain; <code>75ddee000b</code> · async voice processing; <code>ca0774aa23</code> · graceful shutdown; <code>e6f6bde3ca</code> · Discord interaction errors; <code>db8152013b</code> · bounded coding-agent streams; <code>cf9f92b9f1</code> · usage attribution; <code>99b9a0bda6</code> · context ceiling; <code>e442ddb658</code> · isolated smoke state; <code>8c56bc5da6</code> · pinned toolchain; <code>81ab900b59</code> · bootstrap/doctor; <code>7a8f6838aa</code> · CI security scans; <code>546280deb6</code> · approval timer; <code>a942f12640</code> · scratch names; <code>936b81c059</code> · log containment; <code>0d4f26be4f</code> · bounded log tails; <code>1174c483cf</code> · documentation policies; <code>956be85de3</code> · coverage floors; <code>f0a935b269</code> · generated HTML isolation; <code>96be42d600</code> · artifact containment; <code>01c0161181</code> · DNS pinning.</div></div>
+      <div class="card"><div class="label">Commits created</div><div class="metric">36</div><div class="metric-note"><code>c613d618a5</code> · dependencies; <code>2c644b3ebc</code> · paths; <code>5dd45f1547</code> · scan; <code>dbd7bf3c93</code> · token storage; <code>8b36411447</code> · Ajv scope; <code>f9d5eeb0b1</code> · token budget; <code>7926b47d95</code> · conversation ordering; <code>4717cf3d89</code> · cancellation drain; <code>0bd63cd39c</code> · release guard; <code>81c5cf4d99</code> · durable release; <code>4bf76635f9</code> · complete CI gate; <code>00b61702a1</code> · package contents; <code>7dade20b1d</code> · duplicate cron IDs; <code>40580930bd</code> · approval listeners; <code>81e44877d4</code> · lifecycle timers; <code>6c32d656ec</code> · cron overflow drain; <code>75ddee000b</code> · async voice processing; <code>ca0774aa23</code> · graceful shutdown; <code>e6f6bde3ca</code> · Discord interaction errors; <code>db8152013b</code> · bounded coding-agent streams; <code>cf9f92b9f1</code> · usage attribution; <code>99b9a0bda6</code> · context ceiling; <code>e442ddb658</code> · isolated smoke state; <code>8c56bc5da6</code> · pinned toolchain; <code>81ab900b59</code> · bootstrap/doctor; <code>7a8f6838aa</code> · CI security scans; <code>546280deb6</code> · approval timer; <code>a942f12640</code> · scratch names; <code>936b81c059</code> · log containment; <code>0d4f26be4f</code> · bounded log tails; <code>1174c483cf</code> · documentation policies; <code>956be85de3</code> · coverage floors; <code>f0a935b269</code> · generated HTML isolation; <code>96be42d600</code> · artifact containment; <code>01c0161181</code> · DNS pinning; <code>dce2656db5</code> · cron timeout drain.</div></div>
       <div class="card"><div class="label">Push status</div><div class="value">Not attempted</div><div class="metric-note">Push follows final audit and review.</div></div>
       <div class="card"><div class="label">Draft PR</div><div class="value">Not created</div><div class="metric-note">Will be opened only after verified commits and Claude review.</div></div>
     </div>
@@ -583,7 +611,8 @@
 
   <section id="summary">
     <h2>Final summary</h2>
-    <p class="muted">Execution is in progress. The final audit will replace this current-state note with completed/remaining backlog, broad verification, commit and push details, PR status, revised scores, and the stopping reason. Phase and iteration history above will remain intact.</p>
+    <p>Thirty-five of 39 evidence-backed backlog items are complete. The finished branch passes both supported runtime gates, all 1,030 automated tests across backend and dashboard, measured coverage floors, three dependency audits, documentation, package, isolated gateway, shell/workflow, introduced-range secret, and isolated full-history secret checks.</p>
+    <p class="muted">Work stopped because no meaningful High- or Medium-confidence actionable item remains. Two items are deferred until behavior is specified; two are blocked on repository-owner decisions. Publication and draft-PR status will be recorded after the required independent review.</p>
   </section>
 
   <div class="footer">Generated and maintained locally for <code>/Users/katre/Sites/skimpyclaw</code>.</div>
