@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   classifyCommandRisk,
   requiresApproval,
@@ -10,6 +10,7 @@ import {
   findApprovedRequest,
   consumeApproval,
   cleanupExpired,
+  waitForApproval,
   clearApprovals,
   clearApprovalListeners,
   onApprovalEvent,
@@ -22,6 +23,7 @@ beforeEach(() => {
 
 afterEach(() => {
   clearApprovalListeners();
+  vi.restoreAllMocks();
 });
 
 describe('classifyCommandRisk', () => {
@@ -187,6 +189,22 @@ describe('requiresApproval', () => {
 });
 
 describe('approval registry', () => {
+  it('unrefs the fallback timer and clears it after early resolution', async () => {
+    const approval = createApprovalRequest('sudo cmd', undefined, { tier: 2, reason: 'test' });
+    const unref = vi.fn();
+    const timeout = { unref } as unknown as ReturnType<typeof setTimeout>;
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout').mockReturnValue(timeout);
+    const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout').mockImplementation(() => {});
+
+    const waiting = waitForApproval(approval.id, 60_000);
+
+    expect(setTimeoutSpy).toHaveBeenCalledOnce();
+    expect(unref).toHaveBeenCalledOnce();
+    approveRequest(approval.id, 'admin');
+    await expect(waiting).resolves.toMatchObject({ status: 'approved' });
+    expect(clearTimeoutSpy).toHaveBeenCalledWith(timeout);
+  });
+
   it('creates a pending approval request', () => {
     const approval = createApprovalRequest('rm -rf /', undefined, { tier: 3, reason: 'Recursive force delete' });
     expect(approval.id).toBeTruthy();

@@ -586,6 +586,7 @@ export function waitForApproval(
         });
       }
     }, timeoutMs);
+    (timeout as { unref?: () => void }).unref?.();
   });
 }
 
