@@ -9,6 +9,7 @@ import type {
   NormalizedResponse,
   NormalizedToolCall,
   CompactionResult,
+  FinalizationResponse,
 } from '../adapter.js';
 import type { ExecuteToolContext } from '../../tools.js';
 import { contentToText, stripProvider } from '../utils.js';
@@ -224,17 +225,18 @@ export class CodexAdapter implements ProviderAdapter {
     });
 
     const usage = parsed.response?.usage;
-    const cost = toCostDetails(modelId, usage) || undefined;
+    const hasUsage = Number.isFinite(usage?.input_tokens) && Number.isFinite(usage?.output_tokens);
+    const cost = hasUsage ? toCostDetails(modelId, usage) || undefined : undefined;
 
     return {
       hasToolCalls: toolCalls.length > 0,
       toolCalls,
       textContent: parsed.outputText || '',
-      usage: {
-        inputTokens: usage?.input_tokens ?? 0,
-        outputTokens: usage?.output_tokens ?? 0,
+      usage: hasUsage ? {
+        inputTokens: usage.input_tokens,
+        outputTokens: usage.output_tokens,
         cacheReadTokens: usage?.input_tokens_details?.cached_tokens,
-      },
+      } : undefined,
       cost,
       rawResponse: parsed.response,
     };
@@ -263,7 +265,7 @@ export class CodexAdapter implements ProviderAdapter {
     _toolDefs: any[],
     options: ChatOptions,
     _config: Config,
-  ): Promise<string | undefined> {
+  ): Promise<FinalizationResponse> {
     const modelId = stripProvider(options.model);
 
     // Build a finalization input: existing messages + nudge
@@ -292,7 +294,18 @@ export class CodexAdapter implements ProviderAdapter {
     console.log('[codex] Finalizing tool run with a text-only follow-up');
     const sseText = await codexFetch(body);
     const parsed = parseCodexSSE(sseText);
-    return parsed.outputText?.trim() || undefined;
+    const usage = parsed.response?.usage;
+    const hasUsage = Number.isFinite(usage?.input_tokens) && Number.isFinite(usage?.output_tokens);
+    return {
+      textContent: parsed.outputText?.trim() || '',
+      hasToolCalls: parsed.functionCalls.length > 0,
+      usage: hasUsage ? {
+        inputTokens: usage.input_tokens,
+        outputTokens: usage.output_tokens,
+        cacheReadTokens: usage.input_tokens_details?.cached_tokens,
+      } : undefined,
+      cost: hasUsage ? toCostDetails(modelId, usage) || undefined : undefined,
+    };
   }
 
   async compactMessages(

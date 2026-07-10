@@ -10,6 +10,7 @@ import type {
   NormalizedResponse,
   NormalizedToolCall,
   CompactionResult,
+  FinalizationResponse,
 } from '../adapter.js';
 import { getAnthropicClient } from '../anthropic.js';
 import { buildSystemParam, addToolCacheBreakpoint, contentToText, stripProvider, buildThinkingConfig } from '../utils.js';
@@ -132,8 +133,11 @@ export class AnthropicAdapter implements ProviderAdapter {
       model: modelId,
       max_tokens: options.maxTokens || 16384,
       messages: providerMessages.messages,
-      tools: toolDefs,
     };
+
+    if (toolDefs?.length > 0) {
+      anthropicParams.tools = toolDefs;
+    }
 
     if (providerMessages.systemParam) {
       anthropicParams.system = providerMessages.systemParam;
@@ -172,18 +176,19 @@ export class AnthropicAdapter implements ProviderAdapter {
       }
     }
 
-    const cost = toCostDetails(modelId, usage) || undefined;
+    const hasUsage = Number.isFinite(usage?.input_tokens) && Number.isFinite(usage?.output_tokens);
+    const cost = hasUsage ? toCostDetails(modelId, usage) || undefined : undefined;
 
     return {
       hasToolCalls,
       toolCalls,
       textContent,
-      usage: {
-        inputTokens: usage?.input_tokens ?? 0,
-        outputTokens: usage?.output_tokens ?? 0,
+      usage: hasUsage ? {
+        inputTokens: usage.input_tokens,
+        outputTokens: usage.output_tokens,
         cacheReadTokens: usage?.cache_read_input_tokens,
         cacheCreationTokens: usage?.cache_creation_input_tokens,
-      },
+      } : undefined,
       cost,
       rawResponse: response,
     };
@@ -230,6 +235,32 @@ export class AnthropicAdapter implements ProviderAdapter {
       return block;
     });
     providerMessages.messages.push({ role: 'user', content: toolResults });
+  }
+
+  async onEmptyFinalResponse(
+    providerMessages: ProviderMessages,
+    _toolDefs: any[],
+    options: ChatOptions,
+    config: Config,
+  ): Promise<FinalizationResponse> {
+    const finalizationMessages: ProviderMessages = {
+      ...providerMessages,
+      messages: [
+        ...providerMessages.messages,
+        {
+          role: 'user',
+          content: 'Provide the final answer to the user using the tool results above. Do not call tools. Be concise.',
+        },
+      ],
+    };
+    console.log('[anthropic] Finalizing tool run with a text-only follow-up');
+    const response = await this.call(finalizationMessages, [], options, config);
+    return {
+      textContent: response.textContent,
+      usage: response.usage,
+      cost: response.cost,
+      hasToolCalls: response.hasToolCalls,
+    };
   }
 
   async compactMessages(

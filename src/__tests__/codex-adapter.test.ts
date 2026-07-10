@@ -224,7 +224,8 @@ describe('CodexAdapter', () => {
 
       const result = await adapter.onEmptyFinalResponse(providerMessages, [], options, config);
 
-      expect(result).toBe('Here is the final answer.');
+      expect(result.textContent).toBe('Here is the final answer.');
+      expect(result.usage).toEqual(expect.objectContaining({ inputTokens: 50, outputTokens: 20 }));
       expect(mockCodexFetch).toHaveBeenCalledTimes(1);
       // Should NOT include tools in the finalization body
       const body = mockCodexFetch.mock.calls[0][0];
@@ -235,7 +236,7 @@ describe('CodexAdapter', () => {
       expect(lastInput.content[0].text).toContain('final answer');
     });
 
-    it('returns undefined when finalization yields empty text', async () => {
+    it('returns usage when finalization yields empty text', async () => {
       mockCodexFetch.mockResolvedValue('sse-empty');
       mockParseCodexSSE.mockReturnValue({
         outputText: '',
@@ -249,7 +250,8 @@ describe('CodexAdapter', () => {
       };
 
       const result = await adapter.onEmptyFinalResponse(providerMessages, [], options, config);
-      expect(result).toBeUndefined();
+      expect(result.textContent).toBe('');
+      expect(result.usage).toEqual(expect.objectContaining({ inputTokens: 10, outputTokens: 0 }));
     });
   });
 
@@ -274,6 +276,24 @@ describe('CodexAdapter', () => {
       expect(result.toolCalls).toHaveLength(0);
       expect(result.usage?.inputTokens).toBe(100);
       expect(result.usage?.outputTokens).toBe(50);
+    });
+
+    it('leaves usage undefined when Codex does not report it', async () => {
+      mockCodexFetch.mockResolvedValue('sse');
+      mockParseCodexSSE.mockReturnValue({
+        outputText: 'Just text',
+        functionCalls: [],
+        response: { output: [], usage: {} },
+      });
+
+      const result = await adapter.call(
+        { messages: [], systemParam: 'sys' },
+        [],
+        options,
+        config,
+      );
+
+      expect(result.usage).toBeUndefined();
     });
 
     it('parses multiple function calls correctly', async () => {

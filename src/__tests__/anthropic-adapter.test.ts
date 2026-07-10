@@ -198,6 +198,23 @@ describe('AnthropicAdapter', () => {
       expect(result.textContent).toBe('Let me read that file');
     });
 
+    it('leaves usage undefined when Anthropic does not report it', async () => {
+      mockMessagesCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'Hello!' }],
+        stop_reason: 'end_turn',
+        usage: {},
+      });
+
+      const result = await adapter.call(
+        { messages: [{ role: 'user', content: 'Hi' }] },
+        [],
+        options,
+        config,
+      );
+
+      expect(result.usage).toBeUndefined();
+    });
+
     it('should handle cache metrics logging', async () => {
       const consoleSpy = vi.spyOn(console, 'log');
 
@@ -251,6 +268,28 @@ describe('AnthropicAdapter', () => {
         thinking: { type: 'enabled', budget_tokens: 32768 },
       }));
       expect(result.textContent).toBe('Streamed response');
+    });
+  });
+
+  describe('onEmptyFinalResponse', () => {
+    it('makes one text-only call and returns normalized usage', async () => {
+      mockMessagesCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'Final answer' }],
+        stop_reason: 'end_turn',
+        usage: { input_tokens: 25, output_tokens: 10 },
+      });
+      const providerMessages = {
+        messages: [{ role: 'user', content: 'Original request' }],
+        systemParam: { content: 'system' },
+      };
+
+      const result = await adapter.onEmptyFinalResponse(providerMessages, [], options, config);
+
+      expect(result.textContent).toBe('Final answer');
+      expect(result.usage).toEqual(expect.objectContaining({ inputTokens: 25, outputTokens: 10 }));
+      const params = mockMessagesCreate.mock.calls[0][0];
+      expect(params.tools).toBeUndefined();
+      expect(params.messages.at(-1).content).toContain('Do not call tools');
     });
   });
 

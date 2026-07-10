@@ -1,10 +1,11 @@
-// ToolCallGuard — Spin detection, no-progress detection
+// ToolCallGuard — Spin detection, no-progress detection, token budget
 
 import { createHash } from 'crypto';
 
 const SPIN_WARN_THRESHOLD = 3;
 const SPIN_BLOCK_THRESHOLD = 5;
 const NO_PROGRESS_THRESHOLD = 5;
+const DEFAULT_MAX_TURN_TOKENS = 200_000;
 
 interface CallRecord {
   name: string;
@@ -16,8 +17,15 @@ export class ToolCallGuard {
   private resultHashes: string[] = [];
   private totalInputTokens = 0;
   private totalOutputTokens = 0;
+  private maxTurnTokens: number;
 
-  constructor(_maxTurnTokens?: number) {}
+  constructor(maxTurnTokens?: number) {
+    this.maxTurnTokens = typeof maxTurnTokens === 'number'
+      && Number.isFinite(maxTurnTokens)
+      && maxTurnTokens > 0
+      ? maxTurnTokens
+      : DEFAULT_MAX_TURN_TOKENS;
+  }
 
   private hash(data: string): string {
     return createHash('md5').update(data).digest('hex').slice(0, 16);
@@ -63,10 +71,40 @@ export class ToolCallGuard {
     return {};
   }
 
-  /** Record token usage for stats tracking. */
-  recordTokens(inputTokens: number, outputTokens: number): void {
-    this.totalInputTokens += inputTokens;
-    this.totalOutputTokens += outputTokens;
+  /** Record token usage. Returns budget state after this response. */
+  recordTokens(
+    inputTokens: number | undefined,
+    outputTokens: number | undefined,
+  ): { exceeded: boolean; usageUnavailable?: boolean; warning?: string } {
+    if (
+      !Number.isFinite(inputTokens)
+      || !Number.isFinite(outputTokens)
+      || (inputTokens as number) < 0
+      || (outputTokens as number) < 0
+    ) {
+      return {
+        exceeded: true,
+        usageUnavailable: true,
+        warning: 'Token usage unavailable; configured turn budget cannot be enforced',
+      };
+    }
+    this.totalInputTokens += inputTokens as number;
+    this.totalOutputTokens += outputTokens as number;
+    const total = this.totalInputTokens + this.totalOutputTokens;
+
+    if (total >= this.maxTurnTokens) {
+      return {
+        exceeded: true,
+        warning: `Token budget exceeded: ${total} tokens used (limit: ${this.maxTurnTokens})`,
+      };
+    }
+    if (total >= this.maxTurnTokens * 0.8) {
+      return {
+        exceeded: false,
+        warning: `Token budget warning: ${total}/${this.maxTurnTokens} tokens used (${Math.round(total / this.maxTurnTokens * 100)}%)`,
+      };
+    }
+    return { exceeded: false };
   }
 
   /** Reset guard state (for testing or between turns). */

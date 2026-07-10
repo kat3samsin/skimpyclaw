@@ -172,7 +172,7 @@ export interface ToolConfig {
   allowedPaths: string[];
   maxIterations?: number;  // Legacy finalization checkpoint interval; does not cap tool loops
   bashTimeout?: number;    // Bash command timeout in ms (default: 30000)
-  maxTurnTokens?: number;  // Max tokens per agent turn (default: 200000)
+  maxTurnTokens?: number;  // Cumulative provider tokens before text-only finalization (default: 200000)
   toolProfile?: 'minimal' | 'coding' | 'full';  // Tool set to expose (default: 'full')
   contextManagement?: {
     enabled?: boolean;          // default true

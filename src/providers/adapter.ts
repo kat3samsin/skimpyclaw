@@ -33,6 +33,10 @@ export interface NormalizedResponse {
   rawResponse: unknown;
 }
 
+export type FinalizationResponse = Pick<NormalizedResponse, 'textContent' | 'usage' | 'cost'> & {
+  hasToolCalls?: boolean;
+};
+
 export interface NormalizedToolCall {
   /** Unique ID for this tool call (tool_use_id, call_id, toolCall.id) */
   id: string;
@@ -131,16 +135,16 @@ export interface ProviderAdapter {
   appendToolResults?(messages: ProviderMessages, results: { toolCallId: string; result: string; isError?: boolean }[]): void;
 
   /**
-   * Optional hook called when the model's final response has no text but tool calls were made.
-   * Allows providers (e.g. Codex) to make an additional API call to elicit a text summary.
-   * Returns the finalized text, or undefined to use the default fallback.
+   * Optional tool-free finalization hook used for empty responses, legacy
+   * checkpoints, and token-budget stops. Structured responses keep the grace
+   * call's usage and cost in the shared-loop totals.
    */
   onEmptyFinalResponse?(
     providerMessages: ProviderMessages,
     toolDefs: any[],
     options: ChatOptions,
     config: Config,
-  ): Promise<string | undefined>;
+  ): Promise<FinalizationResponse | undefined>;
 
   /** Compact messages when context grows too large */
   compactMessages(

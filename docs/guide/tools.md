@@ -53,6 +53,11 @@ positive value asks the model for a final answer every N tool-use rounds, but it
 no longer caps the loop or returns a max-iteration error. Automatic context
 compaction keeps long tool runs within the configured context threshold.
 
+`maxTurnTokens` defaults to `200000` cumulative input and output tokens across
+provider calls. When a tool-calling response reaches the limit, its tools are
+skipped and the provider gets one text-only finalization call. A completed text
+response is still returned if the response that produced it reached the limit.
+
 ## MCP tools (mcporter)
 
 SkimpyClaw auto-discovers MCP tools at runtime via [mcporter](https://github.com/nicobrinkkemper/mcporter).

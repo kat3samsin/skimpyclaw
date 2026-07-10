@@ -6,7 +6,7 @@
 import type { ChatMessage, ChatOptions, Config, ToolConfig, AuditTrace } from '../types.js';
 import type { ToolChatResult } from './types.js';
 import type { ExecuteToolContext } from '../tools.js';
-import type { ProviderAdapter, NormalizedToolCall } from './adapter.js';
+import type { ProviderAdapter, NormalizedResponse, NormalizedToolCall } from './adapter.js';
 import { getToolDefinitions, executeTool } from '../tools.js';
 import { ToolCallGuard } from './tool-guard.js';
 import { splitToolResult } from './utils.js';
@@ -68,17 +68,77 @@ export async function runToolLoop(
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
   const totalCost = { input: 0, output: 0, total: 0 };
+  let usageComplete = true;
   let traceStatus: 'ok' | 'error' = 'ok';
   let pendingFinalizationCheckpoint = false;
+
+  const recordResponseMetrics = (
+    response: Pick<NormalizedResponse, 'usage' | 'cost'>,
+  ): ReturnType<ToolCallGuard['recordTokens']> => {
+    const inputTokens = response.usage?.inputTokens;
+    const outputTokens = response.usage?.outputTokens;
+    const validUsage = Number.isFinite(inputTokens)
+      && Number.isFinite(outputTokens)
+      && (inputTokens as number) >= 0
+      && (outputTokens as number) >= 0;
+    if (validUsage) {
+      adapter.recordUsage(
+        options.model,
+        response.usage,
+        toolContext?.trigger || 'api',
+        toolContext?.agentId,
+      );
+      totalInputTokens += inputTokens as number;
+      totalOutputTokens += outputTokens as number;
+    } else {
+      usageComplete = false;
+    }
+
+    if (response.cost) {
+      totalCost.input += response.cost.input;
+      totalCost.output += response.cost.output;
+      totalCost.total += response.cost.total;
+    }
+
+    return guard.recordTokens(
+      validUsage ? inputTokens : undefined,
+      validUsage ? outputTokens : undefined,
+    );
+  };
+
+  const requestFinalization = async (
+    reason: string,
+  ): Promise<{ text?: string; tokenResult?: ReturnType<ToolCallGuard['recordTokens']> }> => {
+    if (!adapter.onEmptyFinalResponse) return {};
+    try {
+      const finalized = await adapter.onEmptyFinalResponse(
+        providerMessages, providerToolDefs, options, config,
+      );
+      if (!finalized) {
+        usageComplete = false;
+        return { tokenResult: guard.recordTokens(undefined, undefined) };
+      }
+      const tokenResult = recordResponseMetrics(finalized);
+      if (finalized.hasToolCalls) {
+        console.warn(`[${adapter.name}] ${reason} finalization unexpectedly requested tools`);
+        return { tokenResult };
+      }
+      return { text: finalized.textContent.trim() || undefined, tokenResult };
+    } catch (err) {
+      usageComplete = false;
+      console.warn(`[${adapter.name}] ${reason} finalization pass failed: ${toErrorMessage(err)}`);
+      return { tokenResult: guard.recordTokens(undefined, undefined) };
+    }
+  };
 
   const buildResult = (response: string): ToolChatResult => ({
     response,
     toolCalls: toolLog,
-    usage: {
+    usage: usageComplete ? {
       prompt_tokens: totalInputTokens,
       completion_tokens: totalOutputTokens,
       total_tokens: totalInputTokens + totalOutputTokens,
-    },
+    } : undefined,
     cost: totalCost.total > 0 ? totalCost : undefined,
   });
 
@@ -109,13 +169,10 @@ export async function runToolLoop(
 
       if (pendingFinalizationCheckpoint && adapter.onEmptyFinalResponse) {
         pendingFinalizationCheckpoint = false;
-        try {
-          const finalized = await adapter.onEmptyFinalResponse(
-            providerMessages, providerToolDefs, options, config,
-          );
-          if (finalized) return buildResult(finalized);
-        } catch (err) {
-          console.warn(`[${adapter.name}] checkpoint finalization pass failed: ${toErrorMessage(err)}`);
+        const finalization = await requestFinalization('checkpoint');
+        if (finalization.text) return buildResult(finalization.text);
+        if (finalization.tokenResult?.exceeded) {
+          return buildResult(`[Stopped: ${finalization.tokenResult.warning}]`);
         }
       }
 
@@ -130,33 +187,13 @@ export async function runToolLoop(
       }, 'generation');
 
       let response;
+      let tokenResult: ReturnType<ToolCallGuard['recordTokens']> = { exceeded: false };
       try {
         response = await adapter.call(providerMessages, providerToolDefs, options, config);
-
-        // Record usage
-        adapter.recordUsage(
-          options.model,
-          response.usage,
-          toolContext?.trigger || 'api',
-          toolContext?.agentId,
-        );
-
-        // Accumulate usage across iterations
-        totalInputTokens += response.usage?.inputTokens ?? 0;
-        totalOutputTokens += response.usage?.outputTokens ?? 0;
-
-        // Accumulate cost
-        if (response.cost) {
-          totalCost.input += response.cost.input;
-          totalCost.output += response.cost.output;
-          totalCost.total += response.cost.total;
+        tokenResult = recordResponseMetrics(response);
+        if (tokenResult.warning) {
+          console.warn(`[${adapter.name}:tools:guard] ${tokenResult.warning}`);
         }
-
-        // Track tokens in guard (for stats only, no enforcement)
-        guard.recordTokens(
-          response.usage?.inputTokens ?? 0,
-          response.usage?.outputTokens ?? 0,
-        );
 
         genObs?.update({ output: sanitizeLangfusePayload(response.textContent) });
         genObs?.end();
@@ -182,14 +219,8 @@ export async function runToolLoop(
             console.log(`[${adapter.name}] empty text response after ${toolLog.length} tool calls (${emptyResponseDetail})`);
             // Let adapter attempt a finalization pass (e.g. Codex re-asks without tools)
             if (adapter.onEmptyFinalResponse) {
-              try {
-                const finalized = await adapter.onEmptyFinalResponse(
-                  providerMessages, providerToolDefs, options, config,
-                );
-                if (finalized) responseText = finalized;
-              } catch (err) {
-                console.warn(`[${adapter.name}] finalization pass failed: ${toErrorMessage(err)}`);
-              }
+              const finalization = await requestFinalization('empty-response');
+              if (finalization.text) responseText = finalization.text;
             }
             if (!responseText) {
               responseText = `[Completed with ${toolLog.length} tool calls, no text response]`;
@@ -200,6 +231,34 @@ export async function runToolLoop(
           }
         }
         return buildResult(responseText);
+      }
+
+      // A complete text response is still useful at the limit. Only stop when
+      // the model is asking to spend more budget by executing another tool.
+      if (tokenResult.exceeded) {
+        adapter.appendAssistantResponse(providerMessages, response.rawResponse);
+        const blockedResults = response.toolCalls.map((toolCall) => {
+          toolLog.push(`${toolCall.name} [BLOCKED: token budget]`);
+          return {
+            toolCallId: toolCall.id,
+            result: `[Tool execution skipped: ${tokenResult.warning}]`,
+            isError: true,
+          };
+        });
+        if (adapter.appendToolResults && blockedResults.length > 1) {
+          adapter.appendToolResults(providerMessages, blockedResults);
+        } else {
+          for (const blocked of blockedResults) {
+            adapter.appendToolResult(
+              providerMessages,
+              blocked.toolCallId,
+              blocked.result,
+              blocked.isError,
+            );
+          }
+        }
+        const finalization = await requestFinalization('token-budget');
+        return buildResult(finalization.text || `[Stopped: ${tokenResult.warning}]`);
       }
 
       // Append assistant's response to history
