@@ -334,6 +334,69 @@ describe('runCronJob digest chat output', () => {
     warnSpy.mockRestore();
   });
 
+  it('rejects duplicate job ids before scheduling any intervals', () => {
+    vi.useFakeTimers();
+    const duplicateConfig = {
+      ...config,
+      cron: {
+        jobs: [
+          {
+            id: 'duplicate',
+            name: 'First',
+            schedule: { kind: 'interval', ms: 1000 },
+            payload: { kind: 'agentTurn', message: 'first' },
+          },
+          {
+            id: 'duplicate',
+            name: 'Second',
+            schedule: { kind: 'interval', ms: 2000 },
+            payload: { kind: 'agentTurn', message: 'second' },
+          },
+        ],
+      },
+    } as any;
+
+    expect(() => initCron(duplicateConfig)).toThrow('Duplicate cron job id: "duplicate"');
+    expect(getCronJobs()).toEqual([]);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('keeps the current schedule when replacement config has duplicate ids', async () => {
+    vi.useFakeTimers();
+    const currentConfig = {
+      ...config,
+      cron: {
+        jobs: [{
+          id: 'current',
+          name: 'Current',
+          schedule: { kind: 'interval', ms: 1000 },
+          payload: { kind: 'agentTurn', message: 'current' },
+        }],
+      },
+    } as any;
+    const duplicateConfig = {
+      ...config,
+      cron: {
+        jobs: [
+          { ...currentConfig.cron.jobs[0], id: 'duplicate' },
+          { ...currentConfig.cron.jobs[0], id: 'duplicate' },
+        ],
+      },
+    } as any;
+    runAgentTurnMock.mockResolvedValue('No links today');
+    parseAndSaveDigestMock.mockReturnValue({ summary: 'No links today', articles: [] });
+
+    initCron(currentConfig);
+    expect(() => initCron(duplicateConfig)).toThrow('Duplicate cron job id: "duplicate"');
+    expect(getCronJobs()).toEqual([
+      { id: 'current', name: 'Current', nextRun: new Date(Date.now() + 1000) },
+    ]);
+    expect(vi.getTimerCount()).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(runAgentTurnMock).toHaveBeenCalledTimes(1);
+  });
+
   it('thread id set + successful send does not use active-channel send', async () => {
     const digestText = 'No links today';
     runAgentTurnMock.mockResolvedValue(digestText);

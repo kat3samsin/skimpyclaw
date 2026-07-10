@@ -43,6 +43,27 @@ interface ScheduledJob {
 const scheduledJobs: Map<string, ScheduledJob> = new Map();
 let configWatcher: FSWatcher | null = null;
 
+function assertUniqueCronJobIds(jobs: CronJob[]): void {
+  const seen = new Set<string>();
+  for (const job of jobs) {
+    if (seen.has(job.id)) {
+      throw new Error(`Duplicate cron job id: "${job.id}"`);
+    }
+    seen.add(job.id);
+  }
+}
+
+function replaceScheduledJobs(config: Config): void {
+  assertUniqueCronJobIds(config.cron.jobs);
+  for (const job of scheduledJobs.values()) {
+    job.job.stop();
+  }
+  scheduledJobs.clear();
+  for (const jobDef of config.cron.jobs) {
+    scheduleJob(jobDef, config);
+  }
+}
+
 export interface CronRunTarget {
   id: string;
   name: string;
@@ -743,16 +764,7 @@ export async function runAgentTurnWithTimeout(
 }
 
 export function initCron(config: Config): void {
-  // Clear existing jobs
-  for (const job of scheduledJobs.values()) {
-    job.job.stop();
-  }
-  scheduledJobs.clear();
-
-  // Schedule new jobs
-  for (const jobDef of config.cron.jobs) {
-    scheduleJob(jobDef, config);
-  }
+  replaceScheduledJobs(config);
 
   console.log(`[cron] Initialized ${scheduledJobs.size} jobs`);
 
@@ -769,13 +781,7 @@ export function initCron(config: Config): void {
         try {
           const newConfig = loadConfig();
           console.log('[cron] Config changed, reloading cron jobs...');
-          for (const job of scheduledJobs.values()) {
-            job.job.stop();
-          }
-          scheduledJobs.clear();
-          for (const jobDef of newConfig.cron.jobs) {
-            scheduleJob(jobDef, newConfig);
-          }
+          replaceScheduledJobs(newConfig);
           console.log(`[cron] Reloaded ${scheduledJobs.size} jobs`);
         } catch (err) {
           console.error('[cron] Failed to reload config:', err);
