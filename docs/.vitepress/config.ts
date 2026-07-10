@@ -11,9 +11,6 @@ export default withMermaid({
   // Use .html extension for compatibility with simple servers
   cleanUrls: false,
   
-  // Ignore dead links during build
-  ignoreDeadLinks: true,
-  
   // Last updated timestamp
   lastUpdated: true,
   
@@ -50,7 +47,7 @@ export default withMermaid({
       { text: 'API', link: '/api/index.html' },
       { text: 'Reference', link: '/reference/index.html' },
       { 
-        text: 'v0.3',
+        text: 'v0.4',
         items: [
           { text: 'GitHub', link: 'https://github.com/kat3samsin/skimpyclaw' },
         ]

@@ -251,3 +251,5 @@ pnpm run doctor
 ## License
 
 MIT
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Follow [SECURITY.md](SECURITY.md) before sharing vulnerability details.
