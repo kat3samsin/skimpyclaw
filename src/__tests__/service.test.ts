@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   gateway: {
@@ -6,10 +6,19 @@ const mocks = vi.hoisted(() => ({
     close: vi.fn(async () => {}),
   },
   stopCron: vi.fn(),
+  initCron: vi.fn(),
   stopHeartbeat: vi.fn(),
+  initHeartbeat: vi.fn(),
   stopActiveChannel: vi.fn(async () => {}),
+  initActiveChannel: vi.fn(async () => null),
+  startActiveChannel: vi.fn(async () => {}),
   cleanupMcp: vi.fn(async () => {}),
+  restoreCodeAgentTasks: vi.fn(),
+  setCodeAgentConfig: vi.fn(),
+  initProviders: vi.fn(),
+  initLangfuse: vi.fn(),
   shutdownLangfuse: vi.fn(async () => {}),
+  cleanupLogs: vi.fn(() => ({ deletedFiles: 0, deletedDirs: 0, errors: [] })),
 }));
 
 vi.mock('../gateway.js', () => ({
@@ -17,36 +26,36 @@ vi.mock('../gateway.js', () => ({
 }));
 
 vi.mock('../cron.js', () => ({
-  initCron: vi.fn(),
+  initCron: mocks.initCron,
   stopCron: mocks.stopCron,
 }));
 
 vi.mock('../heartbeat.js', () => ({
-  initHeartbeat: vi.fn(),
+  initHeartbeat: mocks.initHeartbeat,
   stopHeartbeat: mocks.stopHeartbeat,
 }));
 
 vi.mock('../channels.js', () => ({
-  initActiveChannel: vi.fn(async () => null),
-  startActiveChannel: vi.fn(async () => {}),
+  initActiveChannel: mocks.initActiveChannel,
+  startActiveChannel: mocks.startActiveChannel,
   stopActiveChannel: mocks.stopActiveChannel,
 }));
 
-vi.mock('../agent.js', () => ({ initProviders: vi.fn() }));
+vi.mock('../agent.js', () => ({ initProviders: mocks.initProviders }));
 
 vi.mock('../langfuse.js', () => ({
-  initLangfuse: vi.fn(),
+  initLangfuse: mocks.initLangfuse,
   shutdownLangfuse: mocks.shutdownLangfuse,
 }));
 
 vi.mock('../tools.js', () => ({
-  restoreCodeAgentTasks: vi.fn(),
-  setCodeAgentConfig: vi.fn(),
+  restoreCodeAgentTasks: mocks.restoreCodeAgentTasks,
+  setCodeAgentConfig: mocks.setCodeAgentConfig,
   cleanupMcp: mocks.cleanupMcp,
 }));
 
 vi.mock('../log-cleanup.js', () => ({
-  cleanupLogs: vi.fn(() => ({ deletedFiles: 0, deletedDirs: 0, errors: [] })),
+  cleanupLogs: mocks.cleanupLogs,
   formatCleanupSummary: vi.fn(() => ''),
 }));
 
@@ -55,6 +64,48 @@ import { startRuntime } from '../service.js';
 describe('runtime shutdown', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    delete process.env.SKIMPYCLAW_SMOKE_TEST;
+    delete process.env.SKIMPYCLAW_SMOKE_PORT;
+  });
+
+  it('does not initialize persistent subsystems in smoke mode', async () => {
+    process.env.SKIMPYCLAW_SMOKE_TEST = '1';
+    process.env.SKIMPYCLAW_SMOKE_PORT = '19998';
+    const config = {
+      gateway: { port: 18790, host: '127.0.0.1', mode: 'local' },
+      agents: { default: 'main', list: { main: { model: 'test' } } },
+      models: { providers: {}, aliases: {} },
+      channels: {
+        telegram: { enabled: false, allowFrom: [] },
+        discord: { enabled: false, allowFrom: [] },
+      },
+      cron: { jobs: [] },
+      heartbeat: { intervalMs: 60_000, prompt: 'heartbeat' },
+    } as any;
+
+    const runtime = await startRuntime(config);
+
+    expect(mocks.gateway.listen).toHaveBeenCalledWith({ port: 19998, host: '127.0.0.1' });
+    expect(mocks.initLangfuse).not.toHaveBeenCalled();
+    expect(mocks.initProviders).not.toHaveBeenCalled();
+    expect(mocks.restoreCodeAgentTasks).not.toHaveBeenCalled();
+    expect(mocks.setCodeAgentConfig).not.toHaveBeenCalled();
+    expect(mocks.cleanupLogs).not.toHaveBeenCalled();
+    expect(mocks.initCron).not.toHaveBeenCalled();
+    expect(mocks.initActiveChannel).not.toHaveBeenCalled();
+    expect(mocks.startActiveChannel).not.toHaveBeenCalled();
+    expect(mocks.initHeartbeat).not.toHaveBeenCalled();
+
+    await runtime.stop();
+    expect(mocks.stopCron).not.toHaveBeenCalled();
+    expect(mocks.stopHeartbeat).not.toHaveBeenCalled();
+    expect(mocks.stopActiveChannel).not.toHaveBeenCalled();
+    expect(mocks.cleanupMcp).not.toHaveBeenCalled();
+    expect(mocks.shutdownLangfuse).not.toHaveBeenCalled();
+    expect(mocks.gateway.close).toHaveBeenCalledOnce();
   });
 
   it('closes every owned resource once and includes MCP cleanup', async () => {
