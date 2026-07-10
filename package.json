@@ -41,7 +41,9 @@
     "lint": "eslint \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "ci": "pnpm run lint && pnpm run build && pnpm run test && pnpm run dashboard:test"
+    "test:coverage": "vitest run --coverage",
+    "dashboard:test:coverage": "pnpm --dir web/dashboard test:coverage",
+    "ci": "pnpm run lint && pnpm run build && pnpm run test:coverage && pnpm run dashboard:test:coverage"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",
@@ -98,6 +100,7 @@
   "devDependencies": {
     "@eslint/js": "^9.39.2",
     "@types/node": "^20.11.0",
+    "@vitest/coverage-v8": "4.1.10",
     "eslint": "^9.39.2",
     "globals": "^17.3.0",
     "tsx": "^4.7.0",

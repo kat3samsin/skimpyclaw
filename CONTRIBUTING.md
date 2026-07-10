@@ -25,7 +25,7 @@ pnpm test
 Run the full gate before opening a pull request:
 
 ```bash
-pnpm ci
+pnpm run ci
 pnpm docs:build # when documentation changes
 ```
 

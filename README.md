@@ -242,7 +242,7 @@ pnpm build
 pnpm test
 
 # Run full CI gate
-pnpm ci
+pnpm run ci
 
 # Run doctor checks
 pnpm run doctor
