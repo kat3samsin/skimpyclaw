@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SkimpyClaw Repository Improvement Report</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b0f14;
+      --panel: #121821;
+      --panel-2: #18212c;
+      --border: #293545;
+      --text: #e7edf5;
+      --muted: #9aa9ba;
+      --accent: #65d7c4;
+      --critical: #ff5d72;
+      --high: #ff9d5c;
+      --medium: #f4ca64;
+      --low: #75b9ff;
+      --pass: #69d18f;
+      --fail: #ff6b79;
+      --blocked: #a99bea;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: radial-gradient(circle at 85% -10%, #17313a 0, transparent 30rem), var(--bg);
+      color: var(--text);
+      font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main { width: min(1500px, calc(100% - 32px)); margin: 0 auto; padding: 44px 0 80px; }
+    h1, h2, h3 { line-height: 1.16; letter-spacing: -0.02em; }
+    h1 { max-width: 900px; margin: 10px 0 14px; font-size: clamp(34px, 5vw, 64px); }
+    h2 { margin: 0 0 18px; font-size: 26px; }
+    h3 { margin: 0 0 8px; font-size: 17px; }
+    p { margin: 0 0 12px; }
+    a { color: var(--accent); }
+    code { color: #b9f4e8; font: 0.92em ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .kicker { color: var(--accent); font: 700 12px/1.2 ui-monospace, monospace; letter-spacing: .16em; text-transform: uppercase; }
+    .lede { max-width: 900px; color: var(--muted); font-size: 18px; }
+    .meta, .grid, .scores { display: grid; gap: 12px; }
+    .meta { grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 28px 0 18px; }
+    .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .scores { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .card, section {
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: linear-gradient(150deg, rgba(24,33,44,.96), rgba(16,22,30,.96));
+      box-shadow: 0 16px 40px rgba(0,0,0,.18);
+    }
+    .card { padding: 16px; }
+    .card .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
+    .card .value { margin-top: 4px; overflow-wrap: anywhere; font-weight: 700; }
+    section { margin-top: 18px; padding: 24px; }
+    nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 4px; }
+    nav a { padding: 7px 10px; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); text-decoration: none; font-size: 13px; }
+    nav a:hover { border-color: var(--accent); color: var(--text); }
+    .pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 999px; font-size: 12px; font-weight: 750; white-space: nowrap; }
+    .critical { color: #ffd9de; background: rgba(255,93,114,.18); }
+    .high { color: #ffe0c7; background: rgba(255,157,92,.18); }
+    .medium { color: #fff0bd; background: rgba(244,202,100,.18); }
+    .low { color: #d8ebff; background: rgba(117,185,255,.17); }
+    .pass { color: #d9ffe7; background: rgba(105,209,143,.17); }
+    .fail { color: #ffe0e4; background: rgba(255,107,121,.17); }
+    .blocked { color: #eee9ff; background: rgba(169,155,234,.18); }
+    .open { color: #ddecff; background: rgba(117,185,255,.14); }
+    .metric { font-size: 29px; font-weight: 800; }
+    .metric-note { color: var(--muted); font-size: 13px; }
+    .bar { height: 7px; margin: 10px 0; overflow: hidden; border-radius: 99px; background: #0b1118; }
+    .bar > span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--high), var(--accent)); }
+    .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; }
+    table { width: 100%; border-collapse: collapse; min-width: 1120px; }
+    th, td { padding: 11px 12px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+    th { position: sticky; top: 0; z-index: 1; color: var(--muted); background: #151d27; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+    tr:last-child td { border-bottom: 0; }
+    td:nth-child(1) { width: 84px; font: 700 12px ui-monospace, monospace; color: var(--accent); }
+    td:nth-child(2) { width: 230px; font-weight: 700; }
+    td:nth-child(3), td:nth-child(4), td:nth-child(5), td:nth-child(6) { width: 90px; }
+    td:nth-child(7) { min-width: 560px; color: #c8d4e0; }
+    .finding-detail { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px 18px; font-size: 13px; }
+    .finding-detail b { color: var(--text); }
+    .finding-detail div:last-child { grid-column: 1 / -1; }
+    .checks { margin: 0; padding-left: 20px; }
+    .checks li { margin: 7px 0; }
+    .command { display: grid; grid-template-columns: minmax(250px, 1fr) 72px 100px; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); }
+    .command:last-child { border-bottom: 0; }
+    .history-entry { border-left: 3px solid var(--accent); padding: 4px 0 4px 16px; }
+    .history-entry + .history-entry { margin-top: 18px; }
+    .muted { color: var(--muted); }
+    .footer { margin-top: 24px; color: var(--muted); text-align: center; font-size: 12px; }
+    @media (max-width: 900px) {
+      .meta, .grid, .scores { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .finding-detail { grid-template-columns: 1fr; }
+      .finding-detail div:last-child { grid-column: auto; }
+    }
+    @media (max-width: 560px) {
+      main { width: min(100% - 18px, 1500px); padding-top: 24px; }
+      section { padding: 17px; }
+      .meta, .grid, .scores { grid-template-columns: 1fr; }
+      .command { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <div class="kicker">Autonomous repository improvement workflow</div>
+  <h1>SkimpyClaw repository improvement report</h1>
+  <p class="lede">Evidence-backed security, correctness, reliability, performance, maintainability, testing, documentation, developer-experience, and production-readiness work. This report is append-only in its iteration history; current-state fields are updated as each verified backlog item closes.</p>
+
+  <div class="meta">
+    <div class="card"><div class="label">Repository</div><div class="value">kat3samsin/skimpyclaw</div></div>
+    <div class="card"><div class="label">Base</div><div class="value"><code>trunk @ 01c0bd9de9</code></div></div>
+    <div class="card"><div class="label">Working branch</div><div class="value"><code>sol/2026-07-10-repository-improvements</code></div></div>
+    <div class="card"><div class="label">Report initialized</div><div class="value">2026-07-10 · America/Chicago</div></div>
+  </div>
+
+  <nav aria-label="Report sections">
+    <a href="#repository">Repository</a><a href="#baseline">Baseline</a><a href="#scores">Scores</a><a href="#backlog">Backlog</a><a href="#history">Iterations</a><a href="#verification">Verification</a><a href="#git">Git</a><a href="#remaining">Remaining</a><a href="#summary">Summary</a>
+  </nav>
+
+  <section id="repository">
+    <h2>Repository information and stack</h2>
+    <div class="grid">
+      <div class="card"><div class="label">Runtime</div><div class="value">Node.js · TypeScript ESM · Fastify</div></div>
+      <div class="card"><div class="label">Agent runtime</div><div class="value">Anthropic + Codex adapters · shared tool loop · MCP</div></div>
+      <div class="card"><div class="label">Interfaces</div><div class="value">Telegram · Discord · Preact/Vite dashboard · CLI</div></div>
+      <div class="card"><div class="label">Persistence</div><div class="value"><code>~/.skimpyclaw</code> config, encrypted sessions, audit, usage, reports</div></div>
+      <div class="card"><div class="label">Scheduling</div><div class="value">Croner cron/interval jobs · heartbeat · script subprocesses</div></div>
+      <div class="card"><div class="label">Tests</div><div class="value">Vitest: 71 backend files / 875 tests; 3 dashboard files / 54 tests</div></div>
+    </div>
+    <p class="muted" style="margin-top:14px">Boundary note: the existing untracked <code>chief_daily_writer.cjs</code> is user work and is excluded from every scan, edit, stage, and commit in this workflow.</p>
+  </section>
+
+  <section id="baseline">
+    <h2>Baseline health</h2>
+    <div class="grid">
+      <div class="card"><span class="pill pass">Pass</span><div class="metric">875 / 875</div><div class="metric-note">Backend tests</div></div>
+      <div class="card"><span class="pill pass">Pass</span><div class="metric">0</div><div class="metric-note">TypeScript build/typecheck errors</div></div>
+      <div class="card"><span class="pill fail">Fail</span><div class="metric">3</div><div class="metric-note">ESLint errors</div></div>
+      <div class="card"><span class="pill fail">Fail</span><div class="metric">3 / 54</div><div class="metric-note">Dashboard tests failing</div></div>
+      <div class="card"><span class="pill pass">Pass</span><div class="metric">2</div><div class="metric-note">Production builds: app/dashboard and docs</div></div>
+      <div class="card"><span class="pill critical">Critical</span><div class="metric">1</div><div class="metric-note">Production dependency advisory at critical severity</div></div>
+    </div>
+    <ul class="checks" style="margin-top:16px">
+      <li>Ambient pnpm 11 rejected the pnpm-10-installed module tree and warned that repository overrides were ignored. Baselines were rerun with the CI family, pnpm 10.29.3.</li>
+      <li>Root production audit: 1 critical, 20 high, 43 moderate, 5 low findings. Dashboard production audit: 13 moderate, 3 low. Docs audit: 2 high, 23 moderate, 3 low.</li>
+      <li>Current tracked tree secret scan found one documented placeholder Discord ID, not a credential. Full history produced 231 mostly inherited findings across 82,741 commits and is not a useful release-range signal.</li>
+      <li><code>npm pack --dry-run</code> produced 326 entries / 1.70 MB unpacked, including compiled backend tests and no LICENSE artifact.</li>
+      <li>Initial audit calls through the configured npm proxy returned HTTP 418; direct registry audits completed and supplied the counts above.</li>
+    </ul>
+  </section>
+
+  <section id="scores">
+    <h2>Initial scores</h2>
+    <div class="scores">
+      <div class="card"><div class="label">Security</div><div class="metric">4/10</div><div class="bar"><span style="width:40%"></span></div><div class="metric-note">Strong intent and tests, but vulnerable runtime packages, symlink boundary gaps, and a broken active secret hook.</div></div>
+      <div class="card"><div class="label">Reliability</div><div class="metric">5/10</div><div class="bar"><span style="width:50%"></span></div><div class="metric-note">Broad tests; unbounded turns, conversation races, orphaned work, and lifecycle leaks remain.</div></div>
+      <div class="card"><div class="label">Maintainability</div><div class="metric">7/10</div><div class="bar"><span style="width:70%"></span></div><div class="metric-note">Clear TypeScript architecture and docs; package roots and lifecycle ownership are fragmented.</div></div>
+      <div class="card"><div class="label">Performance</div><div class="metric">5/10</div><div class="bar"><span style="width:50%"></span></div><div class="metric-note">Small service footprint, but synchronous voice work and unbounded code-agent buffers can stall or exhaust it.</div></div>
+      <div class="card"><div class="label">Test quality</div><div class="metric">6/10</div><div class="bar"><span style="width:60%"></span></div><div class="metric-note">Excellent backend breadth; dashboard tests are outside CI and no measurable coverage floor exists.</div></div>
+      <div class="card"><div class="label">Developer experience</div><div class="metric">4/10</div><div class="bar"><span style="width:40%"></span></div><div class="metric-note">Rich docs, but clean bootstrap, package-manager pinning, doctor command, and current lint are broken.</div></div>
+      <div class="card"><div class="label">Production readiness</div><div class="metric">4/10</div><div class="bar"><span style="width:40%"></span></div><div class="metric-note">Release source/order, packaging, smoke isolation, dependencies, and licensing all need work.</div></div>
+    </div>
+  </section>
+
+  <section id="backlog">
+    <h2>Prioritized backlog</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>ID</th><th>Finding</th><th>Severity</th><th>Confidence</th><th>Effort</th><th>Status</th><th>Evidence, cause, fix, verification</th></tr></thead>
+        <tbody>
+          <tr><td>SEC-001</td><td>Vulnerable production and build dependencies</td><td><span class="pill critical">Critical</span></td><td>High</td><td>M</td><td><span class="pill pass">Completed</span></td><td><div class="finding-detail"><div><b>Category:</b> Security</div><div><b>Evidence:</b> Direct-registry audits reported 91 root, 17 dashboard, and 28 docs vulnerabilities, including protobufjs RCE, Fastify validation bypasses, Hono static/auth issues, and vulnerable DOMPurify/Vitest/build dependencies.</div><div><b>Root cause:</b> Three stale lockfiles and security overrides below patched versions.</div><div><b>Fix:</b> Applied compatible direct upgrades and narrow transitive overrides without introducing major runtime API migrations.</div><div><b>Verification:</b> Frozen installs, root build, 875 backend tests, docs build, and all five all/production audit variants passed with zero known vulnerabilities. The three pre-existing dashboard query failures were unchanged and remain assigned to CI-001.</div></div></td></tr>
+          <tr><td>SEC-002</td><td>Symlink escapes in filesystem and prompt boundaries</td><td><span class="pill high">High</span></td><td>High</td><td>M</td><td><span class="pill open">Open</span></td><td><div class="finding-detail"><div><b>Category:</b> Security / Path traversal</div><div><b>Evidence:</b> <code>path-utils.ts:8-14</code> falls back to lexical resolution for a nonexistent write beneath a symlink; cron/API prompt readers use lexical prefix checks.</div><div><b>Root cause:</b> Validation does not resolve the nearest existing ancestor or real target.</div><div><b>Fix:</b> Resolve existing ancestors and enforce real-path containment for reads/writes and prompt sources.</div><div><b>Verify:</b> Regression tests with an allowed-root symlink pointing outside; normal new writes still pass.</div></div></td></tr>
+          <tr><td>SEC-003</td><td>Pre-push secret scan silently skips pushed ranges</td><td><span class="pill high">High</span></td><td>High</td><td>S</td><td><span class="pill open">Open</span></td><td><div class="finding-detail"><div><b>Category:</b> Security tooling</div><div><b>Evidence:</b> <code>secret-scan.sh:54</code> passes a revision range to <code>git grep</code>, which exits 128; the script treats that as clean. New branches inspect only the tip tree.</div><div><b>Root cause:</b> Scanner errors and no-match results are conflated.</div><div><b>Fix:</b> Enumerate introduced commits and scan their additions; fail closed on Git errors.</div><div><b>Verify:</b> Temp-repo tests for clean, existing/new branch, add-then-delete secret, and invalid revisions.</div></div></td></tr>
+          <tr><td>SEC-004</td><td>Generated dashboard token is initially persisted in plaintext</td><td><span class="pill high">High</span></td><td>High</td><td>S</td><td><span class="pill open">Open</span></td><td><div class="finding-detail"><div><b>Category:</b> Secrets</div><div><b>Evidence:</b> <code>config.ts:219-224</code> adds the token after migration and calls the raw writer directly.</div><div><b>Root cause:</b> The generated secret bypasses <code>saveConfig</code> migration.</div><div><b>Fix:</b> Persist through secure migration and make smoke tooling resolve references through the config loader.</div><div><b>Verify:</b> macOS-mocked test asserts a keychain reference is written and the runtime retains the resolved token.</div></div></td></tr>
+          <tr><td>REL-001</td><td>Tool turns have no enforceable token budget</td><td><span class="pill high">High</span></td><td>High</td><td>M</td><td><span class="pill open">Open</span></td><td><div class="finding-detail"><div><b>Category:</b> Reliability / Cost</div><div><b>Evidence:</b> Documented <code>maxTurnTokens</code> is discarded by <code>ToolCallGuard</code>; the shared loop is unbounded and records usage for stats only.</div><div><b>Root cause:</b> A former budget feature was intentionally relaxed but its public contract remained.</div><div><b>Fix:</b> Enforce cumulative usage with one text-only finalization attempt.</div><div><b>Verify:</b> Infinite-tool fake adapter stops at configured/default budget with correct totals.</div></div></td></tr>
+          <tr><td>COR-001</td><td>Same-conversation messages race</td><td><span class="pill high">High</span></td><td>High</td><td>M</td><td><span class="pill open">Open</span></td><td><div class="finding-detail"><div><b>Category:</b> Correctness / Concurrency</div><div><b>Evidence:</b> Telegram concurrent runner and Discord fire-and-forget handlers independently read history, await a model, and append in completion order.</div><div><b>Root cause:</b> No keyed per-conversation queue; shared session IDs are reused as lock owners.</div><div><b>Fix:</b> Serialize complete turns per conversation, retain cross-conversation concurrency, and use unique turn lock IDs.</div><div><b>Verify:</b> Deferred promises prove order for same keys and concurrency for different keys.</div></div></td></tr>
+          <tr><td>REL-002</td><td>Agent timeout leaves mutating work alive</td><td><span class="pill high">High</span></td><td>High</td><td>L</td><td><span class="pill open">Open</span></td><td><div class="finding-detail"><div><b>Category:</b> Cancellation</div><div><b>Evidence:</b> Discord returns from <code>Promise.race</code>; provider calls, MCP retries, approvals, and Bash do not consistently observe the abort signal.</div><div><b>Root cause:</b> Cancellation stops at orchestration boundaries.</div><div><b>Fix:</b> Thread abort signals through adapters/tools and suppress post-cancel persistence.</div><div><b>Verify:</b> Abort-aware provider/tool fakes leave no later side effect or live promise.</div></div></td></tr>
+          <tr><td>REL-003</td><td>Release source ref and input are unsafe</td><td><span class="pill high">High</span></td><td>High</td><td>S</td><td><span class="pill open">Open</span></td><td><div class="finding-detail"><div><b>Category:</b> Release security</div><div><b>Evidence:</b> Manual workflow can run from any selected ref and interpolates the version expression in shell before publishing and pushing HEAD.</div><div><b>Root cause:</b> No trunk/ref invariant and unsafe expression-to-shell boundary.</div><div><b>Fix:</b> Gate on trunk, verify remote alignment, pass version via environment, and mirror the branch guard locally.</div><div><b>Verify:</b> Feature branch and invalid input stop before mutation; workflow syntax validates.</div></div></td></tr>
+          <tr><td>REL-004</td><td>npm publish precedes durable Git release record</td><td><span class="pill high">High</span></td><td>High</td><td>S</td><td><span class="pill open">Open</span></td><td><div class="finding-detail"><div><b>Category:</b> Release reliability</div><div><b>Evidence:</b> Workflow and local script publish before commit/tag/push.</div><div><b>Root cause:</b> Irreversible package publication is ordered before fallible repository operations.</div><div><b>Fix:</b> Validate/package first, establish source/tag with a documented retry model, then publish.</div><div><b>Verify:</b> Stubbed command-order test and <code>npm pack --dry-run</code>.</div></div></td></tr>
+          <tr><td>CI-001</td><td>Verification gate is broken and excludes the dashboard</td><td><span class="pill medium">Medium</span></td><td>High</td><td>S</td><td><span class="pill open">Open</span></td><td><div class="finding-detail"><div><b>Category:</b> CI / Test quality</div><div><b>Evidence:</b> Root lint has 3 errors; dashboard has 3 failing queries; CI installs/runs root only.</div><div><b>Root cause:</b> Independent package tests are not aggregated and lint drift was committed.</div><div><b>Fix:</b> Repair failures, add dashboard test script/install, and run build plus both suites in CI/release checks.</div><div><b>Verify:</b> Root CI, production build, dashboard tests all exit 0 from a frozen install.</div></div></td></tr>
+          <tr><td>PKG-001</td><td>npm artifact ships compiled test suites</td><td><span class="pill medium">Medium</span></td><td>High</td><td>XS</td><td><span class="pill open">Open</span></td><td><div class="finding-detail"><div><b>Category:</b> Packaging</div><div><b>Evidence:</b> Dry-run package contains 326 entries and every compiled backend test under <code>dist/__tests__</code>.</div><div><b>Root cause:</b> Production build uses the typecheck tsconfig that includes tests.</div><div><b>Fix:</b> Add a build-only tsconfig excluding tests.</div><div><b>Verify:</b> Build/typecheck/tests pass and packed file list has no <code>dist/__tests__</code>.</div></div></td></tr>
+          <tr><td>COR-002</td><td>Duplicate cron IDs orphan schedules</td><td><span class="pill medium">Medium</span></td><td>High</td><td>S</td><td><span class="pill open">Open</span></td><td><div class="finding-detail"><div><b>Category:</b> Correctness</div><div><b>Evidence:</b> Scheduling every config entry into a Map overwrites an earlier handle without stopping it.</div><div><b>Root cause:</b> Unique IDs are assumed, never validated.</div><div><b>Fix:</b> Validate all IDs before scheduling or swapping schedules.</div><div><b>Verify:</b> Duplicate interval config emits a clear error and leaves no active timer.</div></div></td></tr>
+          <tr><td>REL-005</td><td>Channel reloads accumulate approval listeners</td><td><span class="pill medium">Medium</span></td><td>High</td><td>S</td><td><span class="pill open">Open</span></td><td><div class="finding-detail"><div><b>Category:</b> Lifecycle</div><div><b>Evidence:</b> Telegram and Discord discard unsubscribe functions returned by <code>onApprovalEvent</code>.</div><div><b>Root cause:</b> Listener ownership is not tied to channel init/stop.</div><div><b>Fix:</b> Retain and invoke one unsubscribe handle per channel.</div><div><b>Verify:</b> Reinitialize twice; one listener and one notification remain.</div></div></td></tr>
+          <tr><td>REL-006</td><td>Cron and heartbeat callbacks survive stop/reload</td><td><span class="pill medium">Medium</span></td><td>High</td><td>S</td><td><span class="pill open">Open</span></td><td><div class="finding-detail"><div><b>Category:</b> Timer lifecycle</div><div><b>Evidence:</b> Cron debounce and heartbeat initial timeout handles are local/untracked.</div><div><b>Root cause:</b> Stop functions do not own every scheduled callback.</div><div><b>Fix:</b> Store/clear handles in module state and null them after firing.</div><div><b>Verify:</b> Fake timers prove stopped generations cannot restart work.</div></div></td></tr>
+          <tr><td>REL-007</td><td>Cron output overflow can leave a detached process alive</td><td><span class="pill medium">Medium</span></td><td>High</td><td>S</td><td><span class="pill open">Open</span></td><td><div class="finding-detail"><div><b>Category:</b> Process reliability</div><div><b>Evidence:</b> At maxBuffer, cron sends SIGTERM and rejects while clearing timers; no SIGKILL is scheduled and data handlers continue appending.</div><div><b>Root cause:</b> Overflow cleanup differs from timeout cleanup.</div><div><b>Fix:</b> Bound buffers, stop collecting after settlement, and escalate process-tree termination.</div><div><b>Verify:</b> TERM-resistant high-output fixture is killed and memory buffers stay capped.</div></div></td></tr>
+          <tr><td>PERF-001</td><td>Voice processing blocks the event loop</td><td><span class="pill medium">Medium</span></td><td>High</td><td>M</td><td><span class="pill open">Open</span></td><td><div class="finding-detail"><div><b>Category:</b> Performance</div><div><b>Evidence:</b> Conversion/transcription use <code>execSync</code>; macOS TTS uses <code>spawnSync</code> for operations lasting up to minutes.</div><div><b>Root cause:</b> External work runs synchronously inside handlers.</div><div><b>Fix:</b> Async argument-array process wrapper with bounds, timeout, escalation, and cleanup.</div><div><b>Verify:</b> Delayed fake CLI does not block a timer/gateway probe.</div></div></td></tr>
+          <tr><td>REL-008</td><td>Coding-agent cancellation and retry cleanup diverge</td><td><span class="pill medium">Medium</span></td><td>High</td><td>M</td><td><span class="pill open">Open</span></td><td><div class="finding-detail"><div><b>Category:</b> Process lifecycle</div><div><b>Evidence:</b> User cancel, first timeout, retry timeout, and interactive resume use different signals/status paths.</div><div><b>Root cause:</b> Termination is duplicated, not centralized.</div><div><b>Fix:</b> Shared process-tree termination with SIGKILL escalation and explicit reason.</div><div><b>Verify:</b> TERM-resistant parent/child fixture is gone and status is correct.</div></div></td></tr>
+          <tr><td>REL-009</td><td>Restart/shutdown bypasses MCP cleanup</td><td><span class="pill medium">Medium</span></td><td>High</td><td>S</td><td><span class="pill open">Open</span></td><td><div class="finding-detail"><div><b>Category:</b> Shutdown</div><div><b>Evidence:</b> <code>cleanupMcp</code> is absent from runtime stop; dashboard restart calls <code>process.exit</code> directly.</div><div><b>Root cause:</b> Cleanup ownership is split.</div><div><b>Fix:</b> Include MCP in idempotent stop and route restart through graceful shutdown.</div><div><b>Verify:</b> Mocks prove all resources close once in order.</div></div></td></tr>
+          <tr><td>REL-010</td><td>Discord event rejections are unobserved</td><td><span class="pill medium">Medium</span></td><td>High</td><td>XS</td><td><span class="pill open">Open</span></td><td><div class="finding-detail"><div><b>Category:</b> Error handling</div><div><b>Evidence:</b> Message async IIFE and interaction promise have no terminal catch.</div><div><b>Root cause:</b> EventEmitter handlers fire async work without ownership.</div><div><b>Fix:</b> Attach contextual catches.</div><div><b>Verify:</b> Rejected handler mocks log without <code>unhandledRejection</code>.</div></div></td></tr>
+          <tr><td>PERF-002</td><td>Coding-agent output grows and reparses without bounds</td><td><span class="pill medium">Medium</span></td><td>High</td><td>M</td><td><span class="pill open">Open</span></td><td><div class="finding-detail"><div><b>Category:</b> Performance / Memory</div><div><b>Evidence:</b> Full stdout/stderr strings grow indefinitely and the full stream is reparsed on every chunk despite an on-disk log.</div><div><b>Root cause:</b> One buffer serves archive, parser, and preview.</div><div><b>Fix:</b> Stream archive to disk and retain bounded/incremental parser state.</div><div><b>Verify:</b> Large chunk stream has capped resident state and linear parse work.</div></div></td></tr>
+          <tr><td>OBS-001</td><td>Cancellation and usage attribution are recorded incorrectly</td><td><span class="pill medium">Medium</span></td><td>High</td><td>S</td><td><span class="pill open">Open</span></td><td><div class="finding-detail"><div><b>Category:</b> Observability / Correctness</div><div><b>Evidence:</b> <code>runAgentTurn</code> drops trigger/agent ID; cancelled loops return normal strings and successful traces.</div><div><b>Root cause:</b> Context fields and cancellation state are lost at orchestration boundaries.</div><div><b>Fix:</b> Propagate fields and prevent success persistence/audit on cancellation.</div><div><b>Verify:</b> Cron usage has correct origin; aborted turn has cancelled/error trace and no memory write.</div></div></td></tr>
+          <tr><td>REL-011</td><td>Context compaction can remain above its ceiling</td><td><span class="pill medium">Medium</span></td><td>High</td><td>M</td><td><span class="pill open">Open</span></td><td><div class="finding-detail"><div><b>Category:</b> Reliability</div><div><b>Evidence:</b> Mechanical fallback truncates only tool results and does not enforce <code>tokensAfter &lt;= maxTokens</code>.</div><div><b>Root cause:</b> Huge non-tool content is never progressively bounded.</div><div><b>Fix:</b> Drop/truncate oldest head content while preserving provider call/result invariants.</div><div><b>Verify:</b> Huge non-tool fixtures finish under threshold with valid Codex pairs.</div></div></td></tr>
+          <tr><td>TEST-001</td><td>Smoke test mutates live runtime state</td><td><span class="pill medium">Medium</span></td><td>High</td><td>M</td><td><span class="pill open">Open</span></td><td><div class="finding-detail"><div><b>Category:</b> Test isolation</div><div><b>Evidence:</b> Script reads real config; index writes real gateway log; runtime restores tasks and cleans logs before smoke guard.</div><div><b>Root cause:</b> Smoke mode skips channels but not storage/cleanup.</div><div><b>Fix:</b> Temporary home/config/log tree and smoke-only lifecycle isolation.</div><div><b>Verify:</b> Hash/inventory of real runtime tree is unchanged after a clean-environment smoke run.</div></div></td></tr>
+          <tr><td>DX-001</td><td>Node and pnpm support are unpinned/inconsistent</td><td><span class="pill medium">Medium</span></td><td>High</td><td>S</td><td><span class="pill open">Open</span></td><td><div class="finding-detail"><div><b>Category:</b> Developer experience</div><div><b>Evidence:</b> Docs promise Node 18 though pdf-parse requires 20.16/22.3; pnpm is unpinned across workflows 9/10 and local 11 ignores settings.</div><div><b>Root cause:</b> Runtime/toolchain upgrades did not update metadata.</div><div><b>Fix:</b> Declare engines/packageManager and align docs/workflows.</div><div><b>Verify:</b> Minimum Node CI and frozen pnpm install without ignored-settings warning.</div></div></td></tr>
+          <tr><td>DX-002</td><td>Clean bootstrap and documented doctor command are broken</td><td><span class="pill medium">Medium</span></td><td>High</td><td>S</td><td><span class="pill open">Open</span></td><td><div class="finding-detail"><div><b>Category:</b> Developer experience</div><div><b>Evidence:</b> Root install does not provision dashboard package; docs cite missing <code>pnpm run doctor</code>.</div><div><b>Root cause:</b> Independent manifests lack an aggregate bootstrap/script contract.</div><div><b>Fix:</b> Add explicit bootstrap, dashboard test, and doctor scripts; update development docs.</div><div><b>Verify:</b> Follow documented flow in a clean checkout.</div></div></td></tr>
+          <tr><td>SEC-005</td><td>Security checks are not centrally enforced</td><td><span class="pill medium">Medium</span></td><td>High</td><td>S</td><td><span class="pill open">Open</span></td><td><div class="finding-detail"><div><b>Category:</b> Security / CI</div><div><b>Evidence:</b> CI has no secret or dependency job across three lockfiles.</div><div><b>Root cause:</b> Security verification is local/manual.</div><div><b>Fix:</b> After fixing the hook/audits, add deterministic CI/scheduled checks.</div><div><b>Verify:</b> Seeded secret fails; clean range and patched lockfiles pass.</div></div></td></tr>
+          <tr><td>PKG-002</td><td>MIT claim lacks license artifact/metadata</td><td><span class="pill medium">Medium</span></td><td>High</td><td>XS</td><td><span class="pill blocked">Blocked</span></td><td><div class="finding-detail"><div><b>Category:</b> Legal / Packaging</div><div><b>Evidence:</b> README says MIT and package expects LICENSE, but no file or <code>license</code> field exists.</div><div><b>Root cause:</b> Licensing intent was not completed.</div><div><b>Fix:</b> Add MIT text and metadata after confirming the copyright holder.</div><div><b>Verify:</b> Packed artifact includes LICENSE and manifest reports MIT.</div></div></td></tr>
+          <tr><td>REL-012</td><td>Early approval retains fallback timer</td><td><span class="pill low">Low</span></td><td>High</td><td>XS</td><td><span class="pill open">Open</span></td><td><div class="finding-detail"><div><b>Category:</b> Resource cleanup</div><div><b>Evidence:</b> <code>waitForApproval</code> does not clear/unref its timeout after early resolution.</div><div><b>Root cause:</b> Timer handle is not owned by completion cleanup.</div><div><b>Fix:</b> Clear and unref timer.</div><div><b>Verify:</b> Fake timers show zero pending handles after approval.</div></div></td></tr>
+          <tr><td>PERF-003</td><td>Log tail endpoint reads the whole file</td><td><span class="pill low">Low</span></td><td>High</td><td>S</td><td><span class="pill open">Open</span></td><td><div class="finding-detail"><div><b>Category:</b> Performance</div><div><b>Evidence:</b> Authenticated tail query synchronously reads and splits the entire log.</div><div><b>Root cause:</b> Tail is implemented after full read.</div><div><b>Fix:</b> Bounded reverse file read/response cap.</div><div><b>Verify:</b> Large fixture returns requested tail within bounded bytes.</div></div></td></tr>
+          <tr><td>REL-013</td><td>Scratch artifact names can collide</td><td><span class="pill low">Low</span></td><td>High</td><td>XS</td><td><span class="pill open">Open</span></td><td><div class="finding-detail"><div><b>Category:</b> Reliability</div><div><b>Evidence:</b> Scratch names use only three base-36 random characters per day.</div><div><b>Root cause:</b> Insufficient entropy and non-exclusive creation.</div><div><b>Fix:</b> Use UUID or exclusive creation.</div><div><b>Verify:</b> Deterministic collision fixture never overwrites.</div></div></td></tr>
+          <tr><td>DOC-001</td><td>Docs permit dead links and have stale/missing project docs</td><td><span class="pill low">Low</span></td><td>High</td><td>S</td><td><span class="pill open">Open</span></td><td><div class="finding-detail"><div><b>Category:</b> Documentation</div><div><b>Evidence:</b> Dead-link checking is globally disabled, nav says v0.3 vs package v0.4.0, and no SECURITY/CONTRIBUTING files exist.</div><div><b>Root cause:</b> Documentation checks and release metadata drifted.</div><div><b>Fix:</b> Re-enable link validation with narrow exceptions and add/update project docs.</div><div><b>Verify:</b> Docs build fails on a seeded bad link and passes cleanly.</div></div></td></tr>
+          <tr><td>TEST-002</td><td>No measurable coverage floor</td><td><span class="pill low">Low</span></td><td>High</td><td>M</td><td><span class="pill open">Open</span></td><td><div class="finding-detail"><div><b>Category:</b> Test quality</div><div><b>Evidence:</b> Neither Vitest config collects coverage or defines thresholds; dashboard covers 3 of 17 routed pages.</div><div><b>Root cause:</b> Test count, not executed coverage, is the only regression signal.</div><div><b>Fix:</b> Add coverage provider and conservative ratcheting thresholds after measuring baseline.</div><div><b>Verify:</b> Coverage report passes baseline and fails a seeded threshold breach.</div></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="history">
+    <h2>Iteration history</h2>
+    <div class="history-entry">
+      <h3>Phase 1 · Comprehensive discovery · Completed</h3>
+      <p>Read repository instructions, architecture/security/reference docs, manifests, lockfiles, workflows, release/smoke scripts, backend and dashboard tests, and runtime source. Captured protected-branch and dirty-tree state before work.</p>
+      <p><b>Commands:</b> repository inventory and Git inspection; pnpm-10 lint/typecheck/test/build; dashboard tests; docs build; three dependency audits via the public npm registry; gitleaks history and isolated tracked-tree scans; npm pack dry run.</p>
+      <p><b>Outcome:</b> one critical and eight high-priority findings were promoted above the medium/low backlog. No source changes occurred during discovery. Working branch created only after baseline checks.</p>
+    </div>
+    <div class="history-entry">
+      <h3>SEC-001 · Dependency vulnerability remediation · Completed</h3>
+      <p><b>Files:</b> root, dashboard, and documentation manifests and lockfiles. Upgraded compatible direct dependencies and used narrowly scoped pnpm overrides for advisory-fixed transitive versions.</p>
+      <p><b>Verification:</b> all three frozen installs passed; root production build and all 875 backend tests passed; docs production build passed; root, dashboard, and docs audits all reported zero known vulnerabilities. Dashboard remained at its baseline 51 passing / 3 failing tests because of the already-backlogged ambiguous queries.</p>
+      <p><b>Risk:</b> <code>mcporter</code> remains on the newest Node-20-compatible line rather than its Node-24-only releases. Root install retains the pre-existing optional OpenAI/Zod peer warning.</p>
+    </div>
+  </section>
+
+  <section id="verification">
+    <h2>Verification ledger</h2>
+    <div class="command"><code>npx --yes pnpm@10 run typecheck</code><span class="pill pass">0</span><span>Passed</span></div>
+    <div class="command"><code>npx --yes pnpm@10 run test</code><span class="pill pass">0</span><span>875 passed</span></div>
+    <div class="command"><code>npx --yes pnpm@10 run build</code><span class="pill pass">0</span><span>Passed</span></div>
+    <div class="command"><code>npx --yes pnpm@10 run ci</code><span class="pill fail">1</span><span>3 lint errors</span></div>
+    <div class="command"><code>npx --yes pnpm@10 --dir web/dashboard test</code><span class="pill fail">1</span><span>51 pass / 3 fail</span></div>
+    <div class="command"><code>npx --yes pnpm@10 --dir docs build</code><span class="pill pass">0</span><span>Passed</span></div>
+    <div class="command"><code>pnpm audit (configured proxy)</code><span class="pill fail">1</span><span>Blocked: HTTP 418</span></div>
+    <div class="command"><code>pnpm audit --registry=https://registry.npmjs.org</code><span class="pill fail">1</span><span>Advisories found</span></div>
+    <div class="command"><code>gitleaks detect --no-git (tracked HEAD archive)</code><span class="pill fail">1</span><span>1 placeholder false positive</span></div>
+    <div class="command"><code>npm pack --dry-run --json</code><span class="pill pass">0</span><span>Package inspected</span></div>
+    <div class="command"><code>npx --yes pnpm@10 install --frozen-lockfile</code><span class="pill pass">0</span><span>Root, dashboard, and docs passed after SEC-001</span></div>
+    <div class="command"><code>npx --yes pnpm@10 run build &amp;&amp; npx --yes pnpm@10 run test</code><span class="pill pass">0</span><span>Build passed; 875 tests passed after SEC-001</span></div>
+    <div class="command"><code>npx --yes pnpm@10 --dir docs build</code><span class="pill pass">0</span><span>Passed after SEC-001</span></div>
+    <div class="command"><code>pnpm audit --registry=https://registry.npmjs.org</code><span class="pill pass">0</span><span>Root all/prod, dashboard all/prod, and docs all: 0 vulnerabilities after SEC-001</span></div>
+  </section>
+
+  <section id="git">
+    <h2>Git history and publication</h2>
+    <div class="grid">
+      <div class="card"><div class="label">Commits created</div><div class="metric">0</div><div class="metric-note">Phase 1 is report/backlog initialization only.</div></div>
+      <div class="card"><div class="label">Push status</div><div class="value">Not attempted</div><div class="metric-note">Push follows final audit and review.</div></div>
+      <div class="card"><div class="label">Draft PR</div><div class="value">Not created</div><div class="metric-note">Will be opened only after verified commits and Claude review.</div></div>
+    </div>
+  </section>
+
+  <section id="remaining">
+    <h2>Remaining findings</h2>
+    <p><code>SEC-001</code> is complete; the remaining actionable findings are shown above. <code>PKG-002</code> is blocked on copyright-holder confirmation. Hardening concerns not promoted to the automatic backlog: atomic config writes, startup rollback for embedded callers, and full-session synchronous dashboard reads without measured production impact.</p>
+  </section>
+
+  <section id="summary">
+    <h2>Final summary</h2>
+    <p class="muted">Execution is in progress. The final audit will replace this current-state note with completed/remaining backlog, broad verification, commit and push details, PR status, revised scores, and the stopping reason. Phase and iteration history above will remain intact.</p>
+  </section>
+
+  <div class="footer">Generated and maintained locally for <code>/Users/katre/Sites/skimpyclaw</code>.</div>
+</main>
+</body>
+</html>
