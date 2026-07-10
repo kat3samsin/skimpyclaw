@@ -1,13 +1,14 @@
 // Code Agent Utilities
 
 import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync } from 'fs';
-import { basename, resolve, join, sep } from 'path';
-import { homedir, tmpdir } from 'os';
+import { basename, resolve, join } from 'path';
+import { homedir } from 'os';
 import type { BuildCodeAgentArgsInput, CodeAgentTask } from './types.js';
 import type { Config } from '../types.js';
 import { buildValidationCommand } from './executor.js';
 import { findExecutableOnPath, isExecutableOnPath } from '../utils.js';
 import { buildArtifactUrl, registerLocalArtifact } from '../artifacts.js';
+import { isPathAllowed } from '../tools/path-utils.js';
 
 // Resolve CLI paths once at import time so spawn doesn't get ENOENT
 function resolveCliPath(name: string): string {
@@ -281,10 +282,7 @@ function normalizeOutputPaths(value: string, workdir: string): string {
 }
 
 function isPathInside(path: string, root: string | undefined): boolean {
-  if (!root) return false;
-  const resolvedPath = resolve(path);
-  const resolvedRoot = resolve(root);
-  return resolvedPath === resolvedRoot || resolvedPath.startsWith(`${resolvedRoot}${sep}`);
+  return root ? isPathAllowed(path, [root]) : false;
 }
 
 function extractHtmlPaths(value: string): string[] {
@@ -338,9 +336,6 @@ function buildHtmlArtifactLinks(task: CodeAgentTask, result: string): CodeAgentR
     task.sourceWorkdir,
     task.worktreePath,
     REVIEW_ARTIFACT_DIR,
-    tmpdir(),
-    '/tmp',
-    '/private/tmp',
   ];
   const candidates = new Set([
     ...extractHtmlPaths(result),

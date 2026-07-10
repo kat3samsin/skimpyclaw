@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
+import { existsSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'fs';
 import { homedir, tmpdir } from 'os';
 import { basename, join } from 'path';
 
@@ -96,6 +96,7 @@ describe('notifyCodeAgentResult Discord routing', () => {
       const notification = buildCodeAgentDiscordNotification({
         ...completedTask,
         workdir,
+        sourceWorkdir: tempDir,
         outputPreview: `Artifact: [pr-temp-copy-review.html](${artifactPath})`,
       });
 
@@ -110,6 +111,30 @@ describe('notifyCodeAgentResult Discord routing', () => {
       rmSync(workdir, { recursive: true, force: true });
       rmSync(tempDir, { recursive: true, force: true });
       if (copiedPath) rmSync(copiedPath, { force: true });
+    }
+  });
+
+  it('does not copy a review symlink whose target is outside the task roots', () => {
+    const workdir = mkdtempSync(join(tmpdir(), 'skimpyclaw-review-symlink-'));
+    const linkPath = join(workdir, 'linked-review.html');
+    const outsidePath = '/etc/hosts';
+    const copiedPath = join(homedir(), '.skimpyclaw', 'reviews', basename(linkPath));
+    try {
+      rmSync(copiedPath, { force: true });
+      symlinkSync(outsidePath, linkPath);
+
+      const notification = buildCodeAgentDiscordNotification({
+        ...completedTask,
+        workdir,
+        outputPreview: `Artifact: [linked-review.html](${linkPath})`,
+      });
+
+      expect(existsSync(copiedPath)).toBe(false);
+      expect(notification.content).not.toContain('/artifacts/');
+      expect(notification.content).not.toContain('**Reviews**');
+    } finally {
+      rmSync(workdir, { recursive: true, force: true });
+      rmSync(copiedPath, { force: true });
     }
   });
 

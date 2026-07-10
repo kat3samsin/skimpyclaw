@@ -1,7 +1,7 @@
 // Gateway HTTP server for health checks and control
 
 import Fastify, { FastifyInstance, FastifyReply } from 'fastify';
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, readFileSync, realpathSync, statSync } from 'fs';
 import { homedir } from 'os';
 import { fileURLToPath } from 'url';
 import { isAbsolute, join, relative, resolve } from 'path';
@@ -13,6 +13,7 @@ import { registerDashboardAPI } from './api.js';
 import { registerDashboard } from './dashboard-frontend.js';
 import { ensureDashboardToken } from './config.js';
 import { readRegisteredArtifact } from './artifacts.js';
+import { isPathAllowed } from './tools/path-utils.js';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
@@ -50,6 +51,16 @@ function getReportsRoot(): string {
   return resolve(process.env.SKIMPYCLAW_REPORTS_DIR || join(homedir(), '.skimpyclaw', 'reports'));
 }
 
+function resolveReadableReportPath(path: string): string | null {
+  try {
+    const canonicalPath = realpathSync(path);
+    if (!isPathAllowed(canonicalPath, [getReportsRoot()])) return null;
+    return statSync(canonicalPath).isFile() ? canonicalPath : null;
+  } catch {
+    return null;
+  }
+}
+
 function resolveReportKindRoot(kind: string): string | null {
   if (!/^[a-z0-9][a-z0-9-]*$/i.test(kind)) return null;
   const reportsRoot = getReportsRoot();
@@ -80,7 +91,7 @@ function resolveReportIndexRedirect(kind: string, name: string): { date: string 
   const date = fileName.slice(0, -'.html'.length);
   const filePath = resolve(kindRoot, date, 'index.html');
   const rel = relative(kindRoot, filePath);
-  if (rel !== `${date}/index.html` || isAbsolute(rel) || !existsSync(filePath)) return null;
+  if (rel !== `${date}/index.html` || isAbsolute(rel) || !resolveReadableReportPath(filePath)) return null;
   return { date };
 }
 
@@ -239,8 +250,9 @@ export async function createGateway(cfg: Config): Promise<FastifyInstance> {
       return reply.redirect(`/reports/${request.params.kind}/${redirect.date}/index.html`);
     }
 
-    const filePath = resolveReportPath(request.params.kind, request.params.name);
-    if (!filePath || !existsSync(filePath)) {
+    const resolvedPath = resolveReportPath(request.params.kind, request.params.name);
+    const filePath = resolvedPath ? resolveReadableReportPath(resolvedPath) : null;
+    if (!filePath) {
       reply.code(404).send('Report not found');
       return;
     }
@@ -251,8 +263,9 @@ export async function createGateway(cfg: Config): Promise<FastifyInstance> {
   });
 
   fastify.get<{ Params: { kind: string; date: string; page: string } }>('/reports/:kind/:date/:page', async (request, reply) => {
-    const filePath = resolveReportSectionPath(request.params.kind, request.params.date, request.params.page);
-    if (!filePath || !existsSync(filePath)) {
+    const resolvedPath = resolveReportSectionPath(request.params.kind, request.params.date, request.params.page);
+    const filePath = resolvedPath ? resolveReadableReportPath(resolvedPath) : null;
+    if (!filePath) {
       reply.code(404).send('Report not found');
       return;
     }
