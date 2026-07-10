@@ -807,8 +807,8 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
   });
 
   fastify.post('/api/dashboard/restart', async () => {
-    // Respond first, then terminate so process manager (launchd/systemd) can restart.
-    setTimeout(() => process.exit(0), 150);
+    // Respond first, then use the runtime's SIGTERM shutdown path so resources close.
+    setTimeout(() => process.kill(process.pid, 'SIGTERM'), 150);
     return { restarting: true };
   });
 

@@ -1308,16 +1308,16 @@ describe('Cron prompt-file endpoint', () => {
 describe('Restart endpoint', () => {
   it('POST /api/dashboard/restart returns restarting true', async () => {
     vi.useFakeTimers();
-    const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as any);
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
 
     const res = await inject({ method: 'POST', url: '/api/dashboard/restart' });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ restarting: true });
 
     vi.runOnlyPendingTimers();
-    expect(exitSpy).toHaveBeenCalledWith(0);
+    expect(killSpy).toHaveBeenCalledWith(process.pid, 'SIGTERM');
 
-    exitSpy.mockRestore();
+    killSpy.mockRestore();
     vi.useRealTimers();
   });
 });
