@@ -89,7 +89,9 @@ export async function initDiscord(cfg: Config): Promise<boolean> {
   });
 
   client.on('interactionCreate', (interaction: Interaction) => {
-    void handleInteraction(interaction);
+    void handleInteraction(interaction).catch((err) => {
+      console.error('[discord] Interaction handler failed:', err);
+    });
   });
 
   client.once('clientReady', () => {

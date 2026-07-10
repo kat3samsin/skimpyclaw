@@ -71,7 +71,11 @@ const telegramMocks = vi.hoisted(() => {
 });
 
 const discordMocks = vi.hoisted(() => {
-  const clients: Array<{ destroy: ReturnType<typeof vi.fn> }> = [];
+  const clients: Array<{
+    destroy: ReturnType<typeof vi.fn>;
+    on: ReturnType<typeof vi.fn>;
+  }> = [];
+  const handleInteraction = vi.fn(async () => {});
 
   class Client {
     destroy = vi.fn();
@@ -87,6 +91,7 @@ const discordMocks = vi.hoisted(() => {
   return {
     Client,
     clients,
+    handleInteraction,
     sendApprovalCard: vi.fn(async () => {}),
     registerDelegateToAgentHandler: vi.fn(),
   };
@@ -127,7 +132,7 @@ vi.mock('discord.js', () => ({
 vi.mock('../channels/discord/handlers.js', () => ({
   handleCommand: vi.fn(),
   handleIncomingMessage: vi.fn(),
-  handleInteraction: vi.fn(),
+  handleInteraction: discordMocks.handleInteraction,
   sendApprovalCard: discordMocks.sendApprovalCard,
 }));
 
@@ -198,6 +203,7 @@ beforeEach(async () => {
   telegramMocks.runnerHandles.length = 0;
   telegramMocks.run.mockClear();
   discordMocks.sendApprovalCard.mockClear();
+  discordMocks.handleInteraction.mockReset().mockResolvedValue(undefined);
   discordMocks.clients.length = 0;
 });
 
@@ -277,5 +283,23 @@ describe('approval listener lifecycle', () => {
 
     await expect(stopDiscord()).rejects.toThrow('client destroy failed');
     expect(approvalEvents.listenerCount()).toBe(0);
+  });
+
+  it('observes rejected Discord interaction handlers', async () => {
+    const error = new Error('interaction failed');
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    discordMocks.handleInteraction.mockRejectedValueOnce(error);
+
+    await initDiscord(makeConfig());
+    const interactionHandler = discordMocks.clients.at(-1)?.on.mock.calls
+      .find(([event]) => event === 'interactionCreate')?.[1] as ((interaction: unknown) => void) | undefined;
+    expect(interactionHandler).toBeTypeOf('function');
+
+    interactionHandler?.({ id: 'interaction-1' });
+
+    await vi.waitFor(() => {
+      expect(consoleErrorSpy).toHaveBeenCalledWith('[discord] Interaction handler failed:', error);
+    });
+    consoleErrorSpy.mockRestore();
   });
 });
