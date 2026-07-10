@@ -4,8 +4,8 @@ Step-by-step guide for getting SkimpyClaw running on macOS. Works for both human
 
 ## Prerequisites
 
-- **Node.js 18+** — `node --version`
-- **pnpm** — `pnpm --version` (install: `npm install -g pnpm`)
+- **Node.js 22.20+** — `node --version` (Node 22 or 24 LTS)
+- **pnpm 10.29.3** — `pnpm --version` (install: `npm install -g pnpm@10.29.3`)
 - **Telegram bot token** — create one via [@BotFather](https://t.me/BotFather)
 - **At least one AI provider** — Claude Code Max (OAuth), ChatGPT Plus (Codex), Anthropic API key, or OpenAI key
 - **Your Telegram user ID** — get it from [@userinfobot](https://t.me/userinfobot) (it's a number)
