@@ -750,8 +750,8 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
     const logsDir = getLogsDir();
     const filePath = join(logsDir, filename);
 
-    // Ensure resolved path stays within logs dir
-    if (!resolve(filePath).startsWith(resolve(logsDir))) {
+    // Resolve symlinks before enforcing the log-root boundary.
+    if (!isPathAllowed(filePath, [logsDir])) {
       return reply.code(400).send({ error: 'Invalid filename' });
     }
 

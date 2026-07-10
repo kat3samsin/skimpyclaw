@@ -830,6 +830,17 @@ describe('Logs endpoints', () => {
     const res = await inject({ method: 'GET', url: '/api/dashboard/logs/nonexistent.log' });
     expect(res.statusCode).toBe(404);
   });
+
+  it('GET /api/dashboard/logs/:filename rejects a symlink outside the log root', async () => {
+    const outsidePath = join(TEST_ROOT, 'outside.log');
+    writeFileSync(outsidePath, 'outside secret\n');
+    symlinkSync(outsidePath, join(LOGS_DIR, 'linked.log'));
+
+    const res = await inject({ method: 'GET', url: '/api/dashboard/logs/linked.log' });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toHaveProperty('error', 'Invalid filename');
+  });
 });
 
 describe('Config endpoints', () => {
