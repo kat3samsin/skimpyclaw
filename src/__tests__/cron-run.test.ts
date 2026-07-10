@@ -510,6 +510,67 @@ describe('runCronJob digest chat output', () => {
     }
   });
 
+  it('drains a timed-out script process group before rejecting', async () => {
+    vi.useFakeTimers();
+    const child = new EventEmitter() as any;
+    child.pid = 4321;
+    child.stdout = new EventEmitter();
+    child.stderr = new EventEmitter();
+    spawnMock.mockReturnValue(child);
+
+    let processGroupAlive = true;
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation((_pid, signal) => {
+      if (signal === 'SIGTERM') {
+        queueMicrotask(() => child.emit('close', null, 'SIGTERM'));
+      } else if (signal === 'SIGKILL') {
+        processGroupAlive = false;
+      } else if (signal === 0 && !processGroupAlive) {
+        const error = new Error('No such process') as NodeJS.ErrnoException;
+        error.code = 'ESRCH';
+        throw error;
+      }
+      return true;
+    });
+    const scriptConfig = {
+      ...config,
+      cron: {
+        jobs: [{
+          id: 'timeout',
+          name: 'Timeout',
+          schedule: { kind: 'cron', expr: '* * * * *', tz: 'UTC' },
+          payload: { kind: 'script', script: 'hang', timeoutMs: 100 },
+        }],
+      },
+    } as any;
+
+    try {
+      const run = runCronJob('timeout', scriptConfig);
+      const outcome = run.then(
+        () => ({ status: 'resolved' as const, message: '' }),
+        (error: Error) => ({ status: 'rejected' as const, message: error.message }),
+      );
+      let settled = false;
+      void outcome.then(() => { settled = true; });
+      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1));
+
+      await vi.advanceTimersByTimeAsync(100);
+
+      expect(settled).toBe(false);
+      expect(killSpy.mock.calls.filter(([, signal]) => signal === 'SIGTERM')).toHaveLength(1);
+      expect(killSpy.mock.calls.some(([, signal]) => signal === 'SIGKILL')).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(5000);
+
+      await expect(outcome).resolves.toEqual({
+        status: 'rejected',
+        message: 'Script timed out after 100ms',
+      });
+      expect(killSpy.mock.calls.filter(([, signal]) => signal === 'SIGKILL')).toHaveLength(1);
+    } finally {
+      killSpy.mockRestore();
+    }
+  });
+
   it('thread id set + successful send does not use active-channel send', async () => {
     const digestText = 'No links today';
     runAgentTurnMock.mockResolvedValue(digestText);

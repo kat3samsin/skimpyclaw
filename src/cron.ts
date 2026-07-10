@@ -1136,9 +1136,9 @@ async function executeScript(jobDef: CronJob, _config: Config): Promise<string> 
     let stdout = '';
     let stderr = '';
     let outputBytes = 0;
-    let timedOut = false;
     let settled = false;
     let overflowError: Error | null = null;
+    let timeoutError: Error | null = null;
     let sigkillTimer: ReturnType<typeof setTimeout> | null = null;
     console.log(`[cron:script] Running: ${script.slice(0, 100)}${script.length > 100 ? '...' : ''}`);
     if (cwd) console.log(`[cron:script] cwd: ${cwd}`);
@@ -1167,7 +1167,7 @@ async function executeScript(jobDef: CronJob, _config: Config): Promise<string> 
     };
 
     const terminateForOverflow = () => {
-      if (settled || overflowError) return;
+      if (settled || overflowError || timeoutError) return;
       overflowError = new Error(`Script output exceeded maxBuffer of ${maxBuffer} bytes`);
       clearTimeout(timeout);
       if (!child.pid) {
@@ -1186,7 +1186,7 @@ async function executeScript(jobDef: CronJob, _config: Config): Promise<string> 
     };
 
     const collectOutput = (target: 'stdout' | 'stderr', chunk: Buffer | string) => {
-      if (settled || overflowError) return;
+      if (settled || overflowError || timeoutError) return;
       const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
       const remaining = Math.max(0, maxBuffer - outputBytes);
       const accepted = bytes.subarray(0, remaining);
@@ -1199,13 +1199,20 @@ async function executeScript(jobDef: CronJob, _config: Config): Promise<string> 
     };
 
     const timeout = setTimeout(() => {
-      timedOut = true;
-      if (child.pid) {
-        killScriptProcessTree(child.pid, 'SIGTERM');
-        sigkillTimer = setTimeout(() => killScriptProcessTree(child.pid!, 'SIGKILL'), 5000);
-        (sigkillTimer as { unref?: () => void }).unref?.();
+      timeoutError = new Error(`Script timed out after ${timeoutMs}ms`);
+      if (!child.pid) {
+        fail(timeoutError);
+        return;
       }
-      fail(new Error(`Script timed out after ${timeoutMs}ms`), { keepSigkillTimer: true });
+
+      const pid = child.pid;
+      sigkillTimer = setTimeout(() => {
+        killScriptProcessTree(pid, 'SIGKILL');
+        sigkillTimer = null;
+        fail(timeoutError!);
+      }, 5000);
+      (sigkillTimer as { unref?: () => void }).unref?.();
+      killScriptProcessTree(pid, 'SIGTERM');
     }, timeoutMs);
 
     child.stdout.on('data', (chunk: Buffer | string) => collectOutput('stdout', chunk));
@@ -1213,7 +1220,7 @@ async function executeScript(jobDef: CronJob, _config: Config): Promise<string> 
     child.stderr.on('data', (chunk: Buffer | string) => collectOutput('stderr', chunk));
 
     child.on('error', (error) => {
-      if (overflowError) return;
+      if (overflowError || timeoutError) return;
       fail(error);
     });
 
@@ -1223,13 +1230,15 @@ async function executeScript(jobDef: CronJob, _config: Config): Promise<string> 
         fail(overflowError);
         return;
       }
+      if (timeoutError) {
+        if (sigkillTimer && child.pid && isScriptProcessTreeAlive(child.pid)) return;
+        fail(timeoutError);
+        return;
+      }
       clearTimers();
       if (settled) return;
 
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-      if (timedOut) {
-        return;
-      }
       if (code !== 0) {
         fail(new Error(`Command failed: ${script}${stderr ? `\n${stderr}` : ''}${signal ? `\nSignal: ${signal}` : ''}`));
         return;
