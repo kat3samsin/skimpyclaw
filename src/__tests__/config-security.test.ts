@@ -47,6 +47,7 @@ describe('config security hardening', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.resetModules();
+    mockSecureStore.requireSecureStore.mockReset();
     mockFs.existsSync.mockReturnValue(true);
     mockFs.readFileSync.mockReturnValue('{}');
     mockSecureStore.getSecureValue.mockReturnValue('resolved-secret');
@@ -110,6 +111,75 @@ describe('config security hardening', () => {
       { encoding: 'utf-8', mode: 0o600 },
     );
     expect(mockFs.chmodSync).toHaveBeenCalledWith('/mock-home/.skimpyclaw/config.json', 0o600);
+  });
+
+  it('stores a generated dashboard token in Keychain while retaining its runtime value', async () => {
+    const originalPlatform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true });
+    mockFs.readFileSync.mockReturnValue(JSON.stringify({ gateway: { port: 18790 } }));
+
+    try {
+      const { ensureDashboardToken } = await import('../config.js');
+      const cfg: any = { gateway: { port: 18790 } };
+
+      const token = ensureDashboardToken(cfg);
+
+      expect(cfg.dashboard.token).toBe(token);
+      expect(mockSecureStore.requireSecureStore).toHaveBeenCalledWith('Config secret migration');
+      expect(mockSecureStore.setSecureValue).toHaveBeenCalledWith(
+        'skimpyclaw-config',
+        'dashboard.token',
+        token,
+      );
+      const written = JSON.parse(mockFs.writeFileSync.mock.calls.at(-1)?.[1] as string);
+      expect(written.dashboard.token).toBe('${KEYCHAIN:skimpyclaw-config/dashboard.token}');
+      expect(mockFs.writeFileSync.mock.calls.at(-1)?.[1]).not.toContain(token);
+    } finally {
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
+    }
+  });
+
+  it('preserves the non-macOS fallback while enforcing config permissions', async () => {
+    const originalPlatform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'linux', configurable: true });
+    mockFs.readFileSync.mockReturnValue(JSON.stringify({ gateway: { port: 18790 } }));
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    try {
+      const { ensureDashboardToken } = await import('../config.js');
+      const cfg: any = { gateway: { port: 18790 } };
+
+      const token = ensureDashboardToken(cfg);
+
+      expect(mockSecureStore.requireSecureStore).not.toHaveBeenCalled();
+      expect(mockSecureStore.setSecureValue).not.toHaveBeenCalled();
+      const written = JSON.parse(mockFs.writeFileSync.mock.calls.at(-1)?.[1] as string);
+      expect(written.dashboard.token).toBe(token);
+      expect(mockFs.chmodSync).toHaveBeenCalledWith('/mock-home/.skimpyclaw/config.json', 0o600);
+    } finally {
+      warnSpy.mockRestore();
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
+    }
+  });
+
+  it('does not write or mutate runtime config when secure token storage fails', async () => {
+    const originalPlatform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true });
+    mockFs.readFileSync.mockReturnValue(JSON.stringify({ gateway: { port: 18790 } }));
+    mockSecureStore.requireSecureStore.mockImplementation(() => {
+      throw new Error('[secure-store] unavailable');
+    });
+
+    try {
+      const { ensureDashboardToken } = await import('../config.js');
+      const cfg: any = { gateway: { port: 18790 } };
+
+      expect(() => ensureDashboardToken(cfg)).toThrow('[secure-store] unavailable');
+      expect(mockFs.writeFileSync).not.toHaveBeenCalled();
+      expect(cfg.dashboard).toBeUndefined();
+    } finally {
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
+    }
   });
 
   it('resolves ${KEYCHAIN:service/account} references', async () => {

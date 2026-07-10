@@ -6,7 +6,7 @@
 set -euo pipefail
 
 PORT="${SKIMPYCLAW_SMOKE_PORT:-19999}"
-TOKEN=$(node -e "const c=JSON.parse(require('fs').readFileSync(require('os').homedir()+'/.skimpyclaw/config.json','utf-8')); console.log(c.dashboard?.token||'')" 2>/dev/null || echo "")
+TOKEN=""
 TIMEOUT=15
 PID=""
 
@@ -24,6 +24,14 @@ echo "=== SkimpyClaw Smoke Test ==="
 echo "[1/4] Building..."
 pnpm build 2>&1
 echo "  ✓ Build passed"
+
+# Resolve env/keychain references through the production config loader. Ensure
+# the token exists before startup so the smoke client and gateway use one value.
+TOKEN=$(node --input-type=module -e "const { loadConfig, ensureDashboardToken } = await import('./dist/config.js'); const originalLog = console.log; console.log = () => {}; const config = loadConfig(); const token = ensureDashboardToken(config); console.log = originalLog; process.stdout.write(token);" 2>/dev/null || echo "")
+if [ -z "$TOKEN" ]; then
+  echo "  ✗ Could not resolve dashboard token"
+  exit 1
+fi
 
 # 2. Start on test port
 echo "[2/4] Starting gateway on port $PORT..."
