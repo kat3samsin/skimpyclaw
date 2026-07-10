@@ -1135,8 +1135,10 @@ async function executeScript(jobDef: CronJob, _config: Config): Promise<string> 
     const startTime = Date.now();
     let stdout = '';
     let stderr = '';
+    let outputBytes = 0;
     let timedOut = false;
     let settled = false;
+    let overflowError: Error | null = null;
     let sigkillTimer: ReturnType<typeof setTimeout> | null = null;
     console.log(`[cron:script] Running: ${script.slice(0, 100)}${script.length > 100 ? '...' : ''}`);
     if (cwd) console.log(`[cron:script] cwd: ${cwd}`);
@@ -1164,6 +1166,38 @@ async function executeScript(jobDef: CronJob, _config: Config): Promise<string> 
       reject(error);
     };
 
+    const terminateForOverflow = () => {
+      if (settled || overflowError) return;
+      overflowError = new Error(`Script output exceeded maxBuffer of ${maxBuffer} bytes`);
+      clearTimeout(timeout);
+      if (!child.pid) {
+        fail(overflowError);
+        return;
+      }
+
+      const pid = child.pid;
+      sigkillTimer = setTimeout(() => {
+        killScriptProcessTree(pid, 'SIGKILL');
+        sigkillTimer = null;
+        fail(overflowError!);
+      }, 1000);
+      (sigkillTimer as { unref?: () => void }).unref?.();
+      killScriptProcessTree(pid, 'SIGTERM');
+    };
+
+    const collectOutput = (target: 'stdout' | 'stderr', chunk: Buffer | string) => {
+      if (settled || overflowError) return;
+      const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      const remaining = Math.max(0, maxBuffer - outputBytes);
+      const accepted = bytes.subarray(0, remaining);
+      if (accepted.length > 0) {
+        if (target === 'stdout') stdout += accepted.toString();
+        else stderr += accepted.toString();
+        outputBytes += accepted.length;
+      }
+      if (bytes.length > remaining) terminateForOverflow();
+    };
+
     const timeout = setTimeout(() => {
       timedOut = true;
       if (child.pid) {
@@ -1174,27 +1208,21 @@ async function executeScript(jobDef: CronJob, _config: Config): Promise<string> 
       fail(new Error(`Script timed out after ${timeoutMs}ms`), { keepSigkillTimer: true });
     }, timeoutMs);
 
-    child.stdout.on('data', (chunk: Buffer) => {
-      stdout += chunk.toString();
-      if (stdout.length + stderr.length > maxBuffer) {
-        if (child.pid) killScriptProcessTree(child.pid, 'SIGTERM');
-        fail(new Error(`Script output exceeded maxBuffer of ${maxBuffer} bytes`));
-      }
-    });
+    child.stdout.on('data', (chunk: Buffer | string) => collectOutput('stdout', chunk));
 
-    child.stderr.on('data', (chunk: Buffer) => {
-      stderr += chunk.toString();
-      if (stdout.length + stderr.length > maxBuffer) {
-        if (child.pid) killScriptProcessTree(child.pid, 'SIGTERM');
-        fail(new Error(`Script output exceeded maxBuffer of ${maxBuffer} bytes`));
-      }
-    });
+    child.stderr.on('data', (chunk: Buffer | string) => collectOutput('stderr', chunk));
 
     child.on('error', (error) => {
+      if (overflowError) return;
       fail(error);
     });
 
     child.on('close', (code, signal) => {
+      if (overflowError) {
+        if (sigkillTimer && child.pid && isScriptProcessTreeAlive(child.pid)) return;
+        fail(overflowError);
+        return;
+      }
       clearTimers();
       if (settled) return;
 
@@ -1233,6 +1261,16 @@ export function killScriptProcessTree(pid: number, signal: NodeJS.Signals): void
     } catch {
       // Process already exited.
     }
+  }
+}
+
+function isScriptProcessTreeAlive(pid: number): boolean {
+  if (process.platform === 'win32') return false;
+  try {
+    process.kill(-pid, 0);
+    return true;
+  } catch {
+    return false;
   }
 }
 

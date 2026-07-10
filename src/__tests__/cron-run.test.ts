@@ -1,4 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { EventEmitter } from 'events';
 import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
@@ -13,6 +14,7 @@ const {
   configWatchCallbacks,
   loadConfigMock,
   watchCloseMock,
+  spawnMock,
   testHome,
 } = vi.hoisted(() => ({
   runAgentTurnMock: vi.fn(),
@@ -25,6 +27,7 @@ const {
   configWatchCallbacks: [] as Array<() => void>,
   loadConfigMock: vi.fn(),
   watchCloseMock: vi.fn(),
+  spawnMock: vi.fn(),
   testHome: (() => {
     const { mkdtempSync } = require('fs');
     const { tmpdir } = require('os');
@@ -44,6 +47,11 @@ vi.mock('fs', async (importOriginal) => {
       return { close: watchCloseMock };
     }),
   };
+});
+
+vi.mock('child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('child_process')>();
+  return { ...actual, spawn: spawnMock };
 });
 
 vi.mock('croner', () => ({
@@ -156,6 +164,7 @@ describe('runCronJob digest chat output', () => {
     vi.clearAllMocks();
     cronCallbacks.length = 0;
     configWatchCallbacks.length = 0;
+    spawnMock.mockReset();
   });
 
   afterEach(() => {
@@ -451,6 +460,54 @@ describe('runCronJob digest chat output', () => {
 
     expect(loadConfigMock).not.toHaveBeenCalled();
     expect(getCronJobs().map(job => job.id)).toEqual(['current']);
+  });
+
+  it('caps overflowing script output and drains the process group before rejecting', async () => {
+    vi.useFakeTimers();
+    const child = new EventEmitter() as any;
+    child.pid = 4321;
+    child.stdout = new EventEmitter();
+    child.stderr = new EventEmitter();
+    spawnMock.mockReturnValue(child);
+
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation((_pid, signal) => {
+      if (signal === 'SIGTERM') {
+        queueMicrotask(() => child.emit('close', null, 'SIGTERM'));
+      }
+      return true;
+    });
+    const scriptConfig = {
+      ...config,
+      cron: {
+        jobs: [{
+          id: 'overflow',
+          name: 'Overflow',
+          schedule: { kind: 'cron', expr: '* * * * *', tz: 'UTC' },
+          payload: { kind: 'script', script: 'produce-output', timeoutMs: 60_000 },
+        }],
+      },
+    } as any;
+
+    try {
+      const run = runCronJob('overflow', scriptConfig);
+      let settled = false;
+      void run.then(() => { settled = true; }, () => { settled = true; });
+      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1));
+
+      child.stdout.emit('data', Buffer.alloc(10 * 1024 * 1024 + 1, 97));
+      child.stdout.emit('data', Buffer.from('ignored after overflow'));
+      await vi.advanceTimersByTimeAsync(999);
+
+      expect(settled).toBe(false);
+      expect(killSpy.mock.calls.filter(([, signal]) => signal === 'SIGTERM')).toHaveLength(1);
+      expect(killSpy.mock.calls.some(([, signal]) => signal === 'SIGKILL')).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(run).rejects.toThrow('Script output exceeded maxBuffer of 10485760 bytes');
+      expect(killSpy.mock.calls.filter(([, signal]) => signal === 'SIGKILL')).toHaveLength(1);
+    } finally {
+      killSpy.mockRestore();
+    }
   });
 
   it('thread id set + successful send does not use active-channel send', async () => {
