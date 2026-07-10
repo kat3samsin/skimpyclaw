@@ -80,6 +80,9 @@ export interface MessageFormatHelper<T> {
   /** Truncate a tool result item's content to maxChars. Returns a new item (no mutation). */
   truncateToolResult(item: T, maxChars: number): T;
 
+  /** Truncate user-visible content when a single recent item exceeds the full context ceiling. */
+  truncateItem?(item: T, maxChars: number): T;
+
   /** Serialize a list of items into a human-readable transcript for LLM summarization. */
   serialize(items: T[]): string;
 
