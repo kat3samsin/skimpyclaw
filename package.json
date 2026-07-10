@@ -63,7 +63,8 @@
     "gray-matter": "^4.0.3",
     "mcporter": "^0.9.0",
     "openai": "^4.47.0",
-    "pdf-parse": "^2.4.5"
+    "pdf-parse": "^2.4.5",
+    "undici": "6.27.0"
   },
   "pnpm": {
     "overrides": {

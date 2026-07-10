@@ -89,6 +89,9 @@ importers:
       pdf-parse:
         specifier: ^2.4.5
         version: 2.4.5
+      undici:
+        specifier: 6.27.0
+        version: 6.27.0
     devDependencies:
       '@eslint/js':
         specifier: ^9.39.2
