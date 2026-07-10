@@ -12,13 +12,15 @@ permissions:
   contents: write
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release
   cancel-in-progress: false
 
 jobs:
   release:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      RELEASE_VERSION: ${{ inputs.version }}
 
     steps:
       - name: Checkout
@@ -38,12 +40,8 @@ jobs:
           cache: pnpm
           registry-url: https://registry.npmjs.org
 
-      - name: Validate version input
-        run: |
-          if [[ ! "${{ github.event.inputs.version }}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
-            echo "Invalid version: ${{ github.event.inputs.version }}"
-            exit 1
-          fi
+      - name: Validate release request
+        run: bash scripts/release-guard.sh "$RELEASE_VERSION"
 
       - name: Install dependencies
         run: |
@@ -52,7 +50,7 @@ jobs:
 
       - name: Ensure release tag does not already exist
         run: |
-          TAG="v${{ github.event.inputs.version }}"
+          TAG="v$RELEASE_VERSION"
           if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
             echo "Tag already exists locally: $TAG"
             exit 1
@@ -63,7 +61,7 @@ jobs:
           fi
 
       - name: Bump package version
-        run: npm version "${{ github.event.inputs.version }}" --no-git-tag-version
+        run: npm version "$RELEASE_VERSION" --no-git-tag-version
 
       - name: Build and test
         run: pnpm build && pnpm test
@@ -75,8 +73,7 @@ jobs:
 
       - name: Commit and tag release
         run: |
-          VERSION="${{ github.event.inputs.version }}"
-          TAG="v$VERSION"
+          TAG="v$RELEASE_VERSION"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add package.json

@@ -10,10 +10,8 @@ fi
 VERSION="$1"
 TAG="v${VERSION}"
 
-if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
-  echo "Invalid version: $VERSION"
-  exit 1
-fi
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+bash "$SCRIPT_DIR/release-guard.sh" "$VERSION"
 
 if [[ -n "$(git status --porcelain)" ]]; then
   echo "Working tree is not clean. Commit or stash changes first."
@@ -22,6 +20,10 @@ fi
 
 if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
   echo "Tag already exists: $TAG"
+  exit 1
+fi
+if git ls-remote --exit-code --tags origin "$TAG" >/dev/null 2>&1; then
+  echo "Tag already exists on origin: $TAG"
   exit 1
 fi
 
