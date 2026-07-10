@@ -66,5 +66,5 @@ pnpm run dev          # run with watch mode
 pnpm run build        # compile TypeScript to dist/
 pnpm run typecheck    # type-check only
 pnpm run test         # run Vitest
-pnpm run ci           # full CI gate (lint + typecheck + test)
+pnpm run ci           # full CI gate (lint + production build + backend/dashboard tests)
 ```

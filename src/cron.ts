@@ -1125,7 +1125,6 @@ async function executeScript(jobDef: CronJob, _config: Config): Promise<string> 
     let stderr = '';
     let timedOut = false;
     let settled = false;
-    let timeout: ReturnType<typeof setTimeout>;
     let sigkillTimer: ReturnType<typeof setTimeout> | null = null;
     console.log(`[cron:script] Running: ${script.slice(0, 100)}${script.length > 100 ? '...' : ''}`);
     if (cwd) console.log(`[cron:script] cwd: ${cwd}`);
@@ -1153,7 +1152,7 @@ async function executeScript(jobDef: CronJob, _config: Config): Promise<string> 
       reject(error);
     };
 
-    timeout = setTimeout(() => {
+    const timeout = setTimeout(() => {
       timedOut = true;
       if (child.pid) {
         killScriptProcessTree(child.pid, 'SIGTERM');

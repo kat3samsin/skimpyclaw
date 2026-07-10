@@ -10,7 +10,7 @@ concurrency:
 
 jobs:
   checks:
-    name: Lint, Typecheck, Test
+    name: Lint, Build, Test
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -28,9 +28,15 @@ jobs:
         with:
           node-version: 20
           cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            web/dashboard/pnpm-lock.yaml
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Install dashboard dependencies
+        run: pnpm --dir web/dashboard install --frozen-lockfile
 
       - name: Run CI checks
         run: pnpm run ci

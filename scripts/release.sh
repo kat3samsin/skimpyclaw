@@ -106,6 +106,7 @@ fi
 pnpm --dir web/dashboard install --frozen-lockfile
 pnpm build
 pnpm test
+pnpm --dir web/dashboard test
 npm pack --dry-run
 
 if [[ "$CREATE_RELEASE_RECORD" == "true" ]]; then

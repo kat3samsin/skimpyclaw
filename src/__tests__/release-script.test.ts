@@ -119,10 +119,13 @@ describe('release script durability', () => {
     expect(result.status, result.stderr).toBe(0);
 
     const commands = readFileSync(commandLog, 'utf8').trim().split('\n');
+    const dashboardTestIndex = commands.indexOf('pnpm --dir web/dashboard test');
     const packIndex = commands.indexOf('npm pack --dry-run');
     const publishIndex = commands.indexOf('npm publish --access public');
+    expect(dashboardTestIndex).toBeGreaterThanOrEqual(0);
     expect(packIndex).toBeGreaterThanOrEqual(0);
     expect(publishIndex).toBeGreaterThanOrEqual(0);
+    expect(dashboardTestIndex).toBeLessThan(packIndex);
     expect(packIndex).toBeLessThan(publishIndex);
     expect(git(['log', '-1', '--pretty=%s'])).toBe('release: v0.4.1');
     expect(git(['rev-parse', 'v0.4.1^{commit}'])).toBe(git(['rev-parse', 'HEAD']));

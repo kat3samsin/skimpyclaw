@@ -21,6 +21,7 @@
     "dev": "tsx watch src/index.ts",
     "dashboard:dev": "pnpm --dir web/dashboard dev",
     "dashboard:build": "pnpm --dir web/dashboard build",
+    "dashboard:test": "pnpm --dir web/dashboard test",
     "docs:dev": "pnpm --dir docs dev",
     "docs:build": "pnpm --dir docs install --frozen-lockfile && pnpm --dir docs build",
     "docs:preview": "pnpm --dir docs preview",
@@ -28,12 +29,12 @@
     "onboard": "tsx src/cli.ts onboard",
     "clean": "rm -rf dist",
     "build": "pnpm clean && tsc && pnpm dashboard:build",
-    "release:check": "pnpm build && pnpm test",
+    "release:check": "pnpm build && pnpm test && pnpm dashboard:test",
     "release:local": "bash ./scripts/release.sh",
     "lint": "eslint \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "ci": "pnpm run lint && pnpm run typecheck && pnpm run test"
+    "ci": "pnpm run lint && pnpm run build && pnpm run test && pnpm run dashboard:test"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",
