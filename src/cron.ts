@@ -42,6 +42,7 @@ interface ScheduledJob {
 
 const scheduledJobs: Map<string, ScheduledJob> = new Map();
 let configWatcher: FSWatcher | null = null;
+let configReloadTimer: ReturnType<typeof setTimeout> | null = null;
 
 function assertUniqueCronJobIds(jobs: CronJob[]): void {
   const seen = new Set<string>();
@@ -766,6 +767,11 @@ export async function runAgentTurnWithTimeout(
 export function initCron(config: Config): void {
   replaceScheduledJobs(config);
 
+  if (configReloadTimer) {
+    clearTimeout(configReloadTimer);
+    configReloadTimer = null;
+  }
+
   console.log(`[cron] Initialized ${scheduledJobs.size} jobs`);
 
   // Watch config.json for changes and re-initialize cron jobs
@@ -773,11 +779,11 @@ export function initCron(config: Config): void {
     configWatcher.close();
     configWatcher = null;
   }
-  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   try {
     configWatcher = watch(getConfigPath(), () => {
-      if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => {
+      if (configReloadTimer) clearTimeout(configReloadTimer);
+      configReloadTimer = setTimeout(() => {
+        configReloadTimer = null;
         try {
           const newConfig = loadConfig();
           console.log('[cron] Config changed, reloading cron jobs...');
@@ -1394,6 +1400,10 @@ export function getCronJobDetails(config: Config): CronJobDetail[] {
 }
 
 export function stopCron(): void {
+  if (configReloadTimer) {
+    clearTimeout(configReloadTimer);
+    configReloadTimer = null;
+  }
   if (configWatcher) {
     configWatcher.close();
     configWatcher = null;

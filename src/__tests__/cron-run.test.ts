@@ -10,6 +10,9 @@ const {
   parseAndSaveDigestMock,
   synthesizeSpeechMock,
   cronCallbacks,
+  configWatchCallbacks,
+  loadConfigMock,
+  watchCloseMock,
   testHome,
 } = vi.hoisted(() => ({
   runAgentTurnMock: vi.fn(),
@@ -19,6 +22,9 @@ const {
   parseAndSaveDigestMock: vi.fn(),
   synthesizeSpeechMock: vi.fn(),
   cronCallbacks: [] as Array<() => Promise<void>>,
+  configWatchCallbacks: [] as Array<() => void>,
+  loadConfigMock: vi.fn(),
+  watchCloseMock: vi.fn(),
   testHome: (() => {
     const { mkdtempSync } = require('fs');
     const { tmpdir } = require('os');
@@ -28,6 +34,17 @@ const {
     return dir;
   })(),
 }));
+
+vi.mock('fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('fs')>();
+  return {
+    ...actual,
+    watch: vi.fn((_path: string, listener: () => void) => {
+      configWatchCallbacks.push(listener);
+      return { close: watchCloseMock };
+    }),
+  };
+});
 
 vi.mock('croner', () => ({
   Cron: class {
@@ -65,7 +82,7 @@ vi.mock('../channels/discord/index.js', () => ({
 vi.mock('../config.js', () => ({
   getLogsDir: () => '/tmp',
   getConfigPath: () => '/tmp/config.json',
-  loadConfig: vi.fn(),
+  loadConfig: loadConfigMock,
   resolveAllowedPaths: () => ['/tmp'],
 }));
 
@@ -138,6 +155,7 @@ describe('runCronJob digest chat output', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     cronCallbacks.length = 0;
+    configWatchCallbacks.length = 0;
   });
 
   afterEach(() => {
@@ -395,6 +413,44 @@ describe('runCronJob digest chat output', () => {
 
     await vi.advanceTimersByTimeAsync(1000);
     expect(runAgentTurnMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancels a queued config reload when cron stops', async () => {
+    vi.useFakeTimers();
+    initCron(config);
+
+    expect(configWatchCallbacks).toHaveLength(1);
+    configWatchCallbacks[0]();
+    stopCron();
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(loadConfigMock).not.toHaveBeenCalled();
+    expect(getCronJobs()).toEqual([]);
+  });
+
+  it('cancels an older queued reload when cron is reinitialized', async () => {
+    vi.useFakeTimers();
+    loadConfigMock.mockReturnValue(config);
+    initCron(config);
+    expect(configWatchCallbacks).toHaveLength(1);
+    configWatchCallbacks[0]();
+
+    const currentConfig = {
+      ...config,
+      cron: {
+        jobs: [{
+          id: 'current',
+          name: 'Current',
+          schedule: { kind: 'interval', ms: 5000 },
+          payload: { kind: 'agentTurn', message: 'current' },
+        }],
+      },
+    } as any;
+    initCron(currentConfig);
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(loadConfigMock).not.toHaveBeenCalled();
+    expect(getCronJobs().map(job => job.id)).toEqual(['current']);
   });
 
   it('thread id set + successful send does not use active-channel send', async () => {
