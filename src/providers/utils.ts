@@ -3,6 +3,7 @@
 import { writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
+import { randomUUID } from 'crypto';
 import type { ContentBlock, Config, ThinkingLevel } from '../types.js';
 
 // Anti-hallucination instructions injected between the Claude Code identity
@@ -216,7 +217,7 @@ export function truncateToolResult(result: string, _maxBytes: number = 10_240): 
     const scratchDir = join(homedir(), '.skimpyclaw', 's');
     if (!existsSync(scratchDir)) mkdirSync(scratchDir, { recursive: true });
 
-    const id = Math.random().toString(36).slice(2, 5);
+    const id = randomUUID();
     const filePath = join(scratchDir, id);
     writeFileSync(filePath, result);
 
@@ -238,7 +239,7 @@ function writeScratchFile(result: string): string | null {
   try {
     const scratchDir = join(homedir(), '.skimpyclaw', 's');
     if (!existsSync(scratchDir)) mkdirSync(scratchDir, { recursive: true });
-    const id = Math.random().toString(36).slice(2, 5);
+    const id = randomUUID();
     const filePath = join(scratchDir, id);
     writeFileSync(filePath, result);
     return filePath;
