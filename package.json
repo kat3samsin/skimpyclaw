@@ -20,7 +20,9 @@
     "LICENSE"
   ],
   "scripts": {
+    "bootstrap": "pnpm install --frozen-lockfile && pnpm --dir web/dashboard install --frozen-lockfile",
     "cli": "tsx src/cli.ts",
+    "doctor": "tsx src/cli.ts doctor",
     "start": "tsx src/index.ts",
     "dev": "tsx watch src/index.ts",
     "dashboard:dev": "pnpm --dir web/dashboard dev",

@@ -229,8 +229,8 @@ dist/                   # Compiled output + built dashboard assets
 Requires Node.js 22.20 or newer (Node 22 or 24 LTS) and pnpm 10.29.3.
 
 ```bash
-# Install dependencies
-pnpm install
+# Install root and dashboard dependencies from their lockfiles
+pnpm run bootstrap
 
 # Run in development mode (hot reload)
 pnpm dev
