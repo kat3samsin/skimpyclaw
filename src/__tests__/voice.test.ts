@@ -1,12 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { EventEmitter } from 'events';
 import type { VoiceConfig } from '../types.js';
 
 // Hoist mock variables so they're available when vi.mock factories run
 const { mockAudioSpeechCreate } = vi.hoisted(() => ({
   mockAudioSpeechCreate: vi.fn(),
 }));
-const { mockSpawnSync } = vi.hoisted(() => ({
-  mockSpawnSync: vi.fn(() => ({ status: 0, stdout: '', stderr: '' })),
+const { mockSpawn } = vi.hoisted(() => ({
+  mockSpawn: vi.fn(),
+}));
+const { mockUnlinkSync } = vi.hoisted(() => ({
+  mockUnlinkSync: vi.fn(),
 }));
 
 // Mock openai — use a class so `new OpenAI()` works correctly in ESM mocking context
@@ -21,10 +25,10 @@ vi.mock('openai', () => ({
   },
 }));
 
-// Mock child_process — execSync used by macOS say provider
+// Keep executable discovery synchronous, but mock long-running child processes.
 vi.mock('child_process', () => ({
   execSync: vi.fn(() => Buffer.from('')),
-  spawnSync: (...args: any[]) => (mockSpawnSync as any)(...args),
+  spawn: (...args: any[]) => (mockSpawn as any)(...args),
 }));
 
 // Mock fs to avoid actual disk I/O
@@ -34,7 +38,7 @@ vi.mock('fs', async (importOriginal) => {
     ...actual,
     existsSync: vi.fn(() => true),
     readFileSync: vi.fn(() => Buffer.from('fake-audio-data')),
-    unlinkSync: vi.fn(),
+    unlinkSync: mockUnlinkSync,
     writeFileSync: vi.fn(),
     readdirSync: vi.fn(() => []),
   };
@@ -55,11 +59,36 @@ const baseVoiceConfig: VoiceConfig = {
   channels: {},
 };
 
+function createVoiceChild(options: {
+  autoClose?: boolean;
+  code?: number | null;
+  signal?: NodeJS.Signals | null;
+  stdout?: string;
+  stderr?: string;
+  pid?: number;
+} = {}): any {
+  const child = new EventEmitter() as any;
+  child.pid = options.pid ?? 1234;
+  child.stdout = new EventEmitter();
+  child.stderr = new EventEmitter();
+  child.kill = vi.fn(() => true);
+  if (options.autoClose !== false) {
+    queueMicrotask(() => {
+      if (options.stdout) child.stdout.emit('data', Buffer.from(options.stdout));
+      if (options.stderr) child.stderr.emit('data', Buffer.from(options.stderr));
+      child.emit('close', options.code ?? 0, options.signal ?? null);
+    });
+  }
+  return child;
+}
+
 // --- Tests ---
 
 describe('synthesizeSpeech', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSpawn.mockReset();
+    mockSpawn.mockImplementation(() => createVoiceChild());
   });
 
   it('throws when no providers configured', async () => {
@@ -239,18 +268,105 @@ describe('synthesizeSpeech', () => {
       };
       const result = await synthesizeSpeech("hello'; say hacked", config);
       expect(result.format).toBe('ogg');
-      expect(mockSpawnSync).toHaveBeenNthCalledWith(
+      expect(mockSpawn).toHaveBeenNthCalledWith(
         1,
         'say',
         ['-v', "Bad'Voice; rm -rf /", '-o', expect.stringContaining('.aiff'), "hello'; say hacked"],
         expect.any(Object),
       );
-      expect(mockSpawnSync).toHaveBeenNthCalledWith(
+      expect(mockSpawn).toHaveBeenNthCalledWith(
         2,
         'ffmpeg',
         ['-i', expect.stringContaining('.aiff'), '-c:a', 'libopus', expect.stringContaining('.ogg'), '-y'],
         expect.any(Object),
       );
+    } finally {
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
+    }
+  });
+
+  it('keeps the event loop responsive while macOS synthesis is running', async () => {
+    const originalPlatform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true });
+    const sayChild = createVoiceChild({ autoClose: false });
+    mockSpawn.mockImplementationOnce(() => sayChild);
+    try {
+      const config: VoiceConfig = {
+        ...baseVoiceConfig,
+        providers: { macos: { tts: { voice: 'Zoe' } } },
+      };
+      const synthesis = synthesizeSpeech('delayed speech', config);
+      let timerFired = false;
+
+      await new Promise<void>((resolve) => {
+        setTimeout(() => {
+          timerFired = true;
+          resolve();
+        }, 0);
+      });
+
+      expect(timerFired).toBe(true);
+      expect(mockSpawn).toHaveBeenCalledTimes(1);
+      sayChild.emit('close', 0, null);
+      await expect(synthesis).resolves.toMatchObject({ format: 'ogg' });
+    } finally {
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
+    }
+  });
+
+  it('escalates a timed out macOS process group before rejecting', async () => {
+    const originalPlatform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true });
+    vi.useFakeTimers();
+    const sayChild = createVoiceChild({ autoClose: false, pid: 2468 });
+    mockSpawn.mockImplementationOnce(() => sayChild);
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation((_pid, signal) => {
+      if (signal === 'SIGTERM') {
+        queueMicrotask(() => sayChild.emit('close', null, 'SIGTERM'));
+      }
+      return true;
+    });
+    try {
+      const config: VoiceConfig = {
+        ...baseVoiceConfig,
+        providers: { macos: { tts: { voice: 'Zoe' } } },
+      };
+      const synthesis = synthesizeSpeech('timeout speech', config);
+      const rejection = expect(synthesis).rejects.toThrow(
+        'macOS say failed: say timed out after 120000ms',
+      );
+
+      await vi.advanceTimersByTimeAsync(120_000);
+      expect(killSpy.mock.calls.filter(([, signal]) => signal === 'SIGTERM')).toHaveLength(1);
+      expect(killSpy.mock.calls.some(([, signal]) => signal === 'SIGKILL')).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(1000);
+      await rejection;
+      expect(killSpy.mock.calls.filter(([, signal]) => signal === 'SIGKILL')).toHaveLength(1);
+    } finally {
+      killSpy.mockRestore();
+      vi.useRealTimers();
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
+    }
+  });
+
+  it('bounds process output in macOS synthesis failures and cleans up', async () => {
+    const originalPlatform = process.platform;
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true });
+    const noisyError = `${'x'.repeat(70 * 1024)}bad voice`;
+    mockSpawn.mockImplementationOnce(() => createVoiceChild({ code: 1, stderr: noisyError }));
+    try {
+      const config: VoiceConfig = {
+        ...baseVoiceConfig,
+        providers: { macos: { tts: { voice: 'Zoe' } } },
+      };
+
+      const error = (await synthesizeSpeech('failure speech', config).catch(err => err as Error)) as Error;
+      expect(error).toBeInstanceOf(Error);
+      expect(error.message).toContain('bad voice');
+      expect(error.message.length).toBeLessThanOrEqual(64 * 1024 + 32);
+      expect(mockSpawn).toHaveBeenCalledTimes(1);
+      expect(mockUnlinkSync).toHaveBeenCalledTimes(2);
     } finally {
       Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
     }

@@ -143,5 +143,5 @@ Discord profile aliases and thread bindings are stored in `discord-thread-agents
 - Tool execution is constrained by `allowedPaths` and a bash safety blocklist
 - Cron prompt file paths are restricted to `~/.skimpyclaw/prompts/` — path traversal attempts are rejected
 - Bearer token validation uses SHA-256 hashing with `timingSafeEqual` to prevent timing side-channels
-- Voice TTS uses `spawnSync` with argument arrays (no shell injection risk)
+- Voice TTS uses asynchronous process spawning with argument arrays, bounded output, timeouts, and process-tree termination
 - Gateway binds to `127.0.0.1` by default
