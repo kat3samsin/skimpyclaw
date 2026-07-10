@@ -1,6 +1,6 @@
 // Gateway HTTP server for health checks and control
 
-import Fastify, { FastifyInstance } from 'fastify';
+import Fastify, { FastifyInstance, FastifyReply } from 'fastify';
 import { existsSync, readFileSync } from 'fs';
 import { homedir } from 'os';
 import { fileURLToPath } from 'url';
@@ -15,6 +15,28 @@ import { ensureDashboardToken } from './config.js';
 import { readRegisteredArtifact } from './artifacts.js';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
+
+const UNTRUSTED_HTML_CSP = [
+  'sandbox',
+  "default-src 'none'",
+  "script-src 'none'",
+  "connect-src 'none'",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "form-action 'none'",
+  "frame-ancestors 'none'",
+  "style-src 'unsafe-inline'",
+  "img-src 'self' data: https:",
+  'media-src http: https: data: blob:',
+  'font-src data: https:',
+].join('; ');
+
+function isolateUntrustedHtml(reply: FastifyReply): FastifyReply {
+  return reply
+    .header('Content-Security-Policy', UNTRUSTED_HTML_CSP)
+    .header('X-Content-Type-Options', 'nosniff')
+    .header('Referrer-Policy', 'no-referrer');
+}
 
 function resolveDashboardDistDir(): string {
   const packageDistDashboard = join(__dirname, 'dashboard');
@@ -202,7 +224,10 @@ export async function createGateway(cfg: Config): Promise<FastifyInstance> {
       reply.code(404).send('Artifact not found');
       return;
     }
-    reply
+    const response = artifact.artifact.contentType.startsWith('text/html')
+      ? isolateUntrustedHtml(reply)
+      : reply;
+    response
       .type(artifact.artifact.contentType)
       .header('Content-Disposition', `inline; filename="${artifact.artifact.name.replace(/"/g, '')}"`)
       .send(artifact.content);
@@ -219,7 +244,7 @@ export async function createGateway(cfg: Config): Promise<FastifyInstance> {
       reply.code(404).send('Report not found');
       return;
     }
-    reply
+    isolateUntrustedHtml(reply)
       .type('text/html; charset=utf-8')
       .header('Content-Disposition', `inline; filename="${request.params.name.replace(/"/g, '')}"`)
       .send(readFileSync(filePath));
@@ -231,7 +256,7 @@ export async function createGateway(cfg: Config): Promise<FastifyInstance> {
       reply.code(404).send('Report not found');
       return;
     }
-    reply
+    isolateUntrustedHtml(reply)
       .type('text/html; charset=utf-8')
       .header('Content-Disposition', `inline; filename="${request.params.page.replace(/"/g, '')}"`)
       .send(readFileSync(filePath));

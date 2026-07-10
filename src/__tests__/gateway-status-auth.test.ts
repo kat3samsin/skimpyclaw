@@ -101,6 +101,11 @@ describe('gateway /status auth', () => {
       const res = await app.inject({ method: 'GET', url: `/artifacts/${artifact!.id}/review.html` });
       expect(res.statusCode).toBe(200);
       expect(res.headers['content-type']).toContain('text/html');
+      expect(res.headers['content-security-policy']).toContain("sandbox; default-src 'none'");
+      expect(res.headers['content-security-policy']).toContain("script-src 'none'");
+      expect(res.headers['content-security-policy']).toContain("connect-src 'none'");
+      expect(res.headers['x-content-type-options']).toBe('nosniff');
+      expect(res.headers['referrer-policy']).toBe('no-referrer');
       expect(res.body).toContain('<title>Review</title>');
     } finally {
       await app.close();
@@ -142,6 +147,7 @@ describe('gateway /status auth', () => {
     writeFileSync(join(reportBundleDir, 'index.html'), '<!doctype html><title>Daily Index</title>', 'utf-8');
     writeFileSync(join(reportBundleDir, 'news.html'), '<!doctype html><title>Daily News</title>', 'utf-8');
     writeFileSync(join(reportDir, `${date}.html`), '<!doctype html><title>Old Daily</title>', 'utf-8');
+    writeFileSync(join(reportDir, '2000-01-01.html'), '<!doctype html><title>Flat Daily</title>', 'utf-8');
 
     const app = await createGateway(cfg);
     try {
@@ -155,6 +161,11 @@ describe('gateway /status auth', () => {
 
       const indexRes = await app.inject({ method: 'GET', url: `/reports/chief-daily-reader/${date}/index.html` });
       expect(indexRes.statusCode).toBe(200);
+      expect(indexRes.headers['content-security-policy']).toContain("sandbox; default-src 'none'");
+      expect(indexRes.headers['content-security-policy']).toContain("script-src 'none'");
+      expect(indexRes.headers['content-security-policy']).toContain("connect-src 'none'");
+      expect(indexRes.headers['x-content-type-options']).toBe('nosniff');
+      expect(indexRes.headers['referrer-policy']).toBe('no-referrer');
       expect(indexRes.body).toContain('<title>Daily Index</title>');
 
       const newsRes = await app.inject({ method: 'GET', url: `/reports/chief-daily-reader/${date}/news.html` });
@@ -164,6 +175,15 @@ describe('gateway /status auth', () => {
       const todayNewsRes = await app.inject({ method: 'GET', url: '/reports/chief-daily-reader/today/news.html' });
       expect(todayNewsRes.statusCode).toBe(200);
       expect(todayNewsRes.body).toContain('<title>Daily News</title>');
+
+      const flatRes = await app.inject({ method: 'GET', url: '/reports/chief-daily-reader/2000-01-01.html' });
+      expect(flatRes.statusCode).toBe(200);
+      expect(flatRes.headers['content-security-policy']).toContain("sandbox; default-src 'none'");
+      expect(flatRes.headers['content-security-policy']).toContain("script-src 'none'");
+      expect(flatRes.headers['content-security-policy']).toContain("connect-src 'none'");
+      expect(flatRes.headers['x-content-type-options']).toBe('nosniff');
+      expect(flatRes.headers['referrer-policy']).toBe('no-referrer');
+      expect(flatRes.body).toContain('<title>Flat Daily</title>');
     } finally {
       await app.close();
       rmSync(dir, { recursive: true, force: true });
