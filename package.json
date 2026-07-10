@@ -28,7 +28,7 @@
     "setup": "tsx src/setup.ts",
     "onboard": "tsx src/cli.ts onboard",
     "clean": "rm -rf dist",
-    "build": "pnpm clean && tsc && pnpm dashboard:build",
+    "build": "pnpm clean && tsc -p tsconfig.build.json && pnpm dashboard:build",
     "release:check": "pnpm build && pnpm test && pnpm dashboard:test",
     "release:local": "bash ./scripts/release.sh",
     "lint": "eslint \"src/**/*.ts\"",
