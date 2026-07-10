@@ -818,6 +818,29 @@ describe('Logs endpoints', () => {
     // tail 2 = ["line5", ""]
     const lines = body.content.split('\n');
     expect(lines.length).toBeLessThanOrEqual(2);
+    expect(body.lines).toBe(2);
+    expect(body.truncated).toBe(true);
+  });
+
+  it('GET /api/dashboard/logs/:filename bounds tail reads for large files', async () => {
+    const largePath = join(LOGS_DIR, 'large.log');
+    writeFileSync(largePath, `BEGIN\n${'x'.repeat(1024 * 1024)}\nlast-a\nlast-b`);
+
+    const res = await inject({ method: 'GET', url: '/api/dashboard/logs/large.log?tail=2' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      content: 'last-a\nlast-b',
+      lines: 2,
+      truncated: true,
+    });
+    expect(Buffer.byteLength(res.json().content)).toBeLessThanOrEqual(256 * 1024);
+  });
+
+  it('GET /api/dashboard/logs/:filename rejects an invalid tail count', async () => {
+    const res = await inject({ method: 'GET', url: '/api/dashboard/logs/app.log?tail=0' });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toHaveProperty('error', 'Invalid tail count');
   });
 
   it('GET /api/dashboard/logs/:filename returns 400 for path traversal', async () => {
