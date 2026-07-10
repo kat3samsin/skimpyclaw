@@ -123,13 +123,21 @@ function htmlToText(html: string): string {
     .trim();
 }
 
-export async function executeFetch(input: FetchInput, _config: ToolConfig): Promise<string> {
+export async function executeFetch(
+  input: FetchInput,
+  _config: ToolConfig,
+  abortSignal?: AbortSignal,
+): Promise<string> {
   const { url, method = 'GET', headers = {}, body } = input;
 
   if (!url) return 'Error: url is required';
 
+  let requestTimedOut = false;
+  let cleanupActiveRequest: (() => void) | null = null;
   try {
+    if (abortSignal?.aborted) return 'Error: Request cancelled';
     let target = await validateTarget(url);
+    if (abortSignal?.aborted) return 'Error: Request cancelled';
     const defaultHeaders: Record<string, string> = {
       'User-Agent': 'SkimpyClaw/1.0',
     };
@@ -138,17 +146,37 @@ export async function executeFetch(input: FetchInput, _config: ToolConfig): Prom
     let response: Response | null = null;
 
     for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
-      response = await fetch(target, {
-        method: requestMethod,
-        headers: { ...defaultHeaders, ...headers },
-        body: requestBody,
-        signal: AbortSignal.timeout(TIMEOUT_MS),
-        redirect: 'manual',
-      });
+      if (abortSignal?.aborted) return 'Error: Request cancelled';
+      const requestController = new AbortController();
+      requestTimedOut = false;
+      const timeout = setTimeout(() => {
+        requestTimedOut = true;
+        requestController.abort();
+      }, TIMEOUT_MS);
+      const onAbort = () => requestController.abort();
+      const cleanupRequest = () => {
+        clearTimeout(timeout);
+        abortSignal?.removeEventListener('abort', onAbort);
+      };
+      abortSignal?.addEventListener('abort', onAbort, { once: true });
+      try {
+        response = await fetch(target, {
+          method: requestMethod,
+          headers: { ...defaultHeaders, ...headers },
+          body: requestBody,
+          signal: requestController.signal,
+          redirect: 'manual',
+        });
+      } catch (err) {
+        cleanupRequest();
+        throw err;
+      }
 
       if (!isRedirectStatus(response.status)) {
+        cleanupActiveRequest = cleanupRequest;
         break;
       }
+      cleanupRequest();
       if (hop === MAX_REDIRECTS) {
         return `Error: Too many redirects (>${MAX_REDIRECTS})`;
       }
@@ -158,6 +186,7 @@ export async function executeFetch(input: FetchInput, _config: ToolConfig): Prom
         return `Error: Redirect response missing Location header (HTTP ${response.status})`;
       }
       target = await validateTarget(new URL(location, target).toString());
+      if (abortSignal?.aborted) return 'Error: Request cancelled';
       if ((response.status === 301 || response.status === 302 || response.status === 303) && requestMethod !== 'GET' && requestMethod !== 'HEAD') {
         requestMethod = 'GET';
         requestBody = undefined;
@@ -167,30 +196,43 @@ export async function executeFetch(input: FetchInput, _config: ToolConfig): Prom
       return 'Error: Request did not produce a response';
     }
 
-    const status = `${response.status} ${response.statusText}`;
-    const contentType = response.headers.get('content-type') || '';
-    let responseBody: string;
+    try {
+      const status = `${response.status} ${response.statusText}`;
+      const contentType = response.headers.get('content-type') || '';
+      let responseBody: string;
 
-    if (contentType.includes('json')) {
-      const text = await response.text();
-      try {
-        responseBody = JSON.stringify(JSON.parse(text), null, 2);
-      } catch {
-        responseBody = text;
+      if (contentType.includes('json')) {
+        const text = await response.text();
+        try {
+          responseBody = JSON.stringify(JSON.parse(text), null, 2);
+        } catch {
+          responseBody = text;
+        }
+      } else if (contentType.includes('html')) {
+        const html = await response.text();
+        responseBody = htmlToText(html);
+      } else {
+        responseBody = await response.text();
       }
-    } else if (contentType.includes('html')) {
-      const html = await response.text();
-      responseBody = htmlToText(html);
-    } else {
-      responseBody = await response.text();
-    }
 
-    if (responseBody.length > MAX_RESPONSE_CHARS) {
-      responseBody = responseBody.slice(0, MAX_RESPONSE_CHARS) + `\n\n[Truncated: ${responseBody.length} chars total]`;
-    }
+      if (responseBody.length > MAX_RESPONSE_CHARS) {
+        responseBody = responseBody.slice(0, MAX_RESPONSE_CHARS) + `\n\n[Truncated: ${responseBody.length} chars total]`;
+      }
 
-    return `HTTP ${status}\n\n${responseBody}`;
+      return `HTTP ${status}\n\n${responseBody}`;
+    } finally {
+      cleanupActiveRequest?.();
+      cleanupActiveRequest = null;
+    }
   } catch (err) {
+    cleanupActiveRequest?.();
+    cleanupActiveRequest = null;
+    if (abortSignal?.aborted) {
+      return 'Error: Request cancelled';
+    }
+    if (requestTimedOut) {
+      return `Error: Request timed out after ${TIMEOUT_MS / 1000}s`;
+    }
     if (err instanceof Error && err.name === 'TimeoutError') {
       return `Error: Request timed out after ${TIMEOUT_MS / 1000}s`;
     }

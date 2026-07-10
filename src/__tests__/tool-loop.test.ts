@@ -385,6 +385,66 @@ describe('runToolLoop', () => {
     expect(result.response).toContain('Cancelled');
   });
 
+  it('does not execute provider-requested tools when cancellation arrives during the request', async () => {
+    const abortController = new AbortController();
+    let resolveCall = (_response: NormalizedResponse) => {};
+    const callResult = new Promise<NormalizedResponse>((resolve) => {
+      resolveCall = resolve;
+    });
+    vi.spyOn(adapter, 'call').mockImplementation(() => callResult);
+    const run = runToolLoop(
+      adapter,
+      messages,
+      { ...options, abortSignal: abortController.signal },
+      config,
+      toolConfig,
+    );
+
+    await vi.waitFor(() => expect(adapter.call).toHaveBeenCalledTimes(1));
+    abortController.abort();
+    resolveCall({
+      hasToolCalls: true,
+      toolCalls: [{ id: 'call-after-abort', name: 'testTool', args: {}, rawArgs: '{}' }],
+      textContent: '',
+      usage: { inputTokens: 100, outputTokens: 50 },
+      rawResponse: {},
+    });
+
+    const result = await run;
+    expect(result.response).toContain('Cancelled');
+    expect(mockExecuteTool).not.toHaveBeenCalled();
+  });
+
+  it('waits for an in-flight tool to observe cancellation and does not call the provider again', async () => {
+    const abortController = new AbortController();
+    adapter.responses = [{
+      hasToolCalls: true,
+      toolCalls: [{ id: 'call-1', name: 'testTool', args: {}, rawArgs: '{}' }],
+      textContent: '',
+      usage: { inputTokens: 100, outputTokens: 50 },
+      rawResponse: {},
+    }];
+    mockExecuteTool.mockImplementation(
+      (_name, _args, _toolConfig, context) => new Promise<string>((resolve) => {
+        context.abortSignal.addEventListener('abort', () => resolve('cancelled'), { once: true });
+      }),
+    );
+
+    const run = runToolLoop(
+      adapter,
+      messages,
+      { ...options, abortSignal: abortController.signal },
+      config,
+      toolConfig,
+    );
+    await vi.waitFor(() => expect(mockExecuteTool).toHaveBeenCalledTimes(1));
+    abortController.abort();
+
+    const result = await run;
+    expect(result.response).toContain('Cancelled');
+    expect(adapter.callCount).toBe(1);
+  });
+
   it('should call compactMessages on each iteration', async () => {
     adapter.responses = [
       {

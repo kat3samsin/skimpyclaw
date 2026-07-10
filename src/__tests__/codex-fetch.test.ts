@@ -53,6 +53,41 @@ afterEach(() => {
 });
 
 describe('codexFetch', () => {
+  it('cancels an in-flight fetch from the caller signal', async () => {
+    initFakeCodexAuth();
+    const controller = new AbortController();
+    const fetchMock = vi.fn((_url: string, init: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      init.signal?.addEventListener('abort', () => {
+        reject(new DOMException('aborted', 'AbortError'));
+      }, { once: true });
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const request = codexFetch({ model: 'gpt-5.5' }, 5_000, controller.signal);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    controller.abort();
+
+    await expect(request).rejects.toThrow('Codex request cancelled');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancels retry backoff without making another request', async () => {
+    initFakeCodexAuth();
+    setCodexFetchRetryDelaysForTesting([10_000]);
+    const fetchMock = vi.fn().mockRejectedValue(
+      new TypeError('fetch failed', { cause: new Error('read ECONNRESET') }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const controller = new AbortController();
+
+    const request = codexFetch({ model: 'gpt-5.5' }, 5_000, controller.signal);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    controller.abort();
+
+    await expect(request).rejects.toThrow('Codex request cancelled');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('retries transient fetch failures inside a single provider call', async () => {
     initFakeCodexAuth();
     setCodexFetchRetryDelaysForTesting([0, 0]);

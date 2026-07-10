@@ -24,11 +24,21 @@ function shouldStreamAnthropicRequest(params: { max_tokens?: number }): boolean 
   return typeof params.max_tokens === 'number' && params.max_tokens > NONSTREAMING_TOKEN_LIMIT;
 }
 
-async function createAnthropicMessage(client: Anthropic, params: any): Promise<any> {
+async function createAnthropicMessage(
+  client: Anthropic,
+  params: any,
+  abortSignal?: AbortSignal,
+): Promise<any> {
+  const requestOptions = abortSignal ? { signal: abortSignal } : undefined;
   if (shouldStreamAnthropicRequest(params) && typeof (client.messages as any).stream === 'function') {
-    return await (client.messages as any).stream(params).finalMessage();
+    const stream = requestOptions
+      ? (client.messages as any).stream(params, requestOptions)
+      : (client.messages as any).stream(params);
+    return await stream.finalMessage();
   }
-  return await client.messages.create(params);
+  return requestOptions
+    ? await client.messages.create(params, requestOptions)
+    : await client.messages.create(params);
 }
 
 export class AnthropicAdapter implements ProviderAdapter {
@@ -71,7 +81,7 @@ export class AnthropicAdapter implements ProviderAdapter {
       anthropicParams.max_tokens = Math.max(anthropicParams.max_tokens, thinkingConfig.maxTokens);
     }
 
-    const response = await createAnthropicMessage(client, anthropicParams);
+    const response = await createAnthropicMessage(client, anthropicParams, options.abortSignal);
     const usage = (response as any).usage;
 
     if (usage?.cache_read_input_tokens > 0 || usage?.cache_creation_input_tokens > 0) {
@@ -150,7 +160,7 @@ export class AnthropicAdapter implements ProviderAdapter {
       anthropicParams.max_tokens = Math.max(anthropicParams.max_tokens, thinkingConfig.maxTokens);
     }
 
-    const response = await createAnthropicMessage(client, anthropicParams);
+    const response = await createAnthropicMessage(client, anthropicParams, options.abortSignal);
     const usage = (response as any).usage;
 
     // Log cache metrics
@@ -268,6 +278,7 @@ export class AnthropicAdapter implements ProviderAdapter {
     config: any,
     iteration: number,
     fullConfig?: Config,
+    abortSignal?: AbortSignal,
   ): Promise<CompactionResult<any>> {
     const result = await compactMessages(
       providerMessages.messages,
@@ -275,6 +286,7 @@ export class AnthropicAdapter implements ProviderAdapter {
       config,
       iteration,
       fullConfig,
+      abortSignal,
     );
     providerMessages.messages = result.messages;
     return result;

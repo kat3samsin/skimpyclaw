@@ -379,9 +379,37 @@ export function clearToolDefsCache(): void {
 
 // --- MCP Tool Execution (generic) ---
 
-async function callMcpTool(server: string, tool: string, args: Record<string, any>): Promise<string> {
+async function callMcpTool(
+  server: string,
+  tool: string,
+  args: Record<string, any>,
+  abortSignal?: AbortSignal,
+): Promise<string> {
   const runtime = await getMcpRuntime();
-  const result = await runtime.callTool(server, tool, { args });
+  if (abortSignal?.aborted) throw new Error('MCP tool call cancelled');
+
+  let result: unknown;
+  if (abortSignal) {
+    const definition = runtime.getDefinition(server);
+    const allowed = definition.allowedTools === undefined || definition.allowedTools.includes(tool);
+    const blocked = definition.blockedTools?.includes(tool) === true;
+    if (!allowed || blocked) {
+      throw new Error(`Tool '${tool}' is not accessible on server '${definition.name}'.`);
+    }
+
+    // mcporter does not expose AbortSignal on Runtime.callTool, but its public
+    // connected MCP client does. Preserve mcporter's tool filters above while
+    // cancelling only this request, not every concurrent call on the server.
+    const { client } = await runtime.connect(server);
+    result = await client.callTool(
+      { name: tool, arguments: args },
+      undefined,
+      { signal: abortSignal, resetTimeoutOnProgress: true },
+    );
+    if (abortSignal.aborted) throw new Error('MCP tool call cancelled');
+  } else {
+    result = await runtime.callTool(server, tool, { args });
+  }
   const content = (result as any)?.content;
   if (Array.isArray(content)) {
     return content.map((c: any) => c.text || JSON.stringify(c)).join('\n');
@@ -431,7 +459,27 @@ export function normalizeMcpToolArgsForExecution(
   return args;
 }
 
-async function executeMcpToolGeneric(fullName: string, args: Record<string, any>): Promise<string> {
+async function waitForMcpRetry(ms: number, abortSignal?: AbortSignal): Promise<void> {
+  if (abortSignal?.aborted) throw new Error('MCP tool call cancelled');
+  await new Promise<void>((resolveDelay, rejectDelay) => {
+    const timer = setTimeout(() => {
+      abortSignal?.removeEventListener('abort', onAbort);
+      resolveDelay();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      abortSignal?.removeEventListener('abort', onAbort);
+      rejectDelay(new Error('MCP tool call cancelled'));
+    };
+    abortSignal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+async function executeMcpToolGeneric(
+  fullName: string,
+  args: Record<string, any>,
+  abortSignal?: AbortSignal,
+): Promise<string> {
   const mapping = mcpToolNameMap.get(fullName);
   let server: string;
   let toolName: string;
@@ -462,12 +510,14 @@ async function executeMcpToolGeneric(fullName: string, args: Record<string, any>
   const MAX_RETRIES = 2;
   let lastErr: unknown;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    if (abortSignal?.aborted) throw new Error('MCP tool call cancelled');
     try {
-      const result = await callMcpTool(server, toolName, normalizedArgs);
+      const result = await callMcpTool(server, toolName, normalizedArgs, abortSignal);
       if (attempt < MAX_RETRIES && isRetryableResult(result)) {
         const delay = (attempt + 1) * 2000;
         console.warn(`[mcp] Tool call returned retryable result (${result.slice(0, 100)}), reconnecting (attempt ${attempt + 1}/${MAX_RETRIES})...`);
-        await new Promise(r => setTimeout(r, delay));
+        await waitForMcpRetry(delay, abortSignal);
+        if (abortSignal?.aborted) throw new Error('MCP tool call cancelled');
         await reconnectMcp();
         continue;
       }
@@ -475,10 +525,12 @@ async function executeMcpToolGeneric(fullName: string, args: Record<string, any>
     } catch (err) {
       lastErr = err;
       const msg = err instanceof Error ? err.message : String(err);
+      if (abortSignal?.aborted) throw new Error('MCP tool call cancelled');
       if (attempt < MAX_RETRIES && isRetryableError(msg)) {
         const delay = (attempt + 1) * 2000; // 2s, 4s
         console.warn(`[mcp] Tool call failed (${msg}), reconnecting (attempt ${attempt + 1}/${MAX_RETRIES})...`);
-        await new Promise(r => setTimeout(r, delay));
+        await waitForMcpRetry(delay, abortSignal);
+        if (abortSignal?.aborted) throw new Error('MCP tool call cancelled');
         await reconnectMcp();
         continue;
       }
@@ -511,6 +563,7 @@ export async function executeTool(
   context?: ExecuteToolContext
 ): Promise<string> {
   try {
+    if (context?.abortSignal?.aborted) return 'Error: Agent turn cancelled.';
     // Route MCP tools BEFORE normalization to preserve server/tool name casing
     // NOTE: MCP servers run as external processes with full host access.
     // We validate path-like arguments as a best-effort check, but MCP servers
@@ -527,12 +580,13 @@ export async function executeTool(
           }
         }
       }
-      return await executeMcpToolGeneric(name, input);
+      return await executeMcpToolGeneric(name, input, context?.abortSignal);
     }
 
     // Route code_with_agent - delegate to code-agents module
     if (name === 'code_with_agent') {
       const { executeCodeWithAgent } = await import('./code-agents/index.js');
+      if (context?.abortSignal?.aborted) return 'Error: Agent turn cancelled.';
       return await executeCodeWithAgent(input, config, context);
     }
 
@@ -555,7 +609,13 @@ export async function executeTool(
       case 'read_file':
         return executeReadFile(input.file_path || input.path, config);
       case 'write_file':
-        return await executeWriteFileLocked(input.file_path || input.path, input.content, config, context?.lockTaskId);
+        return await executeWriteFileLocked(
+          input.file_path || input.path,
+          input.content,
+          config,
+          context?.lockTaskId,
+          context?.abortSignal,
+        );
       case 'list_directory': {
         const directoryPath = resolveListDirectoryInput(input);
         if (!directoryPath) return 'Error: Missing path or pattern';
@@ -564,7 +624,7 @@ export async function executeTool(
       case 'bash':
         return await executeBash(input.command || input.cmd, input.cwd, config, context);
       case 'fetch':
-        return await executeFetch(input as any, config);
+        return await executeFetch(input as any, config, context?.abortSignal);
       default:
         return `Error: Unknown tool "${name}"`;
     }

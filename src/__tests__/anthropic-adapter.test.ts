@@ -148,6 +148,27 @@ describe('AnthropicAdapter', () => {
   });
 
   describe('call', () => {
+    it('passes the turn abort signal to Anthropic requests', async () => {
+      const controller = new AbortController();
+      mockMessagesCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'Hello!' }],
+        stop_reason: 'end_turn',
+        usage: { input_tokens: 1, output_tokens: 1 },
+      });
+
+      await adapter.call(
+        { messages: [{ role: 'user', content: 'Hi' }] },
+        [],
+        { ...options, abortSignal: controller.signal },
+        config,
+      );
+
+      expect(mockMessagesCreate).toHaveBeenCalledWith(
+        expect.any(Object),
+        { signal: controller.signal },
+      );
+    });
+
     it('should normalize Anthropic response without tool calls', async () => {
       mockMessagesCreate.mockResolvedValue({
         content: [{ type: 'text', text: 'Hello!' }],
@@ -243,6 +264,7 @@ describe('AnthropicAdapter', () => {
     it('should use streaming for large xhigh thinking requests', async () => {
       const { buildThinkingConfig } = await import('../providers/utils.js');
       vi.mocked(buildThinkingConfig).mockReturnValueOnce({ budget: 32768, maxTokens: 36864 });
+      const controller = new AbortController();
 
       const finalMessage = vi.fn().mockResolvedValue({
         content: [{ type: 'text', text: 'Streamed response' }],
@@ -258,7 +280,7 @@ describe('AnthropicAdapter', () => {
       const result = await adapter.call(
         providerMessages,
         [],
-        { ...options, thinking: 'xhigh' },
+        { ...options, thinking: 'xhigh', abortSignal: controller.signal },
         config,
       );
 
@@ -266,7 +288,7 @@ describe('AnthropicAdapter', () => {
       expect(mockMessagesStream).toHaveBeenCalledWith(expect.objectContaining({
         max_tokens: 36864,
         thinking: { type: 'enabled', budget_tokens: 32768 },
-      }));
+      }), { signal: controller.signal });
       expect(result.textContent).toBe('Streamed response');
     });
   });

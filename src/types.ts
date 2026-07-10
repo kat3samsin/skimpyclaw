@@ -264,13 +264,10 @@ export interface ChatOptions {
   maxTokens?: number;
   temperature?: number;
   thinking?: ThinkingLevel;
+  abortSignal?: AbortSignal;
 }
 
-export interface AbortSignalLike {
-  readonly aborted: boolean;
-  addEventListener?: (...args: any[]) => void;
-  removeEventListener?: (...args: any[]) => void;
-}
+export type AbortSignalLike = AbortSignal;
 
 export interface AgentRunContext {
   userId?: string;

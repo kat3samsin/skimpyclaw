@@ -74,6 +74,7 @@ async function llmSummarize(
   transcript: string,
   config: Config,
   compactionModel?: string,
+  abortSignal?: AbortSignal,
 ): Promise<string | null> {
   try {
     // Dynamically import to avoid circular dependency
@@ -92,6 +93,7 @@ async function llmSummarize(
     const summary = await chat(messages, {
       model,
       maxTokens: SUMMARY_MAX_TOKENS,
+      abortSignal,
     }, config);
 
     if (!summary || summary.trim().length === 0) {
@@ -168,6 +170,7 @@ export async function compactMessages<T>(
   config?: ContextManagementConfig,
   iteration: number = 0,
   fullConfig?: Config,
+  abortSignal?: AbortSignal,
 ): Promise<CompactionResult<T>> {
   if (config?.enabled === false) return { messages: items, compacted: false };
   const maxTokens = config?.maxContextTokens ?? DEFAULT_MAX_CONTEXT_TOKENS;
@@ -197,7 +200,12 @@ export async function compactMessages<T>(
   // Attempt LLM summarization
   if (fullConfig) {
     const transcript = helper.serialize(head);
-    const summary = await llmSummarize(transcript, fullConfig, config?.compactionModel);
+    const summary = await llmSummarize(
+      transcript,
+      fullConfig,
+      config?.compactionModel,
+      abortSignal,
+    );
     if (summary) {
       const summaryItem = helper.buildSummaryMessage(summary);
       const result = applyPostCompactionRepair([summaryItem, ...tail], items, helper);

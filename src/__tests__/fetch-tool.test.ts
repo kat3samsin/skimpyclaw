@@ -94,6 +94,54 @@ describe('fetch-tool SSRF protections', () => {
     );
   });
 
+  it('passes caller cancellation to an in-flight request', async () => {
+    mockLookup.mockResolvedValueOnce([{ address: '93.184.216.34', family: 4 }]);
+    const controller = new AbortController();
+    mockFetch.mockImplementationOnce((_url, init) => new Promise((_resolve, reject) => {
+      init.signal.addEventListener('abort', () => {
+        reject(new DOMException('aborted', 'AbortError'));
+      }, { once: true });
+    }));
+
+    const request = executeFetch(
+      { url: 'https://example.com/slow' },
+      {} as any,
+      controller.signal,
+    );
+    await vi.waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(1));
+    controller.abort();
+
+    await expect(request).resolves.toContain('cancelled');
+    expect(mockFetch.mock.calls[0][1].signal.aborted).toBe(true);
+  });
+
+  it('keeps cancellation active while reading a response body', async () => {
+    mockLookup.mockResolvedValueOnce([{ address: '93.184.216.34', family: 4 }]);
+    const controller = new AbortController();
+    let bodyStarted = false;
+    mockFetch.mockImplementationOnce((_url, init) => Promise.resolve({
+      status: 200,
+      statusText: 'OK',
+      headers: new Headers({ 'content-type': 'text/plain' }),
+      text: () => new Promise((_resolve, reject) => {
+        bodyStarted = true;
+        init.signal.addEventListener('abort', () => {
+          reject(new DOMException('aborted', 'AbortError'));
+        }, { once: true });
+      }),
+    }));
+
+    const request = executeFetch(
+      { url: 'https://example.com/slow-body' },
+      {} as any,
+      controller.signal,
+    );
+    await vi.waitFor(() => expect(bodyStarted).toBe(true));
+    controller.abort();
+
+    await expect(request).resolves.toContain('cancelled');
+  });
+
   it('blocks internal-style host suffixes', async () => {
     const out = await executeFetch({ url: 'https://service.internal/api' }, {} as any);
     expect(out).toContain('Error:');

@@ -38,31 +38,45 @@ export async function runToolLoop(
   toolConfig: ToolConfig,
   toolContext?: ExecuteToolContext,
 ): Promise<ToolChatResult> {
+  const abortSignal = toolContext?.abortSignal ?? options.abortSignal;
+  const requestOptions = abortSignal && options.abortSignal !== abortSignal
+    ? { ...options, abortSignal }
+    : options;
+  const effectiveToolContext = abortSignal && toolContext?.abortSignal !== abortSignal
+    ? { ...toolContext, abortSignal }
+    : toolContext;
   const finalizationInterval = toolConfig.maxIterations && toolConfig.maxIterations > 0
     ? toolConfig.maxIterations
     : undefined;
   const guard = new ToolCallGuard(toolConfig.maxTurnTokens);
   const toolLog: string[] = [];
+  const cancelledResult = (): ToolChatResult => ({
+    response: `[Cancelled after ${toolLog.length} tool calls]`,
+    toolCalls: toolLog,
+  });
+
+  if (abortSignal?.aborted) return cancelledResult();
 
   // Resolve tool definitions once
-  const includeSpawn = !!(toolContext?.fullConfig && (toolContext?.chatId || toolContext?.isCronJob));
-  const providerToolDefOptions = adapter.getToolDefinitionOptions?.(toolContext, config) || {};
+  const includeSpawn = !!(effectiveToolContext?.fullConfig && (effectiveToolContext?.chatId || effectiveToolContext?.isCronJob));
+  const providerToolDefOptions = adapter.getToolDefinitionOptions?.(effectiveToolContext, config) || {};
   const rawToolDefs = await getToolDefinitions(toolConfig, {
     includeAgentTools: includeSpawn,
     includeMcp: providerToolDefOptions.includeMcp,
-    projects: toolContext?.fullConfig?.projects,
+    projects: effectiveToolContext?.fullConfig?.projects,
   });
+  if (abortSignal?.aborted) return cancelledResult();
 
   // Build provider-specific tool definitions
   const providerToolDefs = adapter.buildToolDefs(rawToolDefs, config);
 
   // Build initial provider messages
-  const providerMessages = adapter.buildMessages(messages, options, config);
+  const providerMessages = adapter.buildMessages(messages, requestOptions, config);
 
   // Start audit trace if not already started
-  const trigger = (toolContext?.trigger || 'api') as AuditTrace['trigger'];
-  const ownTrace = !toolContext?.auditTraceId;
-  const auditTraceId = toolContext?.auditTraceId || startTrace(trigger);
+  const trigger = (effectiveToolContext?.trigger || 'api') as AuditTrace['trigger'];
+  const ownTrace = !effectiveToolContext?.auditTraceId;
+  const auditTraceId = effectiveToolContext?.auditTraceId || startTrace(trigger);
 
   // Cumulative usage and cost across all iterations
   let totalInputTokens = 0;
@@ -83,10 +97,10 @@ export async function runToolLoop(
       && (outputTokens as number) >= 0;
     if (validUsage) {
       adapter.recordUsage(
-        options.model,
+        requestOptions.model,
         response.usage,
-        toolContext?.trigger || 'api',
-        toolContext?.agentId,
+        effectiveToolContext?.trigger || 'api',
+        effectiveToolContext?.agentId,
       );
       totalInputTokens += inputTokens as number;
       totalOutputTokens += outputTokens as number;
@@ -112,8 +126,9 @@ export async function runToolLoop(
     if (!adapter.onEmptyFinalResponse) return {};
     try {
       const finalized = await adapter.onEmptyFinalResponse(
-        providerMessages, providerToolDefs, options, config,
+        providerMessages, providerToolDefs, requestOptions, config,
       );
+      if (abortSignal?.aborted) throw new Error('Agent turn cancelled');
       if (!finalized) {
         usageComplete = false;
         return { tokenResult: guard.recordTokens(undefined, undefined) };
@@ -125,6 +140,7 @@ export async function runToolLoop(
       }
       return { text: finalized.textContent.trim() || undefined, tokenResult };
     } catch (err) {
+      if (abortSignal?.aborted) throw err;
       usageComplete = false;
       console.warn(`[${adapter.name}] ${reason} finalization pass failed: ${toErrorMessage(err)}`);
       return { tokenResult: guard.recordTokens(undefined, undefined) };
@@ -148,12 +164,7 @@ export async function runToolLoop(
       const iteration = i + 1;
 
       // Check abort signal before each iteration
-      if (toolContext?.abortSignal?.aborted) {
-        return {
-          response: `[Cancelled after ${toolLog.length} tool calls]`,
-          toolCalls: toolLog,
-        };
-      }
+      if (abortSignal?.aborted) return cancelledResult();
 
       // Compact messages if needed
       const compactionResult = await adapter.compactMessages(
@@ -161,7 +172,9 @@ export async function runToolLoop(
         toolConfig.contextManagement,
         iteration,
         config,
+        abortSignal,
       );
+      if (abortSignal?.aborted) return cancelledResult();
       if (compactionResult.compacted) {
         logCompaction(adapter.name, compactionResult.method || 'unknown', i);
         toolLog.push(`[context compacted via ${compactionResult.method}]`);
@@ -177,20 +190,26 @@ export async function runToolLoop(
       }
 
       // Make API call
-      logIteration(adapter.name, i, options.model);
+      logIteration(adapter.name, i, requestOptions.model);
 
-      const genObs = await tryStartObservation(`${adapter.name}:${options.model}`, {
+      const genObs = await tryStartObservation(`${adapter.name}:${requestOptions.model}`, {
         input: sanitizeLangfusePayload({ messages: providerMessages.messages }),
-        model: options.model,
-        modelParameters: { max_tokens: options.maxTokens },
+        model: requestOptions.model,
+        modelParameters: { max_tokens: requestOptions.maxTokens },
         metadata: { provider: adapter.name, iteration: i + 1 },
       }, 'generation');
 
       let response;
       let tokenResult: ReturnType<ToolCallGuard['recordTokens']> = { exceeded: false };
       try {
-        response = await adapter.call(providerMessages, providerToolDefs, options, config);
+        response = await adapter.call(providerMessages, providerToolDefs, requestOptions, config);
         tokenResult = recordResponseMetrics(response);
+        if (abortSignal?.aborted) {
+          genObs?.update({ level: 'WARNING', statusMessage: 'Agent turn cancelled' });
+          genObs?.end();
+          traceStatus = 'error';
+          return cancelledResult();
+        }
         if (tokenResult.warning) {
           console.warn(`[${adapter.name}:tools:guard] ${tokenResult.warning}`);
         }
@@ -267,14 +286,16 @@ export async function runToolLoop(
       // Execute each tool call, collecting results for batching
       const toolResults: { toolCallId: string; result: string; isError: boolean }[] = [];
       for (const toolCall of response.toolCalls) {
+        if (abortSignal?.aborted) return cancelledResult();
         const result = await executeToolCall(
           toolCall,
           guard,
           toolConfig,
-          toolContext,
+          effectiveToolContext,
           toolLog,
           adapter.name,
         );
+        if (abortSignal?.aborted) return cancelledResult();
         toolResults.push(result);
       }
 

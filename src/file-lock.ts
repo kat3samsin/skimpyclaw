@@ -14,10 +14,15 @@ const locks = new Map<string, LockEntry>();
  * Acquire a lock on a file path. Waits up to LOCK_TIMEOUT_MS if already locked.
  * Returns true if acquired, false if timed out.
  */
-export async function acquireLock(filePath: string, taskId: string): Promise<boolean> {
+export async function acquireLock(
+  filePath: string,
+  taskId: string,
+  abortSignal?: AbortSignal,
+): Promise<boolean> {
   const deadline = Date.now() + LOCK_TIMEOUT_MS;
 
   while (Date.now() < deadline) {
+    if (abortSignal?.aborted) return false;
     const existing = locks.get(filePath);
 
     if (!existing) {

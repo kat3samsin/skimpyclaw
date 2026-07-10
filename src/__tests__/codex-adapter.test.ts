@@ -115,6 +115,29 @@ describe('CodexAdapter', () => {
     }));
   });
 
+  it('passes the turn abort signal to Codex requests', async () => {
+    const controller = new AbortController();
+    mockCodexFetch.mockResolvedValue('sse');
+    mockParseCodexSSE.mockReturnValue({
+      outputText: 'ok',
+      functionCalls: [],
+      response: { usage: { input_tokens: 1, output_tokens: 1 } },
+    });
+
+    await adapter.call(
+      { messages: [], systemParam: 'sys' },
+      [],
+      { ...options, abortSignal: controller.signal },
+      config,
+    );
+
+    expect(mockCodexFetch).toHaveBeenCalledWith(
+      expect.any(Object),
+      undefined,
+      controller.signal,
+    );
+  });
+
   it('keeps Codex reasoning at medium by default', async () => {
     mockCodexFetch.mockResolvedValue('sse');
     mockParseCodexSSE.mockReturnValue({

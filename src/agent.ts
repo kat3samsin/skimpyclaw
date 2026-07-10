@@ -236,7 +236,7 @@ export async function runAgentTurn(
   const thinking = metadataThinking(metadata?.threadAgentThinking)
     ?? metadataThinking(metadata?.thinkingOverride)
     ?? agentConfig.thinking;
-  const chatOptions: ChatOptions = { model, thinking };
+  const chatOptions: ChatOptions = { model, thinking, abortSignal: context?.abortSignal };
 
   const route = resolveProviderRoute(model, config);
   const { resolvedModel, provider, modelId } = route;
@@ -282,6 +282,10 @@ export async function runAgentTurn(
   };
 
   const runTurn = async (): Promise<string> => {
+    if (context?.abortSignal?.aborted) {
+      throw new Error('Agent turn cancelled');
+    }
+
     if (toolConfig?.enabled) {
       // Provider-specific routing is centralized in providers/chatWithTools.
       console.log(
@@ -292,6 +296,10 @@ export async function runAgentTurn(
       toolCalls = result.toolCalls;
     } else {
       response = await chat(messages, chatOptions, config);
+    }
+
+    if (context?.abortSignal?.aborted) {
+      throw new Error('Agent turn cancelled');
     }
 
     try {

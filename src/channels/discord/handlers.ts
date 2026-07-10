@@ -186,34 +186,27 @@ function buildMayoraArtifactRepairPrompt(originalPrompt: string, previousRespons
   ].join('\n');
 }
 
-async function runWithAgentTimeout<T>(label: string, run: (abortSignal: AbortSignalLike) => Promise<T>): Promise<T> {
+async function runWithAgentTimeout<T>(_label: string, run: (abortSignal: AbortSignalLike) => Promise<T>): Promise<T> {
   const controller = new AbortController();
   let timedOut = false;
   let timeout: ReturnType<typeof setTimeout> | null = null;
-  const runPromise = Promise.resolve().then(() => run(controller.signal));
-  void runPromise.then(
-    () => {
-      if (timedOut) {
-        console.warn(`[discord-thread-agents] ${label} completed after timeout; result discarded.`);
-      }
-    },
-    (err) => {
-      if (timedOut) {
-        console.warn(`[discord-thread-agents] ${label} failed after timeout:`, err);
-      }
-    },
-  );
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    timeout = setTimeout(() => {
-      timedOut = true;
-      controller.abort();
-      reject(new Error(`Agent run timed out after ${Math.round(AGENT_RUN_TIMEOUT_MS / 60_000)} minutes`));
-    }, AGENT_RUN_TIMEOUT_MS);
-    (timeout as { unref?: () => void }).unref?.();
-  });
+  timeout = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, AGENT_RUN_TIMEOUT_MS);
+  (timeout as { unref?: () => void }).unref?.();
 
   try {
-    return await Promise.race([runPromise, timeoutPromise]);
+    const result = await run(controller.signal);
+    if (timedOut) {
+      throw new Error(`Agent run timed out after ${Math.round(AGENT_RUN_TIMEOUT_MS / 60_000)} minutes`);
+    }
+    return result;
+  } catch (err) {
+    if (timedOut) {
+      throw new Error(`Agent run timed out after ${Math.round(AGENT_RUN_TIMEOUT_MS / 60_000)} minutes`);
+    }
+    throw err;
   } finally {
     if (timeout) clearTimeout(timeout);
   }

@@ -152,6 +152,7 @@ export interface ProviderAdapter {
     config: ContextManagementConfig | undefined,
     iteration: number,
     fullConfig?: Config,
+    abortSignal?: AbortSignal,
   ): Promise<CompactionResult<any>>;
 
   /** Record usage/cost to the usage tracking system */

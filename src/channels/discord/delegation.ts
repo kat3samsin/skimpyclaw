@@ -70,6 +70,7 @@ function buildRunContext(
     sessionId: threadAgent.threadId,
     channel: 'discord',
     trigger: 'discord',
+    abortSignal: context?.abortSignal,
     metadata: {
       username: context?.approverUsername,
       isDm: false,
@@ -162,6 +163,7 @@ export function createDiscordAgentDelegateHandler(
   context?: ExecuteToolContext,
 ) => Promise<string>) {
   return async (input, config, context) => {
+    if (context?.abortSignal?.aborted) return 'Error: Agent turn cancelled.';
     const client = getClient();
     if (!client) return 'Error: Discord client is not available.';
 
@@ -172,12 +174,17 @@ export function createDiscordAgentDelegateHandler(
     }
 
     const parentChannel = await resolveDelegationParentChannel(client, context);
+    if (context?.abortSignal?.aborted) return 'Error: Agent turn cancelled.';
     if (!parentChannel) {
       return 'Error: Could not find a Discord server channel where I can create a delegated agent thread.';
     }
 
     const preview = truncateTask(input.task, 300);
     const starter = await parentChannel.send(`Delegating to @${profile.alias}:\n${preview}`);
+    if (context?.abortSignal?.aborted) {
+      await starter.delete().catch(() => {});
+      return 'Error: Agent turn cancelled.';
+    }
     if (!canStartThreadFromMessage(starter)) {
       return 'Error: Discord did not allow creating a thread for this delegated agent.';
     }
@@ -194,6 +201,14 @@ export function createDiscordAgentDelegateHandler(
       guildId: thread.guildId,
       channelId: thread.parentId ?? parentChannel.id,
     });
+
+    if (context?.abortSignal?.aborted) {
+      await sendLongTextToChannel(
+        thread,
+        `Delegation to @${profile.alias} was cancelled before the agent started.`,
+      ).catch(() => {});
+      return 'Error: Agent turn cancelled.';
+    }
 
     const url = buildThreadUrl(thread.guildId, thread.id);
     const runner = runDelegatedAgent(thread, thread.parentId ?? parentChannel.id, threadAgent, input.task, config, context);

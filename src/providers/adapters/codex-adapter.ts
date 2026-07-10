@@ -40,6 +40,12 @@ function codexTextTypeForRole(role: unknown): 'input_text' | 'output_text' {
   return role === 'assistant' ? 'output_text' : 'input_text';
 }
 
+function fetchCodex(body: any, abortSignal?: AbortSignal): Promise<string> {
+  return abortSignal
+    ? codexFetch(body, undefined, abortSignal)
+    : codexFetch(body);
+}
+
 function normalizeCodexMessageContent(content: unknown, role: unknown): any[] {
   const textType = codexTextTypeForRole(role);
   if (typeof content === 'string') {
@@ -140,7 +146,7 @@ export class CodexAdapter implements ProviderAdapter {
       include: ['reasoning.encrypted_content'],
     };
 
-    const sseText = await codexFetch(body);
+    const sseText = await fetchCodex(body, options.abortSignal);
     const parsed = parseCodexSSE(sseText);
 
     this.recordUsage(modelId, {
@@ -205,7 +211,7 @@ export class CodexAdapter implements ProviderAdapter {
       body.tools = toolDefs;
     }
 
-    const sseText = await codexFetch(body);
+    const sseText = await fetchCodex(body, options.abortSignal);
     const parsed = parseCodexSSE(sseText);
 
     const toolCalls: NormalizedToolCall[] = parsed.functionCalls.map((fc: any) => {
@@ -292,7 +298,7 @@ export class CodexAdapter implements ProviderAdapter {
     };
 
     console.log('[codex] Finalizing tool run with a text-only follow-up');
-    const sseText = await codexFetch(body);
+    const sseText = await fetchCodex(body, options.abortSignal);
     const parsed = parseCodexSSE(sseText);
     const usage = parsed.response?.usage;
     const hasUsage = Number.isFinite(usage?.input_tokens) && Number.isFinite(usage?.output_tokens);
@@ -313,6 +319,7 @@ export class CodexAdapter implements ProviderAdapter {
     config: any,
     iteration: number,
     fullConfig?: Config,
+    abortSignal?: AbortSignal,
   ): Promise<CompactionResult<any>> {
     const result = await compactMessages(
       providerMessages.messages,
@@ -320,6 +327,7 @@ export class CodexAdapter implements ProviderAdapter {
       config,
       iteration,
       fullConfig,
+      abortSignal,
     );
     providerMessages.messages = result.messages;
     return result;
