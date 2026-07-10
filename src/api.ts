@@ -43,6 +43,7 @@ import { initActiveChannel, stopActiveChannel, startActiveChannel } from './chan
 import { setCodeAgentConfig } from './tools.js';
 import { resolveModelSelection } from './model-selection.js';
 import { readSessionEntriesFromFile } from './sessions.js';
+import { isPathAllowed } from './tools/path-utils.js';
 import {
   getAgentProfileByAlias,
   listAgentProfiles,
@@ -108,7 +109,7 @@ function resolveCronPromptPath(inputPath: string): string | null {
       ? resolve(trimmed)
       : resolve(promptsRoot, trimmed);
 
-  if (!expanded.startsWith(`${promptsRoot}/`) && expanded !== promptsRoot) {
+  if (!isPathAllowed(expanded, [promptsRoot])) {
     return null;
   }
   return expanded;

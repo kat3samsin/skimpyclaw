@@ -1,8 +1,20 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
-import { mkdirSync, writeFileSync, rmSync } from 'fs';
+import { mkdirSync, writeFileSync, rmSync, symlinkSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import Fastify, { FastifyInstance } from 'fastify';
+
+const mockHome = vi.hoisted(() => {
+  const { mkdtempSync } = require('fs');
+  const { tmpdir } = require('os');
+  const { join } = require('path');
+  return mkdtempSync(join(tmpdir(), 'skimpy-api-home-'));
+});
+
+vi.mock('os', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('os')>();
+  return { ...actual, homedir: () => mockHome };
+});
 
 // --- Build a temp directory to act as ~/.skimpyclaw ---
 const TEST_ROOT = join(tmpdir(), `skimpyclaw-test-${Date.now()}`);
@@ -475,6 +487,7 @@ afterAll(async () => {
   await app.close();
   delete process.env.SKIMPYCLAW_TODO_PATH;
   rmSync(TEST_ROOT, { recursive: true, force: true });
+  rmSync(mockHome, { recursive: true, force: true });
 });
 
 beforeEach(() => {
@@ -1272,6 +1285,23 @@ describe('Cron prompt-file endpoint', () => {
   it('GET /api/dashboard/cron/prompt-file rejects invalid path traversal', async () => {
     const res = await inject({ method: 'GET', url: '/api/dashboard/cron/prompt-file?path=../../etc/passwd' });
     expect(res.statusCode).toBe(400);
+  });
+
+  it('GET /api/dashboard/cron/prompt-file rejects a symlink outside the prompts directory', async () => {
+    const promptsRoot = join(mockHome, '.skimpyclaw', 'prompts');
+    const outsideRoot = join(mockHome, 'outside-prompts');
+    mkdirSync(promptsRoot, { recursive: true });
+    mkdirSync(outsideRoot, { recursive: true });
+    writeFileSync(join(outsideRoot, 'secret.md'), 'outside prompt', 'utf-8');
+    symlinkSync(outsideRoot, join(promptsRoot, 'outside-link'), 'dir');
+
+    const res = await inject({
+      method: 'GET',
+      url: '/api/dashboard/cron/prompt-file?path=outside-link/secret.md',
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toHaveProperty('error', 'Invalid prompt path');
   });
 });
 

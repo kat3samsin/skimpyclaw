@@ -17,6 +17,7 @@ import { formatDate, toErrorMessage } from './utils.js';
 import { sanitizeCronEnv } from './env-sanitizer.js';
 import { buildArtifactUrl, registerLocalArtifact } from './artifacts.js';
 import { linkLocalHtmlArtifactsForDiscord } from './channels/discord/utils.js';
+import { isPathAllowed } from './tools/path-utils.js';
 
 function safeTimezone(tz: string | undefined): string {
   const fallback = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
@@ -1239,8 +1240,7 @@ function resolveMessageSource(message: string): string {
     : trimmed.startsWith('/')
       ? resolve(trimmed)
       : resolve(promptsRoot, trimmed);
-  const insidePromptsRoot = resolved === promptsRoot || resolved.startsWith(`${promptsRoot}/`);
-  if (!insidePromptsRoot) {
+  if (!isPathAllowed(resolved, [promptsRoot])) {
     console.warn(`[cron] Rejected prompt path outside ~/.skimpyclaw/prompts: ${trimmed}`);
     return message;
   }

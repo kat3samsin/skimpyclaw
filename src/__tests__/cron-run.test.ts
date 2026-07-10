@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
 const {
@@ -168,6 +168,33 @@ describe('runCronJob digest chat output', () => {
     await runCronJob('tech-digest', config);
 
     expect(sendActiveChannelProactiveMessageMock).not.toHaveBeenCalledWith(config, digestText);
+  });
+
+  it('does not load a prompt through a symlink outside the prompts directory', async () => {
+    const promptsRoot = join(testHome, '.skimpyclaw', 'prompts');
+    const outsideRoot = join(testHome, 'outside-prompts');
+    mkdirSync(promptsRoot, { recursive: true });
+    mkdirSync(outsideRoot, { recursive: true });
+    writeFileSync(join(outsideRoot, 'secret.md'), 'outside prompt', 'utf-8');
+    symlinkSync(outsideRoot, join(promptsRoot, 'outside-link'), 'dir');
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    runAgentTurnMock.mockResolvedValue('No links today');
+    parseAndSaveDigestMock.mockReturnValue({ summary: 'No links today', articles: [] });
+    const promptConfig = {
+      ...config,
+      cron: {
+        jobs: [{
+          ...config.cron.jobs[0],
+          payload: { kind: 'agentTurn', message: 'outside-link/secret.md' },
+        }],
+      },
+    } as any;
+
+    await runCronJob('tech-digest', promptConfig);
+
+    expect(runAgentTurnMock.mock.calls[0][1]).toBe('outside-link/secret.md');
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Rejected prompt path'));
+    warnSpy.mockRestore();
   });
 
   it('resolves a manual cron run by normalized display name', async () => {

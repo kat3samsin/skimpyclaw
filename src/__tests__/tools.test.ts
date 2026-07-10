@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { existsSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'fs';
+import { existsSync, mkdirSync, writeFileSync, readFileSync, rmSync, symlinkSync } from 'fs';
 import { join } from 'path';
 import { executeTool, BUILTIN_TOOL_DEFINITIONS, CODE_WITH_AGENT_TOOL, CHECK_CODE_AGENT_TOOL, DELEGATE_TO_AGENT_TOOL, getToolDefinitions, fromClaudeCodeName, toClaudeCodeName, buildCodeAgentArgs, getActiveCodeAgents, getRecentCodeAgents, getCodeAgent, normalizeMcpToolArgsForExecution } from '../tools.js';
 import { registerDelegateToAgentHandler } from '../tools/agent-delegation.js';
@@ -205,6 +205,28 @@ describe('write_file', () => {
     const result = await executeTool('Write', { path: join(OUTSIDE_DIR, 'hack.txt'), content: 'bad' }, toolConfig);
     expect(result).toContain('Error: Path not allowed');
     expect(existsSync(join(OUTSIDE_DIR, 'hack.txt'))).toBe(false);
+  });
+
+  it('rejects new writes through an allowed-directory symlink to the outside', async () => {
+    const linkPath = join(TEST_DIR, 'outside-link');
+    const escapedPath = join(linkPath, 'nested', 'escaped.txt');
+    symlinkSync(OUTSIDE_DIR, linkPath, 'dir');
+
+    const result = await executeTool('Write', { path: escapedPath, content: 'bad' }, toolConfig);
+
+    expect(result).toContain('Error: Path not allowed');
+    expect(existsSync(join(OUTSIDE_DIR, 'nested', 'escaped.txt'))).toBe(false);
+  });
+
+  it('rejects writes through a dangling symlink to an outside file', async () => {
+    const outsideTarget = join(OUTSIDE_DIR, 'created-via-link.txt');
+    const linkPath = join(TEST_DIR, 'dangling.txt');
+    symlinkSync(outsideTarget, linkPath, 'file');
+
+    const result = await executeTool('Write', { path: linkPath, content: 'bad' }, toolConfig);
+
+    expect(result).toContain('Error: Path not allowed');
+    expect(existsSync(outsideTarget)).toBe(false);
   });
 });
 
