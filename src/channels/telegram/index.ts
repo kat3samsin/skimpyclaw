@@ -5,6 +5,7 @@ import { run, RunnerHandle } from '@grammyjs/runner';
 import type { Config } from '../../types.js';
 import { isAllowed, isRateLimited } from '../../security.js';
 import { runAgentTurn } from '../../agent.js';
+import { runConversationTurn } from '../../conversation-queue.js';
 
 import { getCurrentModel } from '../../gateway.js';
 import { getApproval, approveRequest, denyRequest } from '../../exec-approval.js';
@@ -157,6 +158,17 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
     }
 
     await next();
+  });
+
+  // The runner processes updates concurrently, so keep each chat's history changes ordered.
+  bot.use(async (ctx, next) => {
+    const chatId = ctx.chat?.id;
+    if (!chatId) {
+      await next();
+      return;
+    }
+
+    await runConversationTurn(`telegram:${chatId}`, next);
   });
 
   // Command handlers

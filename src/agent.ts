@@ -264,7 +264,7 @@ export async function runAgentTurn(
     fullConfig: config,
     history,
     abortSignal: context?.abortSignal,
-    lockTaskId: context?.sessionId,
+    lockTaskId: auditTraceId,
     auditTraceId,
     channel: context?.channel,
     channelTargetId,

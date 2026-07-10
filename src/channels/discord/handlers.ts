@@ -17,7 +17,6 @@ import { getCurrentModel, getCurrentThinking, setCurrentModel, setCurrentThinkin
 import { getCronJobs, triggerCronJob } from '../../cron.js';
 import { runAgentTurn } from '../../agent.js';
 import { runHeartbeatCheck } from '../../heartbeat.js';
-import { isAllowed, isRateLimited } from '../../security.js';
 import { getActiveCodeAgents, getRecentCodeAgents } from '../../tools.js';
 import {
   listApprovals,
@@ -65,6 +64,7 @@ import {
 import { isDocumentAttachment, processAttachments, supportedExtensions } from './attachments.js';
 import { getSession, linkThread } from '../../code-agents/interactive-sessions.js';
 import { handleInteractiveThreadMessage } from '../../code-agents/interactive-resume.js';
+import { runConversationTurn } from '../../conversation-queue.js';
 
 type DiscordMessageChannel = Message['channel'] | GuildTextBasedChannel;
 
@@ -336,7 +336,7 @@ function getThreadAgentRunContext(
   };
 }
 
-async function runThreadAgentPrompt(
+async function runThreadAgentPromptBody(
   message: Message,
   targetChannel: DiscordMessageChannel,
   threadAgent: DiscordThreadAgent,
@@ -438,6 +438,30 @@ async function runThreadAgentPrompt(
   }
 }
 
+function runThreadAgentPrompt(
+  message: Message,
+  targetChannel: DiscordMessageChannel,
+  threadAgent: DiscordThreadAgent,
+  promptText: string,
+  config: Config,
+  options: { announceTask?: boolean } = {},
+): Promise<void> {
+  const run = () => runThreadAgentPromptBody(
+    message,
+    targetChannel,
+    threadAgent,
+    promptText,
+    config,
+    options,
+  );
+  const sourceKey = conversationKey(message);
+  const targetKey = conversationKeyForChannel(message, targetChannel);
+
+  return sourceKey === targetKey
+    ? run()
+    : runConversationTurn(`discord:${targetKey}`, run);
+}
+
 async function runMentionedAgentPrompt(message: Message, text: string, config: Config): Promise<boolean> {
   const invocation = parseDiscordAgentMention(text);
   if (!invocation) return false;
@@ -482,14 +506,17 @@ async function runMentionedAgentPrompt(message: Message, text: string, config: C
       channelId: targetChannel.isThread() ? targetChannel.parentId ?? message.channelId : message.channelId,
     });
 
+    const runner = runThreadAgentPrompt(message, targetChannel, record, invocation.prompt, config, {
+      announceTask: !isThread,
+    });
+    void runner.catch(() => {});
+
     if (!isThread) {
       const url = buildThreadUrl(message.guildId, targetChannel.id);
       await message.reply(url ? `Started @${profile.alias}: ${url}` : `Started @${profile.alias}.`);
     }
 
-    await runThreadAgentPrompt(message, targetChannel, record, invocation.prompt, config, {
-      announceTask: !isThread,
-    });
+    await runner;
     return true;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -651,15 +678,23 @@ async function handleThreadAgentCommand(message: Message, args: string[], config
         guildId: message.guildId,
         channelId: targetChannel.isThread() ? targetChannel.parentId ?? message.channelId : message.channelId,
       });
+      let runner = initialPrompt && !isThread
+        ? runThreadAgentPrompt(message, targetChannel, record, initialPrompt, config, {
+          announceTask: !isThread,
+        })
+        : null;
+      void runner?.catch(() => {});
+
       const url = buildThreadUrl(message.guildId, targetChannel.id);
       await message.reply(!isThread && url
         ? `Started @${profile.alias}: ${url}`
         : `This thread now uses ${formatAgentProfile(profile)}`);
-      if (initialPrompt) {
-        await runThreadAgentPrompt(message, targetChannel, record, initialPrompt, config, {
-          announceTask: !isThread,
+      if (initialPrompt && !runner) {
+        runner = runThreadAgentPrompt(message, targetChannel, record, initialPrompt, config, {
+          announceTask: false,
         });
       }
+      await runner;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       await message.reply(`Error: ${msg}`);
@@ -1091,18 +1126,6 @@ export async function handleIncomingMessage(message: Message, config: Config): P
   console.log(
     `[discord] Received message from ${message.author.id} in ${message.channelId}: ${JSON.stringify(message.content).slice(0, 120)}`
   );
-
-  const senderId = message.author.id;
-  const senderUsername = message.author.username;
-  if (!isAllowed(config.channels.discord.allowFrom, senderId, senderUsername)) {
-    console.log(`[discord] Blocked message from ${senderId} (@${senderUsername})`);
-    return;
-  }
-
-  if (isRateLimited(senderId)) {
-    await message.reply('Too many messages. Please wait a moment.');
-    return;
-  }
 
   // Interactive coding session intercept: if this is a thread bound to an active
   // interactive session, route the message to --resume instead of the main agent.

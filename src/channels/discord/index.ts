@@ -8,12 +8,14 @@ import {
 } from 'discord.js';
 import type { Config } from '../../types.js';
 import { onApprovalEvent } from '../../exec-approval.js';
+import { isAllowed, isRateLimited } from '../../security.js';
 import { KNOWN_COMMANDS } from './types.js';
 import { handleCommand, handleIncomingMessage, handleInteraction, sendApprovalCard } from './handlers.js';
-import { splitToChunks } from './utils.js';
+import { conversationKey, splitToChunks } from './utils.js';
 import { sendToThread, sendToThreadWithAttachments, sendToThreadWithVoice, type DiscordTextAttachment } from './threads.js';
 import { registerDelegateToAgentHandler } from '../../tools/agent-delegation.js';
 import { createDiscordAgentDelegateHandler } from './delegation.js';
+import { runConversationTurn } from '../../conversation-queue.js';
 
 let client: Client | null = null;
 let config: Config;
@@ -42,7 +44,21 @@ export async function initDiscord(cfg: Config): Promise<boolean> {
   client.on('messageCreate', (message: Message) => {
     if (message.author.bot) return;
 
-    void (async () => {
+    const senderId = message.author.id;
+    const senderUsername = message.author.username;
+    if (!isAllowed(discord.allowFrom, senderId, senderUsername)) {
+      console.log(`[discord] Blocked message from ${senderId} (@${senderUsername})`);
+      return;
+    }
+    if (isRateLimited(senderId)) {
+      void message.reply('Too many messages. Please wait a moment.').catch((err) => {
+        console.error('[discord] Failed to send rate-limit response:', err);
+      });
+      return;
+    }
+
+    const key = `discord:${conversationKey(message)}`;
+    void runConversationTurn(key, async () => {
       const text = message.content.trim();
       const isPrefixedCommand = text.startsWith('/') || text.startsWith('!');
       const isDm = message.channel.isDMBased();
@@ -64,7 +80,9 @@ export async function initDiscord(cfg: Config): Promise<boolean> {
 
       // Non-command messages
       await handleIncomingMessage(message, config);
-    })();
+    }).catch((err) => {
+      console.error(`[discord] Message handler failed for ${key}:`, err);
+    });
   });
 
   client.on('interactionCreate', (interaction: Interaction) => {

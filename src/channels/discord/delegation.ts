@@ -17,6 +17,7 @@ import {
   startTypingIndicatorForChannel,
 } from './utils.js';
 import { buildThreadUrl } from './threads.js';
+import { runConversationTurn } from '../../conversation-queue.js';
 
 type SendableTextChannel = {
   id: string;
@@ -95,37 +96,39 @@ async function runDelegatedAgent(
   config: Config,
   context?: ExecuteToolContext,
 ): Promise<string> {
-  await sendLongTextToChannel(
-    thread,
-    `Task delegated to @${threadAgent.alias}:\n${task}`,
-  );
-
-  const stopTyping = startTypingIndicatorForChannel(thread);
-  try {
-    const key = `channel:${thread.id}`;
-    const history = await getHistory(key);
-    const response = await runAgentTurn(
-      threadAgent.agentId,
-      task,
-      config,
-      threadAgent.model || getCurrentModel(),
-      getDiscordToolConfig(config),
-      history,
-      buildRunContext(context, threadAgent, parentChannelId),
-    );
-    await addToHistory(key, task, response);
-    await sendLongTextToChannel(thread, response, config);
-    return response;
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+  return runConversationTurn(`discord:channel:${thread.id}`, async () => {
     await sendLongTextToChannel(
       thread,
-      `Error: ${msg}`,
+      `Task delegated to @${threadAgent.alias}:\n${task}`,
     );
-    throw err;
-  } finally {
-    stopTyping();
-  }
+
+    const stopTyping = startTypingIndicatorForChannel(thread);
+    try {
+      const key = `channel:${thread.id}`;
+      const history = await getHistory(key);
+      const response = await runAgentTurn(
+        threadAgent.agentId,
+        task,
+        config,
+        threadAgent.model || getCurrentModel(),
+        getDiscordToolConfig(config),
+        history,
+        buildRunContext(context, threadAgent, parentChannelId),
+      );
+      await addToHistory(key, task, response);
+      await sendLongTextToChannel(thread, response, config);
+      return response;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      await sendLongTextToChannel(
+        thread,
+        `Error: ${msg}`,
+      );
+      throw err;
+    } finally {
+      stopTyping();
+    }
+  });
 }
 
 async function resolveDelegationParentChannel(
