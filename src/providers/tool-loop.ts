@@ -50,10 +50,14 @@ export async function runToolLoop(
     : undefined;
   const guard = new ToolCallGuard(toolConfig.maxTurnTokens);
   const toolLog: string[] = [];
-  const cancelledResult = (): ToolChatResult => ({
-    response: `[Cancelled after ${toolLog.length} tool calls]`,
-    toolCalls: toolLog,
-  });
+  let traceStatus: 'ok' | 'error' = 'ok';
+  const cancelledResult = (): ToolChatResult => {
+    traceStatus = 'error';
+    return {
+      response: `[Cancelled after ${toolLog.length} tool calls]`,
+      toolCalls: toolLog,
+    };
+  };
 
   if (abortSignal?.aborted) return cancelledResult();
 
@@ -74,7 +78,7 @@ export async function runToolLoop(
   const providerMessages = adapter.buildMessages(messages, requestOptions, config);
 
   // Start audit trace if not already started
-  const trigger = (effectiveToolContext?.trigger || 'api') as AuditTrace['trigger'];
+  const trigger = (effectiveToolContext?.trigger || requestOptions.trigger || 'api') as AuditTrace['trigger'];
   const ownTrace = !effectiveToolContext?.auditTraceId;
   const auditTraceId = effectiveToolContext?.auditTraceId || startTrace(trigger);
 
@@ -83,7 +87,6 @@ export async function runToolLoop(
   let totalOutputTokens = 0;
   const totalCost = { input: 0, output: 0, total: 0 };
   let usageComplete = true;
-  let traceStatus: 'ok' | 'error' = 'ok';
   let pendingFinalizationCheckpoint = false;
 
   const recordResponseMetrics = (
@@ -99,8 +102,8 @@ export async function runToolLoop(
       adapter.recordUsage(
         requestOptions.model,
         response.usage,
-        effectiveToolContext?.trigger || 'api',
-        effectiveToolContext?.agentId,
+        effectiveToolContext?.trigger || requestOptions.trigger || 'api',
+        effectiveToolContext?.agentId || requestOptions.agentId,
       );
       totalInputTokens += inputTokens as number;
       totalOutputTokens += outputTokens as number;
@@ -173,6 +176,10 @@ export async function runToolLoop(
         iteration,
         config,
         abortSignal,
+        {
+          trigger: effectiveToolContext?.trigger || requestOptions.trigger,
+          agentId: effectiveToolContext?.agentId || requestOptions.agentId,
+        },
       );
       if (abortSignal?.aborted) return cancelledResult();
       if (compactionResult.compacted) {
@@ -315,6 +322,9 @@ export async function runToolLoop(
         && adapter.onEmptyFinalResponse
       );
     }
+  } catch (err) {
+    traceStatus = 'error';
+    throw err;
   } finally {
     // End the audit trace if we created it
     if (ownTrace) {

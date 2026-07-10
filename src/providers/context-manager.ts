@@ -8,7 +8,7 @@
 // so the compaction algorithm is written once regardless of provider format.
 
 import type { ContextManagementConfig } from './types.js';
-import type { Config, ChatMessage } from '../types.js';
+import type { Config, ChatMessage, ChatOptions } from '../types.js';
 import type { MessageFormatHelper } from './adapter.js';
 
 export type { ContextManagementConfig };
@@ -75,6 +75,7 @@ async function llmSummarize(
   config: Config,
   compactionModel?: string,
   abortSignal?: AbortSignal,
+  usageContext?: Pick<ChatOptions, 'trigger' | 'agentId'>,
 ): Promise<string | null> {
   try {
     // Dynamically import to avoid circular dependency
@@ -94,6 +95,7 @@ async function llmSummarize(
       model,
       maxTokens: SUMMARY_MAX_TOKENS,
       abortSignal,
+      ...usageContext,
     }, config);
 
     if (!summary || summary.trim().length === 0) {
@@ -171,6 +173,7 @@ export async function compactMessages<T>(
   iteration: number = 0,
   fullConfig?: Config,
   abortSignal?: AbortSignal,
+  usageContext?: Pick<ChatOptions, 'trigger' | 'agentId'>,
 ): Promise<CompactionResult<T>> {
   if (config?.enabled === false) return { messages: items, compacted: false };
   const maxTokens = config?.maxContextTokens ?? DEFAULT_MAX_CONTEXT_TOKENS;
@@ -205,6 +208,7 @@ export async function compactMessages<T>(
       fullConfig,
       config?.compactionModel,
       abortSignal,
+      usageContext,
     );
     if (summary) {
       const summaryItem = helper.buildSummaryMessage(summary);

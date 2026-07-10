@@ -232,7 +232,15 @@ describe('compactMessages (generic)', () => {
 
   it('uses LLM summarization with Anthropic helper', async () => {
     const messages = manyItems(anthropicExchange, 'x'.repeat(10_000));
-    const result = await compactMessages(messages, anthropicFormatHelper, { maxContextTokens: 1_000 }, 1, fullConfig);
+    const result = await compactMessages(
+      messages,
+      anthropicFormatHelper,
+      { maxContextTokens: 1_000 },
+      1,
+      fullConfig,
+      undefined,
+      { trigger: 'cron', agentId: 'mayora' },
+    );
 
     expect(result.compacted).toBe(true);
     expect(result.method).toBe('llm');
@@ -241,6 +249,11 @@ describe('compactMessages (generic)', () => {
     expect(result.tokensAfter).toBeGreaterThan(0);
     expect(result.tokensAfter!).toBeLessThan(result.tokensBefore!);
     expect(mockChat).toHaveBeenCalledOnce();
+    expect(mockChat).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.objectContaining({ trigger: 'cron', agentId: 'mayora' }),
+      fullConfig,
+    );
 
     // First message should be the summary in Anthropic format
     expect(result.messages[0].role).toBe('user');

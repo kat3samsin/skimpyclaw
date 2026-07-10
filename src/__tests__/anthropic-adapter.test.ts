@@ -147,6 +147,27 @@ describe('AnthropicAdapter', () => {
     });
   });
 
+  describe('chat', () => {
+    it('records the originating trigger and agent', async () => {
+      const { recordUsage } = await import('../usage.js');
+      mockMessagesCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'Hello!' }],
+        usage: { input_tokens: 10, output_tokens: 5 },
+      });
+
+      await adapter.chat(
+        [{ role: 'user', content: 'Hello' }],
+        { ...options, trigger: 'cron', agentId: 'mayora' },
+        config,
+      );
+
+      expect(recordUsage).toHaveBeenCalledWith(expect.objectContaining({
+        trigger: 'cron',
+        agentId: 'mayora',
+      }));
+    });
+  });
+
   describe('call', () => {
     it('passes the turn abort signal to Anthropic requests', async () => {
       const controller = new AbortController();

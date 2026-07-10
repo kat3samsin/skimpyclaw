@@ -265,6 +265,8 @@ export interface ChatOptions {
   temperature?: number;
   thinking?: ThinkingLevel;
   abortSignal?: AbortSignal;
+  trigger?: AuditTrace['trigger'];
+  agentId?: string;
 }
 
 export type AbortSignalLike = AbortSignal;

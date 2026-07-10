@@ -74,15 +74,23 @@ describe('runAgentTurn file lock ownership', () => {
 
     const firstToolContext = chatWithToolsMock.mock.calls[0][4];
     const secondToolContext = chatWithToolsMock.mock.calls[1][4];
+    expect(chatWithToolsMock.mock.calls[0][1]).toMatchObject({
+      trigger: 'discord',
+      agentId: 'test-agent',
+    });
     expect(firstToolContext).toMatchObject({
       sessionId: 'shared-session',
       auditTraceId: 'trace-1',
       lockTaskId: 'trace-1',
+      trigger: 'discord',
+      agentId: 'test-agent',
     });
     expect(secondToolContext).toMatchObject({
       sessionId: 'shared-session',
       auditTraceId: 'trace-2',
       lockTaskId: 'trace-2',
+      trigger: 'discord',
+      agentId: 'test-agent',
     });
   });
 });

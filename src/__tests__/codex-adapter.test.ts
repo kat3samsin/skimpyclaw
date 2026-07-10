@@ -32,6 +32,7 @@ describe('CodexAdapter', () => {
     options = { model: 'codex/gpt-5.5' };
     mockCodexFetch.mockReset();
     mockParseCodexSSE.mockReset();
+    mockRecordCodexUsage.mockReset();
   });
 
   it('builds Codex messages and extracts system instructions', () => {
@@ -106,12 +107,16 @@ describe('CodexAdapter', () => {
 
     await adapter.chat(
       [{ role: 'user', content: 'Use deeper reasoning' }],
-      { ...options, thinking: 'xhigh' },
+      { ...options, thinking: 'xhigh', trigger: 'cron', agentId: 'mayora' },
       config,
     );
 
     expect(mockCodexFetch).toHaveBeenCalledWith(expect.objectContaining({
       reasoning: { effort: 'xhigh', summary: 'auto' },
+    }));
+    expect(mockRecordCodexUsage).toHaveBeenCalledWith(expect.objectContaining({
+      trigger: 'cron',
+      agentId: 'mayora',
     }));
   });
 

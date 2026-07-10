@@ -92,7 +92,7 @@ export class AnthropicAdapter implements ProviderAdapter {
       outputTokens: usage?.output_tokens ?? 0,
       cacheReadTokens: usage?.cache_read_input_tokens,
       cacheCreationTokens: usage?.cache_creation_input_tokens,
-    }, 'api');
+    }, options.trigger || 'api', options.agentId);
 
     const textContent = response.content.find((c: any) => c.type === 'text');
     return (textContent as any)?.text || '';
@@ -279,6 +279,7 @@ export class AnthropicAdapter implements ProviderAdapter {
     iteration: number,
     fullConfig?: Config,
     abortSignal?: AbortSignal,
+    usageContext?: Pick<ChatOptions, 'trigger' | 'agentId'>,
   ): Promise<CompactionResult<any>> {
     const result = await compactMessages(
       providerMessages.messages,
@@ -287,6 +288,7 @@ export class AnthropicAdapter implements ProviderAdapter {
       iteration,
       fullConfig,
       abortSignal,
+      usageContext,
     );
     providerMessages.messages = result.messages;
     return result;

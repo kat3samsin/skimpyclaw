@@ -153,6 +153,7 @@ export interface ProviderAdapter {
     iteration: number,
     fullConfig?: Config,
     abortSignal?: AbortSignal,
+    usageContext?: Pick<ChatOptions, 'trigger' | 'agentId'>,
   ): Promise<CompactionResult<any>>;
 
   /** Record usage/cost to the usage tracking system */

@@ -1,4 +1,4 @@
-import type { AbortSignalLike } from '../types.js';
+import type { AbortSignalLike, AuditTrace } from '../types.js';
 
 export interface ExecuteToolContext {
   /** Task ID for file lock acquisition (concurrent writes) */
@@ -22,7 +22,7 @@ export interface ExecuteToolContext {
   /** Username of the approver */
   approverUsername?: string;
   /** Trigger source for usage tracking */
-  trigger?: string;
+  trigger?: AuditTrace['trigger'];
   /** Agent ID for usage tracking */
   agentId?: string;
   /** True when this context is from a cron job — enables spawn tools even without a chatId */

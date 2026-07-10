@@ -236,7 +236,13 @@ export async function runAgentTurn(
   const thinking = metadataThinking(metadata?.threadAgentThinking)
     ?? metadataThinking(metadata?.thinkingOverride)
     ?? agentConfig.thinking;
-  const chatOptions: ChatOptions = { model, thinking, abortSignal: context?.abortSignal };
+  const chatOptions: ChatOptions = {
+    model,
+    thinking,
+    abortSignal: context?.abortSignal,
+    trigger: context?.trigger || 'system',
+    agentId,
+  };
 
   const route = resolveProviderRoute(model, config);
   const { resolvedModel, provider, modelId } = route;
@@ -276,6 +282,8 @@ export async function runAgentTurn(
     discordChannelId: (context?.metadata as any)?.discordChannelId,
     isDm: (context?.metadata as any)?.isDm === true,
     threadAgentAlias,
+    trigger: context?.trigger || 'system',
+    agentId,
     delegationDepth: typeof (context?.metadata as any)?.delegationDepth === 'number'
       ? (context?.metadata as any).delegationDepth
       : 0,

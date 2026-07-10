@@ -32,7 +32,9 @@ class MockAdapter implements ProviderAdapter {
   appendAssistantCallCount = 0;
   appendToolResultCallCount = 0;
   compactMessagesCallCount = 0;
+  compactionUsageContexts: Array<{ trigger?: string; agentId?: string } | undefined> = [];
   recordUsageCallCount = 0;
+  recordUsageCalls: Array<{ trigger?: string; agentId?: string }> = [];
 
   // Mock responses to return
   responses: NormalizedResponse[] = [];
@@ -93,8 +95,11 @@ class MockAdapter implements ProviderAdapter {
     _config: any,
     _iteration: number,
     _fullConfig?: Config,
+    _abortSignal?: AbortSignal,
+    usageContext?: { trigger?: string; agentId?: string },
   ): Promise<CompactionResult<any>> {
     this.compactMessagesCallCount++;
+    this.compactionUsageContexts.push(usageContext);
     return {
       messages: messages.messages,
       compacted: false,
@@ -103,6 +108,7 @@ class MockAdapter implements ProviderAdapter {
 
   recordUsage(_model: string, _usage: unknown, _trigger?: string, _agentId?: string): void {
     this.recordUsageCallCount++;
+    this.recordUsageCalls.push({ trigger: _trigger, agentId: _agentId });
   }
 }
 
@@ -175,13 +181,18 @@ describe('runToolLoop', () => {
       },
     ];
 
-    const result = await runToolLoop(adapter, messages, options, config, toolConfig);
+    const result = await runToolLoop(adapter, messages, options, config, toolConfig, {
+      trigger: 'cron',
+      agentId: 'mayora',
+    });
 
     expect(result.response).toBe('Hello! How can I help you?');
     expect(result.toolCalls).toEqual([]);
     expect(adapter.callCount).toBe(1);
     expect(adapter.buildMessagesCallCount).toBe(1);
     expect(adapter.recordUsageCallCount).toBe(1);
+    expect(adapter.recordUsageCalls).toEqual([{ trigger: 'cron', agentId: 'mayora' }]);
+    expect(adapter.compactionUsageContexts).toEqual([{ trigger: 'cron', agentId: 'mayora' }]);
   });
 
   it('should handle tool calls and continue iteration', async () => {
@@ -416,6 +427,8 @@ describe('runToolLoop', () => {
   });
 
   it('waits for an in-flight tool to observe cancellation and does not call the provider again', async () => {
+    const { endTrace } = await import('../audit.js');
+    vi.mocked(endTrace).mockClear();
     const abortController = new AbortController();
     adapter.responses = [{
       hasToolCalls: true,
@@ -443,6 +456,27 @@ describe('runToolLoop', () => {
     const result = await run;
     expect(result.response).toContain('Cancelled');
     expect(adapter.callCount).toBe(1);
+    expect(endTrace).toHaveBeenCalledWith('trace-123', 'error');
+  });
+
+  it('marks its trace as error when cancellation rejects during compaction', async () => {
+    const { endTrace } = await import('../audit.js');
+    vi.mocked(endTrace).mockClear();
+    const abortController = new AbortController();
+    vi.spyOn(adapter, 'compactMessages').mockImplementation(async () => {
+      abortController.abort();
+      throw new Error('compaction cancelled');
+    });
+
+    await expect(runToolLoop(
+      adapter,
+      messages,
+      { ...options, abortSignal: abortController.signal },
+      config,
+      toolConfig,
+    )).rejects.toThrow('compaction cancelled');
+
+    expect(endTrace).toHaveBeenCalledWith('trace-123', 'error');
   });
 
   it('should call compactMessages on each iteration', async () => {

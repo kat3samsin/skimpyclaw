@@ -153,7 +153,7 @@ export class CodexAdapter implements ProviderAdapter {
       inputTokens: parsed.response?.usage?.input_tokens ?? 0,
       outputTokens: parsed.response?.usage?.output_tokens ?? 0,
       cacheReadTokens: parsed.response?.usage?.input_tokens_details?.cached_tokens,
-    }, 'api');
+    }, options.trigger || 'api', options.agentId);
 
     return parsed.outputText || '[No response from Codex]';
   }
@@ -320,6 +320,7 @@ export class CodexAdapter implements ProviderAdapter {
     iteration: number,
     fullConfig?: Config,
     abortSignal?: AbortSignal,
+    usageContext?: Pick<ChatOptions, 'trigger' | 'agentId'>,
   ): Promise<CompactionResult<any>> {
     const result = await compactMessages(
       providerMessages.messages,
@@ -328,6 +329,7 @@ export class CodexAdapter implements ProviderAdapter {
       iteration,
       fullConfig,
       abortSignal,
+      usageContext,
     );
     providerMessages.messages = result.messages;
     return result;
