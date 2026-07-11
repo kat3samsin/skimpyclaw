@@ -473,15 +473,33 @@ describe('code_with_agent', () => {
     });
 
     it('builds codex args with model override', () => {
-      const { args } = buildCodeAgentArgs({ task: 'fix it', agent: 'codex', model: 'gpt-5.3-codex' });
+      const { args } = buildCodeAgentArgs({
+        task: 'fix it',
+        agent: 'codex',
+        model: 'gpt-5.6-sol',
+        effort: 'ultra',
+      });
       expect(args).toContain('-m');
-      expect(args).toContain('gpt-5.3-codex');
+      expect(args).toContain('gpt-5.6-sol');
+      expect(args).toContain('model_reasoning_effort=ultra');
+      expect(args).toContain('service_tier=fast');
     });
 
     it('builds codex args with effort override', () => {
       const { args } = buildCodeAgentArgs({ task: 'fix it', agent: 'codex', effort: 'xhigh' });
       expect(args).toContain('-c');
       expect(args).toContain('model_reasoning_effort=xhigh');
+    });
+
+    it('clamps ultra effort for an explicitly selected non-Sol model', () => {
+      const { args } = buildCodeAgentArgs({
+        task: 'fix it',
+        agent: 'codex',
+        model: 'gpt-5.5',
+        effort: 'ultra',
+      });
+      expect(args).toContain('model_reasoning_effort=xhigh');
+      expect(args).not.toContain('service_tier=fast');
     });
 
     it('does not include --allowedTools for codex', () => {

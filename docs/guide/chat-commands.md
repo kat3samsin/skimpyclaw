@@ -29,7 +29,7 @@
 
 ## Discord-specific behavior
 
-- **Reasoning effort** — `/effort <none|low|medium|high|xhigh>` or `/think <...>` changes the current Discord effort override.
+- **Reasoning effort** — `/effort <none|low|medium|high|xhigh|ultra>` or `/think <...>` changes the current Discord effort override.
 - **Reusable agent profiles** — `/agent` manages Discord aliases such as `@reviewer`; `@alias <message>` invokes a profile directly. See [Agents](/guide/agents).
 - **Interactive approval cards** — When exec approval is needed, Discord sends a message with Approve/Deny buttons (Telegram uses inline keyboards).
 - **Threaded replies** — Coding agent tasks and Discord agent-profile invocations can create threads from the triggering message. Coding-agent status updates and completion notifications route to the thread. Disable coding-agent thread creation with `threadedReplies: false` in Discord config.

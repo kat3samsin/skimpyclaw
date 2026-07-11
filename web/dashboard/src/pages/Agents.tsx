@@ -28,7 +28,7 @@ const EMPTY_FORM: FormState = {
   promptOverlay: '',
 };
 
-const THINKING_OPTIONS: Array<'' | ThinkingLevel> = ['', 'none', 'low', 'medium', 'high', 'xhigh'];
+const THINKING_OPTIONS: Array<'' | ThinkingLevel> = ['', 'none', 'low', 'medium', 'high', 'xhigh', 'ultra'];
 
 function profileToForm(profile: AgentProfile): FormState {
   return {

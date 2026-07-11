@@ -353,9 +353,9 @@ function buildProviders(providers: Set<ProviderChoice>, refs?: SecretRefs): Reco
 }
 
 function buildDefaultModel(providers: Set<ProviderChoice>): string {
+  if (providers.has('codex-oauth')) return 'codex/gpt-5.6-sol';
   const hasAnthropic = providers.has('anthropic-api') || providers.has('anthropic-oauth');
   if (hasAnthropic) return 'anthropic/claude-opus-4-7';
-  if (providers.has('codex-oauth')) return 'codex/gpt-5.5';
   return 'anthropic/claude-opus-4-7';
 }
 
@@ -365,10 +365,11 @@ function buildAliases(providers: Set<ProviderChoice>): Record<string, string> {
     'codex5.2': 'codex/gpt-5.2-codex',
     'codex5.3': 'codex/gpt-5.3-codex',
     'codex5.5': 'codex/gpt-5.5',
+    'codex5.6': 'codex/gpt-5.6-sol',
   };
 
   if (providers.has('codex-oauth')) {
-    aliases.codex = 'codex/gpt-5.5';
+    aliases.codex = 'codex/gpt-5.6-sol';
   }
 
   return aliases;
@@ -442,7 +443,7 @@ export function buildSetupConfig(input: SetupBuildInput): Record<string, unknown
             emoji: '👙🦞',
           },
           model: buildDefaultModel(input.selectedProviders),
-          thinking: 'low',
+          thinking: input.selectedProviders.has('codex-oauth') ? 'ultra' : 'low',
         },
       },
     },

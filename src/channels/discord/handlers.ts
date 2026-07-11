@@ -73,14 +73,14 @@ const THREAD_AGENT_USAGE = [
   '/agent create <alias> [agent-id]',
   '/agent use <alias> [message]',
   '/agent model [alias] <model-alias|provider/model|model-id>',
-  '/agent effort [alias] <none|low|medium|high|xhigh>',
+  '/agent effort [alias] <none|low|medium|high|xhigh|ultra>',
   '/agent prompt [alias] <prompt text>',
   '/agent delete <alias>',
   '/agent list',
   '@alias <message>',
 ].join('\n');
 
-const THINKING_LEVELS: ThinkingLevel[] = ['none', 'low', 'medium', 'high', 'xhigh'];
+const THINKING_LEVELS: ThinkingLevel[] = ['none', 'low', 'medium', 'high', 'xhigh', 'ultra'];
 const AGENT_PROMPT_MAX_CHARS = 20_000;
 const AGENT_PROGRESS_UPDATE_MS = 75_000;
 const AGENT_RUN_TIMEOUT_MS = 12 * 60_000;

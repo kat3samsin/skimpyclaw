@@ -58,7 +58,7 @@ A profile stores:
 - `alias`: Discord-facing name, used as `@alias`
 - `agentId`: target key from `config.agents.list`
 - `model`: optional model override
-- `thinking`: optional effort override (`none`, `low`, `medium`, `high`, `xhigh`)
+- `thinking`: optional effort override (`none`, `low`, `medium`, `high`, `xhigh`, `ultra`)
 - `promptOverlay`: optional instructions injected under `## Discord Thread Agent`
 
 ## Discord Commands

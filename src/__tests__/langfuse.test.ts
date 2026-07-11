@@ -26,6 +26,14 @@ describe('calculateUsageCost', () => {
     expect(cost.totalCost).toBe(35);
   });
 
+  it('resolves GPT-5.6 Sol alias pricing', () => {
+    const cost = calculateUsageCost('codex5.6', 1_000_000, 1_000_000);
+
+    expect(cost.inputCost).toBe(10);
+    expect(cost.outputCost).toBe(60);
+    expect(cost.totalCost).toBe(70);
+  });
+
   it('resolves codex5.1 model pricing', () => {
     const cost = calculateUsageCost('codex/gpt-5.1-codex', 1_000_000, 1_000_000);
 

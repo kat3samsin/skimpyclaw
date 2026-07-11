@@ -72,6 +72,8 @@ const DEFAULT_MODEL_ALIASES: Record<string, string> = {
   'codex5.2': 'codex/gpt-5.2-codex',
   'codex5.3': 'codex/gpt-5.3-codex',
   'codex5.5': 'codex/gpt-5.5',
+  'codex5.6': 'codex/gpt-5.6-sol',
+  codex: 'codex/gpt-5.6-sol',
 };
 
 const MAX_LOG_TAIL_BYTES = 256 * 1024;
@@ -124,7 +126,7 @@ function getSkillsDir(cfg: Config): string {
   return cfg.skills?.directory || join(homedir(), '.skimpyclaw', 'skills');
 }
 
-const THINKING_LEVELS = new Set<ThinkingLevel>(['none', 'low', 'medium', 'high', 'xhigh']);
+const THINKING_LEVELS = new Set<ThinkingLevel>(['none', 'low', 'medium', 'high', 'xhigh', 'ultra']);
 
 function parseThinkingLevel(value: unknown): ThinkingLevel | undefined {
   if (typeof value !== 'string') return undefined;

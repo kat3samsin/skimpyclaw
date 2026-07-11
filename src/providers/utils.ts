@@ -340,6 +340,7 @@ export function buildThinkingConfig(thinking?: ThinkingLevel): { budget: number;
     medium: 8192,
     high: 16384,
     xhigh: 32768,
+    ultra: 32768,
   };
   const budget = budgetTokens[thinking] || 2048;
   return {

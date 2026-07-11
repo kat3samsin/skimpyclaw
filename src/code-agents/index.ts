@@ -77,7 +77,7 @@ export type { ClaudeOutputResult } from './parser.js';
 
 // SKIMPYCLAW_ROOT for workdir default
 const SKIMPYCLAW_ROOT = resolve(import.meta.dirname || process.cwd(), '..', '..');
-const EFFORT_LEVELS = new Set(['none', 'low', 'medium', 'high', 'xhigh']);
+const EFFORT_LEVELS = new Set(['none', 'low', 'medium', 'high', 'xhigh', 'ultra']);
 
 /**
  * Execute check_code_agent tool — list all or get details for one agent.
@@ -198,7 +198,7 @@ export async function executeCodeWithAgent(
     ? effortInput.trim().toLowerCase().replace(/^x[-_ ]?high$/, 'xhigh')
     : undefined;
   if (effort && !EFFORT_LEVELS.has(effort)) {
-    return `Error: Invalid effort "${effortInput}". Use none, low, medium, high, or xhigh.`;
+    return `Error: Invalid effort "${effortInput}". Use none, low, medium, high, xhigh, or ultra.`;
   }
 
   const projects = context?.fullConfig?.projects ?? {};

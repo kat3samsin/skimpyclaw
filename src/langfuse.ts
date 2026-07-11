@@ -88,6 +88,8 @@ export const MODEL_PRICING: Record<string, ModelPricing> = {
   'gpt-5.2-codex': { inputPerMTok: 1.75, outputPerMTok: 14.0 },
   'gpt-5.3-codex': { inputPerMTok: 1.75, outputPerMTok: 14.0 },
   'gpt-5.5': { inputPerMTok: 5.0, outputPerMTok: 30.0 },
+  // Sol requests use Priority processing (Codex Fast), so track Priority rates.
+  'gpt-5.6-sol': { inputPerMTok: 10.0, outputPerMTok: 60.0 },
   'codex-5.1': { inputPerMTok: 1.25, outputPerMTok: 10.0 },
   'codex-5.2': { inputPerMTok: 1.75, outputPerMTok: 14.0 },
   'codex-5.3': { inputPerMTok: 1.75, outputPerMTok: 14.0 },
@@ -110,7 +112,9 @@ const MODEL_ALIAS_MAP: Record<string, string> = {
   'codex5.2': 'gpt-5.2-codex',
   'codex5.3': 'gpt-5.3-codex',
   'codex5.5': 'gpt-5.5',
-  codex: 'gpt-5.5',
+  'codex5.6': 'gpt-5.6-sol',
+  'gpt-5.6': 'gpt-5.6-sol',
+  codex: 'gpt-5.6-sol',
 };
 
 /**

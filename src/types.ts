@@ -105,7 +105,7 @@ export interface AgentConfig {
   thinking?: ThinkingLevel;
 }
 
-export type ThinkingLevel = 'none' | 'low' | 'medium' | 'high' | 'xhigh';
+export type ThinkingLevel = 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'ultra';
 
 export type AllowlistEntry = string | number;
 

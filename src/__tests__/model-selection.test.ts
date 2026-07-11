@@ -11,7 +11,7 @@ function mockConfig(): any {
   return {
     models: {
       aliases: {
-        codex5: 'codex/gpt-5.3-codex',
+        'codex5.6': 'codex/gpt-5.6-sol',
       },
     },
   };
@@ -19,11 +19,11 @@ function mockConfig(): any {
 
 describe('model-selection', () => {
   it('lists aliases sorted', () => {
-    expect(listModelAliases(mockConfig())).toEqual(['codex5']);
+    expect(listModelAliases(mockConfig())).toEqual(['codex5.6']);
   });
 
   it('formats aliases', () => {
-    expect(formatAliases(mockConfig())).toBe('codex5');
+    expect(formatAliases(mockConfig())).toBe('codex5.6');
   });
 
   it('returns model selection usage string', () => {
@@ -31,10 +31,10 @@ describe('model-selection', () => {
   });
 
   it('resolves alias values', () => {
-    const resolved = resolveModelSelection('codex5', mockConfig());
+    const resolved = resolveModelSelection('codex5.6', mockConfig());
     expect(resolved.ok).toBe(true);
-    expect(resolved.aliasUsed).toBe('codex5');
-    expect(resolved.resolved).toBe('codex/gpt-5.3-codex');
+    expect(resolved.aliasUsed).toBe('codex5.6');
+    expect(resolved.resolved).toBe('codex/gpt-5.6-sol');
   });
 
   it('accepts full model spec', () => {
@@ -72,7 +72,7 @@ describe('model-selection', () => {
   it('formats model selection errors with aliases and usage', () => {
     const text = formatModelSelectionError('Unknown model alias: "x"', mockConfig());
     expect(text).toContain('Unknown model alias: "x"');
-    expect(text).toContain('Available aliases: codex5');
+    expect(text).toContain('Available aliases: codex5.6');
     expect(text).toContain('Use alias, provider/model, or model-id.');
   });
 });

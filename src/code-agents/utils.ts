@@ -160,6 +160,7 @@ export function buildCodeAgentArgs(input: BuildCodeAgentArgsInput): { cmd: strin
   const maxTurns = String(input.max_turns || 50);
 
   if (agent === 'codex') {
+    const isSolModel = input.model === 'gpt-5.6-sol' || input.model === 'gpt-5.6';
     const args = [
       'exec',
       '--full-auto',
@@ -169,7 +170,13 @@ export function buildCodeAgentArgs(input: BuildCodeAgentArgsInput): { cmd: strin
     ];
     if (input.workdir) args.push('-C', input.workdir);
     if (input.model) args.push('-m', input.model);
-    if (input.effort) args.push('-c', `model_reasoning_effort=${input.effort}`);
+    if (input.effort) {
+      const effort = input.effort === 'ultra' && input.model && !isSolModel ? 'xhigh' : input.effort;
+      args.push('-c', `model_reasoning_effort=${effort}`);
+    }
+    if (isSolModel) {
+      args.push('-c', 'service_tier=fast');
+    }
     args.push(input.task);
     return { cmd: CODEX_CLI_PATH, args };
   }

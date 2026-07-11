@@ -118,6 +118,48 @@ describe('CodexAdapter', () => {
       trigger: 'cron',
       agentId: 'mayora',
     }));
+    expect(mockCodexFetch.mock.calls[0][0]).not.toHaveProperty('service_tier');
+  });
+
+  it('maps user-facing ultra to backend xhigh on the Sol fast tier', async () => {
+    mockCodexFetch.mockResolvedValue('sse');
+    mockParseCodexSSE.mockReturnValue({
+      outputText: 'ok',
+      functionCalls: [],
+      response: { usage: { input_tokens: 10, output_tokens: 5 } },
+    });
+
+    await adapter.chat(
+      [{ role: 'user', content: 'Use maximum orchestration' }],
+      { ...options, model: 'codex/gpt-5.6-sol', thinking: 'ultra' },
+      config,
+    );
+
+    expect(mockCodexFetch).toHaveBeenCalledWith(expect.objectContaining({
+      model: 'gpt-5.6-sol',
+      reasoning: { effort: 'xhigh', summary: 'auto' },
+      service_tier: 'priority',
+    }));
+  });
+
+  it('also maps ultra reasoning to xhigh for non-Sol Codex models', async () => {
+    mockCodexFetch.mockResolvedValue('sse');
+    mockParseCodexSSE.mockReturnValue({
+      outputText: 'ok',
+      functionCalls: [],
+      response: { usage: { input_tokens: 10, output_tokens: 5 } },
+    });
+
+    await adapter.chat(
+      [{ role: 'user', content: 'Use the deepest supported reasoning' }],
+      { ...options, model: 'codex/gpt-5.5', thinking: 'ultra' },
+      config,
+    );
+
+    expect(mockCodexFetch).toHaveBeenCalledWith(expect.objectContaining({
+      reasoning: { effort: 'xhigh', summary: 'auto' },
+    }));
+    expect(mockCodexFetch.mock.calls[0][0]).not.toHaveProperty('service_tier');
   });
 
   it('passes the turn abort signal to Codex requests', async () => {
@@ -143,7 +185,7 @@ describe('CodexAdapter', () => {
     );
   });
 
-  it('keeps Codex reasoning at medium by default', async () => {
+  it('keeps Codex reasoning at medium by default on the Sol fast tier', async () => {
     mockCodexFetch.mockResolvedValue('sse');
     mockParseCodexSSE.mockReturnValue({
       outputText: 'ok',
@@ -151,10 +193,16 @@ describe('CodexAdapter', () => {
       response: { usage: { input_tokens: 10, output_tokens: 5 } },
     });
 
-    await adapter.call({ messages: [], systemParam: 'sys' }, [], options, config);
+    await adapter.call(
+      { messages: [], systemParam: 'sys' },
+      [],
+      { ...options, model: 'codex/gpt-5.6-sol' },
+      config,
+    );
 
     expect(mockCodexFetch).toHaveBeenCalledWith(expect.objectContaining({
       reasoning: { effort: 'medium', summary: 'auto' },
+      service_tier: 'priority',
     }));
   });
 
@@ -250,7 +298,12 @@ describe('CodexAdapter', () => {
         systemParam: 'System prompt',
       };
 
-      const result = await adapter.onEmptyFinalResponse(providerMessages, [], options, config);
+      const result = await adapter.onEmptyFinalResponse(
+        providerMessages,
+        [],
+        { ...options, model: 'codex/gpt-5.6-sol' },
+        config,
+      );
 
       expect(result.textContent).toBe('Here is the final answer.');
       expect(result.usage).toEqual(expect.objectContaining({ inputTokens: 50, outputTokens: 20 }));
@@ -258,6 +311,7 @@ describe('CodexAdapter', () => {
       // Should NOT include tools in the finalization body
       const body = mockCodexFetch.mock.calls[0][0];
       expect(body.tools).toBeUndefined();
+      expect(body.service_tier).toBe('priority');
       // Should include the nudge message
       const lastInput = body.input[body.input.length - 1];
       expect(lastInput.role).toBe('user');

@@ -41,7 +41,7 @@ MCP tools (via mcporter) are available on the Anthropic and Codex adapter paths.
 `src/model-selection.ts` is the single source of truth for model input parsing:
 
 - Accepted inputs:
-  - configured alias (e.g. `codex5.5`)
+  - configured alias (e.g. `codex5.6`)
   - full provider/model (e.g. `anthropic/claude-sonnet-4-6`)
   - bare model ID with `-` or `.` (e.g. `claude-sonnet-4-6`)
 - Deprecated model IDs are migrated via provider utils (e.g. Claude 3.5 -> current Claude 4 aliases).
@@ -60,4 +60,4 @@ Uses `~/.codex/auth.json` with ChatGPT backend headers (`chatgpt-account-id`, `O
 
 ## Codex Reasoning
 
-Codex requests include `reasoning.summary: "auto"` and map the agent `thinking` setting to `reasoning.effort`. Supported values are `low`, `medium`, `high`, and `xhigh`; unset or `none` preserves the default `medium` effort.
+Codex requests include `reasoning.summary: "auto"` and map the agent `thinking` setting to `reasoning.effort`. The direct backend accepts `low`, `medium`, `high`, and `xhigh`; user-facing `ultra` therefore maps to backend `xhigh`. Codex CLI coding-agent runs receive true `ultra`, where the CLI provides its additional orchestration behavior. Unset or `none` preserves the default `medium` effort. GPT-5.6 Sol requests use the `priority` service tier, exposed as Fast mode in Codex.

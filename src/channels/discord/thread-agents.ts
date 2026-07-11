@@ -38,7 +38,7 @@ export interface DiscordAgentMentionInvocation {
 
 const DEFAULT_STORE_PATH = join(homedir(), '.skimpyclaw', 'discord-thread-agents.json');
 const ALIAS_RE = /^[a-z][a-z0-9_-]{0,63}$/;
-const THINKING_LEVELS = new Set<ThinkingLevel>(['none', 'low', 'medium', 'high', 'xhigh']);
+const THINKING_LEVELS = new Set<ThinkingLevel>(['none', 'low', 'medium', 'high', 'xhigh', 'ultra']);
 
 let storePathOverride: string | null = null;
 let loaded = false;
