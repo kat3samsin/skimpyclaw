@@ -130,6 +130,7 @@ describe('Codex unified tool loop', () => {
     expect(result.response).toBe('Done after configured limit');
     expect(mockCodexFetch).toHaveBeenCalledTimes(3);
     expect(mockCodexFetch.mock.calls[2][0].tools).toBeUndefined();
+    expect(result.usage?.total_tokens).toBe(35);
   });
 
   it('requests tool definitions with MCP enabled for Codex', async () => {

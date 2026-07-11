@@ -239,7 +239,7 @@ Used by cron jobs, heartbeat, and channel defaults:
 | `allowedPaths` | string[] | | Filesystem paths the agent can access |
 | `maxIterations` | number | | Legacy finalization checkpoint interval; a positive value asks for a final answer every N tool-use rounds but does not cap the loop |
 | `bashTimeout` | number | `30000` | Bash command timeout (ms) |
-| `maxTurnTokens` | number | `200000` | Max tokens per agent turn |
+| `maxTurnTokens` | number | `200000` | Cumulative provider-token limit. At the response boundary, pending tools are skipped and one text-only finalization call is allowed. |
 | `toolProfile` | string | `full` | Tool set to expose: `minimal`, `coding`, or `full` |
 
 ### `contextManagement`

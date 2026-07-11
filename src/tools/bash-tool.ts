@@ -6,6 +6,7 @@ import {
   requiresApproval,
   createApprovalRequest,
   waitForApproval,
+  denyRequest,
   type ApprovalChannelMeta,
 } from '../exec-approval.js';
 import type { ToolConfig } from '../types.js';
@@ -13,6 +14,35 @@ import type { ExecuteToolContext } from './execute-context.js';
 import { isPathAllowed } from './path-utils.js';
 import { validateBashPaths } from './bash-path-validation.js';
 import { sanitizeExecEnv } from '../env-sanitizer.js';
+
+function killChildProcessTree(
+  child: ReturnType<typeof spawn>,
+  signal: NodeJS.Signals,
+): void {
+  if (process.platform !== 'win32' && child.pid) {
+    try {
+      process.kill(-child.pid, signal);
+      return;
+    } catch {
+      // Fall back to the direct child when no process group exists.
+    }
+  }
+  try {
+    child.kill(signal);
+  } catch {
+    // Process already exited.
+  }
+}
+
+function isChildProcessTreeAlive(child: ReturnType<typeof spawn>): boolean {
+  if (process.platform === 'win32' || !child.pid) return false;
+  try {
+    process.kill(-child.pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 const SHELL_CONTROL_CHARS = new Set(['|', '&', ';', '<', '>', '(', ')', '`', '$']);
 
@@ -95,6 +125,7 @@ function tokenizeCommand(command: string): string[] | null {
 }
 
 export async function executeBash(command: string, cwd: string | undefined, config: ToolConfig, context?: ExecuteToolContext): Promise<string> {
+  if (context?.abortSignal?.aborted) return 'Error: Agent turn cancelled.';
   // Hard block: existing safety filter (always enforced)
   if (!isBashCommandSafe(command)) {
     return Promise.resolve('Error: Command blocked by safety filter.');
@@ -143,7 +174,14 @@ export async function executeBash(command: string, cwd: string | undefined, conf
       // Create a pending approval request and wait for resolution
       const ttlMs = approvalConfig?.ttlMs ?? 5 * 60 * 1000;
       const request = createApprovalRequest(command, cwd, classification, approvalConfig, channelMeta);
-      const resolved = await waitForApproval(request.id, ttlMs);
+      let resolved;
+      try {
+        resolved = await waitForApproval(request.id, ttlMs, context?.abortSignal);
+      } catch (err) {
+        if (!context?.abortSignal?.aborted) throw err;
+        denyRequest(request.id, 'system:cancelled');
+        return 'Error: Agent turn cancelled.';
+      }
 
       if (resolved.status !== 'approved') {
         return `⛔ Command not executed — approval ${resolved.status} (tier ${classification.tier}: ${classification.reason}).`;
@@ -163,6 +201,7 @@ export async function executeBash(command: string, cwd: string | undefined, conf
 
   const timeout = config.bashTimeout || 30_000;
   const [executable, ...args] = argv;
+  if (context?.abortSignal?.aborted) return 'Error: Agent turn cancelled.';
 
   return new Promise((res) => {
     const child = spawn(executable, args, {
@@ -170,17 +209,51 @@ export async function executeBash(command: string, cwd: string | undefined, conf
       env: sanitizeExecEnv(),
       stdio: ['ignore', 'pipe', 'pipe'],
       shell: false,
+      detached: process.platform !== 'win32',
     });
 
     let stdout = '';
     let stderr = '';
     let timedOut = false;
+    let cancelled = false;
+    let settled = false;
+    let sigkillTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const cleanup = () => {
+      clearTimeout(timer);
+      if (sigkillTimer) clearTimeout(sigkillTimer);
+      context?.abortSignal?.removeEventListener('abort', onAbort);
+    };
+    const finish = (result: string) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      res(result);
+    };
+    const terminationResult = () => {
+      if (cancelled) return 'Error: Agent turn cancelled.';
+      const output = [stdout, stderr].filter(Boolean).join('\n');
+      return (output ? `${output}\n` : '') + `Exit code: timeout after ${timeout}ms`;
+    };
+    const terminate = (reason: 'timeout' | 'cancelled') => {
+      if (timedOut || cancelled || settled) return;
+      timedOut = reason === 'timeout';
+      cancelled = reason === 'cancelled';
+      killChildProcessTree(child, 'SIGTERM');
+      sigkillTimer = setTimeout(() => {
+        killChildProcessTree(child, 'SIGKILL');
+        sigkillTimer = null;
+        finish(terminationResult());
+      }, 1000);
+    };
+    const onAbort = () => terminate('cancelled');
 
     const timer = setTimeout(() => {
-      timedOut = true;
-      child.kill('SIGTERM');
-      setTimeout(() => child.kill('SIGKILL'), 1000);
+      terminate('timeout');
     }, timeout);
+
+    context?.abortSignal?.addEventListener('abort', onAbort, { once: true });
+    if (context?.abortSignal?.aborted) onAbort();
 
     child.stdout.on('data', (chunk: Buffer | string) => {
       stdout += chunk.toString();
@@ -193,25 +266,25 @@ export async function executeBash(command: string, cwd: string | undefined, conf
     });
 
     child.on('error', (error) => {
-      clearTimeout(timer);
-      res(`Error: ${error.message}`);
+      finish(cancelled ? 'Error: Agent turn cancelled.' : `Error: ${error.message}`);
     });
 
     child.on('close', (code, signal) => {
-      clearTimeout(timer);
-      if (timedOut) {
-        const output = [stdout, stderr].filter(Boolean).join('\n');
-        res((output ? `${output}\n` : '') + `Exit code: timeout after ${timeout}ms`);
+      if (cancelled || timedOut) {
+        // Do not release the caller while descendants can still mutate state.
+        // A live process group is drained by the scheduled SIGKILL fallback.
+        if (sigkillTimer && isChildProcessTreeAlive(child)) return;
+        finish(terminationResult());
         return;
       }
 
       const output = [stdout, stderr].filter(Boolean).join('\n').slice(0, 50_000);
       if (code && code !== 0) {
         const reason = signal ? `signal ${signal}` : `Exit code: ${code}`;
-        res((output ? `${output}\n` : '') + reason);
+        finish((output ? `${output}\n` : '') + reason);
         return;
       }
-      res(output || '(no output)');
+      finish(output || '(no output)');
     });
   });
 }

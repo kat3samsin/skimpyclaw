@@ -41,18 +41,27 @@ function executeWriteFile(path: string, content: string, config: ToolConfig): st
  * Write with file locking when a lockTaskId is provided (concurrent context).
  * Falls back to unlocked write when no lockTaskId.
  */
-export async function executeWriteFileLocked(path: string, content: string, config: ToolConfig, lockTaskId?: string): Promise<string> {
+export async function executeWriteFileLocked(
+  path: string,
+  content: string,
+  config: ToolConfig,
+  lockTaskId?: string,
+  abortSignal?: AbortSignal,
+): Promise<string> {
+  if (abortSignal?.aborted) return 'Error: Agent turn cancelled.';
   if (!lockTaskId) {
     return executeWriteFile(path, content, config);
   }
 
   const { acquireLock, releaseLock } = await import('../file-lock.js');
-  const acquired = await acquireLock(path, lockTaskId);
+  const acquired = await acquireLock(path, lockTaskId, abortSignal);
   if (!acquired) {
+    if (abortSignal?.aborted) return 'Error: Agent turn cancelled.';
     return `Error: Could not acquire file lock on ${path} (timed out after 30s)`;
   }
 
   try {
+    if (abortSignal?.aborted) return 'Error: Agent turn cancelled.';
     return executeWriteFile(path, content, config);
   } finally {
     releaseLock(path, lockTaskId);

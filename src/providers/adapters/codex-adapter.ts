@@ -9,6 +9,7 @@ import type {
   NormalizedResponse,
   NormalizedToolCall,
   CompactionResult,
+  FinalizationResponse,
 } from '../adapter.js';
 import type { ExecuteToolContext } from '../../tools.js';
 import { contentToText, stripProvider } from '../utils.js';
@@ -37,6 +38,12 @@ function codexReasoning(options: ChatOptions): { effort: CodexReasoningEffort; s
 
 function codexTextTypeForRole(role: unknown): 'input_text' | 'output_text' {
   return role === 'assistant' ? 'output_text' : 'input_text';
+}
+
+function fetchCodex(body: any, abortSignal?: AbortSignal): Promise<string> {
+  return abortSignal
+    ? codexFetch(body, undefined, abortSignal)
+    : codexFetch(body);
 }
 
 function normalizeCodexMessageContent(content: unknown, role: unknown): any[] {
@@ -139,14 +146,14 @@ export class CodexAdapter implements ProviderAdapter {
       include: ['reasoning.encrypted_content'],
     };
 
-    const sseText = await codexFetch(body);
+    const sseText = await fetchCodex(body, options.abortSignal);
     const parsed = parseCodexSSE(sseText);
 
     this.recordUsage(modelId, {
       inputTokens: parsed.response?.usage?.input_tokens ?? 0,
       outputTokens: parsed.response?.usage?.output_tokens ?? 0,
       cacheReadTokens: parsed.response?.usage?.input_tokens_details?.cached_tokens,
-    }, 'api');
+    }, options.trigger || 'api', options.agentId);
 
     return parsed.outputText || '[No response from Codex]';
   }
@@ -204,7 +211,7 @@ export class CodexAdapter implements ProviderAdapter {
       body.tools = toolDefs;
     }
 
-    const sseText = await codexFetch(body);
+    const sseText = await fetchCodex(body, options.abortSignal);
     const parsed = parseCodexSSE(sseText);
 
     const toolCalls: NormalizedToolCall[] = parsed.functionCalls.map((fc: any) => {
@@ -224,17 +231,18 @@ export class CodexAdapter implements ProviderAdapter {
     });
 
     const usage = parsed.response?.usage;
-    const cost = toCostDetails(modelId, usage) || undefined;
+    const hasUsage = Number.isFinite(usage?.input_tokens) && Number.isFinite(usage?.output_tokens);
+    const cost = hasUsage ? toCostDetails(modelId, usage) || undefined : undefined;
 
     return {
       hasToolCalls: toolCalls.length > 0,
       toolCalls,
       textContent: parsed.outputText || '',
-      usage: {
-        inputTokens: usage?.input_tokens ?? 0,
-        outputTokens: usage?.output_tokens ?? 0,
+      usage: hasUsage ? {
+        inputTokens: usage.input_tokens,
+        outputTokens: usage.output_tokens,
         cacheReadTokens: usage?.input_tokens_details?.cached_tokens,
-      },
+      } : undefined,
       cost,
       rawResponse: parsed.response,
     };
@@ -263,7 +271,7 @@ export class CodexAdapter implements ProviderAdapter {
     _toolDefs: any[],
     options: ChatOptions,
     _config: Config,
-  ): Promise<string | undefined> {
+  ): Promise<FinalizationResponse> {
     const modelId = stripProvider(options.model);
 
     // Build a finalization input: existing messages + nudge
@@ -290,9 +298,20 @@ export class CodexAdapter implements ProviderAdapter {
     };
 
     console.log('[codex] Finalizing tool run with a text-only follow-up');
-    const sseText = await codexFetch(body);
+    const sseText = await fetchCodex(body, options.abortSignal);
     const parsed = parseCodexSSE(sseText);
-    return parsed.outputText?.trim() || undefined;
+    const usage = parsed.response?.usage;
+    const hasUsage = Number.isFinite(usage?.input_tokens) && Number.isFinite(usage?.output_tokens);
+    return {
+      textContent: parsed.outputText?.trim() || '',
+      hasToolCalls: parsed.functionCalls.length > 0,
+      usage: hasUsage ? {
+        inputTokens: usage.input_tokens,
+        outputTokens: usage.output_tokens,
+        cacheReadTokens: usage.input_tokens_details?.cached_tokens,
+      } : undefined,
+      cost: hasUsage ? toCostDetails(modelId, usage) || undefined : undefined,
+    };
   }
 
   async compactMessages(
@@ -300,6 +319,8 @@ export class CodexAdapter implements ProviderAdapter {
     config: any,
     iteration: number,
     fullConfig?: Config,
+    abortSignal?: AbortSignal,
+    usageContext?: Pick<ChatOptions, 'trigger' | 'agentId'>,
   ): Promise<CompactionResult<any>> {
     const result = await compactMessages(
       providerMessages.messages,
@@ -307,6 +328,8 @@ export class CodexAdapter implements ProviderAdapter {
       config,
       iteration,
       fullConfig,
+      abortSignal,
+      usageContext,
     );
     providerMessages.messages = result.messages;
     return result;

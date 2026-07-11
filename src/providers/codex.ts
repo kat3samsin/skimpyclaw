@@ -159,8 +159,20 @@ export function recordCodexUsage(params: {
   }));
 }
 
-async function sleep(ms: number): Promise<void> {
-  await new Promise(resolve => setTimeout(resolve, ms));
+async function sleep(ms: number, abortSignal?: AbortSignal): Promise<void> {
+  if (abortSignal?.aborted) throw new Error('Codex request cancelled');
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      abortSignal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      abortSignal?.removeEventListener('abort', onAbort);
+      reject(new Error('Codex request cancelled'));
+    };
+    abortSignal?.addEventListener('abort', onAbort, { once: true });
+  });
 }
 
 function errorMessageWithCause(error: unknown): string {
@@ -214,7 +226,11 @@ function formatCodexFetchError(error: unknown, url: string): string {
 /**
  * Make a single Codex API call. Returns raw SSE text.
  */
-export async function codexFetch(body: any, timeoutMs: number = DEFAULT_CODEX_FETCH_TIMEOUT_MS): Promise<string> {
+export async function codexFetch(
+  body: any,
+  timeoutMs: number = DEFAULT_CODEX_FETCH_TIMEOUT_MS,
+  abortSignal?: AbortSignal,
+): Promise<string> {
   if (!codexAuth) {
     throw new Error('Codex auth not initialized. Run "codex" CLI to authenticate.');
   }
@@ -223,8 +239,15 @@ export async function codexFetch(body: any, timeoutMs: number = DEFAULT_CODEX_FE
   const url = `${baseUrl}/codex/responses`;
 
   for (let attempt = 0; attempt <= codexFetchRetryDelaysMs.length; attempt++) {
+    if (abortSignal?.aborted) throw new Error('Codex request cancelled');
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), Math.max(1_000, timeoutMs));
+    let timedOut = false;
+    const timeoutId = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, Math.max(1_000, timeoutMs));
+    const onAbort = () => controller.abort();
+    abortSignal?.addEventListener('abort', onAbort, { once: true });
     try {
       const fetchWithCurrentAuth = () => {
         if (!codexAuth) {
@@ -257,7 +280,7 @@ export async function codexFetch(body: any, timeoutMs: number = DEFAULT_CODEX_FE
             codexAuth = refreshedAuth;
             response = await fetchWithCurrentAuth();
             if (response.ok) {
-              return response.text();
+              return await response.text();
             }
             const retryErrorText = await response.text().catch(() => 'unknown');
             throw new Error(`Codex API ${response.status}: ${retryErrorText}`);
@@ -266,10 +289,15 @@ export async function codexFetch(body: any, timeoutMs: number = DEFAULT_CODEX_FE
         throw new Error(`Codex API ${response.status}: ${errorText}`);
       }
 
-      return response.text();
+      return await response.text();
     } catch (error) {
+      if (abortSignal?.aborted) {
+        throw new Error('Codex request cancelled');
+      }
       if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error(`Codex request timed out after ${Math.round(timeoutMs / 1000)}s`);
+        throw new Error(timedOut
+          ? `Codex request timed out after ${Math.round(timeoutMs / 1000)}s`
+          : 'Codex request cancelled');
       }
 
       if (attempt >= codexFetchRetryDelaysMs.length || !isRetryableCodexFetchError(error)) {
@@ -281,9 +309,10 @@ export async function codexFetch(body: any, timeoutMs: number = DEFAULT_CODEX_FE
         `[codex] Transient fetch failure; retrying in ${Math.round(delayMs / 1000)}s ` +
         `(${attempt + 1}/${codexFetchRetryDelaysMs.length}): ${formatCodexFetchError(error, url)}`,
       );
-      await sleep(delayMs);
+      await sleep(delayMs, abortSignal);
     } finally {
       clearTimeout(timeoutId);
+      abortSignal?.removeEventListener('abort', onAbort);
     }
   }
 

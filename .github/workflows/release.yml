@@ -12,13 +12,15 @@ permissions:
   contents: write
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release
   cancel-in-progress: false
 
 jobs:
   release:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      RELEASE_VERSION: ${{ inputs.version }}
 
     steps:
       - name: Checkout
@@ -29,58 +31,27 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 10
+          version: 10.29.3
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: pnpm
           registry-url: https://registry.npmjs.org
 
-      - name: Validate version input
-        run: |
-          if [[ ! "${{ github.event.inputs.version }}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
-            echo "Invalid version: ${{ github.event.inputs.version }}"
-            exit 1
-          fi
+      - name: Validate release request
+        run: bash scripts/release-guard.sh "$RELEASE_VERSION"
 
       - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Configure release identity
         run: |
-          pnpm install --frozen-lockfile
-          pnpm --dir web/dashboard install --frozen-lockfile
-
-      - name: Ensure release tag does not already exist
-        run: |
-          TAG="v${{ github.event.inputs.version }}"
-          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
-            echo "Tag already exists locally: $TAG"
-            exit 1
-          fi
-          if git ls-remote --exit-code --tags origin "$TAG" >/dev/null 2>&1; then
-            echo "Tag already exists on origin: $TAG"
-            exit 1
-          fi
-
-      - name: Bump package version
-        run: npm version "${{ github.event.inputs.version }}" --no-git-tag-version
-
-      - name: Build and test
-        run: pnpm build && pnpm test
-
-      - name: Publish to npm
-        run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Commit and tag release
-        run: |
-          VERSION="${{ github.event.inputs.version }}"
-          TAG="v$VERSION"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package.json
-          git commit -m "release: $TAG"
-          git tag -a "$TAG" -m "Release $TAG"
-          git push origin HEAD
-          git push origin "$TAG"
+
+      - name: Release
+        run: bash scripts/release.sh "$RELEASE_VERSION"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

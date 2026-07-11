@@ -20,7 +20,7 @@ SkimpyClaw applies defense-in-depth for a locally run agent that can execute too
 - **Bash safety**: Dangerous commands are blocked by a blocklist; tier 2-3 risky commands require human approval via exec-approval
 - **Env sanitization**: Bash and cron child processes receive a sanitized env with API keys, tokens, and credentials stripped; `GH_TOKEN` is allowlisted
 - **Cron prompt paths**: Prompt file references in cron jobs are restricted to `~/.skimpyclaw/prompts/` and path traversal is rejected
-- **Voice TTS process safety**: TTS shell calls use `spawnSync` with argument arrays (no string interpolation)
+- **Voice TTS process safety**: TTS commands use asynchronous process spawning with argument arrays, bounded output, timeouts, and process-tree termination
 
 ## Network Controls
 

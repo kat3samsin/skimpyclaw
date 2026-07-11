@@ -1,7 +1,18 @@
 // Dashboard API endpoints
 
 import { FastifyInstance } from 'fastify';
-import { readFileSync, writeFileSync, existsSync, readdirSync, statSync, mkdirSync, rmSync } from 'fs';
+import {
+  closeSync,
+  existsSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  readSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'fs';
 import { validateBearerToken } from './utils.js';
 import { join, basename, resolve } from 'path';
 import { homedir } from 'os';
@@ -43,6 +54,7 @@ import { initActiveChannel, stopActiveChannel, startActiveChannel } from './chan
 import { setCodeAgentConfig } from './tools.js';
 import { resolveModelSelection } from './model-selection.js';
 import { readSessionEntriesFromFile } from './sessions.js';
+import { isPathAllowed } from './tools/path-utils.js';
 import {
   getAgentProfileByAlias,
   listAgentProfiles,
@@ -61,6 +73,42 @@ const DEFAULT_MODEL_ALIASES: Record<string, string> = {
   'codex5.3': 'codex/gpt-5.3-codex',
   'codex5.5': 'codex/gpt-5.5',
 };
+
+const MAX_LOG_TAIL_BYTES = 256 * 1024;
+const MAX_LOG_TAIL_LINES = 10_000;
+
+function readBoundedLogTail(filePath: string, requestedLines: number) {
+  const maxLines = Math.min(requestedLines, MAX_LOG_TAIL_LINES);
+  const fileSize = statSync(filePath).size;
+  const bytesToRead = Math.min(fileSize, MAX_LOG_TAIL_BYTES);
+  const start = fileSize - bytesToRead;
+  const buffer = Buffer.allocUnsafe(bytesToRead);
+  const fd = openSync(filePath, 'r');
+  let bytesRead = 0;
+  try {
+    while (bytesRead < bytesToRead) {
+      const read = readSync(fd, buffer, bytesRead, bytesToRead - bytesRead, start + bytesRead);
+      if (read === 0) break;
+      bytesRead += read;
+    }
+  } finally {
+    closeSync(fd);
+  }
+
+  let firstCompleteByte = 0;
+  if (start > 0) {
+    while (firstCompleteByte < bytesRead && (buffer[firstCompleteByte] & 0xc0) === 0x80) {
+      firstCompleteByte++;
+    }
+  }
+  const availableLines = buffer.subarray(firstCompleteByte, bytesRead).toString('utf-8').split('\n');
+  const tailedLines = availableLines.slice(-maxLines);
+  return {
+    content: tailedLines.join('\n'),
+    lines: tailedLines.length,
+    truncated: start > 0 || availableLines.length > maxLines,
+  };
+}
 
 function validateFilename(filename: string): boolean {
   return !filename.includes('..') && filename === basename(filename);
@@ -108,7 +156,7 @@ function resolveCronPromptPath(inputPath: string): string | null {
       ? resolve(trimmed)
       : resolve(promptsRoot, trimmed);
 
-  if (!expanded.startsWith(`${promptsRoot}/`) && expanded !== promptsRoot) {
+  if (!isPathAllowed(expanded, [promptsRoot])) {
     return null;
   }
   return expanded;
@@ -739,7 +787,17 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
     Querystring: { tail?: string };
   }>('/api/dashboard/logs/:filename', async (request, reply) => {
     const { filename } = request.params;
-    const tail = request.query.tail ? parseInt(request.query.tail, 10) : undefined;
+    const tailParam = request.query.tail;
+    let tail: number | undefined;
+    if (tailParam !== undefined) {
+      if (typeof tailParam !== 'string' || !/^\d+$/.test(tailParam)) {
+        return reply.code(400).send({ error: 'Invalid tail count' });
+      }
+      tail = Number(tailParam);
+      if (!Number.isSafeInteger(tail) || tail <= 0) {
+        return reply.code(400).send({ error: 'Invalid tail count' });
+      }
+    }
 
     // Allow subdirectory paths like "cron/morning-2026-02-05.log" but block traversal
     if (filename.includes('..')) {
@@ -749,8 +807,8 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
     const logsDir = getLogsDir();
     const filePath = join(logsDir, filename);
 
-    // Ensure resolved path stays within logs dir
-    if (!resolve(filePath).startsWith(resolve(logsDir))) {
+    // Resolve symlinks before enforcing the log-root boundary.
+    if (!isPathAllowed(filePath, [logsDir])) {
       return reply.code(400).send({ error: 'Invalid filename' });
     }
 
@@ -758,14 +816,12 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
       return reply.code(404).send({ error: 'Log file not found' });
     }
 
-    const content = readFileSync(filePath, 'utf-8');
-    const allLines = content.split('\n');
-
-    if (tail && tail > 0) {
-      const tailedLines = allLines.slice(-tail);
-      return { content: tailedLines.join('\n'), lines: allLines.length };
+    if (tail !== undefined) {
+      return readBoundedLogTail(filePath, tail);
     }
 
+    const content = readFileSync(filePath, 'utf-8');
+    const allLines = content.split('\n');
     return { content, lines: allLines.length };
   });
 
@@ -806,8 +862,8 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
   });
 
   fastify.post('/api/dashboard/restart', async () => {
-    // Respond first, then terminate so process manager (launchd/systemd) can restart.
-    setTimeout(() => process.exit(0), 150);
+    // Respond first, then use the runtime's SIGTERM shutdown path so resources close.
+    setTimeout(() => process.kill(process.pid, 'SIGTERM'), 150);
     return { restarting: true };
   });
 

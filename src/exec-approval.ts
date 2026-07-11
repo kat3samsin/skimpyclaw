@@ -518,18 +518,39 @@ export function cleanupExpired(): void {
  * Resolves with the final PendingApproval object.
  * Falls back to returning the stored approval (or an expired stub) after timeoutMs.
  */
-export function waitForApproval(id: string, timeoutMs: number): Promise<PendingApproval> {
-  return new Promise((resolve) => {
+export function waitForApproval(
+  id: string,
+  timeoutMs: number,
+  abortSignal?: AbortSignal,
+): Promise<PendingApproval> {
+  return new Promise((resolve, reject) => {
     // Check if already resolved before we start waiting
     const existing = approvals.get(id);
     if (existing && existing.status !== 'pending') {
       resolve(existing);
       return;
     }
+    if (abortSignal?.aborted) {
+      reject(new Error('Approval wait cancelled'));
+      return;
+    }
 
     let settled = false;
+    let removeApprovalListener = () => {};
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+    const cleanup = () => {
+      removeApprovalListener();
+      if (timeout) clearTimeout(timeout);
+      abortSignal?.removeEventListener('abort', onAbort);
+    };
+    const onAbort = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(new Error('Approval wait cancelled'));
+    };
 
-    const cleanup = onAnyApprovalEvent((event) => {
+    removeApprovalListener = onAnyApprovalEvent((event) => {
       if (event.approval.id !== id) return;
       if (event.type === 'created') return; // ignore created events
       if (settled) return;
@@ -537,9 +558,14 @@ export function waitForApproval(id: string, timeoutMs: number): Promise<PendingA
       cleanup();
       resolve(event.approval);
     });
+    abortSignal?.addEventListener('abort', onAbort, { once: true });
+    if (abortSignal?.aborted) {
+      onAbort();
+      return;
+    }
 
     // Fallback timeout — resolve with whatever state we have
-    setTimeout(() => {
+    timeout = setTimeout(() => {
       if (settled) return;
       settled = true;
       cleanup();
@@ -560,6 +586,7 @@ export function waitForApproval(id: string, timeoutMs: number): Promise<PendingA
         });
       }
     }, timeoutMs);
+    (timeout as { unref?: () => void }).unref?.();
   });
 }
 

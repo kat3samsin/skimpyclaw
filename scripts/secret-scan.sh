@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
+export LC_ALL=C
 
 # Lightweight pre-push secret scan.
-# Scans commit contents in ranges being pushed for common credential patterns.
+# Scans added lines in every commit being introduced for common credential patterns.
 
 patterns=(
   'AKIA[0-9A-Z]{16}'
@@ -13,27 +14,78 @@ patterns=(
   'sk-[A-Za-z0-9]{20,}'
 )
 
-scan_range() {
-  local range="$1"
-  if [[ -z "$range" ]]; then
-    return 0
+scan_dir="$(mktemp -d "${TMPDIR:-/tmp}/skimpyclaw-secret-scan.XXXXXX")"
+trap 'rm -rf "$scan_dir"' EXIT
+
+scan_commit() {
+  local commit="$1"
+  local patch_file="$scan_dir/patch"
+  local additions_file="$scan_dir/additions"
+
+  if ! git -c color.ui=never diff-tree --root -m --text --no-commit-id --no-ext-diff --unified=0 -r "$commit" -- . ':!node_modules' ':!dist' >"$patch_file"; then
+    echo "[secret-scan] Unable to inspect commit: $commit" >&2
+    return 2
   fi
 
-  local hit=0
+  if ! sed -n -e '/^+++ /d' -e 's/^+//p' "$patch_file" >"$additions_file"; then
+    echo "[secret-scan] Scanner failed while extracting additions from commit: $commit" >&2
+    return 2
+  fi
+
+  local p grep_status
   for p in "${patterns[@]}"; do
-    if git -c color.ui=never grep -nE "$p" "$range" -- . ':!node_modules' ':!dist' >/tmp/skimpyclaw-secret-scan.out 2>/dev/null; then
-      echo "[secret-scan] Potential secret match for pattern: $p"
-      cat /tmp/skimpyclaw-secret-scan.out
-      hit=1
+    if grep -qE -e "$p" "$additions_file"; then
+      echo "[secret-scan] Potential secret match in $commit for pattern: $p"
+      echo "[secret-scan] Push blocked. Remove or rotate secrets and try again."
+      return 1
+    else
+      grep_status=$?
+      if [[ "$grep_status" -gt 1 ]]; then
+        echo "[secret-scan] Scanner failed while inspecting commit: $commit" >&2
+        return 2
+      fi
     fi
   done
-
-  if [[ "$hit" -eq 1 ]]; then
-    echo "[secret-scan] Push blocked. Remove or rotate secrets and try again."
-    return 1
-  fi
   return 0
 }
+
+scan_revisions() {
+  local commits_file="$scan_dir/commits"
+  if ! git rev-list --reverse "$@" >"$commits_file"; then
+    echo "[secret-scan] Unable to enumerate pushed commits." >&2
+    return 2
+  fi
+
+  local commit
+  while IFS= read -r commit; do
+    [[ -z "$commit" ]] && continue
+    scan_commit "$commit" || return $?
+  done <"$commits_file"
+}
+
+case "${1:-}" in
+  --range)
+    if [[ $# -ne 3 ]]; then
+      echo "Usage: $0 --range <base-sha> <head-sha>" >&2
+      exit 2
+    fi
+    scan_revisions "${2}..${3}"
+    exit $?
+    ;;
+  --all)
+    if [[ $# -ne 1 ]]; then
+      echo "Usage: $0 --all" >&2
+      exit 2
+    fi
+    scan_revisions --all
+    exit $?
+    ;;
+esac
+
+if [[ "${1:-}" == "--pre-push" ]]; then
+  shift
+fi
+remote_name="${1:-origin}"
 
 # pre-push receives ref updates on stdin:
 # <local ref> <local sha1> <remote ref> <remote sha1>
@@ -47,11 +99,11 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   fi
 
   if [[ "$remote_sha" =~ ^0+$ ]]; then
-    # New branch: scan all ancestors reachable from local tip.
-    scan_range "$local_sha" || exit 1
+    # New branch: scan commits not already present on the destination remote.
+    scan_revisions "$local_sha" --not --remotes="$remote_name" || exit $?
   else
     # Existing branch update: scan commits being introduced.
-    scan_range "$remote_sha..$local_sha" || exit 1
+    scan_revisions "$remote_sha..$local_sha" || exit $?
   fi
 done
 

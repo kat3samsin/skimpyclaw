@@ -1,5 +1,5 @@
-import { describe, it, expect, afterAll, vi } from 'vitest';
-import { existsSync, readdirSync, unlinkSync } from 'fs';
+import { describe, it, expect, afterAll, afterEach, vi } from 'vitest';
+import { existsSync, readFileSync, readdirSync, unlinkSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { fileURLToPath } from 'url';
@@ -12,6 +12,10 @@ vi.mock('os', async () => {
 const { truncateToolResult, splitToolResult } = await import('../providers/utils.js');
 
 const scratchDir = join(testHome, '.skimpyclaw', 's');
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 // Clean up scratch files created during tests
 afterAll(() => {
@@ -49,6 +53,21 @@ describe('token efficiency', () => {
       const masked = truncateToolResult(result);
       expect(masked.startsWith('→')).toBe(true);
       expect(masked).toContain('.skimpyclaw/s/');
+    });
+
+    it('does not overwrite scratch output when the legacy random source collides', () => {
+      vi.spyOn(Math, 'random').mockReturnValue(0.5);
+      const first = `FIRST ${'x'.repeat(5_000)}`;
+      const second = `SECOND ${'y'.repeat(5_000)}`;
+
+      const firstMasked = truncateToolResult(first);
+      const secondMasked = truncateToolResult(second);
+      const firstPath = firstMasked.slice(1).replace(/^~/, homedir());
+      const secondPath = secondMasked.slice(1).replace(/^~/, homedir());
+
+      expect(secondPath).not.toBe(firstPath);
+      expect(readFileSync(firstPath, 'utf-8')).toBe(first);
+      expect(readFileSync(secondPath, 'utf-8')).toBe(second);
     });
   });
 

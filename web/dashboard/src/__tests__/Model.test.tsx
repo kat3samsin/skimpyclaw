@@ -42,11 +42,11 @@ describe('Model page', () => {
 
   it('submits selected alias and updates active model using resolved response', async () => {
     vi.mocked(setModel).mockResolvedValue({ model: 'anthropic/claude-haiku-4-5' });
-    const { getByText, getByPlaceholderText } = render(<Model showToast={showToast} />);
+    const { getByText, getByPlaceholderText, getByRole } = render(<Model showToast={showToast} />);
     await waitFor(() => expect(getByText('claude-fast')).toBeTruthy());
 
     fireEvent.click(getByText('claude-fast'));
-    fireEvent.click(getByText('Switch Model'));
+    fireEvent.click(getByRole('button', { name: 'Switch Model' }));
 
     await waitFor(() => {
       expect(setModel).toHaveBeenCalledWith('claude-fast');
@@ -59,24 +59,24 @@ describe('Model page', () => {
   });
 
   it('does not submit invalid alias-like input', async () => {
-    const { getByText, getByPlaceholderText } = render(<Model showToast={showToast} />);
+    const { getByText, getByPlaceholderText, getByRole } = render(<Model showToast={showToast} />);
     await waitFor(() => expect(getByText('claude-fast')).toBeTruthy());
 
     const input = getByPlaceholderText('Model ID or alias') as HTMLInputElement;
     fireEvent.input(input, { target: { value: 'unknown_alias' } });
-    fireEvent.click(getByText('Switch Model'));
+    fireEvent.click(getByRole('button', { name: 'Switch Model' }));
 
     expect(setModel).not.toHaveBeenCalled();
     expect(showToast).toHaveBeenCalledWith('Unknown model alias: "unknown_alias"', 'error');
   });
 
   it('shows invalid selection error for malformed provider/model input', async () => {
-    const { getByText, getByPlaceholderText } = render(<Model showToast={showToast} />);
+    const { getByText, getByPlaceholderText, getByRole } = render(<Model showToast={showToast} />);
     await waitFor(() => expect(getByText('claude-fast')).toBeTruthy());
 
     const input = getByPlaceholderText('Model ID or alias') as HTMLInputElement;
     fireEvent.input(input, { target: { value: 'anthropic/' } });
-    fireEvent.click(getByText('Switch Model'));
+    fireEvent.click(getByRole('button', { name: 'Switch Model' }));
 
     expect(setModel).not.toHaveBeenCalled();
     expect(showToast).toHaveBeenCalledWith(

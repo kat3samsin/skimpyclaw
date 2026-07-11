@@ -79,7 +79,7 @@ Always run `pnpm build && pnpm test` after making changes. Do not submit work wi
 - **Bash execution** — commands go through exec approval and path validation. Keep risk-tier checks in `src/exec-approval.ts`
 - **Gateway auth** — `/status` and all write endpoints require Bearer token. Do not add unauthed endpoints that expose config or runtime state
 - **Cron prompt paths** — `resolveMessageSource()` only reads files inside `~/.skimpyclaw/prompts/`. Do not relax this path restriction
-- **Voice TTS** — uses `spawnSync` with argument arrays. Never use `execSync` with string interpolation for user-controlled text
+- **Voice TTS** — uses asynchronous `spawn` with argument arrays, `shell: false`, bounded output, and timeouts. Never use `execSync` with string interpolation for user-controlled text
 - **Token comparison** — `validateBearerToken()` hashes both sides with SHA-256 before `timingSafeEqual`. Do not revert to direct buffer comparison
 
 ## Testing

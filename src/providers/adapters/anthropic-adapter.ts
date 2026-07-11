@@ -10,6 +10,7 @@ import type {
   NormalizedResponse,
   NormalizedToolCall,
   CompactionResult,
+  FinalizationResponse,
 } from '../adapter.js';
 import { getAnthropicClient } from '../anthropic.js';
 import { buildSystemParam, addToolCacheBreakpoint, contentToText, stripProvider, buildThinkingConfig } from '../utils.js';
@@ -23,11 +24,21 @@ function shouldStreamAnthropicRequest(params: { max_tokens?: number }): boolean 
   return typeof params.max_tokens === 'number' && params.max_tokens > NONSTREAMING_TOKEN_LIMIT;
 }
 
-async function createAnthropicMessage(client: Anthropic, params: any): Promise<any> {
+async function createAnthropicMessage(
+  client: Anthropic,
+  params: any,
+  abortSignal?: AbortSignal,
+): Promise<any> {
+  const requestOptions = abortSignal ? { signal: abortSignal } : undefined;
   if (shouldStreamAnthropicRequest(params) && typeof (client.messages as any).stream === 'function') {
-    return await (client.messages as any).stream(params).finalMessage();
+    const stream = requestOptions
+      ? (client.messages as any).stream(params, requestOptions)
+      : (client.messages as any).stream(params);
+    return await stream.finalMessage();
   }
-  return await client.messages.create(params);
+  return requestOptions
+    ? await client.messages.create(params, requestOptions)
+    : await client.messages.create(params);
 }
 
 export class AnthropicAdapter implements ProviderAdapter {
@@ -70,7 +81,7 @@ export class AnthropicAdapter implements ProviderAdapter {
       anthropicParams.max_tokens = Math.max(anthropicParams.max_tokens, thinkingConfig.maxTokens);
     }
 
-    const response = await createAnthropicMessage(client, anthropicParams);
+    const response = await createAnthropicMessage(client, anthropicParams, options.abortSignal);
     const usage = (response as any).usage;
 
     if (usage?.cache_read_input_tokens > 0 || usage?.cache_creation_input_tokens > 0) {
@@ -81,7 +92,7 @@ export class AnthropicAdapter implements ProviderAdapter {
       outputTokens: usage?.output_tokens ?? 0,
       cacheReadTokens: usage?.cache_read_input_tokens,
       cacheCreationTokens: usage?.cache_creation_input_tokens,
-    }, 'api');
+    }, options.trigger || 'api', options.agentId);
 
     const textContent = response.content.find((c: any) => c.type === 'text');
     return (textContent as any)?.text || '';
@@ -132,8 +143,11 @@ export class AnthropicAdapter implements ProviderAdapter {
       model: modelId,
       max_tokens: options.maxTokens || 16384,
       messages: providerMessages.messages,
-      tools: toolDefs,
     };
+
+    if (toolDefs?.length > 0) {
+      anthropicParams.tools = toolDefs;
+    }
 
     if (providerMessages.systemParam) {
       anthropicParams.system = providerMessages.systemParam;
@@ -146,7 +160,7 @@ export class AnthropicAdapter implements ProviderAdapter {
       anthropicParams.max_tokens = Math.max(anthropicParams.max_tokens, thinkingConfig.maxTokens);
     }
 
-    const response = await createAnthropicMessage(client, anthropicParams);
+    const response = await createAnthropicMessage(client, anthropicParams, options.abortSignal);
     const usage = (response as any).usage;
 
     // Log cache metrics
@@ -172,18 +186,19 @@ export class AnthropicAdapter implements ProviderAdapter {
       }
     }
 
-    const cost = toCostDetails(modelId, usage) || undefined;
+    const hasUsage = Number.isFinite(usage?.input_tokens) && Number.isFinite(usage?.output_tokens);
+    const cost = hasUsage ? toCostDetails(modelId, usage) || undefined : undefined;
 
     return {
       hasToolCalls,
       toolCalls,
       textContent,
-      usage: {
-        inputTokens: usage?.input_tokens ?? 0,
-        outputTokens: usage?.output_tokens ?? 0,
+      usage: hasUsage ? {
+        inputTokens: usage.input_tokens,
+        outputTokens: usage.output_tokens,
         cacheReadTokens: usage?.cache_read_input_tokens,
         cacheCreationTokens: usage?.cache_creation_input_tokens,
-      },
+      } : undefined,
       cost,
       rawResponse: response,
     };
@@ -232,11 +247,39 @@ export class AnthropicAdapter implements ProviderAdapter {
     providerMessages.messages.push({ role: 'user', content: toolResults });
   }
 
+  async onEmptyFinalResponse(
+    providerMessages: ProviderMessages,
+    _toolDefs: any[],
+    options: ChatOptions,
+    config: Config,
+  ): Promise<FinalizationResponse> {
+    const finalizationMessages: ProviderMessages = {
+      ...providerMessages,
+      messages: [
+        ...providerMessages.messages,
+        {
+          role: 'user',
+          content: 'Provide the final answer to the user using the tool results above. Do not call tools. Be concise.',
+        },
+      ],
+    };
+    console.log('[anthropic] Finalizing tool run with a text-only follow-up');
+    const response = await this.call(finalizationMessages, [], options, config);
+    return {
+      textContent: response.textContent,
+      usage: response.usage,
+      cost: response.cost,
+      hasToolCalls: response.hasToolCalls,
+    };
+  }
+
   async compactMessages(
     providerMessages: ProviderMessages,
     config: any,
     iteration: number,
     fullConfig?: Config,
+    abortSignal?: AbortSignal,
+    usageContext?: Pick<ChatOptions, 'trigger' | 'agentId'>,
   ): Promise<CompactionResult<any>> {
     const result = await compactMessages(
       providerMessages.messages,
@@ -244,6 +287,8 @@ export class AnthropicAdapter implements ProviderAdapter {
       config,
       iteration,
       fullConfig,
+      abortSignal,
+      usageContext,
     );
     providerMessages.messages = result.messages;
     return result;

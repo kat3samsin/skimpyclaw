@@ -33,6 +33,10 @@ export interface NormalizedResponse {
   rawResponse: unknown;
 }
 
+export type FinalizationResponse = Pick<NormalizedResponse, 'textContent' | 'usage' | 'cost'> & {
+  hasToolCalls?: boolean;
+};
+
 export interface NormalizedToolCall {
   /** Unique ID for this tool call (tool_use_id, call_id, toolCall.id) */
   id: string;
@@ -75,6 +79,9 @@ export interface MessageFormatHelper<T> {
 
   /** Truncate a tool result item's content to maxChars. Returns a new item (no mutation). */
   truncateToolResult(item: T, maxChars: number): T;
+
+  /** Truncate user-visible content when a single recent item exceeds the full context ceiling. */
+  truncateItem?(item: T, maxChars: number): T;
 
   /** Serialize a list of items into a human-readable transcript for LLM summarization. */
   serialize(items: T[]): string;
@@ -131,16 +138,16 @@ export interface ProviderAdapter {
   appendToolResults?(messages: ProviderMessages, results: { toolCallId: string; result: string; isError?: boolean }[]): void;
 
   /**
-   * Optional hook called when the model's final response has no text but tool calls were made.
-   * Allows providers (e.g. Codex) to make an additional API call to elicit a text summary.
-   * Returns the finalized text, or undefined to use the default fallback.
+   * Optional tool-free finalization hook used for empty responses, legacy
+   * checkpoints, and token-budget stops. Structured responses keep the grace
+   * call's usage and cost in the shared-loop totals.
    */
   onEmptyFinalResponse?(
     providerMessages: ProviderMessages,
     toolDefs: any[],
     options: ChatOptions,
     config: Config,
-  ): Promise<string | undefined>;
+  ): Promise<FinalizationResponse | undefined>;
 
   /** Compact messages when context grows too large */
   compactMessages(
@@ -148,6 +155,8 @@ export interface ProviderAdapter {
     config: ContextManagementConfig | undefined,
     iteration: number,
     fullConfig?: Config,
+    abortSignal?: AbortSignal,
+    usageContext?: Pick<ChatOptions, 'trigger' | 'agentId'>,
   ): Promise<CompactionResult<any>>;
 
   /** Record usage/cost to the usage tracking system */

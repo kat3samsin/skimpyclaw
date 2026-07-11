@@ -1,7 +1,7 @@
 // Gateway HTTP server for health checks and control
 
-import Fastify, { FastifyInstance } from 'fastify';
-import { existsSync, readFileSync } from 'fs';
+import Fastify, { FastifyInstance, FastifyReply } from 'fastify';
+import { existsSync, readFileSync, realpathSync, statSync } from 'fs';
 import { homedir } from 'os';
 import { fileURLToPath } from 'url';
 import { isAbsolute, join, relative, resolve } from 'path';
@@ -13,8 +13,31 @@ import { registerDashboardAPI } from './api.js';
 import { registerDashboard } from './dashboard-frontend.js';
 import { ensureDashboardToken } from './config.js';
 import { readRegisteredArtifact } from './artifacts.js';
+import { isPathAllowed } from './tools/path-utils.js';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
+
+const UNTRUSTED_HTML_CSP = [
+  'sandbox',
+  "default-src 'none'",
+  "script-src 'none'",
+  "connect-src 'none'",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "form-action 'none'",
+  "frame-ancestors 'none'",
+  "style-src 'unsafe-inline'",
+  "img-src 'self' data: https:",
+  'media-src http: https: data: blob:',
+  'font-src data: https:',
+].join('; ');
+
+function isolateUntrustedHtml(reply: FastifyReply): FastifyReply {
+  return reply
+    .header('Content-Security-Policy', UNTRUSTED_HTML_CSP)
+    .header('X-Content-Type-Options', 'nosniff')
+    .header('Referrer-Policy', 'no-referrer');
+}
 
 function resolveDashboardDistDir(): string {
   const packageDistDashboard = join(__dirname, 'dashboard');
@@ -26,6 +49,16 @@ function resolveDashboardDistDir(): string {
 
 function getReportsRoot(): string {
   return resolve(process.env.SKIMPYCLAW_REPORTS_DIR || join(homedir(), '.skimpyclaw', 'reports'));
+}
+
+function resolveReadableReportPath(path: string): string | null {
+  try {
+    const canonicalPath = realpathSync(path);
+    if (!isPathAllowed(canonicalPath, [getReportsRoot()])) return null;
+    return statSync(canonicalPath).isFile() ? canonicalPath : null;
+  } catch {
+    return null;
+  }
 }
 
 function resolveReportKindRoot(kind: string): string | null {
@@ -58,7 +91,7 @@ function resolveReportIndexRedirect(kind: string, name: string): { date: string 
   const date = fileName.slice(0, -'.html'.length);
   const filePath = resolve(kindRoot, date, 'index.html');
   const rel = relative(kindRoot, filePath);
-  if (rel !== `${date}/index.html` || isAbsolute(rel) || !existsSync(filePath)) return null;
+  if (rel !== `${date}/index.html` || isAbsolute(rel) || !resolveReadableReportPath(filePath)) return null;
   return { date };
 }
 
@@ -202,7 +235,10 @@ export async function createGateway(cfg: Config): Promise<FastifyInstance> {
       reply.code(404).send('Artifact not found');
       return;
     }
-    reply
+    const response = artifact.artifact.contentType.startsWith('text/html')
+      ? isolateUntrustedHtml(reply)
+      : reply;
+    response
       .type(artifact.artifact.contentType)
       .header('Content-Disposition', `inline; filename="${artifact.artifact.name.replace(/"/g, '')}"`)
       .send(artifact.content);
@@ -214,24 +250,26 @@ export async function createGateway(cfg: Config): Promise<FastifyInstance> {
       return reply.redirect(`/reports/${request.params.kind}/${redirect.date}/index.html`);
     }
 
-    const filePath = resolveReportPath(request.params.kind, request.params.name);
-    if (!filePath || !existsSync(filePath)) {
+    const resolvedPath = resolveReportPath(request.params.kind, request.params.name);
+    const filePath = resolvedPath ? resolveReadableReportPath(resolvedPath) : null;
+    if (!filePath) {
       reply.code(404).send('Report not found');
       return;
     }
-    reply
+    isolateUntrustedHtml(reply)
       .type('text/html; charset=utf-8')
       .header('Content-Disposition', `inline; filename="${request.params.name.replace(/"/g, '')}"`)
       .send(readFileSync(filePath));
   });
 
   fastify.get<{ Params: { kind: string; date: string; page: string } }>('/reports/:kind/:date/:page', async (request, reply) => {
-    const filePath = resolveReportSectionPath(request.params.kind, request.params.date, request.params.page);
-    if (!filePath || !existsSync(filePath)) {
+    const resolvedPath = resolveReportSectionPath(request.params.kind, request.params.date, request.params.page);
+    const filePath = resolvedPath ? resolveReadableReportPath(resolvedPath) : null;
+    if (!filePath) {
       reply.code(404).send('Report not found');
       return;
     }
-    reply
+    isolateUntrustedHtml(reply)
       .type('text/html; charset=utf-8')
       .header('Content-Disposition', `inline; filename="${request.params.page.replace(/"/g, '')}"`)
       .send(readFileSync(filePath));

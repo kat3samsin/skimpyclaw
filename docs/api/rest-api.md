@@ -60,7 +60,9 @@ All endpoints are served by the Fastify gateway on port `18790`. Dashboard endpo
 | Method | Path | Params | Description |
 |--------|------|--------|-------------|
 | `GET` | `/api/dashboard/logs` | | List all log files recursively |
-| `GET` | `/api/dashboard/logs/:filename` | `tail?` | Read log file, optional last N lines |
+| `GET` | `/api/dashboard/logs/:filename` | `tail=N` | Read a full log or a bounded suffix (max 10,000 lines / 256 KiB) |
+
+Tail responses return <code>{ content, lines, truncated }</code>, where <code>lines</code> is the number of returned lines and <code>truncated</code> indicates omitted content. Invalid or non-positive tail counts return HTTP 400.
 
 ## Audit
 

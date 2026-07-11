@@ -65,11 +65,30 @@ describe('ToolCallGuard', () => {
   });
 
   describe('token tracking', () => {
-    it('tracks tokens without enforcement', () => {
-      const guard = new ToolCallGuard();
-      guard.recordTokens(5000, 5000);
+    it('warns at 80 percent and stops at the configured limit', () => {
+      const guard = new ToolCallGuard(100);
+      const warning = guard.recordTokens(40, 40);
+      const exceeded = guard.recordTokens(10, 10);
+
+      expect(warning.exceeded).toBe(false);
+      expect(warning.warning).toContain('80/100');
+      expect(exceeded.exceeded).toBe(true);
+      expect(exceeded.warning).toContain('limit: 100');
       const stats = guard.getStats();
-      expect(stats.totalTokens).toBe(10000);
+      expect(stats.totalTokens).toBe(100);
+    });
+
+    it('uses the documented 200000-token default', () => {
+      const guard = new ToolCallGuard();
+      expect(guard.recordTokens(199_999, 0).exceeded).toBe(false);
+      expect(guard.recordTokens(1, 0).exceeded).toBe(true);
+    });
+
+    it('fails closed when usage is unavailable', () => {
+      const guard = new ToolCallGuard(100);
+      const result = guard.recordTokens(undefined, undefined);
+      expect(result.exceeded).toBe(true);
+      expect(result.usageUnavailable).toBe(true);
     });
   });
 

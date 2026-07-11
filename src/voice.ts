@@ -1,6 +1,7 @@
 // Voice transcription — local Whisper CLI (free) with API fallback
 import { existsSync, readFileSync, unlinkSync, readdirSync } from 'fs';
-import { execSync, spawnSync } from 'child_process';
+import { execSync, spawn } from 'child_process';
+import { randomUUID } from 'crypto';
 import { basename, dirname, join } from 'path';
 import { tmpdir } from 'os';
 import type { VoiceConfig, VoiceProviderConfig } from './types.js';
@@ -10,6 +11,103 @@ export interface TranscriptionResult {
   text: string;
   duration?: number;
   provider: string;
+}
+
+interface VoiceProcessResult {
+  stdout: string;
+  stderr: string;
+}
+
+function runVoiceProcess(executable: string, args: string[], timeoutMs: number): Promise<VoiceProcessResult> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(executable, args, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      shell: false,
+      detached: process.platform !== 'win32',
+    });
+    const maxOutputChars = 64 * 1024;
+    let stdout = '';
+    let stderr = '';
+    let timedOut = false;
+    let settled = false;
+    let sigkillTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const appendTail = (current: string, chunk: Buffer | string): string => {
+      const text = chunk.toString();
+      if (text.length >= maxOutputChars) return text.slice(-maxOutputChars);
+      return (current + text).slice(-maxOutputChars);
+    };
+    const killProcessTree = (signal: NodeJS.Signals) => {
+      if (process.platform !== 'win32' && child.pid) {
+        try {
+          process.kill(-child.pid, signal);
+          return;
+        } catch {
+          // Fall back to the direct process when no process group exists.
+        }
+      }
+      try {
+        child.kill(signal);
+      } catch {
+        // Process already exited.
+      }
+    };
+    const isProcessTreeAlive = (): boolean => {
+      if (process.platform === 'win32' || !child.pid) return false;
+      try {
+        process.kill(-child.pid, 0);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    const cleanup = () => {
+      clearTimeout(timeout);
+      if (sigkillTimer) clearTimeout(sigkillTimer);
+    };
+    const finish = (error?: Error) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      if (error) reject(error);
+      else resolve({ stdout, stderr });
+    };
+    const timeoutError = new Error(`${executable} timed out after ${timeoutMs}ms`);
+    const timeout = setTimeout(() => {
+      if (settled) return;
+      timedOut = true;
+      sigkillTimer = setTimeout(() => {
+        killProcessTree('SIGKILL');
+        sigkillTimer = null;
+        finish(timeoutError);
+      }, 1000);
+      killProcessTree('SIGTERM');
+    }, timeoutMs);
+
+    child.stdout?.on('data', (chunk: Buffer | string) => {
+      stdout = appendTail(stdout, chunk);
+    });
+    child.stderr?.on('data', (chunk: Buffer | string) => {
+      stderr = appendTail(stderr, chunk);
+    });
+    child.on('error', (error) => {
+      if (!timedOut) finish(error);
+    });
+    child.on('close', (code, signal) => {
+      if (timedOut) {
+        if (sigkillTimer && isProcessTreeAlive()) return;
+        finish(timeoutError);
+        return;
+      }
+      if (code !== 0) {
+        const detail = (stderr || stdout).trim();
+        const reason = signal ? `signal ${signal}` : `exit code ${code ?? 'unknown'}`;
+        finish(new Error(detail || `${executable} failed with ${reason}`));
+        return;
+      }
+      finish();
+    });
+  });
 }
 
 // --- Local Whisper CLI ---
@@ -58,7 +156,7 @@ const WHISPER_CPP_NATIVE_FORMATS = new Set(['wav']);
  * Telegram sends .oga (Ogg/Opus) which whisper-cli can't read despite claiming ogg support.
  * Returns the WAV path (caller must clean up) or the original path if already compatible.
  */
-function convertToWav(audioPath: string): { wavPath: string; needsCleanup: boolean } {
+async function convertToWav(audioPath: string): Promise<{ wavPath: string; needsCleanup: boolean }> {
   const ext = audioPath.split('.').pop()?.toLowerCase() || '';
 
   // WAV is already native — no conversion needed
@@ -79,10 +177,14 @@ function convertToWav(audioPath: string): { wavPath: string; needsCleanup: boole
 
   const wavPath = audioPath.replace(/\.[^.]+$/, '.wav');
   try {
-    execSync(
-      `ffmpeg -i "${audioPath}" -ar 16000 -ac 1 -c:a pcm_s16le "${wavPath}" -y`,
-      { encoding: 'utf-8', timeout: 30_000, stdio: ['ignore', 'pipe', 'pipe'] }
-    );
+    await runVoiceProcess('ffmpeg', [
+      '-i', audioPath,
+      '-ar', '16000',
+      '-ac', '1',
+      '-c:a', 'pcm_s16le',
+      wavPath,
+      '-y',
+    ], 30_000);
   } catch (err) {
     const msg = toErrorMessage(err);
     throw new Error(`ffmpeg conversion failed: ${msg}`);
@@ -117,17 +219,21 @@ async function transcribeWithWhisperCpp(audioPath: string, cliPath: string): Pro
   }
 
   // Convert to WAV if needed (Telegram sends .oga which whisper-cli can't read)
-  const { wavPath, needsCleanup } = convertToWav(audioPath);
+  const { wavPath, needsCleanup } = await convertToWav(audioPath);
 
   const outputDir = dirname(wavPath);
   const baseName = basename(wavPath).replace(/\.[^.]+$/, '');
   const outputBase = join(outputDir, baseName);
 
   try {
-    execSync(
-      `"${cliPath}" -m "${WHISPER_CPP_MODEL}" -otxt -of "${outputBase}" -np -nt "${wavPath}"`,
-      { encoding: 'utf-8', timeout: 60_000, stdio: ['ignore', 'pipe', 'pipe'] }
-    );
+    await runVoiceProcess(cliPath, [
+      '-m', WHISPER_CPP_MODEL,
+      '-otxt',
+      '-of', outputBase,
+      '-np',
+      '-nt',
+      wavPath,
+    ], 60_000);
   } catch (err) {
     const msg = toErrorMessage(err);
     console.error(`[voice] whisper-cli failed: ${msg}`);
@@ -175,10 +281,12 @@ async function transcribeWithPythonWhisper(audioPath: string, cliPath: string): 
   const baseName = basename(audioPath).replace(/\.[^.]+$/, '');
 
   try {
-    execSync(
-      `"${cliPath}" "${audioPath}" --model turbo --output_format txt --output_dir "${outputDir}"`,
-      { encoding: 'utf-8', timeout: 120_000, stdio: ['ignore', 'pipe', 'pipe'] }
-    );
+    await runVoiceProcess(cliPath, [
+      audioPath,
+      '--model', 'turbo',
+      '--output_format', 'txt',
+      '--output_dir', outputDir,
+    ], 120_000);
   } catch (err) {
     const msg = toErrorMessage(err);
     throw new Error(`Python whisper failed: ${msg}`);
@@ -399,33 +507,27 @@ function getTTSProvider(config: VoiceConfig): { name: string; provider: VoicePro
  * Synthesize speech using macOS `say` + ffmpeg.
  * Returns OGG audio buffer.
  */
-function synthesizeWithMacOS(text: string, voice: string = 'Zoe'): SpeechResult {
+async function synthesizeWithMacOS(text: string, voice: string = 'Zoe'): Promise<SpeechResult> {
   if (process.platform !== 'darwin') {
     throw new Error('macOS say provider is only available on macOS.');
   }
   if (!HAS_FFMPEG) {
     throw new Error('ffmpeg is required for macOS TTS (to convert AIFF to OGG). Install: brew install ffmpeg');
   }
-  const id = Date.now();
+  const id = randomUUID();
   const aiffPath = join(tmpdir(), `skimpyclaw-tts-${id}.aiff`);
   const oggPath = join(tmpdir(), `skimpyclaw-tts-${id}.ogg`);
   try {
-    const sayResult = spawnSync('say', ['-v', voice, '-o', aiffPath, text], {
-      encoding: 'utf-8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    if (sayResult.status !== 0) {
-      const msg = (sayResult.stderr || sayResult.stdout || '').trim() || 'unknown error';
-      throw new Error(`macOS say failed: ${msg}`);
+    try {
+      await runVoiceProcess('say', ['-v', voice, '-o', aiffPath, text], 120_000);
+    } catch (err) {
+      throw new Error(`macOS say failed: ${toErrorMessage(err)}`);
     }
 
-    const ffmpegResult = spawnSync('ffmpeg', ['-i', aiffPath, '-c:a', 'libopus', oggPath, '-y'], {
-      encoding: 'utf-8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    if (ffmpegResult.status !== 0) {
-      const msg = (ffmpegResult.stderr || ffmpegResult.stdout || '').trim() || 'unknown error';
-      throw new Error(`ffmpeg conversion failed: ${msg}`);
+    try {
+      await runVoiceProcess('ffmpeg', ['-i', aiffPath, '-c:a', 'libopus', oggPath, '-y'], 30_000);
+    } catch (err) {
+      throw new Error(`ffmpeg conversion failed: ${toErrorMessage(err)}`);
     }
 
     const buffer = readFileSync(oggPath);

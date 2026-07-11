@@ -9,6 +9,7 @@ import type {
   ProviderMessages,
   NormalizedResponse,
   CompactionResult,
+  FinalizationResponse,
 } from '../providers/adapter.js';
 import type { ChatMessage, ChatOptions, Config, ToolConfig } from '../types.js';
 
@@ -31,7 +32,9 @@ class MockAdapter implements ProviderAdapter {
   appendAssistantCallCount = 0;
   appendToolResultCallCount = 0;
   compactMessagesCallCount = 0;
+  compactionUsageContexts: Array<{ trigger?: string; agentId?: string } | undefined> = [];
   recordUsageCallCount = 0;
+  recordUsageCalls: Array<{ trigger?: string; agentId?: string }> = [];
 
   // Mock responses to return
   responses: NormalizedResponse[] = [];
@@ -85,15 +88,18 @@ class MockAdapter implements ProviderAdapter {
     toolDefs: any[],
     options: ChatOptions,
     config: Config,
-  ): Promise<string | undefined>;
+  ): Promise<FinalizationResponse | undefined>;
 
   async compactMessages(
     messages: ProviderMessages,
     _config: any,
     _iteration: number,
     _fullConfig?: Config,
+    _abortSignal?: AbortSignal,
+    usageContext?: { trigger?: string; agentId?: string },
   ): Promise<CompactionResult<any>> {
     this.compactMessagesCallCount++;
+    this.compactionUsageContexts.push(usageContext);
     return {
       messages: messages.messages,
       compacted: false,
@@ -102,6 +108,7 @@ class MockAdapter implements ProviderAdapter {
 
   recordUsage(_model: string, _usage: unknown, _trigger?: string, _agentId?: string): void {
     this.recordUsageCallCount++;
+    this.recordUsageCalls.push({ trigger: _trigger, agentId: _agentId });
   }
 }
 
@@ -174,13 +181,18 @@ describe('runToolLoop', () => {
       },
     ];
 
-    const result = await runToolLoop(adapter, messages, options, config, toolConfig);
+    const result = await runToolLoop(adapter, messages, options, config, toolConfig, {
+      trigger: 'cron',
+      agentId: 'mayora',
+    });
 
     expect(result.response).toBe('Hello! How can I help you?');
     expect(result.toolCalls).toEqual([]);
     expect(adapter.callCount).toBe(1);
     expect(adapter.buildMessagesCallCount).toBe(1);
     expect(adapter.recordUsageCallCount).toBe(1);
+    expect(adapter.recordUsageCalls).toEqual([{ trigger: 'cron', agentId: 'mayora' }]);
+    expect(adapter.compactionUsageContexts).toEqual([{ trigger: 'cron', agentId: 'mayora' }]);
   });
 
   it('should handle tool calls and continue iteration', async () => {
@@ -215,6 +227,108 @@ describe('runToolLoop', () => {
     expect(adapter.callCount).toBe(2);
     expect(adapter.appendAssistantCallCount).toBe(1);
     expect(adapter.appendToolResultCallCount).toBe(1);
+  });
+
+  it('stops before executing the tool call that exhausts the token budget', async () => {
+    toolConfig.maxTurnTokens = 250;
+    adapter.onEmptyFinalResponse = vi.fn().mockResolvedValue({
+      textContent: 'Final answer from gathered results',
+      usage: { inputTokens: 20, outputTokens: 5 },
+      cost: { input: 0.01, output: 0.01, total: 0.02 },
+    });
+    adapter.responses = [
+      {
+        hasToolCalls: true,
+        toolCalls: [{ id: 'call-1', name: 'testTool', args: { step: 1 }, rawArgs: '{"step":1}' }],
+        textContent: '',
+        usage: { inputTokens: 100, outputTokens: 50 },
+        rawResponse: {},
+      },
+      {
+        hasToolCalls: true,
+        toolCalls: [{ id: 'call-2', name: 'testTool', args: { step: 2 }, rawArgs: '{"step":2}' }],
+        textContent: '',
+        usage: { inputTokens: 100, outputTokens: 50 },
+        rawResponse: {},
+      },
+    ];
+
+    const result = await runToolLoop(adapter, messages, options, config, toolConfig);
+
+    expect(result.response).toBe('Final answer from gathered results');
+    expect(mockExecuteTool).toHaveBeenCalledTimes(1);
+    expect(adapter.callCount).toBe(2);
+    expect(adapter.onEmptyFinalResponse).toHaveBeenCalledTimes(1);
+    expect(result.usage?.total_tokens).toBe(325);
+    expect(result.cost?.total).toBe(0.02);
+    expect(adapter.recordUsageCallCount).toBe(3);
+    expect(adapter.appendAssistantCallCount).toBe(2);
+    expect(adapter.appendToolResultCallCount).toBe(2);
+  });
+
+  it('does not execute tools when the first response exceeds the token budget', async () => {
+    toolConfig.maxTurnTokens = 100;
+    adapter.onEmptyFinalResponse = vi.fn().mockResolvedValue({
+      textContent: 'Budget-limited answer',
+      usage: { inputTokens: 10, outputTokens: 5 },
+    });
+    adapter.responses = [{
+      hasToolCalls: true,
+      toolCalls: [{ id: 'call-1', name: 'testTool', args: {}, rawArgs: '{}' }],
+      textContent: '',
+      usage: { inputTokens: 100, outputTokens: 50 },
+      rawResponse: {},
+    }];
+
+    const result = await runToolLoop(adapter, messages, options, config, toolConfig);
+
+    expect(result.response).toBe('Budget-limited answer');
+    expect(mockExecuteTool).not.toHaveBeenCalled();
+    expect(adapter.appendAssistantCallCount).toBe(1);
+    expect(adapter.appendToolResultCallCount).toBe(1);
+    expect(adapter.onEmptyFinalResponse).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails closed when a tool-calling response has no usage data', async () => {
+    toolConfig.maxTurnTokens = 1000;
+    adapter.onEmptyFinalResponse = vi.fn().mockResolvedValue({
+      textContent: 'Usage was unavailable, so the turn stopped',
+      usage: { inputTokens: 10, outputTokens: 5 },
+    });
+    adapter.responses = [{
+      hasToolCalls: true,
+      toolCalls: [{ id: 'call-1', name: 'testTool', args: {}, rawArgs: '{}' }],
+      textContent: '',
+      usage: undefined,
+      rawResponse: {},
+    }];
+
+    const result = await runToolLoop(adapter, messages, options, config, toolConfig);
+
+    expect(result.response).toBe('Usage was unavailable, so the turn stopped');
+    expect(mockExecuteTool).not.toHaveBeenCalled();
+    expect(adapter.onEmptyFinalResponse).toHaveBeenCalledTimes(1);
+    expect(result.usage).toBeUndefined();
+  });
+
+  it('returns a completed text response even when it reaches the token budget', async () => {
+    toolConfig.maxTurnTokens = 100;
+    adapter.onEmptyFinalResponse = vi.fn().mockResolvedValue({
+      textContent: 'Should not replace final text',
+      usage: { inputTokens: 1, outputTokens: 1 },
+    });
+    adapter.responses = [{
+      hasToolCalls: false,
+      toolCalls: [],
+      textContent: 'Already complete',
+      usage: { inputTokens: 100, outputTokens: 50 },
+      rawResponse: {},
+    }];
+
+    const result = await runToolLoop(adapter, messages, options, config, toolConfig);
+
+    expect(result.response).toBe('Already complete');
+    expect(adapter.onEmptyFinalResponse).not.toHaveBeenCalled();
   });
 
   it('should continue past legacy maxIterations until the model returns a final answer', async () => {
@@ -280,6 +394,89 @@ describe('runToolLoop', () => {
     const result = await runToolLoop(adapter, messages, options, config, toolConfig, toolContext);
 
     expect(result.response).toContain('Cancelled');
+  });
+
+  it('does not execute provider-requested tools when cancellation arrives during the request', async () => {
+    const abortController = new AbortController();
+    let resolveCall = (_response: NormalizedResponse) => {};
+    const callResult = new Promise<NormalizedResponse>((resolve) => {
+      resolveCall = resolve;
+    });
+    vi.spyOn(adapter, 'call').mockImplementation(() => callResult);
+    const run = runToolLoop(
+      adapter,
+      messages,
+      { ...options, abortSignal: abortController.signal },
+      config,
+      toolConfig,
+    );
+
+    await vi.waitFor(() => expect(adapter.call).toHaveBeenCalledTimes(1));
+    abortController.abort();
+    resolveCall({
+      hasToolCalls: true,
+      toolCalls: [{ id: 'call-after-abort', name: 'testTool', args: {}, rawArgs: '{}' }],
+      textContent: '',
+      usage: { inputTokens: 100, outputTokens: 50 },
+      rawResponse: {},
+    });
+
+    const result = await run;
+    expect(result.response).toContain('Cancelled');
+    expect(mockExecuteTool).not.toHaveBeenCalled();
+  });
+
+  it('waits for an in-flight tool to observe cancellation and does not call the provider again', async () => {
+    const { endTrace } = await import('../audit.js');
+    vi.mocked(endTrace).mockClear();
+    const abortController = new AbortController();
+    adapter.responses = [{
+      hasToolCalls: true,
+      toolCalls: [{ id: 'call-1', name: 'testTool', args: {}, rawArgs: '{}' }],
+      textContent: '',
+      usage: { inputTokens: 100, outputTokens: 50 },
+      rawResponse: {},
+    }];
+    mockExecuteTool.mockImplementation(
+      (_name, _args, _toolConfig, context) => new Promise<string>((resolve) => {
+        context.abortSignal.addEventListener('abort', () => resolve('cancelled'), { once: true });
+      }),
+    );
+
+    const run = runToolLoop(
+      adapter,
+      messages,
+      { ...options, abortSignal: abortController.signal },
+      config,
+      toolConfig,
+    );
+    await vi.waitFor(() => expect(mockExecuteTool).toHaveBeenCalledTimes(1));
+    abortController.abort();
+
+    const result = await run;
+    expect(result.response).toContain('Cancelled');
+    expect(adapter.callCount).toBe(1);
+    expect(endTrace).toHaveBeenCalledWith('trace-123', 'error');
+  });
+
+  it('marks its trace as error when cancellation rejects during compaction', async () => {
+    const { endTrace } = await import('../audit.js');
+    vi.mocked(endTrace).mockClear();
+    const abortController = new AbortController();
+    vi.spyOn(adapter, 'compactMessages').mockImplementation(async () => {
+      abortController.abort();
+      throw new Error('compaction cancelled');
+    });
+
+    await expect(runToolLoop(
+      adapter,
+      messages,
+      { ...options, abortSignal: abortController.signal },
+      config,
+      toolConfig,
+    )).rejects.toThrow('compaction cancelled');
+
+    expect(endTrace).toHaveBeenCalledWith('trace-123', 'error');
   });
 
   it('should call compactMessages on each iteration', async () => {
@@ -416,7 +613,10 @@ describe('runToolLoop', () => {
 
   describe('onEmptyFinalResponse hook', () => {
     it('should call onEmptyFinalResponse when final text is empty after tool use', async () => {
-      adapter.onEmptyFinalResponse = vi.fn().mockResolvedValue('Finalized answer');
+      adapter.onEmptyFinalResponse = vi.fn().mockResolvedValue({
+        textContent: 'Finalized answer',
+        usage: { inputTokens: 5, outputTokens: 2 },
+      });
       adapter.responses = [
         {
           hasToolCalls: true,
@@ -441,7 +641,10 @@ describe('runToolLoop', () => {
     });
 
     it('should NOT call onEmptyFinalResponse when final text is non-empty', async () => {
-      adapter.onEmptyFinalResponse = vi.fn().mockResolvedValue('Should not appear');
+      adapter.onEmptyFinalResponse = vi.fn().mockResolvedValue({
+        textContent: 'Should not appear',
+        usage: { inputTokens: 1, outputTokens: 1 },
+      });
       adapter.responses = [
         {
           hasToolCalls: true,
@@ -466,7 +669,10 @@ describe('runToolLoop', () => {
     });
 
     it('should NOT call onEmptyFinalResponse when no tool calls were made', async () => {
-      adapter.onEmptyFinalResponse = vi.fn().mockResolvedValue('Should not appear');
+      adapter.onEmptyFinalResponse = vi.fn().mockResolvedValue({
+        textContent: 'Should not appear',
+        usage: { inputTokens: 1, outputTokens: 1 },
+      });
       adapter.responses = [
         {
           hasToolCalls: false,
@@ -535,7 +741,10 @@ describe('runToolLoop', () => {
 
     it('should return checkpoint finalization when legacy maxIterations is reached', async () => {
       const customToolConfig = { ...toolConfig, maxIterations: 2 };
-      adapter.onEmptyFinalResponse = vi.fn().mockResolvedValue('Best effort final answer');
+      adapter.onEmptyFinalResponse = vi.fn().mockResolvedValue({
+        textContent: 'Best effort final answer',
+        usage: { inputTokens: 5, outputTokens: 2 },
+      });
       adapter.responses = [
         {
           hasToolCalls: true,
@@ -562,7 +771,10 @@ describe('runToolLoop', () => {
 
     it('should continue after checkpoint finalization returns empty', async () => {
       const customToolConfig = { ...toolConfig, maxIterations: 2 };
-      adapter.onEmptyFinalResponse = vi.fn().mockResolvedValue(undefined);
+      adapter.onEmptyFinalResponse = vi.fn().mockResolvedValue({
+        textContent: '',
+        usage: { inputTokens: 5, outputTokens: 2 },
+      });
       adapter.responses = [
         {
           hasToolCalls: true,
@@ -596,7 +808,10 @@ describe('runToolLoop', () => {
 
     it('should retry checkpoint finalization every legacy maxIterations interval', async () => {
       const customToolConfig = { ...toolConfig, maxIterations: 2 };
-      adapter.onEmptyFinalResponse = vi.fn().mockResolvedValue(undefined);
+      adapter.onEmptyFinalResponse = vi.fn().mockResolvedValue({
+        textContent: '',
+        usage: { inputTokens: 5, outputTokens: 2 },
+      });
       mockExecuteTool.mockImplementation(async (_name, args) => `tool result ${JSON.stringify(args)}`);
       adapter.responses = [
         ...Array.from({ length: 5 }, (_, index) => ({
@@ -620,6 +835,28 @@ describe('runToolLoop', () => {
       expect(result.response).toBe('Final after repeated checkpoints');
       expect(adapter.callCount).toBe(6);
       expect(adapter.onEmptyFinalResponse).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not start another iteration when checkpoint finalization exhausts the budget', async () => {
+      const customToolConfig = { ...toolConfig, maxIterations: 1, maxTurnTokens: 100 };
+      adapter.onEmptyFinalResponse = vi.fn().mockResolvedValue({
+        textContent: '',
+        usage: { inputTokens: 40, outputTokens: 10 },
+      });
+      adapter.responses = [{
+        hasToolCalls: true,
+        toolCalls: [{ id: 'call-loop-1', name: 'testTool', args: { x: 1 }, rawArgs: '{"x":1}' }],
+        textContent: '',
+        usage: { inputTokens: 40, outputTokens: 10 },
+        rawResponse: {},
+      }];
+
+      const result = await runToolLoop(adapter, messages, options, config, customToolConfig);
+
+      expect(result.response).toContain('Token budget exceeded');
+      expect(adapter.callCount).toBe(1);
+      expect(adapter.onEmptyFinalResponse).toHaveBeenCalledTimes(1);
+      expect(result.usage?.total_tokens).toBe(100);
     });
   });
 

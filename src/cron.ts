@@ -17,6 +17,7 @@ import { formatDate, toErrorMessage } from './utils.js';
 import { sanitizeCronEnv } from './env-sanitizer.js';
 import { buildArtifactUrl, registerLocalArtifact } from './artifacts.js';
 import { linkLocalHtmlArtifactsForDiscord } from './channels/discord/utils.js';
+import { isPathAllowed } from './tools/path-utils.js';
 
 function safeTimezone(tz: string | undefined): string {
   const fallback = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
@@ -41,6 +42,28 @@ interface ScheduledJob {
 
 const scheduledJobs: Map<string, ScheduledJob> = new Map();
 let configWatcher: FSWatcher | null = null;
+let configReloadTimer: ReturnType<typeof setTimeout> | null = null;
+
+function assertUniqueCronJobIds(jobs: CronJob[]): void {
+  const seen = new Set<string>();
+  for (const job of jobs) {
+    if (seen.has(job.id)) {
+      throw new Error(`Duplicate cron job id: "${job.id}"`);
+    }
+    seen.add(job.id);
+  }
+}
+
+function replaceScheduledJobs(config: Config): void {
+  assertUniqueCronJobIds(config.cron.jobs);
+  for (const job of scheduledJobs.values()) {
+    job.job.stop();
+  }
+  scheduledJobs.clear();
+  for (const jobDef of config.cron.jobs) {
+    scheduleJob(jobDef, config);
+  }
+}
 
 export interface CronRunTarget {
   id: string;
@@ -742,15 +765,11 @@ export async function runAgentTurnWithTimeout(
 }
 
 export function initCron(config: Config): void {
-  // Clear existing jobs
-  for (const job of scheduledJobs.values()) {
-    job.job.stop();
-  }
-  scheduledJobs.clear();
+  replaceScheduledJobs(config);
 
-  // Schedule new jobs
-  for (const jobDef of config.cron.jobs) {
-    scheduleJob(jobDef, config);
+  if (configReloadTimer) {
+    clearTimeout(configReloadTimer);
+    configReloadTimer = null;
   }
 
   console.log(`[cron] Initialized ${scheduledJobs.size} jobs`);
@@ -760,21 +779,15 @@ export function initCron(config: Config): void {
     configWatcher.close();
     configWatcher = null;
   }
-  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   try {
     configWatcher = watch(getConfigPath(), () => {
-      if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => {
+      if (configReloadTimer) clearTimeout(configReloadTimer);
+      configReloadTimer = setTimeout(() => {
+        configReloadTimer = null;
         try {
           const newConfig = loadConfig();
           console.log('[cron] Config changed, reloading cron jobs...');
-          for (const job of scheduledJobs.values()) {
-            job.job.stop();
-          }
-          scheduledJobs.clear();
-          for (const jobDef of newConfig.cron.jobs) {
-            scheduleJob(jobDef, newConfig);
-          }
+          replaceScheduledJobs(newConfig);
           console.log(`[cron] Reloaded ${scheduledJobs.size} jobs`);
         } catch (err) {
           console.error('[cron] Failed to reload config:', err);
@@ -1122,9 +1135,10 @@ async function executeScript(jobDef: CronJob, _config: Config): Promise<string> 
     const startTime = Date.now();
     let stdout = '';
     let stderr = '';
-    let timedOut = false;
+    let outputBytes = 0;
     let settled = false;
-    let timeout: ReturnType<typeof setTimeout>;
+    let overflowError: Error | null = null;
+    let timeoutError: Error | null = null;
     let sigkillTimer: ReturnType<typeof setTimeout> | null = null;
     console.log(`[cron:script] Running: ${script.slice(0, 100)}${script.length > 100 ? '...' : ''}`);
     if (cwd) console.log(`[cron:script] cwd: ${cwd}`);
@@ -1152,44 +1166,79 @@ async function executeScript(jobDef: CronJob, _config: Config): Promise<string> 
       reject(error);
     };
 
-    timeout = setTimeout(() => {
-      timedOut = true;
-      if (child.pid) {
-        killScriptProcessTree(child.pid, 'SIGTERM');
-        sigkillTimer = setTimeout(() => killScriptProcessTree(child.pid!, 'SIGKILL'), 5000);
-        (sigkillTimer as { unref?: () => void }).unref?.();
+    const terminateForOverflow = () => {
+      if (settled || overflowError || timeoutError) return;
+      overflowError = new Error(`Script output exceeded maxBuffer of ${maxBuffer} bytes`);
+      clearTimeout(timeout);
+      if (!child.pid) {
+        fail(overflowError);
+        return;
       }
-      fail(new Error(`Script timed out after ${timeoutMs}ms`), { keepSigkillTimer: true });
+
+      const pid = child.pid;
+      sigkillTimer = setTimeout(() => {
+        killScriptProcessTree(pid, 'SIGKILL');
+        sigkillTimer = null;
+        fail(overflowError!);
+      }, 1000);
+      (sigkillTimer as { unref?: () => void }).unref?.();
+      killScriptProcessTree(pid, 'SIGTERM');
+    };
+
+    const collectOutput = (target: 'stdout' | 'stderr', chunk: Buffer | string) => {
+      if (settled || overflowError || timeoutError) return;
+      const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      const remaining = Math.max(0, maxBuffer - outputBytes);
+      const accepted = bytes.subarray(0, remaining);
+      if (accepted.length > 0) {
+        if (target === 'stdout') stdout += accepted.toString();
+        else stderr += accepted.toString();
+        outputBytes += accepted.length;
+      }
+      if (bytes.length > remaining) terminateForOverflow();
+    };
+
+    const timeout = setTimeout(() => {
+      timeoutError = new Error(`Script timed out after ${timeoutMs}ms`);
+      if (!child.pid) {
+        fail(timeoutError);
+        return;
+      }
+
+      const pid = child.pid;
+      sigkillTimer = setTimeout(() => {
+        killScriptProcessTree(pid, 'SIGKILL');
+        sigkillTimer = null;
+        fail(timeoutError!);
+      }, 5000);
+      (sigkillTimer as { unref?: () => void }).unref?.();
+      killScriptProcessTree(pid, 'SIGTERM');
     }, timeoutMs);
 
-    child.stdout.on('data', (chunk: Buffer) => {
-      stdout += chunk.toString();
-      if (stdout.length + stderr.length > maxBuffer) {
-        if (child.pid) killScriptProcessTree(child.pid, 'SIGTERM');
-        fail(new Error(`Script output exceeded maxBuffer of ${maxBuffer} bytes`));
-      }
-    });
+    child.stdout.on('data', (chunk: Buffer | string) => collectOutput('stdout', chunk));
 
-    child.stderr.on('data', (chunk: Buffer) => {
-      stderr += chunk.toString();
-      if (stdout.length + stderr.length > maxBuffer) {
-        if (child.pid) killScriptProcessTree(child.pid, 'SIGTERM');
-        fail(new Error(`Script output exceeded maxBuffer of ${maxBuffer} bytes`));
-      }
-    });
+    child.stderr.on('data', (chunk: Buffer | string) => collectOutput('stderr', chunk));
 
     child.on('error', (error) => {
+      if (overflowError || timeoutError) return;
       fail(error);
     });
 
     child.on('close', (code, signal) => {
+      if (overflowError) {
+        if (sigkillTimer && child.pid && isScriptProcessTreeAlive(child.pid)) return;
+        fail(overflowError);
+        return;
+      }
+      if (timeoutError) {
+        if (sigkillTimer && child.pid && isScriptProcessTreeAlive(child.pid)) return;
+        fail(timeoutError);
+        return;
+      }
       clearTimers();
       if (settled) return;
 
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-      if (timedOut) {
-        return;
-      }
       if (code !== 0) {
         fail(new Error(`Command failed: ${script}${stderr ? `\n${stderr}` : ''}${signal ? `\nSignal: ${signal}` : ''}`));
         return;
@@ -1224,6 +1273,16 @@ export function killScriptProcessTree(pid: number, signal: NodeJS.Signals): void
   }
 }
 
+function isScriptProcessTreeAlive(pid: number): boolean {
+  if (process.platform === 'win32') return false;
+  try {
+    process.kill(-pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 
 /**
  * If message is a path to a .md file, read and return its contents.
@@ -1239,8 +1298,7 @@ function resolveMessageSource(message: string): string {
     : trimmed.startsWith('/')
       ? resolve(trimmed)
       : resolve(promptsRoot, trimmed);
-  const insidePromptsRoot = resolved === promptsRoot || resolved.startsWith(`${promptsRoot}/`);
-  if (!insidePromptsRoot) {
+  if (!isPathAllowed(resolved, [promptsRoot])) {
     console.warn(`[cron] Rejected prompt path outside ~/.skimpyclaw/prompts: ${trimmed}`);
     return message;
   }
@@ -1389,6 +1447,10 @@ export function getCronJobDetails(config: Config): CronJobDetail[] {
 }
 
 export function stopCron(): void {
+  if (configReloadTimer) {
+    clearTimeout(configReloadTimer);
+    configReloadTimer = null;
+  }
   if (configWatcher) {
     configWatcher.close();
     configWatcher = null;

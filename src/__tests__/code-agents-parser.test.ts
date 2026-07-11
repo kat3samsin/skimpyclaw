@@ -1,5 +1,11 @@
-import { describe, expect, it } from 'vitest';
-import { parseClaudeOutput, parseCodexOutput, parseStreamJsonForLive } from '../code-agents/parser.js';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  CodeAgentOutputCollector,
+  MAX_STREAM_EVENT_CHARS,
+  parseClaudeOutput,
+  parseCodexOutput,
+  parseStreamJsonForLive,
+} from '../code-agents/parser.js';
 
 describe('code-agents parser', () => {
   it('parses newer Claude stream item.completed agent_message events', () => {
@@ -59,5 +65,72 @@ describe('code-agents parser', () => {
     expect(parsed).toBe('Final review text.');
     expect(parsed).not.toContain('thread.started');
     expect(parsed).not.toContain('command_execution');
+  });
+
+  it('incrementally preserves final output and Claude usage across fragmented chunks', () => {
+    const rawText = [
+      JSON.stringify({
+        type: 'item.completed',
+        item: { type: 'agent_message', text: 'Hello from the coding agent 🦞' },
+      }),
+      JSON.stringify({ type: 'turn.completed', usage: { input_tokens: 7, output_tokens: 3 } }),
+      JSON.stringify({ type: 'result', result: 'Finished', total_cost_usd: 0.01 }),
+    ].join('\n');
+    const raw = Buffer.from(rawText);
+    const collector = new CodeAgentOutputCollector();
+
+    for (let offset = 0; offset < raw.length; offset += 7) {
+      collector.push(raw.subarray(offset, offset + 7));
+    }
+    collector.finish();
+
+    expect(collector.getLiveOutput()).toBe(parseStreamJsonForLive(rawText));
+    expect(collector.getClaudeOutput()).toEqual(parseClaudeOutput(rawText));
+    expect(collector.getCodexOutput()).toBe(parseCodexOutput(rawText));
+    expect(collector.getClaudeOutput()).toMatchObject({
+      text: 'Hello from the coding agent 🦞\nFinished',
+      totalCost: 0.01,
+      inputTokens: 7,
+      outputTokens: 3,
+    });
+  });
+
+  it('parses each completed event once while retaining bounded previews', () => {
+    const lines = Array.from({ length: 200 }, (_, index) => JSON.stringify({
+      type: 'item.completed',
+      item: { type: 'agent_message', text: `${index}: ${'x'.repeat(80)}` },
+    }));
+    const parseSpy = vi.spyOn(JSON, 'parse');
+    const collector = new CodeAgentOutputCollector();
+
+    for (const line of lines) {
+      collector.push(`${line}\n`);
+      collector.getLiveOutput();
+    }
+    collector.finish();
+
+    expect(parseSpy).toHaveBeenCalledTimes(lines.length);
+    const liveOutput = collector.getLiveOutput();
+    const claudeOutput = collector.getClaudeOutput().text;
+    const codexOutput = collector.getCodexOutput();
+    expect(liveOutput.length).toBeLessThanOrEqual(5_000);
+    expect(liveOutput).toContain('199:');
+    expect(claudeOutput.length).toBeLessThanOrEqual(5_000);
+    expect(claudeOutput).toMatch(/^0:/);
+    expect(codexOutput.length).toBeLessThanOrEqual(5_000);
+    expect(codexOutput).toMatch(/^0:/);
+    parseSpy.mockRestore();
+  });
+
+  it('caps an unterminated oversized event before a newline arrives', () => {
+    const collector = new CodeAgentOutputCollector();
+
+    collector.push('x'.repeat(MAX_STREAM_EVENT_CHARS * 2));
+
+    expect((collector as unknown as { lineBuffer: string }).lineBuffer.length)
+      .toBe(MAX_STREAM_EVENT_CHARS);
+    collector.push('\n');
+    collector.finish();
+    expect(collector.getLiveOutput()).toContain('oversized stream event omitted');
   });
 });

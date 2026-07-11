@@ -8,7 +8,7 @@
 // so the compaction algorithm is written once regardless of provider format.
 
 import type { ContextManagementConfig } from './types.js';
-import type { Config, ChatMessage } from '../types.js';
+import type { Config, ChatMessage, ChatOptions } from '../types.js';
 import type { MessageFormatHelper } from './adapter.js';
 
 export type { ContextManagementConfig };
@@ -29,9 +29,10 @@ export interface CompactionResult<T> {
 }
 
 const DEFAULT_MAX_CONTEXT_TOKENS = 200_000;
-const KEEP_TAIL = 8;         // always keep last N messages/items untouched
+const KEEP_TAIL = 8;         // preserve the newest N items when they fit the configured ceiling
 const RESULT_MAX_CHARS = 200; // fallback truncation length
 const SUMMARY_MAX_TOKENS = 1024; // max tokens for summary response
+const CONTEXT_TRUNCATION_MARKER = '\n[...truncated for context limit...]\n';
 
 // Preferred compaction models in priority order (cheap & fast).
 // Can be overridden via contextManagement.compactionModel in config.
@@ -74,6 +75,8 @@ async function llmSummarize(
   transcript: string,
   config: Config,
   compactionModel?: string,
+  abortSignal?: AbortSignal,
+  usageContext?: Pick<ChatOptions, 'trigger' | 'agentId'>,
 ): Promise<string | null> {
   try {
     // Dynamically import to avoid circular dependency
@@ -92,6 +95,8 @@ async function llmSummarize(
     const summary = await chat(messages, {
       model,
       maxTokens: SUMMARY_MAX_TOKENS,
+      abortSignal,
+      ...usageContext,
     }, config);
 
     if (!summary || summary.trim().length === 0) {
@@ -128,19 +133,9 @@ function mechanicallyCompact<T>(
   head: T[],
   tail: T[],
   helper: MessageFormatHelper<T>,
-  maxTokens: number,
 ): T[] {
   const truncatedHead = truncateToolResults(head, helper).items;
-  const headOnlyResult = [...truncatedHead, ...tail];
-
-  if (estimateTokens(headOnlyResult as any[]) <= maxTokens) {
-    return headOnlyResult;
-  }
-
-  // A recent tool result can be larger than the full target context. Keep the
-  // tail intact when possible, but shrink tail tool results before sending an
-  // oversized compacted context back into the next model call.
-  return truncateToolResults([...head, ...tail], helper).items;
+  return [...truncatedHead, ...tail];
 }
 
 function applyPostCompactionRepair<T>(
@@ -149,6 +144,99 @@ function applyPostCompactionRepair<T>(
   helper: MessageFormatHelper<T>,
 ): T[] {
   return helper.repairCompactedMessages?.(result, original) ?? result;
+}
+
+function truncateContextText(value: string, maxChars: number): string {
+  if (value.length <= maxChars) return value;
+  if (maxChars <= 0) return '';
+  if (maxChars <= CONTEXT_TRUNCATION_MARKER.length) {
+    return CONTEXT_TRUNCATION_MARKER.slice(0, maxChars);
+  }
+  const retainedChars = maxChars - CONTEXT_TRUNCATION_MARKER.length;
+  const headChars = Math.ceil(retainedChars / 2);
+  return value.slice(0, headChars)
+    + CONTEXT_TRUNCATION_MARKER
+    + value.slice(-(retainedChars - headChars));
+}
+
+function truncateStructuredContent(content: unknown, maxChars: number): unknown {
+  if (typeof content === 'string') return truncateContextText(content, maxChars);
+  if (!Array.isArray(content)) return content;
+  const stringFieldCount = content.reduce((count, block) => (
+    count
+    + (typeof block?.text === 'string' ? 1 : 0)
+    + (typeof block?.content === 'string' || block?.type === 'tool_result' ? 1 : 0)
+  ), 0);
+  const perField = Math.floor(maxChars / Math.max(1, stringFieldCount));
+  return content.map((block) => {
+    let next = block;
+    if (typeof block?.text === 'string') {
+      next = { ...next, text: truncateContextText(block.text, perField) };
+    }
+    if (typeof block?.content === 'string' || block?.type === 'tool_result') {
+      const raw = typeof block.content === 'string' ? block.content : JSON.stringify(block.content) ?? '';
+      next = { ...next, content: truncateContextText(raw, perField) };
+    }
+    return next;
+  });
+}
+
+function enforceTokenCeiling<T>(
+  seed: T[],
+  original: T[],
+  helper: MessageFormatHelper<T>,
+  maxTokens: number,
+  preserveFirst = false,
+): T[] {
+  let newestCandidate: T[] = [];
+  const firstStart = preserveFirst ? 1 : 0;
+  for (let start = firstStart; start < seed.length; start++) {
+    const suffix = preserveFirst
+      ? [seed[0], ...seed.slice(start)]
+      : seed.slice(start);
+    const candidate = applyPostCompactionRepair(suffix, original, helper);
+    if (candidate.length > (preserveFirst ? 1 : 0)) {
+      newestCandidate = candidate;
+      if (estimateTokens(candidate as any[]) <= maxTokens) return candidate;
+    }
+
+    const boundedSuffix = truncateToolResults(suffix, helper).items;
+    if (boundedSuffix === suffix) continue;
+    const boundedCandidate = applyPostCompactionRepair(boundedSuffix, original, helper);
+    if (boundedCandidate.length <= (preserveFirst ? 1 : 0)) continue;
+    newestCandidate = boundedCandidate;
+    if (estimateTokens(boundedCandidate as any[]) <= maxTokens) return boundedCandidate;
+  }
+
+  if (helper.truncateItem && newestCandidate.length > 0) {
+    if (preserveFirst) {
+      let summaryCharBudget = Math.max(0, maxTokens * 4);
+      for (;;) {
+        const truncated = [
+          helper.truncateItem(newestCandidate[0], summaryCharBudget),
+          ...newestCandidate.slice(1),
+        ];
+        const candidate = applyPostCompactionRepair(truncated, truncated, helper);
+        if (candidate.length > 1 && estimateTokens(candidate as any[]) <= maxTokens) return candidate;
+        if (summaryCharBudget === 0) break;
+        summaryCharBudget = Math.floor(summaryCharBudget / 2);
+      }
+    }
+
+    let totalCharBudget = Math.max(0, maxTokens * 4);
+    for (;;) {
+      const perItem = Math.floor(totalCharBudget / newestCandidate.length);
+      const truncated = newestCandidate.map(item => helper.truncateItem!(item, perItem));
+      const candidate = applyPostCompactionRepair(truncated, truncated, helper);
+      if (candidate.length > (preserveFirst ? 1 : 0)
+        && estimateTokens(candidate as any[]) <= maxTokens) return candidate;
+      if (totalCharBudget === 0) break;
+      totalCharBudget = Math.floor(totalCharBudget / 2);
+    }
+  }
+
+  if (seed.length === 0 && estimateTokens([]) <= maxTokens) return seed;
+  throw new Error(`Unable to compact context below ${maxTokens} tokens without dropping the newest item`);
 }
 
 // =====================================================================
@@ -168,6 +256,8 @@ export async function compactMessages<T>(
   config?: ContextManagementConfig,
   iteration: number = 0,
   fullConfig?: Config,
+  abortSignal?: AbortSignal,
+  usageContext?: Pick<ChatOptions, 'trigger' | 'agentId'>,
 ): Promise<CompactionResult<T>> {
   if (config?.enabled === false) return { messages: items, compacted: false };
   const maxTokens = config?.maxContextTokens ?? DEFAULT_MAX_CONTEXT_TOKENS;
@@ -181,10 +271,11 @@ export async function compactMessages<T>(
   // to progressively shrink rather than re-summarizing repeatedly.
   if (compactedMarker.has(items as any[])) {
     console.log(`[context-manager] Already compacted, using truncation fallback (iteration ${iteration})`);
-    const result = applyPostCompactionRepair(
-      mechanicallyCompact(head, tail, helper, maxTokens),
+    const result = enforceTokenCeiling(
+      mechanicallyCompact(head, tail, helper),
       items,
       helper,
+      maxTokens,
     );
     compactedMarker.add(result as any[]);
     return { messages: result, compacted: true, method: 'truncation', tokensBefore: estimated, tokensAfter: estimateTokens(result as any[]) };
@@ -197,10 +288,16 @@ export async function compactMessages<T>(
   // Attempt LLM summarization
   if (fullConfig) {
     const transcript = helper.serialize(head);
-    const summary = await llmSummarize(transcript, fullConfig, config?.compactionModel);
+    const summary = await llmSummarize(
+      transcript,
+      fullConfig,
+      config?.compactionModel,
+      abortSignal,
+      usageContext,
+    );
     if (summary) {
       const summaryItem = helper.buildSummaryMessage(summary);
-      const result = applyPostCompactionRepair([summaryItem, ...tail], items, helper);
+      const result = enforceTokenCeiling([summaryItem, ...tail], items, helper, maxTokens, true);
       compactedMarker.add(result as any[]);
       const tokensAfter = estimateTokens(result as any[]);
       return { messages: result, compacted: true, method: 'llm', summary, tokensBefore: estimated, tokensAfter };
@@ -208,10 +305,11 @@ export async function compactMessages<T>(
   }
 
   // Fallback: mechanical truncation
-  const result = applyPostCompactionRepair(
-    mechanicallyCompact(head, tail, helper, maxTokens),
+  const result = enforceTokenCeiling(
+    mechanicallyCompact(head, tail, helper),
     items,
     helper,
+    maxTokens,
   );
   compactedMarker.add(result as any[]);
   return { messages: result, compacted: true, method: 'truncation', tokensBefore: estimated, tokensAfter: estimateTokens(result as any[]) };
@@ -220,6 +318,61 @@ export async function compactMessages<T>(
 // =====================================================================
 // Provider-specific MessageFormatHelper implementations
 // =====================================================================
+
+function repairAnthropicToolResults(compacted: any[]): any[] {
+  const seenToolUses = new Set<string>();
+  const repaired: any[] = [];
+  let changed = false;
+
+  for (const item of compacted) {
+    if (!Array.isArray(item?.content)) {
+      repaired.push(item);
+      continue;
+    }
+    for (const block of item.content) {
+      if (block?.type === 'tool_use' && typeof block.id === 'string') {
+        seenToolUses.add(block.id);
+      }
+    }
+    const content = item.content.filter((block: any) => (
+      block?.type !== 'tool_result'
+      || (typeof block.tool_use_id === 'string' && seenToolUses.has(block.tool_use_id))
+    ));
+    if (content.length === item.content.length) {
+      repaired.push(item);
+    } else if (content.length > 0) {
+      changed = true;
+      repaired.push({ ...item, content });
+    } else {
+      changed = true;
+    }
+  }
+
+  return changed ? repaired : compacted;
+}
+
+function repairOpenAIToolResults(compacted: any[]): any[] {
+  const seenToolCalls = new Set<string>();
+  const repaired: any[] = [];
+  let changed = false;
+
+  for (const item of compacted) {
+    if (Array.isArray(item?.tool_calls)) {
+      for (const call of item.tool_calls) {
+        if (typeof call?.id === 'string') seenToolCalls.add(call.id);
+      }
+    }
+    if (item?.role === 'tool' && (
+      typeof item.tool_call_id !== 'string' || !seenToolCalls.has(item.tool_call_id)
+    )) {
+      changed = true;
+      continue;
+    }
+    repaired.push(item);
+  }
+
+  return changed ? repaired : compacted;
+}
 
 /** Anthropic message format helper. */
 export const anthropicFormatHelper: MessageFormatHelper<any> = {
@@ -243,6 +396,11 @@ export const anthropicFormatHelper: MessageFormatHelper<any> = {
     return changed ? { ...item, content: newContent } : item;
   },
 
+  truncateItem(item: any, maxChars: number): any {
+    const content = truncateStructuredContent(item?.content, maxChars);
+    return content === item?.content ? item : { ...item, content };
+  },
+
   serialize(items: any[]): string {
     return serializeAnthropicMessages(items);
   },
@@ -252,6 +410,10 @@ export const anthropicFormatHelper: MessageFormatHelper<any> = {
       role: 'user',
       content: [{ type: 'text', text: `[Conversation Summary]\n${summary}` }],
     };
+  },
+
+  repairCompactedMessages(compacted: any[]): any[] {
+    return repairAnthropicToolResults(compacted);
   },
 };
 
@@ -267,6 +429,11 @@ export const openaiFormatHelper: MessageFormatHelper<any> = {
     return { ...item, content: item.content.slice(0, maxChars) + ' [truncated]' };
   },
 
+  truncateItem(item: any, maxChars: number): any {
+    const content = truncateStructuredContent(item?.content, maxChars);
+    return content === item?.content ? item : { ...item, content };
+  },
+
   serialize(items: any[]): string {
     return serializeOpenAIMessages(items);
   },
@@ -276,6 +443,10 @@ export const openaiFormatHelper: MessageFormatHelper<any> = {
       role: 'user' as const,
       content: `[Conversation Summary]\n${summary}`,
     };
+  },
+
+  repairCompactedMessages(compacted: any[]): any[] {
+    return repairOpenAIToolResults(compacted);
   },
 };
 
@@ -354,6 +525,15 @@ export const codexFormatHelper: MessageFormatHelper<any> = {
     if (typeof item.output !== 'string') return item;
     if (item.output.length <= maxChars) return item;
     return { ...item, output: item.output.slice(0, maxChars) + ' [truncated]' };
+  },
+
+  truncateItem(item: any, maxChars: number): any {
+    if (item?.type === 'function_call_output' && typeof item.output === 'string') {
+      return { ...item, output: truncateContextText(item.output, maxChars) };
+    }
+    if (item?.type !== 'message') return item;
+    const content = truncateStructuredContent(item.content, maxChars);
+    return content === item.content ? item : { ...item, content };
   },
 
   serialize(items: any[]): string {

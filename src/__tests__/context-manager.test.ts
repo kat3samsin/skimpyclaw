@@ -232,7 +232,15 @@ describe('compactMessages (generic)', () => {
 
   it('uses LLM summarization with Anthropic helper', async () => {
     const messages = manyItems(anthropicExchange, 'x'.repeat(10_000));
-    const result = await compactMessages(messages, anthropicFormatHelper, { maxContextTokens: 1_000 }, 1, fullConfig);
+    const result = await compactMessages(
+      messages,
+      anthropicFormatHelper,
+      { maxContextTokens: 20_000 },
+      1,
+      fullConfig,
+      undefined,
+      { trigger: 'cron', agentId: 'mayora' },
+    );
 
     expect(result.compacted).toBe(true);
     expect(result.method).toBe('llm');
@@ -241,6 +249,11 @@ describe('compactMessages (generic)', () => {
     expect(result.tokensAfter).toBeGreaterThan(0);
     expect(result.tokensAfter!).toBeLessThan(result.tokensBefore!);
     expect(mockChat).toHaveBeenCalledOnce();
+    expect(mockChat).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.objectContaining({ trigger: 'cron', agentId: 'mayora' }),
+      fullConfig,
+    );
 
     // First message should be the summary in Anthropic format
     expect(result.messages[0].role).toBe('user');
@@ -252,26 +265,28 @@ describe('compactMessages (generic)', () => {
 
   it('uses truncation after an already compacted context is still oversized', async () => {
     const messages = manyItems(anthropicExchange, 'x'.repeat(10_000));
-    const first = await compactMessages(messages, anthropicFormatHelper, { maxContextTokens: 1_000 }, 1, fullConfig);
+    const first = await compactMessages(messages, anthropicFormatHelper, { maxContextTokens: 20_000 }, 1, fullConfig);
     expect(first.method).toBe('llm');
+    first.messages.push({
+      role: 'user',
+      content: [{ type: 'text', text: `new oversized context ${'x'.repeat(100_000)}` }],
+    });
+    const tokensBeforeSecond = estimateTokens(first.messages);
 
     mockChat.mockClear();
-    const second = await compactMessages(first.messages, anthropicFormatHelper, { maxContextTokens: 1_000 }, 2, fullConfig);
+    const second = await compactMessages(first.messages, anthropicFormatHelper, { maxContextTokens: 20_000 }, 2, fullConfig);
 
     expect(second.method).toBe('truncation');
     expect(mockChat).not.toHaveBeenCalled();
-    expect(second.tokensAfter!).toBeLessThan(first.tokensAfter!);
-    expect(
-      second.messages.some((msg: any) =>
-        Array.isArray(msg.content) &&
-        msg.content.some((block: any) => block.type === 'tool_result' && block.content.includes('[truncated]')),
-      ),
-    ).toBe(true);
+    expect(second.tokensAfter!).toBeLessThan(tokensBeforeSecond);
+    expect(second.tokensAfter).toBeLessThanOrEqual(20_000);
+    expect(JSON.stringify(second.messages)).toContain('new oversized context');
+    expect(JSON.stringify(second.messages)).toContain('truncated for context limit');
   });
 
   it('uses LLM summarization with OpenAI helper', async () => {
     const messages = manyItems(openaiExchange, 'x'.repeat(10_000));
-    const result = await compactMessages(messages, openaiFormatHelper, { maxContextTokens: 1_000 }, 1, fullConfig);
+    const result = await compactMessages(messages, openaiFormatHelper, { maxContextTokens: 20_000 }, 1, fullConfig);
 
     expect(result.compacted).toBe(true);
     expect(result.method).toBe('llm');
@@ -279,9 +294,35 @@ describe('compactMessages (generic)', () => {
     expect(result.messages[0].content).toContain('[Conversation Summary]');
   });
 
+  it('preserves the newest request ahead of an oversized LLM summary', async () => {
+    const newest = `LATEST request ${'y'.repeat(180)}`;
+    const messages = [
+      ...Array.from({ length: 12 }, (_, index) => ({
+        role: 'user',
+        content: `old ${index} ${'x'.repeat(2_000)}`,
+      })),
+      { role: 'user', content: newest },
+    ];
+    mockChat.mockResolvedValueOnce('S'.repeat(200));
+
+    const result = await compactMessages(
+      messages,
+      openaiFormatHelper,
+      { maxContextTokens: 100 },
+      1,
+      fullConfig,
+    );
+
+    expect(result.method).toBe('llm');
+    expect(result.tokensAfter).toBeLessThanOrEqual(100);
+    expect(result.messages.at(-1)).toEqual({ role: 'user', content: newest });
+    expect(result.messages[0].content).toContain('[Conversation Summary]');
+    expect(result.messages[0].content).toContain('truncated for context limit');
+  });
+
   it('uses LLM summarization with Codex helper', async () => {
     const messages = manyItems(codexExchange, 'x'.repeat(10_000));
-    const result = await compactMessages(messages, codexFormatHelper, { maxContextTokens: 1_000 }, 1, fullConfig);
+    const result = await compactMessages(messages, codexFormatHelper, { maxContextTokens: 20_000 }, 1, fullConfig);
 
     expect(result.compacted).toBe(true);
     expect(result.method).toBe('llm');
@@ -381,6 +422,129 @@ describe('compactMessages (generic)', () => {
     expect(mockChat).not.toHaveBeenCalled();
   });
 
+  it('enforces the token ceiling for huge non-tool messages in every format', async () => {
+    const cases = [
+      {
+        helper: anthropicFormatHelper,
+        makeItem: (content: string) => ({ role: 'user', content: [{ type: 'text', text: content }] }),
+      },
+      {
+        helper: openaiFormatHelper,
+        makeItem: (content: string) => ({ role: 'user', content }),
+      },
+      {
+        helper: codexFormatHelper,
+        makeItem: (content: string) => ({ type: 'message', role: 'user', content }),
+      },
+    ];
+
+    for (const { helper, makeItem } of cases) {
+      const items = Array.from({ length: 12 }, (_, index) => (
+        makeItem(`${index}: ${'x'.repeat(10_000)}${index === 11 ? ' LATEST' : ''}`)
+      ));
+      const original = JSON.stringify(items);
+      const result = await compactMessages(items, helper, { maxContextTokens: 1_000 });
+
+      expect(result.tokensAfter).toBeLessThanOrEqual(1_000);
+      expect(JSON.stringify(result.messages)).toContain('LATEST');
+      expect(JSON.stringify(result.messages)).toContain('truncated for context limit');
+      expect(JSON.stringify(items)).toBe(original);
+    }
+  });
+
+  it('keeps retained Codex function outputs paired while enforcing the ceiling', async () => {
+    const items = [
+      ...Array.from({ length: 12 }, (_, index) => ({
+        type: 'message',
+        role: 'user',
+        content: `old ${index} ${'x'.repeat(10_000)}`,
+      })),
+      { type: 'function_call', call_id: 'fc_recent', name: 'Bash', arguments: '{"command":"date"}' },
+      { type: 'function_call_output', call_id: 'fc_recent', output: 'y'.repeat(10_000) },
+      { type: 'message', role: 'user', content: 'newest request' },
+    ];
+
+    const result = await compactMessages(items, codexFormatHelper, { maxContextTokens: 500 });
+
+    expect(result.tokensAfter).toBeLessThanOrEqual(500);
+    const outputIndex = result.messages.findIndex(
+      (item: any) => item.type === 'function_call_output' && item.call_id === 'fc_recent',
+    );
+    expect(outputIndex).toBeGreaterThan(0);
+    expect(result.messages[outputIndex - 1]).toMatchObject({
+      type: 'function_call',
+      call_id: 'fc_recent',
+    });
+    expect(result.messages.at(-1)).toMatchObject({ content: 'newest request' });
+  });
+
+  it('keeps a fitting recent tool result intact after dropping older content', async () => {
+    const output = 'recent result '.repeat(30);
+    const items = [
+      { type: 'message', role: 'user', content: 'x'.repeat(20_000) },
+      { type: 'function_call', call_id: 'fc_fit', name: 'Bash', arguments: '{"command":"date"}' },
+      { type: 'function_call_output', call_id: 'fc_fit', output },
+      { type: 'message', role: 'user', content: 'newest request' },
+    ];
+
+    const result = await compactMessages(items, codexFormatHelper, { maxContextTokens: 500 });
+
+    expect(result.tokensAfter).toBeLessThanOrEqual(500);
+    expect(result.messages.find((item: any) => item.type === 'function_call_output')?.output).toBe(output);
+  });
+
+  it('does not retain orphaned Anthropic or OpenAI tool results after an LLM tail cut', async () => {
+    const cases = [
+      {
+        helper: anthropicFormatHelper,
+        call: {
+          role: 'assistant',
+          content: [{ type: 'tool_use', id: 'tool_boundary', name: 'Bash', input: { command: 'date' } }],
+        },
+        result: {
+          role: 'user',
+          content: [{ type: 'tool_result', tool_use_id: 'tool_boundary', content: 'result' }],
+        },
+        isOrphan: (items: any[]) => items.some((item) => (
+          Array.isArray(item.content)
+          && item.content.some((block: any) => block.type === 'tool_result')
+          && !items.some((candidate) => (
+            Array.isArray(candidate.content)
+            && candidate.content.some((block: any) => block.type === 'tool_use')
+          ))
+        )),
+      },
+      {
+        helper: openaiFormatHelper,
+        call: {
+          role: 'assistant',
+          content: null,
+          tool_calls: [{ id: 'tool_boundary', type: 'function', function: { name: 'Bash', arguments: '{}' } }],
+        },
+        result: { role: 'tool', tool_call_id: 'tool_boundary', content: 'result' },
+        isOrphan: (items: any[]) => items.some((item) => (
+          item.role === 'tool'
+          && !items.some((candidate) => candidate.tool_calls?.some((call: any) => call.id === item.tool_call_id))
+        )),
+      },
+    ];
+
+    for (const { helper, call, result: toolResult, isOrphan } of cases) {
+      const items = [
+        ...Array.from({ length: 12 }, (_, index) => ({
+          role: 'user',
+          content: `old ${index} ${'x'.repeat(1_000)}`,
+        })),
+        call,
+        toolResult,
+        ...Array.from({ length: 7 }, (_, index) => ({ role: 'user', content: `recent ${index}` })),
+      ];
+
+      const compacted = await compactMessages(items, helper, { maxContextTokens: 1_000 }, 1, fullConfig);
+      expect(isOrphan(compacted.messages)).toBe(false);
+    }
+  });
+
   it('keeps last 8 items intact across all formats', async () => {
     for (const [factory, helper] of [
       [anthropicExchange, anthropicFormatHelper],
@@ -388,7 +552,7 @@ describe('compactMessages (generic)', () => {
       [codexExchange, codexFormatHelper],
     ] as const) {
       const items = manyItems(factory as any, 'x'.repeat(10_000));
-      const result = await compactMessages(items, helper, { maxContextTokens: 1_000 }, 1, fullConfig);
+      const result = await compactMessages(items, helper, { maxContextTokens: 20_000 }, 1, fullConfig);
       expect(result.messages.slice(-8)).toEqual(items.slice(-8));
       mockChat.mockClear();
       mockChat.mockResolvedValue('Summary of the conversation.');
@@ -442,6 +606,21 @@ describe('compactMessages (generic)', () => {
     expect(result.method).toBe('llm');
     expect(result.messages[0].kind).toBe('summary');
   });
+
+  it('fails clearly when a custom format cannot fit its newest item', async () => {
+    const helper = {
+      isToolResult: () => false,
+      truncateToolResult: (item: any) => item,
+      serialize: (items: any[]) => JSON.stringify(items),
+      buildSummaryMessage: (summary: string) => ({ content: summary }),
+    };
+
+    await expect(compactMessages(
+      [{ content: 'x'.repeat(10_000) }],
+      helper,
+      { maxContextTokens: 100 },
+    )).rejects.toThrow('without dropping the newest item');
+  });
 });
 
 // =====================================================================
@@ -464,7 +643,7 @@ describe('compactAnthropicMessages (legacy wrapper)', () => {
 
   it('uses LLM summarization when fullConfig is provided', async () => {
     const messages = manyItems(anthropicExchange, 'x'.repeat(10_000));
-    const result = await compactAnthropicMessages(messages, { maxContextTokens: 1_000 }, 1, fullConfig);
+    const result = await compactAnthropicMessages(messages, { maxContextTokens: 20_000 }, 1, fullConfig);
 
     expect(result.compacted).toBe(true);
     expect(result.method).toBe('llm');
@@ -492,7 +671,7 @@ describe('compactOpenAIMessages (legacy wrapper)', () => {
 
   it('uses LLM summarization when fullConfig is provided', async () => {
     const messages = manyItems(openaiExchange, 'x'.repeat(10_000));
-    const result = await compactOpenAIMessages(messages, { maxContextTokens: 1_000 }, 1, fullConfig);
+    const result = await compactOpenAIMessages(messages, { maxContextTokens: 20_000 }, 1, fullConfig);
 
     expect(result.compacted).toBe(true);
     expect(result.method).toBe('llm');
@@ -518,7 +697,7 @@ describe('compactCodexMessages (legacy wrapper)', () => {
 
   it('uses LLM summarization when fullConfig is provided', async () => {
     const items = manyItems(codexExchange, 'x'.repeat(10_000));
-    const result = await compactCodexMessages(items, { maxContextTokens: 1_000 }, 1, fullConfig);
+    const result = await compactCodexMessages(items, { maxContextTokens: 20_000 }, 1, fullConfig);
 
     expect(result.compacted).toBe(true);
     expect(result.method).toBe('llm');

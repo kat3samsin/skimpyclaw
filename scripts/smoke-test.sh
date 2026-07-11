@@ -6,14 +6,18 @@
 set -euo pipefail
 
 PORT="${SKIMPYCLAW_SMOKE_PORT:-19999}"
-TOKEN=$(node -e "const c=JSON.parse(require('fs').readFileSync(require('os').homedir()+'/.skimpyclaw/config.json','utf-8')); console.log(c.dashboard?.token||'')" 2>/dev/null || echo "")
+TOKEN=""
 TIMEOUT=15
 PID=""
+SMOKE_HOME=""
 
 cleanup() {
   if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then
-    kill "$PID" 2>/dev/null
+    kill "$PID" 2>/dev/null || true
     wait "$PID" 2>/dev/null || true
+  fi
+  if [ -n "$SMOKE_HOME" ] && [ -d "$SMOKE_HOME" ]; then
+    rm -rf "$SMOKE_HOME" || true
   fi
 }
 trap cleanup EXIT
@@ -25,9 +29,67 @@ echo "[1/4] Building..."
 pnpm build 2>&1
 echo "  ✓ Build passed"
 
+SMOKE_HOME=$(mktemp -d "${TMPDIR:-/tmp}/skimpyclaw-smoke.XXXXXX")
+mkdir -p "$SMOKE_HOME/.skimpyclaw"
+chmod 700 "$SMOKE_HOME/.skimpyclaw"
+
+export SKIMPYCLAW_SMOKE_TOKEN
+SKIMPYCLAW_SMOKE_TOKEN=$(node --input-type=module -e "import { randomUUID } from 'node:crypto'; process.stdout.write(randomUUID());")
+cat > "$SMOKE_HOME/.skimpyclaw/config.json" <<'JSON'
+{
+  "gateway": {
+    "port": 18790,
+    "host": "127.0.0.1",
+    "mode": "local"
+  },
+  "dashboard": {
+    "token": "${SKIMPYCLAW_SMOKE_TOKEN}"
+  },
+  "agents": {
+    "default": "main",
+    "list": {
+      "main": {
+        "model": "anthropic/claude-haiku-4-5"
+      }
+    }
+  },
+  "models": {
+    "providers": {},
+    "aliases": {}
+  },
+  "channels": {
+    "telegram": {
+      "enabled": false,
+      "allowFrom": []
+    },
+    "discord": {
+      "enabled": false,
+      "allowFrom": []
+    }
+  },
+  "cron": {
+    "jobs": []
+  },
+  "heartbeat": {
+    "intervalMs": 3600000,
+    "prompt": "smoke test"
+  },
+  "allowedPaths": ["${HOME}/.skimpyclaw"]
+}
+JSON
+chmod 600 "$SMOKE_HOME/.skimpyclaw/config.json"
+
+# Resolve env/keychain references through the production config loader. Ensure
+# the token exists before startup so the smoke client and gateway use one value.
+TOKEN=$(HOME="$SMOKE_HOME" node --input-type=module -e "const { loadConfig, ensureDashboardToken } = await import('./dist/config.js'); const originalLog = console.log; console.log = () => {}; const config = loadConfig(); const token = ensureDashboardToken(config); console.log = originalLog; process.stdout.write(token);" 2>/dev/null || echo "")
+if [ -z "$TOKEN" ]; then
+  echo "  ✗ Could not resolve dashboard token"
+  exit 1
+fi
+
 # 2. Start on test port
 echo "[2/4] Starting gateway on port $PORT..."
-SKIMPYCLAW_SMOKE_TEST=1 SKIMPYCLAW_SMOKE_PORT="$PORT" node dist/index.js &
+HOME="$SMOKE_HOME" SKIMPYCLAW_SMOKE_TEST=1 SKIMPYCLAW_SMOKE_PORT="$PORT" node dist/index.js &
 PID=$!
 
 # Wait for gateway to be ready

@@ -34,6 +34,7 @@ vi.mock('../sessions.js', () => ({
 import { createDiscordAgentDelegateHandler } from '../channels/discord/delegation.js';
 import {
   _setThreadAgentStorePathForTesting,
+  getThreadAgentByThreadId,
   setAgentProfileModel,
   setAgentProfilePrompt,
   setAgentProfileThinking,
@@ -136,5 +137,96 @@ describe('Discord agent delegation', () => {
       }),
     );
     expect(result).toContain('Delegated to @codex-reviewer');
+  });
+
+  it('removes a starter message when cancellation arrives while sending it', async () => {
+    upsertAgentProfile({ alias: 'reviewer', agentId: 'main', createdBy: 'user-1' });
+    let resolveStarter = (_starter: unknown) => {};
+    const parentSendMock = vi.fn(() => new Promise((resolve) => {
+      resolveStarter = resolve;
+    }));
+    const deleteMock = vi.fn(async () => {});
+    const startThreadMock = vi.fn();
+    const fetchMock = vi.fn(async () => ({
+      id: 'parent-channel',
+      type: ChannelType.GuildText,
+      send: parentSendMock,
+    }));
+    const handler = createDiscordAgentDelegateHandler(() => ({
+      channels: { fetch: fetchMock },
+    }) as any);
+    const config = {
+      agents: { default: 'main', list: { main: { model: 'anthropic/test' } } },
+      channels: { telegram: { enabled: false, allowFrom: [] }, discord: { enabled: true, allowFrom: [] } },
+    } as any;
+    const controller = new AbortController();
+
+    const delegation = handler(
+      { alias: 'reviewer', task: 'Review this', mode: 'new_thread', wait: true, allowSelf: false },
+      config,
+      {
+        channel: 'discord',
+        discordChannelId: 'parent-channel',
+        abortSignal: controller.signal,
+      },
+    );
+    await vi.waitFor(() => expect(parentSendMock).toHaveBeenCalledTimes(1));
+    controller.abort();
+    resolveStarter({ delete: deleteMock, startThread: startThreadMock });
+
+    await expect(delegation).resolves.toContain('cancelled');
+    expect(deleteMock).toHaveBeenCalledTimes(1);
+    expect(startThreadMock).not.toHaveBeenCalled();
+  });
+
+  it('binds and marks a created thread when cancellation arrives during creation', async () => {
+    upsertAgentProfile({ alias: 'reviewer', agentId: 'main', createdBy: 'user-1' });
+    let resolveThread = (_thread: unknown) => {};
+    const threadSendMock = vi.fn(async () => ({}));
+    const startThreadMock = vi.fn(() => new Promise((resolve) => {
+      resolveThread = resolve;
+    }));
+    const parentSendMock = vi.fn(async () => ({
+      delete: vi.fn(async () => {}),
+      startThread: startThreadMock,
+    }));
+    const fetchMock = vi.fn(async () => ({
+      id: 'parent-channel',
+      type: ChannelType.GuildText,
+      send: parentSendMock,
+    }));
+    const handler = createDiscordAgentDelegateHandler(() => ({
+      channels: { fetch: fetchMock },
+    }) as any);
+    const config = {
+      agents: { default: 'main', list: { main: { model: 'anthropic/test' } } },
+      channels: { telegram: { enabled: false, allowFrom: [] }, discord: { enabled: true, allowFrom: [] } },
+    } as any;
+    const controller = new AbortController();
+
+    const delegation = handler(
+      { alias: 'reviewer', task: 'Review this', mode: 'new_thread', wait: true, allowSelf: false },
+      config,
+      {
+        channel: 'discord',
+        discordChannelId: 'parent-channel',
+        approverUserId: 'user-1',
+        abortSignal: controller.signal,
+      },
+    );
+    await vi.waitFor(() => expect(startThreadMock).toHaveBeenCalledTimes(1));
+    controller.abort();
+    resolveThread({
+      id: 'created-thread',
+      guildId: 'guild-1',
+      parentId: 'parent-channel',
+      send: threadSendMock,
+      sendTyping: vi.fn(async () => {}),
+    });
+
+    await expect(delegation).resolves.toContain('cancelled');
+    expect(getThreadAgentByThreadId('created-thread')?.alias).toBe('reviewer');
+    expect(threadSendMock).toHaveBeenCalledWith(expect.stringContaining('cancelled'));
+    expect(runAgentTurnMock).not.toHaveBeenCalled();
   });
 });

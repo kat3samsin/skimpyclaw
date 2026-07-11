@@ -216,12 +216,12 @@ export function ensureDashboardToken(config: Config): string {
 
   const token = randomUUID();
 
-  // Read raw config to preserve env var references, then add the token.
-  // loadRawConfig() already runs migratePlaintextSecrets(), so no need to run it again.
+  // Read raw config to preserve existing env/keychain references, then persist
+  // the generated token through the same secret-migration path as other saves.
   const raw = loadRawConfig();
   raw.dashboard = raw.dashboard || {};
   raw.dashboard.token = token;
-  writeConfigFile(raw);
+  saveConfig(raw as Config);
 
   // Update the in-memory config too
   if (!config.dashboard) {

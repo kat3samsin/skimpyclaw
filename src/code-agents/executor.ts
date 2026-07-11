@@ -31,11 +31,17 @@ import {
 } from './registry.js';
 import { buildCodeAgentArgs, buildCodeAgentSpawnEnv, notifyCodeAgentResult } from './utils.js';
 import { cleanupCodeAgentWorktree } from './worktrees.js';
-import { parseStreamJsonForLive, parseClaudeOutput, parseCodexOutput } from './parser.js';
+import { CodeAgentOutputCollector } from './parser.js';
 import { startTrace, addEvent, endTrace } from '../audit.js';
 import { buildUsageRecord, recordUsage } from '../usage.js';
 
 const CANCELLED_MESSAGE = 'Cancelled by user';
+const STDERR_PREVIEW_CHARS = 2000;
+
+function appendTail(current: string, chunk: string, maxChars: number): string {
+  const combined = current + chunk;
+  return combined.length > maxChars ? combined.slice(-maxChars) : combined;
+}
 
 /** Supported JS package managers. */
 export type PackageManager = 'pnpm' | 'yarn' | 'npm' | 'bun';
@@ -386,15 +392,21 @@ export async function runCodeAgentBackground(
         sessionId: caTask.cliSessionId,
       });
 
-  let stdout = '';
-  let stderr = '';
+  let outputCollector = new CodeAgentOutputCollector();
+  let stderrTail = '';
 
   // Full log file — untruncated stdout + stderr
   const logPath = join(getCodeAgentsDir(), `${id}.log`);
   ensureCodeAgentsDir();
   const logStream = createWriteStream(logPath, { flags: 'w' });
   let logStreamEnded = false;
-  const logWrite = (data: string | Buffer) => { if (!logStreamEnded) logStream.write(data); };
+  const logWrite = (data: string | Buffer, source?: { pause: () => unknown; resume: () => unknown }) => {
+    if (logStreamEnded) return;
+    if (!logStream.write(data) && source) {
+      source.pause();
+      logStream.once('drain', () => source.resume());
+    }
+  };
   logWrite(`=== ${id} | ${agent} | ${new Date().toISOString()} ===\n`);
   logWrite(`Task: ${task.slice(0, 500)}\n`);
   logWrite(`Workdir: ${workdir}\n\n`);
@@ -419,26 +431,25 @@ export async function runCodeAgentBackground(
       const STATUS_WRITE_INTERVAL = 3000;
 
       proc.stdout.on('data', (chunk: Buffer) => {
-        stdout += chunk.toString();
-        logWrite(chunk);
+        outputCollector.push(chunk);
+        logWrite(chunk, proc.stdout);
         const now = Date.now();
         if (now - lastStatusWrite > STATUS_WRITE_INTERVAL) {
           lastStatusWrite = now;
-          // Parse stream-json into readable live output
-          const parsed = parseStreamJsonForLive(stdout);
-          const live = stderr ? `[progress]\n${stderr.slice(-2000)}\n\n${parsed}` : parsed;
+          const parsed = outputCollector.getLiveOutput();
+          const live = stderrTail ? `[progress]\n${stderrTail}\n\n${parsed}` : parsed;
           caTask.liveOutput = live;
           writeCodeAgentTask(caTask);
         }
       });
       proc.stderr.on('data', (chunk: Buffer) => {
-        stderr += chunk.toString();
-        logWrite(chunk);
+        stderrTail = appendTail(stderrTail, chunk.toString(), STDERR_PREVIEW_CHARS);
+        logWrite(chunk, proc.stderr);
         const now = Date.now();
         if (now - lastStatusWrite > STATUS_WRITE_INTERVAL) {
           lastStatusWrite = now;
-          const parsedOut = parseStreamJsonForLive(stdout);
-          const live = `[progress]\n${stderr.slice(-2000)}\n\n${parsedOut}`;
+          const parsedOut = outputCollector.getLiveOutput();
+          const live = `[progress]\n${stderrTail}\n\n${parsedOut}`;
           caTask.liveOutput = live;
           writeCodeAgentTask(caTask);
         }
@@ -461,6 +472,7 @@ export async function runCodeAgentBackground(
       });
 
       proc.on('close', (code) => {
+        outputCollector.finish();
         if (activeTimer) clearTimeout(activeTimer);
         activeTimer = null;
         activeProc = null;
@@ -481,6 +493,7 @@ export async function runCodeAgentBackground(
       });
 
       proc.on('error', (err) => {
+        outputCollector.finish();
         if (activeTimer) clearTimeout(activeTimer);
         activeTimer = null;
         activeProc = null;
@@ -497,7 +510,7 @@ export async function runCodeAgentBackground(
     // Parse output — stream-json format is newline-delimited JSON events
     let agentOutput: string;
     if (agent === 'claude') {
-      const parsed = parseClaudeOutput(stdout);
+      const parsed = outputCollector.getClaudeOutput();
       agentOutput = parsed.text;
       // Store cost/token data from CLI result event
       if (parsed.totalCost != null) caTask.totalCost = (caTask.totalCost ?? 0) + parsed.totalCost;
@@ -518,7 +531,7 @@ export async function runCodeAgentBackground(
         }));
       }
     } else {
-      agentOutput = parseCodexOutput(stdout);
+      agentOutput = outputCollector.getCodexOutput();
     }
 
     if (exitCode !== 0) {
@@ -599,8 +612,8 @@ export async function runCodeAgentBackground(
 
         // Re-run agent with the validation errors appended to the prompt
         const retryTask = `Fix build/test errors in the ${agent} codebase (workdir: ${workdir}).\n\nOriginal task summary: ${task.slice(0, 300)}\n\nErrors to fix:\n${validateResult.slice(0, 4_000)}`;
-        stdout = '';
-        stderr = '';
+        outputCollector = new CodeAgentOutputCollector();
+        stderrTail = '';
 
         const { cmd: retryCmd, args: retryArgs } = buildCodeAgentArgs({
           task: retryTask,
@@ -623,23 +636,23 @@ export async function runCodeAgentBackground(
 
           let lastStatusWrite = 0;
           retryProc.stdout.on('data', (chunk: Buffer) => {
-            stdout += chunk.toString();
+            outputCollector.push(chunk);
             const now = Date.now();
             if (now - lastStatusWrite > 3000) {
               lastStatusWrite = now;
-              const retryParsed = parseStreamJsonForLive(stdout);
-              const live = stderr ? `[progress]\n${stderr.slice(-2000)}\n\n${retryParsed}` : retryParsed;
+              const retryParsed = outputCollector.getLiveOutput();
+              const live = stderrTail ? `[progress]\n${stderrTail}\n\n${retryParsed}` : retryParsed;
               caTask.liveOutput = live;
               writeCodeAgentTask(caTask);
             }
           });
           retryProc.stderr.on('data', (chunk: Buffer) => {
-            stderr += chunk.toString();
+            stderrTail = appendTail(stderrTail, chunk.toString(), STDERR_PREVIEW_CHARS);
             const now = Date.now();
             if (now - lastStatusWrite > 3000) {
               lastStatusWrite = now;
-              const parsedOut = parseStreamJsonForLive(stdout);
-              const live = `[progress]\n${stderr.slice(-2000)}\n\n${parsedOut}`;
+              const parsedOut = outputCollector.getLiveOutput();
+              const live = `[progress]\n${stderrTail}\n\n${parsedOut}`;
               caTask.liveOutput = live;
               writeCodeAgentTask(caTask);
             }
@@ -659,6 +672,7 @@ export async function runCodeAgentBackground(
             try { activeProc?.kill('SIGTERM'); } catch { /* best effort */ }
           });
           retryProc.on('close', (code) => {
+            outputCollector.finish();
             if (activeTimer) clearTimeout(activeTimer);
             activeTimer = null;
             activeProc = null;
@@ -669,6 +683,7 @@ export async function runCodeAgentBackground(
             resolveRetry(code);
           });
           retryProc.on('error', (err) => {
+            outputCollector.finish();
             if (activeTimer) clearTimeout(activeTimer);
             activeTimer = null;
             activeProc = null;
@@ -679,7 +694,7 @@ export async function runCodeAgentBackground(
 
         if (retryExitCode === 0) {
           if (agent === 'claude') {
-            const retryParsed = parseClaudeOutput(stdout);
+            const retryParsed = outputCollector.getClaudeOutput();
             agentOutput = retryParsed.text;
             // Accumulate cost/tokens from retry run
             if (retryParsed.totalCost != null) caTask.totalCost = (caTask.totalCost ?? 0) + retryParsed.totalCost;
@@ -699,7 +714,7 @@ export async function runCodeAgentBackground(
               }));
             }
           } else {
-            agentOutput = parseCodexOutput(stdout);
+            agentOutput = outputCollector.getCodexOutput();
           }
           caTask.status = 'validating';
           caTask.liveOutput = undefined;

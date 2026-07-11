@@ -16,6 +16,7 @@ import {
 } from './channels.js';
 
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+let heartbeatInitialTimer: ReturnType<typeof setTimeout> | null = null;
 let running = false;
 
 function getHeartbeatTools(config: Config): ToolConfig {
@@ -58,6 +59,11 @@ function getHeartbeatPrompt(config: Config): string {
 }
 
 export function initHeartbeat(config: Config): void {
+  if (heartbeatInitialTimer) {
+    clearTimeout(heartbeatInitialTimer);
+    heartbeatInitialTimer = null;
+  }
+
   const { heartbeat } = config;
   if (!heartbeat?.prompt || !heartbeat?.intervalMs) {
     console.log('[heartbeat] Disabled (no prompt or interval configured)');
@@ -69,7 +75,8 @@ export function initHeartbeat(config: Config): void {
 
   // Run first check after a short delay (let everything else initialize).
   // Never let async heartbeat failures bubble out of timer callbacks.
-  setTimeout(() => {
+  heartbeatInitialTimer = setTimeout(() => {
+    heartbeatInitialTimer = null;
     void runHeartbeatCheck(config).catch((error) => {
       const msg = error instanceof Error ? error.message : String(error);
       console.error(`[heartbeat] Initial check failed: ${msg}`);
@@ -85,6 +92,10 @@ export function initHeartbeat(config: Config): void {
 }
 
 export function stopHeartbeat(): void {
+  if (heartbeatInitialTimer) {
+    clearTimeout(heartbeatInitialTimer);
+    heartbeatInitialTimer = null;
+  }
   if (heartbeatTimer) {
     clearInterval(heartbeatTimer);
     heartbeatTimer = null;

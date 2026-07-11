@@ -1,7 +1,10 @@
 // Fetch tool — lightweight HTTP requests and web search without browser overhead
 
+import type { LookupAddress } from 'dns';
 import { lookup } from 'dns/promises';
 import { BlockList, isIP } from 'net';
+import type { LookupFunction } from 'net';
+import { Agent } from 'undici';
 import type { ToolConfig } from '../types.js';
 
 export interface FetchInput {
@@ -14,6 +17,11 @@ export interface FetchInput {
 const MAX_RESPONSE_CHARS = 50_000;
 const TIMEOUT_MS = 30_000;
 const MAX_REDIRECTS = 5;
+
+interface ValidatedTarget {
+  url: URL;
+  addresses: LookupAddress[];
+}
 
 const BLOCKED_HOSTNAMES = new Set([
   'localhost',
@@ -60,7 +68,7 @@ function isBlockedIpAddress(address: string): boolean {
   return true;
 }
 
-async function validateTarget(rawUrl: string): Promise<URL> {
+async function validateTarget(rawUrl: string): Promise<ValidatedTarget> {
   const parsed = new URL(rawUrl);
   if (!['http:', 'https:'].includes(parsed.protocol)) {
     throw new Error(`Unsupported protocol: ${parsed.protocol}`);
@@ -74,23 +82,52 @@ async function validateTarget(rawUrl: string): Promise<URL> {
     throw new Error(`Blocked internal host: ${hostname}`);
   }
 
-  if (isIP(hostname) !== 0 && isBlockedIpAddress(hostname)) {
+  const literalFamily = isIP(hostname);
+  if (literalFamily !== 0 && isBlockedIpAddress(hostname)) {
     throw new Error(`Blocked target IP: ${hostname}`);
   }
 
-  if (isIP(hostname) === 0) {
-    const resolved = await lookup(hostname, { all: true, verbatim: true });
-    if (!resolved.length) {
+  let addresses: LookupAddress[];
+  if (literalFamily === 0) {
+    addresses = await lookup(hostname, { all: true, verbatim: true });
+    if (!addresses.length) {
       throw new Error(`Could not resolve host: ${hostname}`);
     }
-    for (const rec of resolved) {
+    for (const rec of addresses) {
       if (isBlockedIpAddress(rec.address)) {
         throw new Error(`Blocked resolved IP for ${hostname}: ${rec.address}`);
       }
     }
+  } else {
+    addresses = [{ address: hostname, family: literalFamily }];
   }
 
-  return parsed;
+  return { url: parsed, addresses };
+}
+
+function createPinnedAgent(addresses: LookupAddress[]): Agent {
+  const pinned = addresses.map(record => ({ ...record }));
+  const pinnedLookup: LookupFunction = (_hostname, options, callback) => {
+    const requestedFamily = options.family === 4 || options.family === 6 ? options.family : 0;
+    const eligible = requestedFamily
+      ? pinned.filter(record => record.family === requestedFamily)
+      : pinned;
+    if (!eligible.length) {
+      const error = Object.assign(new Error('No validated address matches the requested family'), { code: 'ENOTFOUND' });
+      callback(error, '');
+      return;
+    }
+    if (options.all) {
+      callback(null, eligible.map(record => ({ ...record })));
+      return;
+    }
+    callback(null, eligible[0].address, eligible[0].family);
+  };
+
+  return new Agent({
+    connect: { lookup: pinnedLookup },
+    autoSelectFamily: true,
+  });
 }
 
 function isRedirectStatus(status: number): boolean {
@@ -123,13 +160,22 @@ function htmlToText(html: string): string {
     .trim();
 }
 
-export async function executeFetch(input: FetchInput, _config: ToolConfig): Promise<string> {
+export async function executeFetch(
+  input: FetchInput,
+  _config: ToolConfig,
+  abortSignal?: AbortSignal,
+): Promise<string> {
   const { url, method = 'GET', headers = {}, body } = input;
 
   if (!url) return 'Error: url is required';
 
+  let requestTimedOut = false;
+  let cleanupActiveRequest: (() => void) | null = null;
+  let activeDispatcher: Agent | null = null;
   try {
+    if (abortSignal?.aborted) return 'Error: Request cancelled';
     let target = await validateTarget(url);
+    if (abortSignal?.aborted) return 'Error: Request cancelled';
     const defaultHeaders: Record<string, string> = {
       'User-Agent': 'SkimpyClaw/1.0',
     };
@@ -138,16 +184,47 @@ export async function executeFetch(input: FetchInput, _config: ToolConfig): Prom
     let response: Response | null = null;
 
     for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
-      response = await fetch(target, {
-        method: requestMethod,
-        headers: { ...defaultHeaders, ...headers },
-        body: requestBody,
-        signal: AbortSignal.timeout(TIMEOUT_MS),
-        redirect: 'manual',
-      });
+      if (abortSignal?.aborted) return 'Error: Request cancelled';
+      const requestController = new AbortController();
+      requestTimedOut = false;
+      const timeout = setTimeout(() => {
+        requestTimedOut = true;
+        requestController.abort();
+      }, TIMEOUT_MS);
+      const onAbort = () => requestController.abort();
+      const cleanupRequest = () => {
+        clearTimeout(timeout);
+        abortSignal?.removeEventListener('abort', onAbort);
+      };
+      abortSignal?.addEventListener('abort', onAbort, { once: true });
+      const dispatcher = createPinnedAgent(target.addresses);
+      try {
+        response = await fetch(target.url, {
+          method: requestMethod,
+          headers: { ...defaultHeaders, ...headers },
+          body: requestBody,
+          signal: requestController.signal,
+          redirect: 'manual',
+          dispatcher,
+        } as RequestInit & { dispatcher: Agent });
+      } catch (err) {
+        cleanupRequest();
+        dispatcher.destroy();
+        throw err;
+      }
 
       if (!isRedirectStatus(response.status)) {
+        cleanupActiveRequest = cleanupRequest;
+        activeDispatcher = dispatcher;
         break;
+      }
+      cleanupRequest();
+      try {
+        await response.body?.cancel();
+        await dispatcher.close();
+      } catch (err) {
+        dispatcher.destroy();
+        throw err;
       }
       if (hop === MAX_REDIRECTS) {
         return `Error: Too many redirects (>${MAX_REDIRECTS})`;
@@ -157,7 +234,8 @@ export async function executeFetch(input: FetchInput, _config: ToolConfig): Prom
       if (!location) {
         return `Error: Redirect response missing Location header (HTTP ${response.status})`;
       }
-      target = await validateTarget(new URL(location, target).toString());
+      target = await validateTarget(new URL(location, target.url).toString());
+      if (abortSignal?.aborted) return 'Error: Request cancelled';
       if ((response.status === 301 || response.status === 302 || response.status === 303) && requestMethod !== 'GET' && requestMethod !== 'HEAD') {
         requestMethod = 'GET';
         requestBody = undefined;
@@ -169,28 +247,41 @@ export async function executeFetch(input: FetchInput, _config: ToolConfig): Prom
 
     const status = `${response.status} ${response.statusText}`;
     const contentType = response.headers.get('content-type') || '';
+    const rawBody = await response.text();
     let responseBody: string;
 
     if (contentType.includes('json')) {
-      const text = await response.text();
       try {
-        responseBody = JSON.stringify(JSON.parse(text), null, 2);
+        responseBody = JSON.stringify(JSON.parse(rawBody), null, 2);
       } catch {
-        responseBody = text;
+        responseBody = rawBody;
       }
     } else if (contentType.includes('html')) {
-      const html = await response.text();
-      responseBody = htmlToText(html);
+      responseBody = htmlToText(rawBody);
     } else {
-      responseBody = await response.text();
+      responseBody = rawBody;
     }
 
     if (responseBody.length > MAX_RESPONSE_CHARS) {
       responseBody = responseBody.slice(0, MAX_RESPONSE_CHARS) + `\n\n[Truncated: ${responseBody.length} chars total]`;
     }
 
+    cleanupActiveRequest?.();
+    cleanupActiveRequest = null;
+    await activeDispatcher?.close();
+    activeDispatcher = null;
     return `HTTP ${status}\n\n${responseBody}`;
   } catch (err) {
+    cleanupActiveRequest?.();
+    cleanupActiveRequest = null;
+    activeDispatcher?.destroy();
+    activeDispatcher = null;
+    if (abortSignal?.aborted) {
+      return 'Error: Request cancelled';
+    }
+    if (requestTimedOut) {
+      return `Error: Request timed out after ${TIMEOUT_MS / 1000}s`;
+    }
     if (err instanceof Error && err.name === 'TimeoutError') {
       return `Error: Request timed out after ${TIMEOUT_MS / 1000}s`;
     }

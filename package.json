@@ -3,6 +3,10 @@
   "version": "0.4.0",
   "description": "A lobster in a bikini",
   "type": "module",
+  "engines": {
+    "node": ">=22.20.0"
+  },
+  "packageManager": "pnpm@10.29.3",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
@@ -16,24 +20,30 @@
     "LICENSE"
   ],
   "scripts": {
+    "bootstrap": "pnpm install --frozen-lockfile && pnpm --dir web/dashboard install --frozen-lockfile",
     "cli": "tsx src/cli.ts",
+    "doctor": "tsx src/cli.ts doctor",
     "start": "tsx src/index.ts",
     "dev": "tsx watch src/index.ts",
     "dashboard:dev": "pnpm --dir web/dashboard dev",
     "dashboard:build": "pnpm --dir web/dashboard build",
+    "dashboard:test": "pnpm --dir web/dashboard test",
     "docs:dev": "pnpm --dir docs dev",
     "docs:build": "pnpm --dir docs install --frozen-lockfile && pnpm --dir docs build",
     "docs:preview": "pnpm --dir docs preview",
     "setup": "tsx src/setup.ts",
     "onboard": "tsx src/cli.ts onboard",
     "clean": "rm -rf dist",
-    "build": "pnpm clean && tsc && pnpm dashboard:build",
-    "release:check": "pnpm build && pnpm test",
+    "build": "pnpm clean && tsc -p tsconfig.build.json && pnpm dashboard:build",
+    "release:check": "pnpm build && pnpm test && pnpm dashboard:test",
     "release:local": "bash ./scripts/release.sh",
+    "security:audit": "pnpm audit --audit-level=low --registry=https://registry.npmjs.org && pnpm --dir web/dashboard audit --audit-level=low --registry=https://registry.npmjs.org && pnpm --dir docs audit --audit-level=low --registry=https://registry.npmjs.org",
     "lint": "eslint \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "ci": "pnpm run lint && pnpm run typecheck && pnpm run test"
+    "test:coverage": "vitest run --coverage",
+    "dashboard:test:coverage": "pnpm --dir web/dashboard test:coverage",
+    "ci": "pnpm run lint && pnpm run build && pnpm run test:coverage && pnpm run dashboard:test:coverage"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",
@@ -41,25 +51,48 @@
     "@langfuse/otel": "^4.5.1",
     "@langfuse/tracing": "^4.5.1",
     "@opentelemetry/api": "^1.9.0",
-    "@opentelemetry/core": "^2.0.1",
-    "@opentelemetry/exporter-trace-otlp-http": "^0.202.0",
-    "@opentelemetry/sdk-trace-base": "^2.0.1",
-    "@opentelemetry/sdk-trace-node": "^2.0.1",
+    "@opentelemetry/core": "^2.9.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.220.0",
+    "@opentelemetry/sdk-trace-base": "^2.9.0",
+    "@opentelemetry/sdk-trace-node": "^2.9.0",
     "croner": "^8.0.0",
-    "discord.js": "^14.25.1",
+    "discord.js": "^14.26.5",
     "dotenv": "^16.4.0",
-    "fastify": "^5.7.2",
+    "fastify": "^5.10.0",
     "grammy": "^1.21.1",
     "gray-matter": "^4.0.3",
-    "mcporter": "^0.7.3",
+    "mcporter": "^0.9.0",
     "openai": "^4.47.0",
-    "pdf-parse": "^2.4.5"
+    "pdf-parse": "^2.4.5",
+    "undici": "6.27.0"
   },
   "pnpm": {
     "overrides": {
-      "@eslint/config-array>minimatch": "3.1.2",
-      "@eslint/eslintrc>minimatch": "3.1.2",
-      "vite>rollup": "4.57.1"
+      "@eslint/config-array>minimatch": "3.1.4",
+      "@eslint/eslintrc>minimatch": "3.1.4",
+      "@hono/node-server": "1.19.13",
+      "@opentelemetry/core": "2.9.0",
+      "ajv@8": "8.18.0",
+      "brace-expansion@1": "1.1.13",
+      "express-rate-limit": "8.2.2",
+      "fast-uri": "3.1.2",
+      "flatted": "3.4.2",
+      "form-data": "4.0.6",
+      "hono": "4.12.25",
+      "ip-address": "10.2.0",
+      "js-yaml": "3.15.0",
+      "lodash": "4.18.1",
+      "minimatch@3": "3.1.4",
+      "minimatch@9": "9.0.7",
+      "path-to-regexp": "8.4.0",
+      "picomatch": "4.0.4",
+      "postcss": "8.5.10",
+      "protobufjs": "7.6.3",
+      "qs": "6.15.3",
+      "undici": "6.27.0",
+      "vite": "6.4.3",
+      "vite>rollup": "4.59.0",
+      "ws": "8.21.0"
     },
     "onlyBuiltDependencies": [
       "esbuild"
@@ -68,11 +101,13 @@
   "devDependencies": {
     "@eslint/js": "^9.39.2",
     "@types/node": "^20.11.0",
+    "@vitest/coverage-v8": "4.1.10",
     "eslint": "^9.39.2",
     "globals": "^17.3.0",
     "tsx": "^4.7.0",
     "typescript": "^5.4.0",
     "typescript-eslint": "^8.54.0",
-    "vitest": "^4.0.18"
+    "vite": "6.4.3",
+    "vitest": "^4.1.10"
   }
 }

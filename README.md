@@ -226,9 +226,11 @@ dist/                   # Compiled output + built dashboard assets
 
 ## Development
 
+Requires Node.js 22.20 or newer (Node 22 or 24 LTS) and pnpm 10.29.3.
+
 ```bash
-# Install dependencies
-pnpm install
+# Install root and dashboard dependencies from their lockfiles
+pnpm run bootstrap
 
 # Run in development mode (hot reload)
 pnpm dev
@@ -240,7 +242,7 @@ pnpm build
 pnpm test
 
 # Run full CI gate
-pnpm ci
+pnpm run ci
 
 # Run doctor checks
 pnpm run doctor
@@ -249,3 +251,5 @@ pnpm run doctor
 ## License
 
 MIT
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Follow [SECURITY.md](SECURITY.md) before sharing vulnerability details.

@@ -63,8 +63,10 @@ skimpyclaw tools remove my-server
 ```bash
 pnpm run start        # run once
 pnpm run dev          # run with watch mode
+pnpm run bootstrap    # install root and dashboard lockfiles
 pnpm run build        # compile TypeScript to dist/
 pnpm run typecheck    # type-check only
 pnpm run test         # run Vitest
-pnpm run ci           # full CI gate (lint + typecheck + test)
+pnpm run ci           # full CI gate (lint + production build + backend/dashboard tests)
+pnpm run doctor       # run local preflight checks
 ```

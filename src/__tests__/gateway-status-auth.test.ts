@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
+import { mkdirSync, mkdtempSync, rmSync, statSync, symlinkSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
@@ -93,7 +93,7 @@ describe('gateway /status auth', () => {
     const dir = mkdtempSync(join(tmpdir(), 'skimpy-artifact-route-'));
     const artifactPath = join(dir, 'review.html');
     writeFileSync(artifactPath, '<!doctype html><title>Review</title>', 'utf-8');
-    const artifact = registerLocalArtifact(artifactPath);
+    const artifact = registerLocalArtifact(artifactPath, [dir]);
     expect(artifact).not.toBeNull();
 
     const app = await createGateway(cfg);
@@ -101,6 +101,11 @@ describe('gateway /status auth', () => {
       const res = await app.inject({ method: 'GET', url: `/artifacts/${artifact!.id}/review.html` });
       expect(res.statusCode).toBe(200);
       expect(res.headers['content-type']).toContain('text/html');
+      expect(res.headers['content-security-policy']).toContain("sandbox; default-src 'none'");
+      expect(res.headers['content-security-policy']).toContain("script-src 'none'");
+      expect(res.headers['content-security-policy']).toContain("connect-src 'none'");
+      expect(res.headers['x-content-type-options']).toBe('nosniff');
+      expect(res.headers['referrer-policy']).toBe('no-referrer');
       expect(res.body).toContain('<title>Review</title>');
     } finally {
       await app.close();
@@ -110,18 +115,53 @@ describe('gateway /status auth', () => {
 
   it('serves persisted local artifacts after memory is cleared', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'skimpy-artifact-persist-'));
+    const previousHome = process.env.HOME;
+    try {
+      process.env.HOME = dir;
+      process.env.SKIMPYCLAW_ARTIFACT_REGISTRY_PATH = join(dir, 'registry.json');
+      const artifactDir = join(dir, '.skimpyclaw', 'reviews');
+      mkdirSync(artifactDir, { recursive: true });
+      const artifactPath = join(artifactDir, 'review.html');
+      writeFileSync(artifactPath, '<!doctype html><title>Persisted</title>', 'utf-8');
+      const artifact = registerLocalArtifact(artifactPath);
+      expect(artifact).not.toBeNull();
+      expect(statSync(process.env.SKIMPYCLAW_ARTIFACT_REGISTRY_PATH).mode & 0o777).toBe(0o600);
+      clearRegisteredArtifactMemoryForTesting();
+
+      const app = await createGateway(cfg);
+      try {
+        const res = await app.inject({ method: 'GET', url: `/artifacts/${artifact!.id}/review.html` });
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toContain('<title>Persisted</title>');
+      } finally {
+        await app.close();
+      }
+    } finally {
+      clearRegisteredArtifactsForTesting();
+      process.env.HOME = previousHome;
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects persisted artifact paths outside managed artifact roots', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'skimpy-artifact-forged-'));
     process.env.SKIMPYCLAW_ARTIFACT_REGISTRY_PATH = join(dir, 'registry.json');
-    const artifactPath = join(dir, 'review.html');
-    writeFileSync(artifactPath, '<!doctype html><title>Persisted</title>', 'utf-8');
-    const artifact = registerLocalArtifact(artifactPath);
-    expect(artifact).not.toBeNull();
+    const outsidePath = join(dir, 'outside-secret.html');
+    writeFileSync(outsidePath, '<!doctype html><title>Outside Secret</title>', 'utf-8');
+    writeFileSync(process.env.SKIMPYCLAW_ARTIFACT_REGISTRY_PATH, JSON.stringify([{
+      id: 'forged-artifact',
+      path: outsidePath,
+      name: 'review.html',
+      contentType: 'text/html; charset=utf-8',
+      createdAt: Date.now(),
+    }]), 'utf-8');
     clearRegisteredArtifactMemoryForTesting();
 
     const app = await createGateway(cfg);
     try {
-      const res = await app.inject({ method: 'GET', url: `/artifacts/${artifact!.id}/review.html` });
-      expect(res.statusCode).toBe(200);
-      expect(res.body).toContain('<title>Persisted</title>');
+      const res = await app.inject({ method: 'GET', url: '/artifacts/forged-artifact/review.html' });
+      expect(res.statusCode).toBe(404);
+      expect(res.body).not.toContain('Outside Secret');
     } finally {
       await app.close();
       clearRegisteredArtifactsForTesting();
@@ -142,6 +182,7 @@ describe('gateway /status auth', () => {
     writeFileSync(join(reportBundleDir, 'index.html'), '<!doctype html><title>Daily Index</title>', 'utf-8');
     writeFileSync(join(reportBundleDir, 'news.html'), '<!doctype html><title>Daily News</title>', 'utf-8');
     writeFileSync(join(reportDir, `${date}.html`), '<!doctype html><title>Old Daily</title>', 'utf-8');
+    writeFileSync(join(reportDir, '2000-01-01.html'), '<!doctype html><title>Flat Daily</title>', 'utf-8');
 
     const app = await createGateway(cfg);
     try {
@@ -155,6 +196,11 @@ describe('gateway /status auth', () => {
 
       const indexRes = await app.inject({ method: 'GET', url: `/reports/chief-daily-reader/${date}/index.html` });
       expect(indexRes.statusCode).toBe(200);
+      expect(indexRes.headers['content-security-policy']).toContain("sandbox; default-src 'none'");
+      expect(indexRes.headers['content-security-policy']).toContain("script-src 'none'");
+      expect(indexRes.headers['content-security-policy']).toContain("connect-src 'none'");
+      expect(indexRes.headers['x-content-type-options']).toBe('nosniff');
+      expect(indexRes.headers['referrer-policy']).toBe('no-referrer');
       expect(indexRes.body).toContain('<title>Daily Index</title>');
 
       const newsRes = await app.inject({ method: 'GET', url: `/reports/chief-daily-reader/${date}/news.html` });
@@ -164,6 +210,38 @@ describe('gateway /status auth', () => {
       const todayNewsRes = await app.inject({ method: 'GET', url: '/reports/chief-daily-reader/today/news.html' });
       expect(todayNewsRes.statusCode).toBe(200);
       expect(todayNewsRes.body).toContain('<title>Daily News</title>');
+
+      const flatRes = await app.inject({ method: 'GET', url: '/reports/chief-daily-reader/2000-01-01.html' });
+      expect(flatRes.statusCode).toBe(200);
+      expect(flatRes.headers['content-security-policy']).toContain("sandbox; default-src 'none'");
+      expect(flatRes.headers['content-security-policy']).toContain("script-src 'none'");
+      expect(flatRes.headers['content-security-policy']).toContain("connect-src 'none'");
+      expect(flatRes.headers['x-content-type-options']).toBe('nosniff');
+      expect(flatRes.headers['referrer-policy']).toBe('no-referrer');
+      expect(flatRes.body).toContain('<title>Flat Daily</title>');
+    } finally {
+      await app.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects report symlinks whose targets are outside the reports root', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'skimpy-report-symlink-'));
+    process.env.SKIMPYCLAW_REPORTS_DIR = join(dir, 'reports');
+    const reportDir = join(process.env.SKIMPYCLAW_REPORTS_DIR, 'chief-daily-reader');
+    const bundleDir = join(reportDir, '2000-01-02');
+    const outsidePath = join(dir, 'outside-secret.html');
+    mkdirSync(bundleDir, { recursive: true });
+    writeFileSync(outsidePath, '<!doctype html><title>Outside Secret</title>', 'utf-8');
+    symlinkSync(outsidePath, join(reportDir, '2000-01-01.html'));
+    symlinkSync(outsidePath, join(bundleDir, 'news.html'));
+
+    const app = await createGateway(cfg);
+    try {
+      const flatRes = await app.inject({ method: 'GET', url: '/reports/chief-daily-reader/2000-01-01.html' });
+      const sectionRes = await app.inject({ method: 'GET', url: '/reports/chief-daily-reader/2000-01-02/news.html' });
+      expect([flatRes.statusCode, sectionRes.statusCode]).toEqual([404, 404]);
+      expect(`${flatRes.body}${sectionRes.body}`).not.toContain('Outside Secret');
     } finally {
       await app.close();
       rmSync(dir, { recursive: true, force: true });

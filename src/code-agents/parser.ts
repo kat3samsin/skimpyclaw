@@ -1,5 +1,11 @@
 // Code Agent Output Parser
 
+import { StringDecoder } from 'node:string_decoder';
+
+export const MAX_STREAM_EVENT_CHARS = 1024 * 1024;
+const MAX_OUTPUT_PREVIEW_CHARS = 5000;
+const OVERSIZED_EVENT_MESSAGE = '[oversized stream event omitted from in-memory preview]';
+
 interface ClaudeContentBlock {
   type?: string;
   text?: string;
@@ -85,6 +91,208 @@ function extractClaudeEventParts(
   }
 
   return parts;
+}
+
+function appendFirst(current: string, value: string, maxChars: number): string {
+  if (!value || current.length >= maxChars) return current;
+  const separator = current ? '\n' : '';
+  return (current + separator + value).slice(0, maxChars);
+}
+
+function appendLast(current: string, value: string, maxChars: number): string {
+  if (!value) return current;
+  const separator = current ? '\n' : '';
+  const combined = current + separator + value;
+  return combined.length > maxChars ? combined.slice(-maxChars) : combined;
+}
+
+/**
+ * Incrementally parses coding-agent JSONL output without retaining the full
+ * stream in memory. The on-disk task log remains the full-fidelity archive.
+ */
+export class CodeAgentOutputCollector {
+  private readonly decoder = new StringDecoder('utf8');
+  private lineBuffer = '';
+  private lineTruncated = false;
+  private finished = false;
+  private rawPrefix = '';
+  private liveOutput = '';
+  private claudeText = '';
+  private codexText = '';
+  private lastResult: Record<string, unknown> | null = null;
+  private accumInputTokens = 0;
+  private accumOutputTokens = 0;
+  private hasTurnUsage = false;
+  private sawCodexJsonEvent = false;
+
+  push(chunk: string | Buffer): void {
+    if (this.finished) return;
+    const text = typeof chunk === 'string' ? chunk : this.decoder.write(chunk);
+    this.consume(text);
+  }
+
+  finish(): void {
+    if (this.finished) return;
+    const remaining = this.decoder.end();
+    this.consume(remaining);
+    if (this.lineBuffer || this.lineTruncated) this.commitLine();
+    this.finished = true;
+  }
+
+  getLiveOutput(): string {
+    return this.liveOutput;
+  }
+
+  getClaudeOutput(): ClaudeOutputResult {
+    const costData: Pick<ClaudeOutputResult, 'totalCost' | 'inputTokens' | 'outputTokens'> = {};
+    if (this.lastResult) {
+      if (typeof this.lastResult.total_cost_usd === 'number') {
+        costData.totalCost = this.lastResult.total_cost_usd;
+      }
+      if (typeof this.lastResult.total_input_tokens === 'number') {
+        costData.inputTokens = this.lastResult.total_input_tokens;
+      }
+      if (typeof this.lastResult.total_output_tokens === 'number') {
+        costData.outputTokens = this.lastResult.total_output_tokens;
+      }
+      if (costData.inputTokens == null || costData.outputTokens == null) {
+        const usage = this.lastResult.usage as Record<string, unknown> | undefined;
+        if (usage) {
+          if (costData.inputTokens == null && typeof usage.input_tokens === 'number') {
+            costData.inputTokens = usage.input_tokens;
+          }
+          if (costData.outputTokens == null && typeof usage.output_tokens === 'number') {
+            costData.outputTokens = usage.output_tokens;
+          }
+        }
+      }
+    }
+    if (this.hasTurnUsage) {
+      if (costData.inputTokens == null) costData.inputTokens = this.accumInputTokens;
+      if (costData.outputTokens == null) costData.outputTokens = this.accumOutputTokens;
+    }
+
+    if (this.claudeText.trim()) {
+      return { text: this.claudeText.trim(), metadata: this.lastResult || undefined, ...costData };
+    }
+    if (this.lastResult) {
+      const turns = this.lastResult.num_turns || '?';
+      const cost = this.lastResult.total_cost_usd != null
+        ? `$${(this.lastResult.total_cost_usd as number).toFixed(2)}`
+        : '';
+      const duration = this.lastResult.duration_ms
+        ? `${Math.round((this.lastResult.duration_ms as number) / 1000)}s`
+        : '';
+      return {
+        text: [`Completed in ${turns} turns`, duration, cost].filter(Boolean).join(', '),
+        metadata: this.lastResult,
+        ...costData,
+      };
+    }
+    return { text: this.rawPrefix.slice(0, 500) || '(no output)', ...costData };
+  }
+
+  getCodexOutput(): string {
+    return this.codexText || (this.sawCodexJsonEvent ? '(no text output)' : this.rawPrefix) || '(no output)';
+  }
+
+  private consume(text: string): void {
+    if (!text) return;
+    if (this.rawPrefix.length < MAX_OUTPUT_PREVIEW_CHARS) {
+      this.rawPrefix = (this.rawPrefix + text).slice(0, MAX_OUTPUT_PREVIEW_CHARS);
+    }
+
+    let start = 0;
+    while (start < text.length) {
+      const newline = text.indexOf('\n', start);
+      const end = newline === -1 ? text.length : newline;
+      this.appendLineSegment(text, start, end);
+      if (newline === -1) return;
+      this.commitLine();
+      start = newline + 1;
+    }
+  }
+
+  private appendLineSegment(text: string, start: number, end: number): void {
+    if (this.lineTruncated || start === end) return;
+    const available = MAX_STREAM_EVENT_CHARS - this.lineBuffer.length;
+    const length = end - start;
+    if (length <= available) {
+      this.lineBuffer += text.slice(start, end);
+      return;
+    }
+    if (available > 0) this.lineBuffer += text.slice(start, start + available);
+    this.lineTruncated = true;
+  }
+
+  private commitLine(): void {
+    const line = this.lineBuffer;
+    const truncated = this.lineTruncated;
+    this.lineBuffer = '';
+    this.lineTruncated = false;
+
+    if (truncated) {
+      this.liveOutput = appendLast(this.liveOutput, OVERSIZED_EVENT_MESSAGE, MAX_OUTPUT_PREVIEW_CHARS);
+      this.claudeText = appendFirst(this.claudeText, OVERSIZED_EVENT_MESSAGE, MAX_OUTPUT_PREVIEW_CHARS);
+      this.codexText = appendFirst(this.codexText, OVERSIZED_EVENT_MESSAGE, MAX_OUTPUT_PREVIEW_CHARS);
+      return;
+    }
+    if (!line.trim()) return;
+
+    let event: Record<string, unknown> | null = null;
+    try {
+      const parsed = JSON.parse(line);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        event = parsed as Record<string, unknown>;
+      }
+    } catch {
+      // Handled as plain output below.
+    }
+
+    if (!event) {
+      if (!line.startsWith('{')) {
+        this.liveOutput = appendLast(this.liveOutput, line.trim(), MAX_OUTPUT_PREVIEW_CHARS);
+      }
+      this.codexText = appendFirst(this.codexText, line, MAX_OUTPUT_PREVIEW_CHARS);
+      return;
+    }
+
+    const liveParts = extractClaudeEventParts(event, { includeSystem: true, includeTools: true });
+    for (const part of liveParts) {
+      this.liveOutput = appendLast(this.liveOutput, part, MAX_OUTPUT_PREVIEW_CHARS);
+    }
+
+    const finalParts = extractClaudeEventParts(event, { includeSystem: false, includeTools: false });
+    for (const part of finalParts) {
+      this.claudeText = appendFirst(this.claudeText, part, MAX_OUTPUT_PREVIEW_CHARS);
+    }
+
+    if (event.type === 'result') this.lastResult = event;
+    if (event.type === 'turn.completed') {
+      const usage = event.usage as Record<string, unknown> | undefined;
+      if (usage) {
+        if (typeof usage.input_tokens === 'number') {
+          this.accumInputTokens += usage.input_tokens;
+          this.hasTurnUsage = true;
+        }
+        if (typeof usage.output_tokens === 'number') {
+          this.accumOutputTokens += usage.output_tokens;
+          this.hasTurnUsage = true;
+        }
+      }
+    }
+
+    if (typeof event.type === 'string') this.sawCodexJsonEvent = true;
+    if (event.type === 'output_text' || event.output_text) {
+      const output = event.output_text || event.text || '';
+      if (output) this.codexText = appendFirst(this.codexText, String(output), MAX_OUTPUT_PREVIEW_CHARS);
+    } else if (event.type === 'item.completed') {
+      const item = event.item as Record<string, unknown> | undefined;
+      if (item?.type === 'agent_message' && item.text) {
+        this.codexText = appendFirst(this.codexText, String(item.text), MAX_OUTPUT_PREVIEW_CHARS);
+      }
+    }
+  }
 }
 
 /**

@@ -1,8 +1,9 @@
 import { randomBytes } from 'crypto';
-import { existsSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, realpathSync, statSync, unlinkSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
 import { basename, dirname, extname, join, resolve } from 'path';
 import type { Config } from './types.js';
+import { isPathAllowed } from './tools/path-utils.js';
 
 export interface RegisteredArtifact {
   id: string;
@@ -15,7 +16,22 @@ export interface RegisteredArtifact {
 const MAX_ARTIFACT_BYTES = 10 * 1024 * 1024;
 const MAX_REGISTERED_ARTIFACTS = 200;
 const artifacts = new Map<string, RegisteredArtifact>();
+const artifactRoots = new Map<string, string[]>();
 let persistedArtifactsLoaded = false;
+
+function getManagedArtifactRoots(): string[] {
+  const root = join(homedir(), '.skimpyclaw');
+  return [
+    join(root, 'reports'),
+    join(root, 'reviews'),
+    join(root, 'logs', 'newspaper'),
+  ];
+}
+
+function removeRegisteredArtifact(id: string): void {
+  artifacts.delete(id);
+  artifactRoots.delete(id);
+}
 
 function getArtifactContentType(path: string): string {
   const ext = extname(path).toLowerCase();
@@ -36,7 +52,7 @@ function pruneRegisteredArtifacts(): void {
   const oldest = [...artifacts.values()]
     .sort((a, b) => a.createdAt - b.createdAt)
     .slice(0, artifacts.size - MAX_REGISTERED_ARTIFACTS);
-  for (const artifact of oldest) artifacts.delete(artifact.id);
+  for (const artifact of oldest) removeRegisteredArtifact(artifact.id);
 }
 
 function getRegistryPath(): string | null {
@@ -57,23 +73,29 @@ function loadPersistedArtifacts(): void {
   try {
     const parsed = JSON.parse(readFileSync(registryPath, 'utf-8')) as unknown;
     if (!Array.isArray(parsed)) return;
+    const managedRoots = getManagedArtifactRoots();
     for (const item of parsed) {
       if (!item || typeof item !== 'object') continue;
       const artifact = item as Partial<RegisteredArtifact>;
       if (
         typeof artifact.id === 'string' &&
         typeof artifact.path === 'string' &&
-        typeof artifact.name === 'string' &&
-        typeof artifact.contentType === 'string' &&
         typeof artifact.createdAt === 'number'
       ) {
-        artifacts.set(artifact.id, {
-          id: artifact.id,
-          path: resolve(artifact.path),
-          name: artifact.name,
-          contentType: artifact.contentType,
-          createdAt: artifact.createdAt,
-        });
+        try {
+          const canonicalPath = realpathSync(resolve(artifact.path));
+          if (!isPathAllowed(canonicalPath, managedRoots)) continue;
+          artifacts.set(artifact.id, {
+            id: artifact.id,
+            path: canonicalPath,
+            name: basename(canonicalPath),
+            contentType: getArtifactContentType(canonicalPath),
+            createdAt: artifact.createdAt,
+          });
+          artifactRoots.set(artifact.id, managedRoots);
+        } catch {
+          // Stale or unresolvable entries are ignored.
+        }
       }
     }
     pruneRegisteredArtifacts();
@@ -89,16 +111,18 @@ function persistRegisteredArtifacts(): void {
   try {
     mkdirSync(dirname(registryPath), { recursive: true });
     const entries = [...artifacts.values()].sort((a, b) => b.createdAt - a.createdAt);
-    writeFileSync(registryPath, `${JSON.stringify(entries, null, 2)}\n`);
+    writeFileSync(registryPath, `${JSON.stringify(entries, null, 2)}\n`, { encoding: 'utf-8', mode: 0o600 });
+    chmodSync(registryPath, 0o600);
   } catch {
     // Artifact links remain valid in memory even when persistence fails.
   }
 }
 
-export function registerLocalArtifact(path: string): RegisteredArtifact | null {
+export function registerLocalArtifact(path: string, allowedRoots = getManagedArtifactRoots()): RegisteredArtifact | null {
   try {
     loadPersistedArtifacts();
-    const resolvedPath = resolve(path);
+    const resolvedPath = realpathSync(resolve(path));
+    if (!isPathAllowed(resolvedPath, allowedRoots)) return null;
     const stat = statSync(resolvedPath);
     if (!stat.isFile() || stat.size <= 0 || stat.size > MAX_ARTIFACT_BYTES) return null;
 
@@ -111,6 +135,7 @@ export function registerLocalArtifact(path: string): RegisteredArtifact | null {
       createdAt: Date.now(),
     };
     artifacts.set(id, artifact);
+    artifactRoots.set(id, allowedRoots);
     pruneRegisteredArtifacts();
     persistRegisteredArtifacts();
     return artifact;
@@ -125,20 +150,19 @@ export function getRegisteredArtifact(id: string): RegisteredArtifact | null {
   if (!artifact) return null;
 
   try {
-    if (!existsSync(artifact.path)) {
-      artifacts.delete(id);
-      persistRegisteredArtifacts();
-      return null;
-    }
-    const stat = statSync(artifact.path);
+    const canonicalPath = realpathSync(artifact.path);
+    const allowedRoots = artifactRoots.get(id) ?? getManagedArtifactRoots();
+    if (!isPathAllowed(canonicalPath, allowedRoots)) throw new Error('Artifact path is outside managed roots');
+    const stat = statSync(canonicalPath);
     if (!stat.isFile() || stat.size <= 0 || stat.size > MAX_ARTIFACT_BYTES) {
-      artifacts.delete(id);
-      persistRegisteredArtifacts();
-      return null;
+      throw new Error('Artifact is not a readable file');
     }
+    artifact.path = canonicalPath;
+    artifact.name = basename(canonicalPath);
+    artifact.contentType = getArtifactContentType(canonicalPath);
     return artifact;
   } catch {
-    artifacts.delete(id);
+    removeRegisteredArtifact(id);
     persistRegisteredArtifacts();
     return null;
   }
@@ -150,7 +174,7 @@ export function readRegisteredArtifact(id: string): { artifact: RegisteredArtifa
   try {
     return { artifact, content: readFileSync(artifact.path) };
   } catch {
-    artifacts.delete(id);
+    removeRegisteredArtifact(id);
     persistRegisteredArtifacts();
     return null;
   }
@@ -170,6 +194,7 @@ export function buildArtifactUrl(config: Pick<Config, 'gateway'> | null | undefi
 
 export function clearRegisteredArtifactsForTesting(): void {
   artifacts.clear();
+  artifactRoots.clear();
   persistedArtifactsLoaded = false;
   const registryPath = getRegistryPath();
   if (registryPath) {
@@ -183,5 +208,6 @@ export function clearRegisteredArtifactsForTesting(): void {
 
 export function clearRegisteredArtifactMemoryForTesting(): void {
   artifacts.clear();
+  artifactRoots.clear();
   persistedArtifactsLoaded = false;
 }

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { EventEmitter } from 'node:events';
 
 // Mock all heavy dependencies before importing
 vi.mock('../code-agents/registry.js', () => {
@@ -16,14 +17,9 @@ vi.mock('../code-agents/registry.js', () => {
   };
 });
 
-vi.mock('../code-agents/parser.js', () => ({
-  parseStreamJsonForLive: vi.fn((s: string) => s.slice(0, 200)),
-  parseClaudeOutput: vi.fn((s: string) => ({ text: s, costUsd: 0 })),
-  parseCodexOutput: vi.fn((s: string) => s),
-}));
-
 vi.mock('../code-agents/utils.js', () => ({
   buildCodeAgentArgs: vi.fn(() => ({ cmd: 'echo', args: ['hello'] })),
+  buildCodeAgentSpawnEnv: vi.fn(() => ({ ...process.env })),
   notifyCodeAgentResult: vi.fn(async () => {}),
   resolveModelAlias: vi.fn((m: string) => m),
 }));
@@ -34,13 +30,18 @@ vi.mock('../audit.js', () => ({
   endTrace: vi.fn(async () => {}),
 }));
 
+vi.mock('../usage.js', () => ({
+  buildUsageRecord: vi.fn((record: unknown) => record),
+  recordUsage: vi.fn(),
+}));
+
 // We need child_process to be real for spawn tests, but we'll mock fs
 vi.mock('fs', async () => {
   const actual = await vi.importActual<typeof import('fs')>('fs');
   return {
     ...actual,
     createWriteStream: vi.fn(() => ({
-      write: vi.fn(),
+      write: vi.fn(() => true),
       end: vi.fn(),
     })),
   };
@@ -93,5 +94,74 @@ describe('executor - compressed retry prompt', () => {
     expect(src).not.toContain('`${task}\\n\\n---\\nPrevious attempt failed');
     expect(src).toContain('task.slice(0, 300)');
     expect(src).toContain('Fix build/test errors in the ${agent} codebase');
+  });
+});
+
+describe('executor - bounded streaming output', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('feeds process chunks through the incremental collector', async () => {
+    const { storeCodeAgentTask, getCodeAgent } = await import('../code-agents/registry.js');
+    const { runCodeAgentBackground } = await import('../code-agents/executor.js');
+    const { createWriteStream } = await import('fs');
+    const logStream = new EventEmitter() as EventEmitter & {
+      write: ReturnType<typeof vi.fn>;
+      end: ReturnType<typeof vi.fn>;
+    };
+    let backpressured = false;
+    logStream.write = vi.fn((data: string | Buffer) => {
+      if (!backpressured && Buffer.isBuffer(data)) {
+        backpressured = true;
+        queueMicrotask(() => logStream.emit('drain'));
+        return false;
+      }
+      return true;
+    });
+    logStream.end = vi.fn();
+    vi.mocked(createWriteStream).mockReturnValueOnce(logStream as any);
+    const startedAt = new Date();
+    storeCodeAgentTask({
+      id: 'ca-stream-test',
+      agent: 'codex',
+      task: 'stream test',
+      workdir: process.cwd(),
+      status: 'running',
+      startedAt: startedAt.toISOString(),
+    } as any);
+    const event = JSON.stringify({
+      type: 'item.completed',
+      item: { type: 'agent_message', text: 'bounded final answer 🦞' },
+    }) + '\n';
+    const script = [
+      `const data = Buffer.from(${JSON.stringify(event)});`,
+      `const marker = Buffer.from('🦞');`,
+      `const split = data.indexOf(marker) + 2;`,
+      `process.stdout.write(data.subarray(0, split));`,
+      `setTimeout(() => process.stdout.write(data.subarray(split)), 20);`,
+    ].join('\n');
+
+    await runCodeAgentBackground(
+      'ca-stream-test',
+      'codex',
+      'stream test',
+      process.cwd(),
+      false,
+      {},
+      startedAt,
+      { buildArgs: () => ({ cmd: process.execPath, args: ['-e', script] }) },
+    );
+
+    expect(getCodeAgent('ca-stream-test')).toMatchObject({
+      status: 'completed',
+      outputPreview: 'bounded final answer 🦞',
+    });
+    expect(backpressured).toBe(true);
+    expect(logStream.end).toHaveBeenCalledTimes(1);
+    const archived = Buffer.concat(logStream.write.mock.calls.map(([data]) => (
+      Buffer.isBuffer(data) ? data : Buffer.from(data)
+    ))).toString();
+    expect(archived).toContain('bounded final answer 🦞');
   });
 });

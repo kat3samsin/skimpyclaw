@@ -1,8 +1,20 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
-import { mkdirSync, writeFileSync, rmSync } from 'fs';
+import { mkdirSync, writeFileSync, rmSync, symlinkSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import Fastify, { FastifyInstance } from 'fastify';
+
+const mockHome = vi.hoisted(() => {
+  const { mkdtempSync } = require('fs');
+  const { tmpdir } = require('os');
+  const { join } = require('path');
+  return mkdtempSync(join(tmpdir(), 'skimpy-api-home-'));
+});
+
+vi.mock('os', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('os')>();
+  return { ...actual, homedir: () => mockHome };
+});
 
 // --- Build a temp directory to act as ~/.skimpyclaw ---
 const TEST_ROOT = join(tmpdir(), `skimpyclaw-test-${Date.now()}`);
@@ -475,6 +487,7 @@ afterAll(async () => {
   await app.close();
   delete process.env.SKIMPYCLAW_TODO_PATH;
   rmSync(TEST_ROOT, { recursive: true, force: true });
+  rmSync(mockHome, { recursive: true, force: true });
 });
 
 beforeEach(() => {
@@ -805,6 +818,29 @@ describe('Logs endpoints', () => {
     // tail 2 = ["line5", ""]
     const lines = body.content.split('\n');
     expect(lines.length).toBeLessThanOrEqual(2);
+    expect(body.lines).toBe(2);
+    expect(body.truncated).toBe(true);
+  });
+
+  it('GET /api/dashboard/logs/:filename bounds tail reads for large files', async () => {
+    const largePath = join(LOGS_DIR, 'large.log');
+    writeFileSync(largePath, `BEGIN\n${'x'.repeat(1024 * 1024)}\nlast-a\nlast-b`);
+
+    const res = await inject({ method: 'GET', url: '/api/dashboard/logs/large.log?tail=2' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      content: 'last-a\nlast-b',
+      lines: 2,
+      truncated: true,
+    });
+    expect(Buffer.byteLength(res.json().content)).toBeLessThanOrEqual(256 * 1024);
+  });
+
+  it('GET /api/dashboard/logs/:filename rejects an invalid tail count', async () => {
+    const res = await inject({ method: 'GET', url: '/api/dashboard/logs/app.log?tail=0' });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toHaveProperty('error', 'Invalid tail count');
   });
 
   it('GET /api/dashboard/logs/:filename returns 400 for path traversal', async () => {
@@ -816,6 +852,17 @@ describe('Logs endpoints', () => {
   it('GET /api/dashboard/logs/:filename returns 404 for missing file', async () => {
     const res = await inject({ method: 'GET', url: '/api/dashboard/logs/nonexistent.log' });
     expect(res.statusCode).toBe(404);
+  });
+
+  it('GET /api/dashboard/logs/:filename rejects a symlink outside the log root', async () => {
+    const outsidePath = join(TEST_ROOT, 'outside.log');
+    writeFileSync(outsidePath, 'outside secret\n');
+    symlinkSync(outsidePath, join(LOGS_DIR, 'linked.log'));
+
+    const res = await inject({ method: 'GET', url: '/api/dashboard/logs/linked.log' });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toHaveProperty('error', 'Invalid filename');
   });
 });
 
@@ -1273,21 +1320,38 @@ describe('Cron prompt-file endpoint', () => {
     const res = await inject({ method: 'GET', url: '/api/dashboard/cron/prompt-file?path=../../etc/passwd' });
     expect(res.statusCode).toBe(400);
   });
+
+  it('GET /api/dashboard/cron/prompt-file rejects a symlink outside the prompts directory', async () => {
+    const promptsRoot = join(mockHome, '.skimpyclaw', 'prompts');
+    const outsideRoot = join(mockHome, 'outside-prompts');
+    mkdirSync(promptsRoot, { recursive: true });
+    mkdirSync(outsideRoot, { recursive: true });
+    writeFileSync(join(outsideRoot, 'secret.md'), 'outside prompt', 'utf-8');
+    symlinkSync(outsideRoot, join(promptsRoot, 'outside-link'), 'dir');
+
+    const res = await inject({
+      method: 'GET',
+      url: '/api/dashboard/cron/prompt-file?path=outside-link/secret.md',
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toHaveProperty('error', 'Invalid prompt path');
+  });
 });
 
 describe('Restart endpoint', () => {
   it('POST /api/dashboard/restart returns restarting true', async () => {
     vi.useFakeTimers();
-    const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as any);
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
 
     const res = await inject({ method: 'POST', url: '/api/dashboard/restart' });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ restarting: true });
 
     vi.runOnlyPendingTimers();
-    expect(exitSpy).toHaveBeenCalledWith(0);
+    expect(killSpy).toHaveBeenCalledWith(process.pid, 'SIGTERM');
 
-    exitSpy.mockRestore();
+    killSpy.mockRestore();
     vi.useRealTimers();
   });
 });

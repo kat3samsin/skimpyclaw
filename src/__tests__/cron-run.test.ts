@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
+import { EventEmitter } from 'events';
+import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
 const {
@@ -10,6 +11,10 @@ const {
   parseAndSaveDigestMock,
   synthesizeSpeechMock,
   cronCallbacks,
+  configWatchCallbacks,
+  loadConfigMock,
+  watchCloseMock,
+  spawnMock,
   testHome,
 } = vi.hoisted(() => ({
   runAgentTurnMock: vi.fn(),
@@ -19,6 +24,10 @@ const {
   parseAndSaveDigestMock: vi.fn(),
   synthesizeSpeechMock: vi.fn(),
   cronCallbacks: [] as Array<() => Promise<void>>,
+  configWatchCallbacks: [] as Array<() => void>,
+  loadConfigMock: vi.fn(),
+  watchCloseMock: vi.fn(),
+  spawnMock: vi.fn(),
   testHome: (() => {
     const { mkdtempSync } = require('fs');
     const { tmpdir } = require('os');
@@ -28,6 +37,22 @@ const {
     return dir;
   })(),
 }));
+
+vi.mock('fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('fs')>();
+  return {
+    ...actual,
+    watch: vi.fn((_path: string, listener: () => void) => {
+      configWatchCallbacks.push(listener);
+      return { close: watchCloseMock };
+    }),
+  };
+});
+
+vi.mock('child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('child_process')>();
+  return { ...actual, spawn: spawnMock };
+});
 
 vi.mock('croner', () => ({
   Cron: class {
@@ -65,7 +90,7 @@ vi.mock('../channels/discord/index.js', () => ({
 vi.mock('../config.js', () => ({
   getLogsDir: () => '/tmp',
   getConfigPath: () => '/tmp/config.json',
-  loadConfig: vi.fn(),
+  loadConfig: loadConfigMock,
   resolveAllowedPaths: () => ['/tmp'],
 }));
 
@@ -138,6 +163,8 @@ describe('runCronJob digest chat output', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     cronCallbacks.length = 0;
+    configWatchCallbacks.length = 0;
+    spawnMock.mockReset();
   });
 
   afterEach(() => {
@@ -168,6 +195,33 @@ describe('runCronJob digest chat output', () => {
     await runCronJob('tech-digest', config);
 
     expect(sendActiveChannelProactiveMessageMock).not.toHaveBeenCalledWith(config, digestText);
+  });
+
+  it('does not load a prompt through a symlink outside the prompts directory', async () => {
+    const promptsRoot = join(testHome, '.skimpyclaw', 'prompts');
+    const outsideRoot = join(testHome, 'outside-prompts');
+    mkdirSync(promptsRoot, { recursive: true });
+    mkdirSync(outsideRoot, { recursive: true });
+    writeFileSync(join(outsideRoot, 'secret.md'), 'outside prompt', 'utf-8');
+    symlinkSync(outsideRoot, join(promptsRoot, 'outside-link'), 'dir');
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    runAgentTurnMock.mockResolvedValue('No links today');
+    parseAndSaveDigestMock.mockReturnValue({ summary: 'No links today', articles: [] });
+    const promptConfig = {
+      ...config,
+      cron: {
+        jobs: [{
+          ...config.cron.jobs[0],
+          payload: { kind: 'agentTurn', message: 'outside-link/secret.md' },
+        }],
+      },
+    } as any;
+
+    await runCronJob('tech-digest', promptConfig);
+
+    expect(runAgentTurnMock.mock.calls[0][1]).toBe('outside-link/secret.md');
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Rejected prompt path'));
+    warnSpy.mockRestore();
   });
 
   it('resolves a manual cron run by normalized display name', async () => {
@@ -305,6 +359,216 @@ describe('runCronJob digest chat output', () => {
     expect(getCronJobs()[0].nextRun).toEqual(new Date('2026-06-22T00:00:10.000Z'));
 
     warnSpy.mockRestore();
+  });
+
+  it('rejects duplicate job ids before scheduling any intervals', () => {
+    vi.useFakeTimers();
+    const duplicateConfig = {
+      ...config,
+      cron: {
+        jobs: [
+          {
+            id: 'duplicate',
+            name: 'First',
+            schedule: { kind: 'interval', ms: 1000 },
+            payload: { kind: 'agentTurn', message: 'first' },
+          },
+          {
+            id: 'duplicate',
+            name: 'Second',
+            schedule: { kind: 'interval', ms: 2000 },
+            payload: { kind: 'agentTurn', message: 'second' },
+          },
+        ],
+      },
+    } as any;
+
+    expect(() => initCron(duplicateConfig)).toThrow('Duplicate cron job id: "duplicate"');
+    expect(getCronJobs()).toEqual([]);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('keeps the current schedule when replacement config has duplicate ids', async () => {
+    vi.useFakeTimers();
+    const currentConfig = {
+      ...config,
+      cron: {
+        jobs: [{
+          id: 'current',
+          name: 'Current',
+          schedule: { kind: 'interval', ms: 1000 },
+          payload: { kind: 'agentTurn', message: 'current' },
+        }],
+      },
+    } as any;
+    const duplicateConfig = {
+      ...config,
+      cron: {
+        jobs: [
+          { ...currentConfig.cron.jobs[0], id: 'duplicate' },
+          { ...currentConfig.cron.jobs[0], id: 'duplicate' },
+        ],
+      },
+    } as any;
+    runAgentTurnMock.mockResolvedValue('No links today');
+    parseAndSaveDigestMock.mockReturnValue({ summary: 'No links today', articles: [] });
+
+    initCron(currentConfig);
+    expect(() => initCron(duplicateConfig)).toThrow('Duplicate cron job id: "duplicate"');
+    expect(getCronJobs()).toEqual([
+      { id: 'current', name: 'Current', nextRun: new Date(Date.now() + 1000) },
+    ]);
+    expect(vi.getTimerCount()).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(runAgentTurnMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancels a queued config reload when cron stops', async () => {
+    vi.useFakeTimers();
+    initCron(config);
+
+    expect(configWatchCallbacks).toHaveLength(1);
+    configWatchCallbacks[0]();
+    stopCron();
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(loadConfigMock).not.toHaveBeenCalled();
+    expect(getCronJobs()).toEqual([]);
+  });
+
+  it('cancels an older queued reload when cron is reinitialized', async () => {
+    vi.useFakeTimers();
+    loadConfigMock.mockReturnValue(config);
+    initCron(config);
+    expect(configWatchCallbacks).toHaveLength(1);
+    configWatchCallbacks[0]();
+
+    const currentConfig = {
+      ...config,
+      cron: {
+        jobs: [{
+          id: 'current',
+          name: 'Current',
+          schedule: { kind: 'interval', ms: 5000 },
+          payload: { kind: 'agentTurn', message: 'current' },
+        }],
+      },
+    } as any;
+    initCron(currentConfig);
+    await vi.advanceTimersByTimeAsync(1000);
+
+    expect(loadConfigMock).not.toHaveBeenCalled();
+    expect(getCronJobs().map(job => job.id)).toEqual(['current']);
+  });
+
+  it('caps overflowing script output and drains the process group before rejecting', async () => {
+    vi.useFakeTimers();
+    const child = new EventEmitter() as any;
+    child.pid = 4321;
+    child.stdout = new EventEmitter();
+    child.stderr = new EventEmitter();
+    spawnMock.mockReturnValue(child);
+
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation((_pid, signal) => {
+      if (signal === 'SIGTERM') {
+        queueMicrotask(() => child.emit('close', null, 'SIGTERM'));
+      }
+      return true;
+    });
+    const scriptConfig = {
+      ...config,
+      cron: {
+        jobs: [{
+          id: 'overflow',
+          name: 'Overflow',
+          schedule: { kind: 'cron', expr: '* * * * *', tz: 'UTC' },
+          payload: { kind: 'script', script: 'produce-output', timeoutMs: 60_000 },
+        }],
+      },
+    } as any;
+
+    try {
+      const run = runCronJob('overflow', scriptConfig);
+      let settled = false;
+      void run.then(() => { settled = true; }, () => { settled = true; });
+      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1));
+
+      child.stdout.emit('data', Buffer.alloc(10 * 1024 * 1024 + 1, 97));
+      child.stdout.emit('data', Buffer.from('ignored after overflow'));
+      await vi.advanceTimersByTimeAsync(999);
+
+      expect(settled).toBe(false);
+      expect(killSpy.mock.calls.filter(([, signal]) => signal === 'SIGTERM')).toHaveLength(1);
+      expect(killSpy.mock.calls.some(([, signal]) => signal === 'SIGKILL')).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(run).rejects.toThrow('Script output exceeded maxBuffer of 10485760 bytes');
+      expect(killSpy.mock.calls.filter(([, signal]) => signal === 'SIGKILL')).toHaveLength(1);
+    } finally {
+      killSpy.mockRestore();
+    }
+  });
+
+  it('drains a timed-out script process group before rejecting', async () => {
+    vi.useFakeTimers();
+    const child = new EventEmitter() as any;
+    child.pid = 4321;
+    child.stdout = new EventEmitter();
+    child.stderr = new EventEmitter();
+    spawnMock.mockReturnValue(child);
+
+    let processGroupAlive = true;
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation((_pid, signal) => {
+      if (signal === 'SIGTERM') {
+        queueMicrotask(() => child.emit('close', null, 'SIGTERM'));
+      } else if (signal === 'SIGKILL') {
+        processGroupAlive = false;
+      } else if (signal === 0 && !processGroupAlive) {
+        const error = new Error('No such process') as NodeJS.ErrnoException;
+        error.code = 'ESRCH';
+        throw error;
+      }
+      return true;
+    });
+    const scriptConfig = {
+      ...config,
+      cron: {
+        jobs: [{
+          id: 'timeout',
+          name: 'Timeout',
+          schedule: { kind: 'cron', expr: '* * * * *', tz: 'UTC' },
+          payload: { kind: 'script', script: 'hang', timeoutMs: 100 },
+        }],
+      },
+    } as any;
+
+    try {
+      const run = runCronJob('timeout', scriptConfig);
+      const outcome = run.then(
+        () => ({ status: 'resolved' as const, message: '' }),
+        (error: Error) => ({ status: 'rejected' as const, message: error.message }),
+      );
+      let settled = false;
+      void outcome.then(() => { settled = true; });
+      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1));
+
+      await vi.advanceTimersByTimeAsync(100);
+
+      expect(settled).toBe(false);
+      expect(killSpy.mock.calls.filter(([, signal]) => signal === 'SIGTERM')).toHaveLength(1);
+      expect(killSpy.mock.calls.some(([, signal]) => signal === 'SIGKILL')).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(5000);
+
+      await expect(outcome).resolves.toEqual({
+        status: 'rejected',
+        message: 'Script timed out after 100ms',
+      });
+      expect(killSpy.mock.calls.filter(([, signal]) => signal === 'SIGKILL')).toHaveLength(1);
+    } finally {
+      killSpy.mockRestore();
+    }
   });
 
   it('thread id set + successful send does not use active-channel send', async () => {

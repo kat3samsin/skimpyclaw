@@ -147,7 +147,49 @@ describe('AnthropicAdapter', () => {
     });
   });
 
+  describe('chat', () => {
+    it('records the originating trigger and agent', async () => {
+      const { recordUsage } = await import('../usage.js');
+      mockMessagesCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'Hello!' }],
+        usage: { input_tokens: 10, output_tokens: 5 },
+      });
+
+      await adapter.chat(
+        [{ role: 'user', content: 'Hello' }],
+        { ...options, trigger: 'cron', agentId: 'mayora' },
+        config,
+      );
+
+      expect(recordUsage).toHaveBeenCalledWith(expect.objectContaining({
+        trigger: 'cron',
+        agentId: 'mayora',
+      }));
+    });
+  });
+
   describe('call', () => {
+    it('passes the turn abort signal to Anthropic requests', async () => {
+      const controller = new AbortController();
+      mockMessagesCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'Hello!' }],
+        stop_reason: 'end_turn',
+        usage: { input_tokens: 1, output_tokens: 1 },
+      });
+
+      await adapter.call(
+        { messages: [{ role: 'user', content: 'Hi' }] },
+        [],
+        { ...options, abortSignal: controller.signal },
+        config,
+      );
+
+      expect(mockMessagesCreate).toHaveBeenCalledWith(
+        expect.any(Object),
+        { signal: controller.signal },
+      );
+    });
+
     it('should normalize Anthropic response without tool calls', async () => {
       mockMessagesCreate.mockResolvedValue({
         content: [{ type: 'text', text: 'Hello!' }],
@@ -198,6 +240,23 @@ describe('AnthropicAdapter', () => {
       expect(result.textContent).toBe('Let me read that file');
     });
 
+    it('leaves usage undefined when Anthropic does not report it', async () => {
+      mockMessagesCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'Hello!' }],
+        stop_reason: 'end_turn',
+        usage: {},
+      });
+
+      const result = await adapter.call(
+        { messages: [{ role: 'user', content: 'Hi' }] },
+        [],
+        options,
+        config,
+      );
+
+      expect(result.usage).toBeUndefined();
+    });
+
     it('should handle cache metrics logging', async () => {
       const consoleSpy = vi.spyOn(console, 'log');
 
@@ -226,6 +285,7 @@ describe('AnthropicAdapter', () => {
     it('should use streaming for large xhigh thinking requests', async () => {
       const { buildThinkingConfig } = await import('../providers/utils.js');
       vi.mocked(buildThinkingConfig).mockReturnValueOnce({ budget: 32768, maxTokens: 36864 });
+      const controller = new AbortController();
 
       const finalMessage = vi.fn().mockResolvedValue({
         content: [{ type: 'text', text: 'Streamed response' }],
@@ -241,7 +301,7 @@ describe('AnthropicAdapter', () => {
       const result = await adapter.call(
         providerMessages,
         [],
-        { ...options, thinking: 'xhigh' },
+        { ...options, thinking: 'xhigh', abortSignal: controller.signal },
         config,
       );
 
@@ -249,8 +309,30 @@ describe('AnthropicAdapter', () => {
       expect(mockMessagesStream).toHaveBeenCalledWith(expect.objectContaining({
         max_tokens: 36864,
         thinking: { type: 'enabled', budget_tokens: 32768 },
-      }));
+      }), { signal: controller.signal });
       expect(result.textContent).toBe('Streamed response');
+    });
+  });
+
+  describe('onEmptyFinalResponse', () => {
+    it('makes one text-only call and returns normalized usage', async () => {
+      mockMessagesCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'Final answer' }],
+        stop_reason: 'end_turn',
+        usage: { input_tokens: 25, output_tokens: 10 },
+      });
+      const providerMessages = {
+        messages: [{ role: 'user', content: 'Original request' }],
+        systemParam: { content: 'system' },
+      };
+
+      const result = await adapter.onEmptyFinalResponse(providerMessages, [], options, config);
+
+      expect(result.textContent).toBe('Final answer');
+      expect(result.usage).toEqual(expect.objectContaining({ inputTokens: 25, outputTokens: 10 }));
+      const params = mockMessagesCreate.mock.calls[0][0];
+      expect(params.tools).toBeUndefined();
+      expect(params.messages.at(-1).content).toContain('Do not call tools');
     });
   });
 

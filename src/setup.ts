@@ -9,6 +9,8 @@ import { spawnSync } from 'child_process';
 import { randomUUID } from 'crypto';
 import { runDoctor as runDoctorChecks } from './doctor/runner.js';
 import { secureStoreAvailable, setSecureValue } from './secure-store.js';
+import { saveConfig } from './config.js';
+import type { Config } from './types.js';
 import {
   ensureCoreTemplates,
   ensureStarterSkills,
@@ -828,8 +830,7 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
     mkdirSync(AGENTS_DIR, { recursive: true });
     mkdirSync(join(AGENTS_DIR, 'memory'), { recursive: true });
     const configPath = join(CONFIG_DIR, 'config.json');
-    const configJson = JSON.stringify(generatedConfig, null, 2);
-    writeFileSync(configPath, configJson);
+    saveConfig(generatedConfig as unknown as Config);
     console.log(`✓ Config written to ${configPath}`);
 
     // Copy templates

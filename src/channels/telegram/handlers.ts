@@ -462,8 +462,8 @@ export const commandHandlers = {
 };
 
 // Subscribe to approval events for proactive notifications
-export function subscribeToApprovalEvents(bot: any, cfg: Config): void {
-  onApprovalEvent('created', (event) => {
+export function subscribeToApprovalEvents(bot: any, cfg: Config): () => void {
+  return onApprovalEvent('created', (event) => {
     if (!bot) return;
     const { approval } = event;
     const meta = approval.channelMeta;

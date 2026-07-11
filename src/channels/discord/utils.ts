@@ -325,7 +325,7 @@ export function linkLocalHtmlArtifactsForDiscord(
     const reportUrl = buildReportUrlForLocalPath(config, resolved.path, resolved.root);
     if (reportUrl) return `[${label}](${reportUrl})`;
 
-    const artifact = registerLocalArtifact(resolved.path);
+    const artifact = registerLocalArtifact(resolved.path, roots);
     if (!artifact) return match;
 
     const url = buildArtifactUrl(config, artifact);

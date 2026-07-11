@@ -5,6 +5,7 @@ import { run, RunnerHandle } from '@grammyjs/runner';
 import type { Config } from '../../types.js';
 import { isAllowed, isRateLimited } from '../../security.js';
 import { runAgentTurn } from '../../agent.js';
+import { runConversationTurn } from '../../conversation-queue.js';
 
 import { getCurrentModel } from '../../gateway.js';
 import { getApproval, approveRequest, denyRequest } from '../../exec-approval.js';
@@ -48,6 +49,7 @@ export { commandHandlers, subscribeToApprovalEvents } from './handlers.js';
 
 let activeBot: Bot | null = null;
 let runnerHandle: RunnerHandle | null = null;
+let unsubscribeApprovalEvents: (() => void) | null = null;
 
 export function getBot(): Bot | null {
   return activeBot;
@@ -69,6 +71,8 @@ export async function startTelegram(): Promise<void> {
 }
 
 export async function stopTelegram(): Promise<void> {
+  unsubscribeApprovalEvents?.();
+  unsubscribeApprovalEvents = null;
   if (runnerHandle) {
     await runnerHandle.stop();
     runnerHandle = null;
@@ -128,6 +132,8 @@ export async function sendProactiveVoice(
 }
 
 export async function initTelegram(cfg: Config): Promise<Bot | null> {
+  unsubscribeApprovalEvents?.();
+  unsubscribeApprovalEvents = null;
   if (!cfg.channels.telegram.enabled || !cfg.channels.telegram.token) {
     console.log('[telegram] Disabled or no token configured');
     return null;
@@ -157,6 +163,17 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
     }
 
     await next();
+  });
+
+  // The runner processes updates concurrently, so keep each chat's history changes ordered.
+  bot.use(async (ctx, next) => {
+    const chatId = ctx.chat?.id;
+    if (!chatId) {
+      await next();
+      return;
+    }
+
+    await runConversationTurn(`telegram:${chatId}`, next);
   });
 
   // Command handlers
@@ -219,9 +236,6 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
       // Message may already be edited or deleted
     }
   });
-
-  // Subscribe to approval events for proactive notifications
-  subscribeToApprovalEvents(bot, cfg);
 
   // Handle voice messages
   bot.on('message:voice', async (ctx) => {
@@ -398,6 +412,7 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
   });
 
   runnerHandle = run(bot);
+  unsubscribeApprovalEvents = subscribeToApprovalEvents(bot, cfg);
   console.log('[telegram] Bot started');
   return bot;
 }
