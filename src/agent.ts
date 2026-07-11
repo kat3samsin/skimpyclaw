@@ -155,7 +155,7 @@ export function formatMemoryEntry(userMessage: string, assistantMessage: string,
 // Langfuse app tagging
 const LANGFUSE_APP_NAME = 'skimpyclaw';
 const LANGFUSE_APP_TAG = 'app:skimpyclaw';
-const THINKING_LEVELS = new Set<ThinkingLevel>(['none', 'low', 'medium', 'high', 'xhigh']);
+const THINKING_LEVELS = new Set<ThinkingLevel>(['none', 'low', 'medium', 'high', 'xhigh', 'ultra']);
 
 function metadataThinking(value: unknown): ThinkingLevel | undefined {
   return typeof value === 'string' && THINKING_LEVELS.has(value as ThinkingLevel)

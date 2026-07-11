@@ -1,10 +1,73 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
   isRetryableCronAgentError,
+  ensureChiefHtmlArtifact,
   killScriptProcessTree,
   parseDualOutput,
   runAgentTurnWithTimeout,
 } from '../cron.js';
+import type { CronJob } from '../types.js';
+
+const chiefJob: CronJob = {
+  id: 'chief-newspaper',
+  name: 'THE DAILY',
+  schedule: { kind: 'cron', expr: '30 7 * * *' },
+  payload: { kind: 'agentTurn', message: 'chief.md' },
+  agent: 'chief',
+};
+
+const chiefP2Job: CronJob = {
+  id: 'chief-p2-reader',
+  name: 'Chief P2 Reader',
+  schedule: { kind: 'cron', expr: '20 7 * * 1-5' },
+  payload: { kind: 'agentTurn', message: 'chief-p2.md' },
+  agent: 'chief-p2',
+};
+
+describe('ensureChiefHtmlArtifact', () => {
+  it('fails the cron run when Chief did not create the required index', () => {
+    expect(() => ensureChiefHtmlArtifact(
+      chiefJob,
+      'chief',
+      '2026-07-11T12:30:00.000Z',
+      'Done',
+      () => false,
+    )).toThrow('Chief report is missing required artifact');
+  });
+
+  it('adds the required Chief artifact link when the file exists', () => {
+    const result = ensureChiefHtmlArtifact(
+      chiefJob,
+      'chief',
+      '2026-07-11T12:30:00.000Z',
+      'Done',
+      () => true,
+    );
+
+    expect(result).toContain('/chief-daily-reader/2026-07-11/index.html');
+    expect(result).toContain('Done');
+  });
+
+  it('also requires Chief to create the compatibility redirect', () => {
+    expect(() => ensureChiefHtmlArtifact(
+      chiefJob,
+      'chief',
+      '2026-07-11T12:30:00.000Z',
+      'Done',
+      path => path.endsWith('/index.html'),
+    )).toThrow('/chief-daily-reader/2026-07-11.html');
+  });
+
+  it('requires the dated Chief P2 artifact', () => {
+    expect(() => ensureChiefHtmlArtifact(
+      chiefP2Job,
+      'chief-p2',
+      '2026-07-11T12:20:00.000Z',
+      'Done',
+      () => false,
+    )).toThrow('Chief P2 report is missing required artifact');
+  });
+});
 
 describe('parseDualOutput', () => {
   it('returns full response as text when no delimiters present', () => {

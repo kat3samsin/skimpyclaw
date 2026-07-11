@@ -77,11 +77,11 @@ describe('Discord thread agents registry', () => {
 
     expect(setAgentProfilePrompt('claude-coder', 'Review code like a senior engineer.')?.promptOverlay)
       .toBe('Review code like a senior engineer.');
-    expect(setAgentProfileModel('claude-coder', 'anthropic/claude-sonnet-4-5')?.model)
-      .toBe('anthropic/claude-sonnet-4-5');
-    expect(setAgentProfileThinking('claude-coder', 'xhigh')?.thinking).toBe('xhigh');
-    expect(getThreadAgentByThreadId('thread-2')?.model).toBe('anthropic/claude-sonnet-4-5');
-    expect(getThreadAgentByThreadId('thread-2')?.thinking).toBe('xhigh');
+    expect(setAgentProfileModel('claude-coder', 'codex/gpt-5.6-sol')?.model)
+      .toBe('codex/gpt-5.6-sol');
+    expect(setAgentProfileThinking('claude-coder', 'ultra')?.thinking).toBe('ultra');
+    expect(getThreadAgentByThreadId('thread-2')?.model).toBe('codex/gpt-5.6-sol');
+    expect(getThreadAgentByThreadId('thread-2')?.thinking).toBe('ultra');
   });
 
   it('deletes profiles with their bindings', () => {

@@ -383,6 +383,34 @@ function ensureMayoraHtmlArtifact(jobDef: CronJob, agentId: string, logEntry: Cr
     : `[Mayora Daily Briefing HTML](${primaryPath})\n\n${text}`;
 }
 
+export function ensureChiefHtmlArtifact(
+  jobDef: CronJob,
+  agentId: string,
+  startedAt: string,
+  text: string,
+  pathExists: (path: string) => boolean = existsSync,
+): string {
+  const isDaily = jobDef.id === 'chief-newspaper' || agentId === 'chief';
+  const isP2 = jobDef.id === 'chief-p2-reader' || agentId === 'chief-p2';
+  if (!isDaily && !isP2) return text;
+
+  const started = new Date(startedAt);
+  const date = formatDate(Number.isNaN(started.getTime()) ? new Date() : started);
+  const dailyReportDir = join(homedir(), '.skimpyclaw', 'reports', 'chief-daily-reader');
+  const paths = isDaily
+    ? [join(dailyReportDir, date, 'index.html'), join(dailyReportDir, `${date}.html`)]
+    : [join(homedir(), '.skimpyclaw', 'reports', 'chief-p2-reader', `${date}.html`)];
+  const missingPath = paths.find(path => !pathExists(path));
+  if (missingPath) {
+    // Chief reports deliberately hard-fail here so cron cannot record false success.
+    throw new Error(`${isDaily ? 'Chief' : 'Chief P2'} report is missing required artifact: ${missingPath}`);
+  }
+
+  return text.includes(paths[0])
+    ? text
+    : `[${isDaily ? 'THE DAILY HTML' : 'Chief P2 Reader HTML'}](${paths[0]})\n\n${text}`;
+}
+
 function injectVoiceLinkIntoMayoraHtml(text: string, voiceUrl: string, jobId: string): void {
   if (!text.includes('mayora-daily-briefing') || !voiceUrl) return;
 
@@ -927,8 +955,9 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
       const tools = jobDef.payload.tools
         ? { ...jobDef.payload.tools, allowedPaths: resolveAllowedPaths(config, jobDef.payload.tools.allowedPaths) }
         : defaultTools;
+      const timeoutMs = jobDef.payload.timeoutMs ?? 600000;
       const response = await runAgentTurnWithTimeout(
-        jobDef.payload.timeoutMs,
+        timeoutMs,
         (abortSignal) => runCronAgentTurnWithRetry(
           jobDef.id,
           () => runAgentTurn(
@@ -953,14 +982,15 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
         ),
         () => appendCronLogLine(
           jobDef.id,
-          `Agent turn timed out after ${jobDef.payload.timeoutMs}ms; aborting`,
+          `Agent turn timed out after ${timeoutMs}ms; aborting`,
         ),
       );
       appendCronLogLine(jobDef.id, `Agent turn completed (${response.length} chars)`);
 
       // Parse dual output (voice + text) if delimiters present
       const { voice: voicePortion, text: parsedTextPortion } = parseDualOutput(response);
-      const textPortion = ensureMayoraHtmlArtifact(jobDef, resolvedAgentId, logEntry, parsedTextPortion);
+      const mayoraText = ensureMayoraHtmlArtifact(jobDef, resolvedAgentId, logEntry, parsedTextPortion);
+      const textPortion = ensureChiefHtmlArtifact(jobDef, resolvedAgentId, logEntry.startedAt, mayoraText);
       if (voicePortion) {
         appendCronLogLine(jobDef.id, `Dual output parsed: voice=${voicePortion.length} chars, text=${textPortion.length} chars`);
       }

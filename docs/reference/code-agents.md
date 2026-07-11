@@ -13,6 +13,8 @@
 - Claude: `claude -p --verbose --output-format stream-json --dangerously-skip-permissions ... <task>`
 - Codex: `codex exec --full-auto --json --color never ... <task>`
 
+When the selected Codex model is GPT-5.6 Sol, `code_with_agent` passes `service_tier=fast`. An `ultra` effort override is passed as `model_reasoning_effort=ultra` for Sol and clamped to `xhigh` for an explicitly selected non-Sol model.
+
 ## Execution Flow
 
 - Tool schema: `src/tools/definitions.ts` (`code_with_agent`)

@@ -64,7 +64,7 @@ export const CODE_WITH_AGENT_TOOL = {
       },
       effort: {
         type: 'string' as const,
-        enum: ['none', 'low', 'medium', 'high', 'xhigh'],
+        enum: ['none', 'low', 'medium', 'high', 'xhigh', 'ultra'],
         description: 'Optional reasoning effort for coding agents that support it.',
       },
       worktree: {

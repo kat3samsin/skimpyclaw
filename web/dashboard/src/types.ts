@@ -191,7 +191,7 @@ export interface SetModelResponse {
   model: string;
 }
 
-export type ThinkingLevel = 'none' | 'low' | 'medium' | 'high' | 'xhigh';
+export type ThinkingLevel = 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'ultra';
 
 export interface AgentProfile {
   alias: string;
