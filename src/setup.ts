@@ -1,7 +1,7 @@
 // Interactive setup wizard for SkimpyClaw
 
 import * as readline from 'readline';
-import { writeFileSync, mkdirSync, existsSync, copyFileSync, readdirSync, readFileSync } from 'fs';
+import { chmodSync, writeFileSync, mkdirSync, existsSync, copyFileSync, readdirSync, readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { homedir } from 'os';
 import { fileURLToPath } from 'url';
@@ -823,12 +823,17 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
 
     // Create directories
     console.log('Creating directories...');
-    mkdirSync(CONFIG_DIR, { recursive: true });
-    mkdirSync(join(CONFIG_DIR, 'logs'), { recursive: true });
-    mkdirSync(join(CONFIG_DIR, 'sessions'), { recursive: true });
-    mkdirSync(join(CONFIG_DIR, 'cron'), { recursive: true });
-    mkdirSync(AGENTS_DIR, { recursive: true });
-    mkdirSync(join(AGENTS_DIR, 'memory'), { recursive: true });
+    for (const dir of [
+      CONFIG_DIR,
+      join(CONFIG_DIR, 'logs'),
+      join(CONFIG_DIR, 'sessions'),
+      join(CONFIG_DIR, 'cron'),
+      AGENTS_DIR,
+      join(AGENTS_DIR, 'memory'),
+    ]) {
+      mkdirSync(dir, { recursive: true, mode: 0o700 });
+      chmodSync(dir, 0o700);
+    }
     const configPath = join(CONFIG_DIR, 'config.json');
     saveConfig(generatedConfig as unknown as Config);
     console.log(`✓ Config written to ${configPath}`);
@@ -873,10 +878,10 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
         return m && !newKeys.has(m[1]);
       });
       const merged = envContent.trim() + (preserved.length ? '\n' + preserved.join('\n') : '') + '\n';
-      writeFileSync(envPath, merged);
+      writeSetupEnvFile(envPath, merged);
       console.log(`✓ Secrets merged into ${envPath}`);
     } else {
-      writeFileSync(envPath, envContent);
+      writeSetupEnvFile(envPath, envContent);
       console.log(`✓ Secrets written to ${envPath}`);
     }
 
@@ -917,7 +922,7 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
     console.log(`${c.bold('Dashboard')}`);
     console.log(`   URL:   http://localhost:18790/dashboard`);
     console.log(`   Token: ${c.cyan(dashboardToken)}`);
-    console.log(`   ${c.dim('(also available via: skimpyclaw status)')}`);
+    console.log(`   ${c.dim('(shown during setup only; skimpyclaw status omits credentials)')}`);
 
     console.log('\nNext steps:');
     let step = 1;
@@ -937,6 +942,12 @@ export async function runSetup(options: SetupOptions = {}): Promise<void> {
   } finally {
     rl.close();
   }
+}
+
+export function writeSetupEnvFile(path: string, content: string): void {
+  if (existsSync(path)) chmodSync(path, 0o600);
+  writeFileSync(path, content, { encoding: 'utf-8', mode: 0o600 });
+  chmodSync(path, 0o600);
 }
 
 async function main(): Promise<void> {

@@ -1,7 +1,24 @@
 import { describe, expect, it } from 'vitest';
-import { buildSetupArtifacts, buildSetupConfig } from '../setup.js';
+import { chmodSync, mkdtempSync, rmSync, statSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
+import { buildSetupArtifacts, buildSetupConfig, writeSetupEnvFile } from '../setup.js';
 
 describe('setup config generation', () => {
+  it('stores fallback environment secrets with owner-only permissions', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'skimpyclaw-setup-'));
+    const path = join(dir, '.env');
+    try {
+      writeSetupEnvFile(path, 'API_KEY=first\n');
+      chmodSync(path, 0o644);
+      writeSetupEnvFile(path, 'API_KEY=second\n');
+
+      expect(statSync(path).mode & 0o777).toBe(0o600);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('builds Anthropic+Codex config with expected defaults', () => {
     const selectedProviders = new Set(['anthropic-api', 'codex-oauth'] as const);
     const config = buildSetupConfig({

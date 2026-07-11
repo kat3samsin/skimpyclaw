@@ -1,5 +1,5 @@
 import { execFileSync } from 'child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -32,6 +32,34 @@ afterEach(() => {
 });
 
 describe('code agent registry', () => {
+  it('tightens permissions on existing task storage', async () => {
+    const fakeHome = mkdtempSync(join(tmpdir(), 'skimpyclaw-home-'));
+    roots.push(fakeHome);
+    const codeAgentsDir = join(fakeHome, '.skimpyclaw', 'logs', 'code-agents');
+    const taskPath = join(codeAgentsDir, 'ca-private.json');
+    mkdirSync(codeAgentsDir, { recursive: true });
+    writeFileSync(taskPath, '{}');
+    chmodSync(codeAgentsDir, 0o755);
+    chmodSync(taskPath, 0o644);
+    vi.doMock('os', async () => {
+      const actual = await vi.importActual<typeof import('os')>('os');
+      return { ...actual, homedir: () => fakeHome };
+    });
+    const registry = await import('../code-agents/registry.js');
+
+    registry.writeCodeAgentTask({
+      id: 'ca-private',
+      agent: 'codex',
+      task: 'private task',
+      workdir: '/tmp',
+      status: 'running',
+      startedAt: new Date().toISOString(),
+    } as any);
+
+    expect(statSync(codeAgentsDir).mode & 0o777).toBe(0o700);
+    expect(statSync(taskPath).mode & 0o777).toBe(0o600);
+  });
+
   it('cleans interrupted clean worktrees on restore', async () => {
     const fakeHome = mkdtempSync(join(tmpdir(), 'skimpyclaw-home-'));
     roots.push(fakeHome);

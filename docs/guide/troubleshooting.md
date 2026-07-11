@@ -188,12 +188,14 @@ curl -X POST http://localhost:18790/cron/<job-id>/run
 **Fix:**
 
 ```bash
-# Find your dashboard token
-grep -o '"token":"[^"]*"' ~/.skimpyclaw/config.json
+# Explicitly retrieve the dashboard token from macOS Keychain
+security find-generic-password -s skimpyclaw-config -a dashboard.token -w
 
-# Or check startup logs for "[dashboard] Access token: ..."
 # Enter the token in the dashboard login prompt
 ```
+
+On systems configured without Keychain storage, read the literal
+`dashboard.token` value from the owner-only `~/.skimpyclaw/config.json` file.
 
 ## 11. Coding Agent Validation Fails on Monorepos
 

@@ -7,29 +7,6 @@ export interface StatusResponse {
   lastMessage?: string;
   activeChannel?: 'telegram' | 'discord' | null;
   cronJobs: CronJobSummary[];
-  subagents?: {
-    maxConcurrent: number;
-    active: number;
-    running: number;
-    pending: number;
-    recentTotal: number;
-    recentCompleted: number;
-    recentFailed: number;
-    recentCancelled: number;
-  };
-  activeSubagents?: Array<{
-    id: string;
-    type: string;
-    status: string;
-    model?: string;
-    label?: string;
-    promptPreview: string;
-    retryCount: number;
-    maxRetries: number;
-    createdAt: string;
-    startedAt?: string;
-    elapsedSeconds: number;
-  }>;
 }
 
 export interface CronJobSummary {
@@ -178,10 +155,6 @@ export interface CodeAgent {
   model?: string;
   modelLabel?: string;
   effort?: string;
-  parentTaskId?: string;
-  childTaskIds?: string[];
-  subtask?: string;
-  synthesisResult?: string;
   validationPassed?: boolean;
   validationOutput?: string;
   workdir?: string;
@@ -194,7 +167,6 @@ export interface CodeAgent {
     reason?: string;
     at: string;
   };
-  wave?: number;
   retryCount?: number;
   totalCost?: number;
   inputTokens?: number;

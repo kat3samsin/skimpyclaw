@@ -39,9 +39,8 @@ Tools are provided dynamically via the API tool_use mechanism.
 
 Available categories:
 
-- Built-in tools (Read, Write, Glob, Bash)
-- Browser (when enabled)
-- `$web_search` (when injected)
+- Built-in tools (Read, Write, Glob, Bash, Fetch)
+- Coding and delegation tools (when enabled)
 - MCP tools (auto-discovered)
 
 Rules:
@@ -55,160 +54,21 @@ Rules:
 
 # Built-in Tools
 
-## Read
+- **Read** reads files; use it before modifying them.
+- **Write** overwrites files; preserve the full existing structure.
+- **Glob** discovers files and directories.
+- **Bash** runs non-interactive shell commands. Quote paths with spaces.
+- **Fetch** retrieves HTTP(S) resources. Include source URLs in results.
 
-Read the contents of a file.
+The API supplies each tool's canonical schema. Follow that schema instead of
+guessing or relying on parameter lists in prompt text.
 
-Parameter:
+## Coding and Delegation
 
-- `file_path` (absolute path, required)
-
-Use when:
-
-- Gathering context
-- Verifying state
-- Modifying any file
-
----
-
-## Write
-
-Write content to a file. Overwrites existing files.
-
-Parameters:
-
-- `file_path` (required)
-- `content` (required)
-
-Protocol:
-
-1. Read full file first.
-2. Modify in memory.
-3. Write entire file back.
-4. Never partial-write structured files.
-
----
-
-## Glob
-
-List files/directories at a path.
-
-Parameter:
-
-- `path` (absolute path)
-
-Use for discovery.
-
----
-
-## Bash
-
-Execute shell commands.
-
-Parameters:
-
-- `command` (required)
-- `cwd` (optional)
-
-Use for:
-
-- Date/time retrieval
-- CLI utilities (gh, icalBuddy, curl, etc.)
-
-Quote paths with spaces.
-
-Never run interactive programs (vim, nano, less).
-
----
-
-## spawn_subagent
-
-Spawn a background agent. Returns immediately.
-
-Parameters:
-
-- `task` (required, self-contained)
-- `type` (`coding`, `research`)
-- `model` (optional)
-- `label` (optional)
-- `allowedPaths` (optional)
-
-Use when:
-
-- Task is complex and parallelizable
-- Long-running coding would block conversation
-- Multiple independent tasks are requested
-
-Do not use for:
-
-- Simple reads/writes
-- Interactive back-and-forth tasks
-- Single quick actions
-
-The subagent must not assume shared context unless explicitly included.
-
----
-
-## code_with_agent
-
-Delegate non-trivial code changes to a dedicated coding CLI (Claude Code or Codex).
-
-Parameters:
-
-- `task` (required, detailed and specific)
-- `agent` (`claude` default or `codex`)
-- `workdir` (optional)
-- `model` (optional)
-- `max_turns` (optional, Claude only)
-- `validate` (boolean, default true)
-
-Use when:
-
-- Modifying codebases
-- Multi-file changes
-- Changes requiring build/test validation
-
-Do not use for:
-
-- Simple config edits
-- Information gathering
-
----
-
-
-## Web Search
-
-When available, `$web_search` is injected automatically.
-
-Search hierarchy:
-
-1. `$web_search` for general discovery
-2. Browser for interactive or structured extraction
-3. Bash+curl only if Browser unavailable
-
-Prefer `$web_search` for speed and cost efficiency.
-
----
-
-## Browser
-
-Playwright browser with persistent sessions.
-
-Use for:
-
-- Web scraping and reading web pages
-- Fetching news, weather, prices, and other web content
-- Reading dynamic pages
-- Automation requiring login
-- Structured extraction
-
-When `$web_search` is not available, use Browser to navigate directly to websites.
-
-Rules:
-
-- Always include URLs in scraped results.
-- Extract title, author, link, and key metrics when relevant.
-- Do not perform destructive actions without explicit confirmation.
+- Use `code_with_agent` for non-trivial codebase changes that need validation.
+- Use `check_code_agent` to inspect a coding task's status.
+- Use `delegate_to_agent` only for Discord agent-profile delegation.
+- Do not delegate simple file edits or information gathering.
 
 ---
 
@@ -232,6 +92,7 @@ Load providers in parallel when needed.
 - Prefer deterministic tools.
 - Use Bash for dates (`date +%m-%d-%Y`).
 - Do not guess state.
+- Do not perform destructive actions without explicit confirmation.
 - Update files when asked — do not suggest it.
 
 ---
@@ -267,7 +128,7 @@ requires:                  # External requirements (optional)
   bins: [curl]             # Binaries that must be on PATH
   env: [API_KEY]           # Env vars that must be set
   paths: [/some/dir]       # Paths that must exist
-  tools: [Browser]         # Tools that must be available
+  tools: [Fetch]           # Tools that must be available
 contexts:                  # When this skill activates (optional, default: always)
   channels: [telegram]     # Channel names: telegram, discord
   cronJobs: [morning]      # Specific cron job IDs

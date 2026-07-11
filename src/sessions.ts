@@ -3,6 +3,7 @@
 
 import {
   appendFileSync,
+  chmodSync,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -65,8 +66,9 @@ function sessionPath(platform: string, chatId: string | number): string {
 
 function ensureDir(): void {
   if (!existsSync(SESSIONS_DIR)) {
-    mkdirSync(SESSIONS_DIR, { recursive: true });
+    mkdirSync(SESSIONS_DIR, { recursive: true, mode: 0o700 });
   }
+  chmodSync(SESSIONS_DIR, 0o700);
 }
 
 function deriveKeyFromEnv(raw: string): Buffer {
@@ -171,7 +173,8 @@ function migratePlaintextFile(filePath: string, entries: SessionEntry[]): void {
 
   try {
     const encryptedLines = entries.map(entry => encryptEntry(entry));
-    writeFileSync(filePath, encryptedLines.join('\n') + '\n', 'utf-8');
+    writeFileSync(filePath, encryptedLines.join('\n') + '\n', { encoding: 'utf-8', mode: 0o600 });
+    chmodSync(filePath, 0o600);
     console.log(`[sessions] Migrated plaintext history to encrypted format: ${filePath}`);
   } catch (err) {
     console.error('[sessions] Failed to migrate session file:', err);
@@ -183,7 +186,8 @@ function appendEncryptedEntry(filePath: string, entry: SessionEntry): void {
     throw new Error('Encrypted session storage is unavailable. Configure macOS Keychain access or SKIMPYCLAW_HISTORY_KEY.');
   }
 
-  appendFileSync(filePath, encryptEntry(entry) + '\n', 'utf-8');
+  appendFileSync(filePath, encryptEntry(entry) + '\n', { encoding: 'utf-8', mode: 0o600 });
+  chmodSync(filePath, 0o600);
 }
 
 export function readSessionEntriesFromFile(filePath: string): SessionEntry[] {
@@ -254,7 +258,8 @@ export function trimSessionFileForRetention(filePath: string, cutoffMs: number, 
   }
 
   const rewritten = kept.map((item) => item.entry ? encryptEntry(item.entry) : item.raw).join('\n') + '\n';
-  writeFileSync(filePath, rewritten, 'utf-8');
+  writeFileSync(filePath, rewritten, { encoding: 'utf-8', mode: 0o600 });
+  chmodSync(filePath, 0o600);
   result.freedBytes = Math.max(0, originalSize - Buffer.byteLength(rewritten, 'utf-8'));
   return result;
 }
@@ -370,7 +375,8 @@ export async function replaceWithSummary(
       throw new Error('Encrypted session storage is unavailable. Configure macOS Keychain access or SKIMPYCLAW_HISTORY_KEY.');
     }
 
-    writeFileSync(filePath, encryptEntry(entry) + '\n', 'utf-8');
+    writeFileSync(filePath, encryptEntry(entry) + '\n', { encoding: 'utf-8', mode: 0o600 });
+    chmodSync(filePath, 0o600);
   } catch (err) {
     console.error('[sessions] Failed to replace with summary:', err);
   }

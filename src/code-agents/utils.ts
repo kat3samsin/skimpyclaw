@@ -492,7 +492,7 @@ function firstMeaningfulLines(value: string, maxChars: number): string {
 }
 
 function formatAgentDisplay(task: CodeAgentTask): string {
-  const agent = task.agent === 'team-coordinator' ? 'TEAM' : task.agent.toUpperCase();
+  const agent = task.agent.toUpperCase();
   const model = task.modelLabel || resolveCodeAgentModelLabel(task.agent, task.model);
   const effort = task.effort ? ` · effort ${task.effort}` : '';
   return `${agent} · ${model}${effort}`;

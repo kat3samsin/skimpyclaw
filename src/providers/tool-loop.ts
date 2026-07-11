@@ -14,6 +14,7 @@ import { startTrace, addEvent, endTrace } from '../audit.js';
 import { toErrorMessage } from '../utils.js';
 import { buildToolLogEntry, logIteration, logCompaction } from './loop-utils.js';
 import { sanitizeLangfusePayload } from '../langfuse.js';
+import { redactSecrets, redactSecretText } from '../security.js';
 
 /** Start a Langfuse observation (lazy import to avoid circular deps). Returns null if disabled. */
 async function tryStartObservation(name: string, params: any, type: 'generation' | 'tool') {
@@ -225,10 +226,11 @@ export async function runToolLoop(
         genObs?.end();
       } catch (err) {
         const errorMessage = toErrorMessage(err);
+        const redactedError = redactSecretText(errorMessage);
         genObs?.update({
           level: 'ERROR',
-          statusMessage: errorMessage,
-          output: sanitizeLangfusePayload({ error: errorMessage }),
+          statusMessage: redactedError,
+          output: sanitizeLangfusePayload({ error: redactedError }),
         });
         genObs?.end();
         traceStatus = 'error';
@@ -340,6 +342,10 @@ interface ToolCallResult {
   isError: boolean;
 }
 
+function redactToolResultForLogging(result: string): string {
+  return redactSecretText(result.slice(0, 1_000));
+}
+
 /**
  * Execute a single tool call and return the result (does NOT append to messages).
  */
@@ -351,7 +357,7 @@ async function executeToolCall(
   toolLog: string[],
   providerName: string,
 ): Promise<ToolCallResult> {
-  const inputStr = toolCall.rawArgs.slice(0, 200);
+  const inputStr = redactSecretText(JSON.stringify(redactSecrets(toolCall.args))).slice(0, 200);
   console.log(`[${providerName}:tools] -> ${toolCall.name}(${inputStr})`);
 
   // Guard: spin detection
@@ -372,7 +378,7 @@ async function executeToolCall(
   const toolObs = await tryStartObservation(
     `tool:${toolCall.name}`,
     {
-      input: sanitizeLangfusePayload(toolCall.args),
+      input: sanitizeLangfusePayload(redactSecrets(toolCall.args)),
       metadata: { app: 'skimpyclaw', tool: toolCall.name },
     },
     'tool',
@@ -382,7 +388,8 @@ async function executeToolCall(
   try {
     const result = await executeTool(toolCall.name, toolCall.args, toolConfig, toolContext);
     const truncatedResult = splitToolResult(toolCall.name, toolCall.args, result);
-    const resultPreview = result.slice(0, 200) + (result.length > 200 ? '...' : '');
+    const redactedResult = redactToolResultForLogging(result);
+    const resultPreview = redactedResult.slice(0, 200) + (result.length > 200 ? '...' : '');
 
     console.log(`[${providerName}:tools] <- ${resultPreview}`);
     toolLog.push(buildToolLogEntry(toolCall.name, inputStr, resultPreview));
@@ -410,24 +417,25 @@ async function executeToolCall(
     return { toolCallId: toolCall.id, result: finalResult, isError: false };
   } catch (err) {
     const errorMessage = toErrorMessage(err);
+    const redactedError = redactSecretText(errorMessage);
     toolObs?.update({
       level: 'ERROR',
-      statusMessage: errorMessage,
-      output: sanitizeLangfusePayload({ error: errorMessage }),
+      statusMessage: redactedError,
+      output: sanitizeLangfusePayload({ error: redactedError }),
     });
     toolObs?.end();
 
     if (toolContext?.auditTraceId) {
       addEvent(toolContext.auditTraceId, {
         type: 'tool_error',
-        summary: `${toolCall.name} error: ${errorMessage.slice(0, 150)}`,
+        summary: `${toolCall.name} error: ${redactedError.slice(0, 150)}`,
         durationMs: Date.now() - toolStart,
       });
     }
 
     const errorResult = `[Tool Error] ${toolCall.name}: ${errorMessage}`;
-    console.error(`[${providerName}:tools] tool error: ${errorMessage}`);
-    toolLog.push(`${toolCall.name} [ERROR: ${errorMessage.slice(0, 100)}]`);
+    console.error(`[${providerName}:tools] tool error: ${redactedError}`);
+    toolLog.push(`${toolCall.name} [ERROR: ${redactedError.slice(0, 100)}]`);
     return { toolCallId: toolCall.id, result: errorResult, isError: true };
   }
 }

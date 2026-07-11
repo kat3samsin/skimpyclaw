@@ -31,6 +31,7 @@ class MockAdapter implements ProviderAdapter {
   buildToolDefsCallCount = 0;
   appendAssistantCallCount = 0;
   appendToolResultCallCount = 0;
+  appendedToolResults: string[] = [];
   compactMessagesCallCount = 0;
   compactionUsageContexts: Array<{ trigger?: string; agentId?: string } | undefined> = [];
   recordUsageCallCount = 0;
@@ -78,6 +79,7 @@ class MockAdapter implements ProviderAdapter {
 
   appendToolResult(messages: ProviderMessages, toolCallId: string, result: string, isError?: boolean): void {
     this.appendToolResultCallCount++;
+    this.appendedToolResults.push(result);
     messages.messages.push({ role: 'tool', toolCallId, result, isError });
   }
 
@@ -529,6 +531,68 @@ describe('runToolLoop', () => {
     expect(adapter.callCount).toBe(2);
     // Tool log should contain the error
     expect(result.toolCalls.some(t => t.includes('ERROR'))).toBe(true);
+  });
+
+  it('redacts tool arguments and result previews without changing tool execution data', async () => {
+    const envValue = 'plain-env-token';
+    const bearerValue = ['123e4567', 'e89b', '12d3', 'a456', '426614174000'].join('-');
+    const passwordValue = 'plain-password';
+    const resultValue = 'plain-result-secret';
+    const shapedValue = `ghp_${'a'.repeat(36)}`;
+    const command = `INTERNAL_TOKEN=${envValue} curl -H "Authorization: Bearer ${bearerValue}" --password ${passwordValue}`;
+    const rawResult = JSON.stringify({ token: resultValue, value: shapedValue, payload: 'x'.repeat(1_500) });
+    mockExecuteTool.mockResolvedValueOnce(rawResult);
+    adapter.responses = [
+      {
+        hasToolCalls: true,
+        toolCalls: [{
+          id: 'call-secret',
+          name: 'testTool',
+          args: { cmd: command, password: passwordValue },
+          rawArgs: JSON.stringify({ cmd: command, password: passwordValue }),
+        }],
+        textContent: '',
+        usage: { inputTokens: 100, outputTokens: 50 },
+        rawResponse: {},
+      },
+      {
+        hasToolCalls: false,
+        toolCalls: [],
+        textContent: 'Done',
+        usage: { inputTokens: 100, outputTokens: 50 },
+        rawResponse: {},
+      },
+    ];
+    const { addEvent } = await import('../audit.js');
+    vi.mocked(addEvent).mockClear();
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    const result = await runToolLoop(
+      adapter,
+      messages,
+      options,
+      config,
+      toolConfig,
+      { auditTraceId: 'existing-trace' },
+    );
+
+    expect(mockExecuteTool).toHaveBeenCalledWith(
+      'testTool',
+      { cmd: command, password: passwordValue },
+      toolConfig,
+      { auditTraceId: 'existing-trace' },
+    );
+    expect(adapter.appendedToolResults).toEqual([rawResult]);
+    const logged = [
+      ...logSpy.mock.calls.flat(),
+      ...result.toolCalls,
+      JSON.stringify(vi.mocked(addEvent).mock.calls),
+    ].join('\n');
+    for (const secret of [envValue, bearerValue, passwordValue, resultValue, shapedValue]) {
+      expect(logged).not.toContain(secret);
+    }
+    expect(logged).toContain('[REDACTED');
+    logSpy.mockRestore();
   });
 
   it('should call endTrace when the loop completes and it created the trace', async () => {

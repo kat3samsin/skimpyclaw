@@ -4,6 +4,7 @@ import { LangfuseSpanProcessor } from '@langfuse/otel';
 import { setLangfuseTracerProvider } from '@langfuse/tracing';
 import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
 import type { Config } from './types.js';
+import { isSecretKey, redactSecretText } from './security.js';
 
 const DATA_URI_BASE64_RE =
   /data:([a-zA-Z0-9][a-zA-Z0-9!#$&^_.+-]*\/[a-zA-Z0-9][a-zA-Z0-9!#$&^_.+-]*(?:;[a-zA-Z0-9!#$&^_.+-]+=[^;,\s]+)*);base64,([a-zA-Z0-9+/_=-]+)/gi;
@@ -15,7 +16,7 @@ function estimateBase64Bytes(base64Data: string): number {
 }
 
 function sanitizeLangfuseString(value: string): string {
-  return value.replace(DATA_URI_BASE64_RE, (_match, mimeType: string, base64Data: string) => {
+  return redactSecretText(value).replace(DATA_URI_BASE64_RE, (_match, mimeType: string, base64Data: string) => {
     const byteLength = estimateBase64Bytes(base64Data);
     return `[redacted data URI: ${mimeType}, approx ${byteLength} bytes]`;
   });
@@ -27,11 +28,11 @@ function isPlainObject(value: object): value is Record<string, unknown> {
 }
 
 /**
- * Remove inline base64 media from Langfuse observability payloads only.
+ * Remove secrets and inline base64 media from Langfuse observability payloads only.
  *
  * SkimpyClaw still sends the original provider/tool payloads to their normal
- * destinations; this copy prevents Langfuse media upload parsing from seeing
- * data:*;base64 strings in trace and observation input/output/metadata.
+ * destinations; this copy prevents Langfuse from receiving secret-shaped text
+ * or inline data:*;base64 media in trace and observation input/output/metadata.
  */
 export function sanitizeLangfusePayload<T>(payload: T): T {
   if (typeof payload === 'string') {
@@ -52,7 +53,7 @@ export function sanitizeLangfusePayload<T>(payload: T): T {
 
   const sanitized: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(payload)) {
-    sanitized[key] = sanitizeLangfusePayload(value);
+    sanitized[key] = isSecretKey(key) ? '[REDACTED]' : sanitizeLangfusePayload(value);
   }
   return sanitized as T;
 }

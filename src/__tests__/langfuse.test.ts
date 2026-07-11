@@ -36,6 +36,24 @@ describe('calculateUsageCost', () => {
 });
 
 describe('sanitizeLangfusePayload', () => {
+  it('redacts secrets from observability strings', () => {
+    const secret = 'plain-observability-token';
+    const sanitized = sanitizeLangfusePayload(`INTERNAL_TOKEN=${secret}`);
+
+    expect(sanitized).not.toContain(secret);
+    expect(sanitized).toContain('[REDACTED_SECRET]');
+  });
+
+  it('redacts short secrets stored under sensitive keys', () => {
+    const sanitized = sanitizeLangfusePayload({
+      nested: { token: 'short', password: 'hunter2', label: 'kept' },
+    });
+
+    expect(sanitized).toEqual({
+      nested: { token: '[REDACTED]', password: '[REDACTED]', label: 'kept' },
+    });
+  });
+
   it('replaces base64 data URIs with compact media placeholders', () => {
     const sanitized = sanitizeLangfusePayload('data:image/png;base64,aGVsbG8=');
 
@@ -89,7 +107,7 @@ describe('sanitizeLangfusePayload', () => {
 
   it('leaves non-media strings unchanged', () => {
     const payload = {
-      token: 'YWJjZA==',
+      value: 'YWJjZA==',
       url: 'https://example.com/image.png',
     };
 

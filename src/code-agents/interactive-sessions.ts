@@ -5,7 +5,7 @@
 // Per-session FIFO queue prevents concurrent --resume subprocesses against
 // the same session (which would corrupt history).
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname } from 'path';
 import { homedir } from 'os';
 import { join } from 'path';
@@ -46,9 +46,11 @@ function ensureLoaded(): void {
 
 function persist(): void {
   try {
-    mkdirSync(dirname(STORE_PATH), { recursive: true });
+    mkdirSync(dirname(STORE_PATH), { recursive: true, mode: 0o700 });
+    chmodSync(dirname(STORE_PATH), 0o700);
     const arr = Array.from(sessions.values());
-    writeFileSync(STORE_PATH, JSON.stringify(arr, null, 2), 'utf-8');
+    writeFileSync(STORE_PATH, JSON.stringify(arr, null, 2), { encoding: 'utf-8', mode: 0o600 });
+    chmodSync(STORE_PATH, 0o600);
   } catch (err) {
     console.error('[interactive-sessions] Failed to persist store:', err);
   }

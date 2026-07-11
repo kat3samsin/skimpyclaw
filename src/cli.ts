@@ -327,14 +327,12 @@ async function runForeground(): Promise<number> {
 
 async function commandStatus(): Promise<number> {
   let port = DEFAULT_PORT;
-  let dashboardToken = '';
   try {
     const cfg = loadConfig();
     const cfgPort = Number(cfg?.gateway?.port);
     if (Number.isFinite(cfgPort) && cfgPort > 0) {
       port = cfgPort;
     }
-    dashboardToken = String(cfg?.dashboard?.token || '');
   } catch {
     // Keep default when config does not exist yet.
   }
@@ -352,10 +350,7 @@ async function commandStatus(): Promise<number> {
     console.log(`Model: ${status.model}`);
     console.log(`Last message: ${status.lastMessage || 'never'}`);
     console.log(`Cron jobs: ${Array.isArray(status.cronJobs) ? status.cronJobs.length : 0}`);
-    if (dashboardToken) {
-      console.log(`Dashboard: http://127.0.0.1:${port}/dashboard`);
-      console.log(`Dashboard token: ${dashboardToken}`);
-    }
+    console.log(`Dashboard: http://127.0.0.1:${port}/dashboard`);
     return 0;
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);

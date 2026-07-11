@@ -127,7 +127,13 @@ const SECRET_TEXT_PATTERNS = [
   /github_pat_[A-Za-z0-9_]{20,}/g,
   /xox[baprs]-[A-Za-z0-9-]+/g,
   /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g,
+  /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*/g,
   /sk-[A-Za-z0-9]{20,}/g,
+  /\bAuthorization\s*:\s*(?:Bearer|Basic)\s+[^\s"',;\\]+/gi,
+  /\bBearer\s+[A-Za-z0-9._~+/=-]+/gi,
+  /\b[A-Za-z][A-Za-z0-9_]*(?:KEY|TOKEN|PASSWORD|SECRET)[A-Za-z0-9_]*\s*=\s*(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s,;]+)/gi,
+  /--(?:api[-_]?key|token|password|secret)(?:\s+|=)(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s,;]+)/gi,
+  /\b(?:api[_-]?key|access[_-]?token|token|password|secret)["']?\s*[:=]\s*(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s,;}]+)/gi,
 ];
 
 export function redactSecretText(input: string): string {
@@ -138,10 +144,14 @@ export function redactSecretText(input: string): string {
   return redacted;
 }
 
+export function isSecretKey(key: string): boolean {
+  return SECRET_KEYS.some(secret => key.toLowerCase().includes(secret));
+}
+
 export function redactSecrets(obj: Record<string, any>): Record<string, any> {
   const redacted: Record<string, any> = {};
   for (const [key, value] of Object.entries(obj)) {
-    if (SECRET_KEYS.some(s => key.toLowerCase().includes(s))) {
+    if (isSecretKey(key)) {
       redacted[key] = '[REDACTED]';
     } else if (Array.isArray(value)) {
       redacted[key] = value.map((item) => {

@@ -57,7 +57,11 @@ describe('config security hardening', () => {
     const { saveConfig } = await import('../config.js');
     saveConfig({ gateway: { port: 18790 } } as any);
 
-    expect(mockFs.mkdirSync).toHaveBeenCalledWith('/mock-home/.skimpyclaw', { recursive: true });
+    expect(mockFs.mkdirSync).toHaveBeenCalledWith(
+      '/mock-home/.skimpyclaw',
+      { recursive: true, mode: 0o700 },
+    );
+    expect(mockFs.chmodSync).toHaveBeenCalledWith('/mock-home/.skimpyclaw', 0o700);
     expect(mockFs.writeFileSync).toHaveBeenCalledWith(
       '/mock-home/.skimpyclaw/config.json',
       expect.any(String),

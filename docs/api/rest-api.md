@@ -6,7 +6,7 @@ All endpoints are served by the Fastify gateway on port `18790`. Dashboard endpo
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/api/dashboard/status` | Uptime, model, agent, active channel, cron jobs, subagent stats |
+| `GET` | `/api/dashboard/status` | Uptime, model, agent, active channel, cron jobs |
 | `GET` | `/api/dashboard/config` | Current config (secrets redacted) |
 | `PUT` | `/api/dashboard/config` | Save new config. Body: `{ config }` |
 | `POST` | `/api/dashboard/restart` | Graceful process restart |
@@ -21,12 +21,10 @@ All endpoints are served by the Fastify gateway on port `18790`. Dashboard endpo
 | `GET` | `/api/dashboard/model` | Current model, aliases, per-agent assignments |
 | `POST` | `/api/dashboard/model` | Set model. Body: `{ model }` -- validated via `resolveModelSelection` |
 
-## Sessions & Conversations
+## Conversations
 
 | Method | Path | Params | Description |
 |--------|------|--------|-------------|
-| `GET` | `/api/dashboard/sessions` | | List all conversation sessions |
-| `GET` | `/api/dashboard/sessions/:id` | | Get full session (JSON) |
 | `GET` | `/api/dashboard/conversations` | `channel?` | List telegram/discord conversations |
 | `GET` | `/api/dashboard/conversations/:id` | `limit?`, `offset?` | Paginated messages (JSONL) |
 
@@ -76,10 +74,3 @@ Tail responses return <code>{ content, lines, truncated }</code>, where <code>li
 |--------|------|--------|-------------|
 | `GET` | `/api/dashboard/usage` | | Usage summary (costs, tokens) |
 | `GET` | `/api/dashboard/usage/records` | `limit?`, `offset?`, `model?` | Paginated records (max 200) |
-
-## TODOs
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/api/dashboard/todos` | Parse TODO.md items with completion stats |
-| `PUT` | `/api/dashboard/todos/:id` | Toggle todo completion. Body: `{ completed? }` |

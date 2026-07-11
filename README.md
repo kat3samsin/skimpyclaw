@@ -123,7 +123,9 @@ curl http://127.0.0.1:18790/health
 http://127.0.0.1:18790/dashboard
 ```
 
-Bearer token is shown in startup logs.
+The bearer token is shown once during setup. See the
+[dashboard troubleshooting guide](docs/guide/troubleshooting.md#10-dashboard-401-unauthorized)
+for the explicit Keychain recovery command if you need it again.
 
 ## Security
 
@@ -195,11 +197,9 @@ templates/              # Default template markdown files
   IDENTITY.md
   USER.md
   TOOLS.md
-  BOOT.md
   HEARTBEAT.md
   MEMORY.md
   AGENTS.md
-  BOOTSTRAP.md
 
 dist/                   # Compiled output + built dashboard assets
 ```

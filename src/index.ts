@@ -1,7 +1,7 @@
 // SkimpyClaw - Lightweight Personal AI Assistant
 // Main entry point
 
-import { createWriteStream, mkdirSync, existsSync, statSync, renameSync } from 'fs';
+import { chmodSync, createWriteStream, mkdirSync, existsSync, statSync, renameSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import dotenv from 'dotenv';
@@ -16,11 +16,13 @@ const MAX_LOG_SIZE = 10 * 1024 * 1024; // 10MB — rotate when exceeded
 
 function initLogging(): void {
   if (!existsSync(LOG_DIR)) {
-    mkdirSync(LOG_DIR, { recursive: true });
+    mkdirSync(LOG_DIR, { recursive: true, mode: 0o700 });
   }
+  chmodSync(LOG_DIR, 0o700);
 
   // Rotate if log file exceeds max size
   if (existsSync(LOG_FILE)) {
+    chmodSync(LOG_FILE, 0o600);
     try {
       const stat = statSync(LOG_FILE);
       if (stat.size > MAX_LOG_SIZE) {
@@ -32,7 +34,12 @@ function initLogging(): void {
     }
   }
 
-  const logStream = createWriteStream(LOG_FILE, { flags: 'a' });
+  for (const existingLog of ['gateway.log.1', 'gateway.stdout.log', 'gateway.stderr.log']) {
+    const path = join(LOG_DIR, existingLog);
+    if (existsSync(path)) chmodSync(path, 0o600);
+  }
+
+  const logStream = createWriteStream(LOG_FILE, { flags: 'a', mode: 0o600 });
 
   const timestamp = () => new Date().toISOString();
 

@@ -9,9 +9,7 @@ import {
   type Interaction,
   type GuildTextBasedChannel,
 } from 'discord.js';
-import { join } from 'path';
-import { tmpdir } from 'os';
-import { existsSync, mkdirSync, writeFileSync, unlinkSync } from 'fs';
+import { unlinkSync } from 'fs';
 import type { AbortSignalLike, Config, ThinkingLevel } from '../../types.js';
 import { getCurrentModel, getCurrentThinking, setCurrentModel, setCurrentThinking } from '../../gateway.js';
 import { getCronJobs, triggerCronJob } from '../../cron.js';
@@ -25,7 +23,7 @@ import {
   getApproval,
   type PendingApproval,
 } from '../../exec-approval.js';
-import { transcribeAudio, synthesizeSpeech } from '../../voice.js';
+import { transcribeAudio, synthesizeSpeech, writeTemporaryVoiceFile } from '../../voice.js';
 import * as sessions from '../../sessions.js';
 import { formatAliases, formatModelSelectionError, getModelSelectionUsage, resolveModelSelection } from '../../model-selection.js';
 import { KNOWN_COMMANDS } from './types.js';
@@ -1285,15 +1283,12 @@ export async function handleIncomingMessage(message: Message, config: Config): P
       const buffer = Buffer.from(await voiceResponse.arrayBuffer());
 
       const ext = attachment.name?.split('.').pop() || 'ogg';
-      const tempDir = join(tmpdir(), 'skimpyclaw-voice');
-      if (!existsSync(tempDir)) mkdirSync(tempDir, { recursive: true });
-      const tempPath = join(tempDir, `discord-voice-${Date.now()}.${ext}`);
-      writeFileSync(tempPath, buffer);
+      const tempPath = writeTemporaryVoiceFile('discord-voice', ext, buffer);
 
       try {
         const result = await transcribeAudio(tempPath, config.voice);
         const transcription = result.text.trim();
-        console.log(`[discord] Transcription result: ${transcription}`);
+        console.log(`[discord] Transcription complete (${transcription.length} chars)`);
 
         if (!transcription) {
           await message.reply('Could not transcribe audio — no speech detected.');

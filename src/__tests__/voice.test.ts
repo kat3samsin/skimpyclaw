@@ -9,8 +9,11 @@ const { mockAudioSpeechCreate } = vi.hoisted(() => ({
 const { mockSpawn } = vi.hoisted(() => ({
   mockSpawn: vi.fn(),
 }));
-const { mockUnlinkSync } = vi.hoisted(() => ({
+const { mockChmodSync, mockMkdirSync, mockUnlinkSync, mockWriteFileSync } = vi.hoisted(() => ({
+  mockChmodSync: vi.fn(),
+  mockMkdirSync: vi.fn(),
   mockUnlinkSync: vi.fn(),
+  mockWriteFileSync: vi.fn(),
 }));
 
 // Mock openai — use a class so `new OpenAI()` works correctly in ESM mocking context
@@ -37,9 +40,11 @@ vi.mock('fs', async (importOriginal) => {
   return {
     ...actual,
     existsSync: vi.fn(() => true),
+    chmodSync: mockChmodSync,
+    mkdirSync: mockMkdirSync,
     readFileSync: vi.fn(() => Buffer.from('fake-audio-data')),
     unlinkSync: mockUnlinkSync,
-    writeFileSync: vi.fn(),
+    writeFileSync: mockWriteFileSync,
     readdirSync: vi.fn(() => []),
   };
 });
@@ -49,7 +54,7 @@ const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
 // Import after mocks are set up
-const { synthesizeSpeech, checkTTSDependencies, checkVoiceDependencies } = await import('../voice.js');
+const { synthesizeSpeech, checkTTSDependencies, checkVoiceDependencies, writeTemporaryVoiceFile } = await import('../voice.js');
 
 // --- Config helpers ---
 
@@ -58,6 +63,18 @@ const baseVoiceConfig: VoiceConfig = {
   providers: {},
   channels: {},
 };
+
+it('stores temporary voice input with owner-only permissions', () => {
+  const buffer = Buffer.from('voice');
+  const path = writeTemporaryVoiceFile('discord-voice', '../ogg', buffer);
+  const dir = path.slice(0, path.lastIndexOf('/'));
+
+  expect(path).toMatch(/discord-voice-[0-9a-f-]+\.ogg$/);
+  expect(mockMkdirSync).toHaveBeenCalledWith(dir, { recursive: true, mode: 0o700 });
+  expect(mockChmodSync).toHaveBeenCalledWith(dir, 0o700);
+  expect(mockWriteFileSync).toHaveBeenCalledWith(path, buffer, { mode: 0o600 });
+  expect(mockChmodSync).toHaveBeenCalledWith(path, 0o600);
+});
 
 function createVoiceChild(options: {
   autoClose?: boolean;

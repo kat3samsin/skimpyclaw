@@ -2,7 +2,7 @@
 
 import { Cron } from 'croner';
 import { spawn } from 'child_process';
-import { existsSync, mkdirSync, appendFileSync, readFileSync, watch, writeFileSync, type FSWatcher } from 'fs';
+import { chmodSync, existsSync, mkdirSync, appendFileSync, readFileSync, watch, writeFileSync, type FSWatcher } from 'fs';
 import { dirname, join, resolve } from 'path';
 import { getLogsDir, getConfigPath, loadConfig, resolveAllowedPaths } from './config.js';
 import type { AbortSignalLike, Config, CronJob, ToolConfig } from './types.js';
@@ -18,6 +18,7 @@ import { sanitizeCronEnv } from './env-sanitizer.js';
 import { buildArtifactUrl, registerLocalArtifact } from './artifacts.js';
 import { linkLocalHtmlArtifactsForDiscord } from './channels/discord/utils.js';
 import { isPathAllowed } from './tools/path-utils.js';
+import { redactSecretText } from './security.js';
 
 function safeTimezone(tz: string | undefined): string {
   const fallback = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
@@ -93,8 +94,9 @@ interface CronVoiceArtifact {
 function getCronLogDir(): string {
   const dir = join(getLogsDir(), 'cron');
   if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true });
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
   }
+  chmodSync(dir, 0o700);
   return dir;
 }
 
@@ -109,20 +111,22 @@ function writeCronLog(entry: CronLogEntry): void {
   const header = `[${entry.startedAt}] ${entry.jobName} (${entry.jobId})`;
   const status = `Status: ${entry.status}`;
   const duration = entry.durationMs != null ? `Duration: ${(entry.durationMs / 1000).toFixed(1)}s` : '';
-  const error = entry.error ? `Error: ${entry.error}` : '';
-  const output = entry.output ? `Output:\n${entry.output}` : '';
+  const error = entry.error ? `Error: ${redactSecretText(entry.error)}` : '';
+  const output = entry.output ? `Output:\n${redactSecretText(entry.output)}` : '';
 
   const lines = [separator, header, status, duration, error, output]
     .filter(Boolean)
     .join('\n');
 
-  appendFileSync(logPath, lines + '\n');
+  appendFileSync(logPath, lines + '\n', { encoding: 'utf-8', mode: 0o600 });
+  chmodSync(logPath, 0o600);
 }
 
 function appendCronLogLine(jobId: string, line: string): void {
   const logPath = getCronLogPath(jobId);
   const timestamp = new Date().toISOString();
-  appendFileSync(logPath, `[${timestamp}] ${line}\n`);
+  appendFileSync(logPath, `[${timestamp}] ${redactSecretText(line)}\n`, { encoding: 'utf-8', mode: 0o600 });
+  chmodSync(logPath, 0o600);
 }
 
 function safeArtifactExtension(format: string): string {
@@ -470,7 +474,7 @@ async function sendCronNotification(
       return false;
     } catch (err) {
       const errorText = err instanceof Error ? err.message : String(err);
-      console.error(`[cron] Discord thread delivery failed for ${discordThreadId}; active-channel fallback disabled: ${errorText}`);
+      console.error(`[cron] Discord thread delivery failed for ${discordThreadId}; active-channel fallback disabled: ${redactSecretText(errorText)}`);
       return false;
     }
   }
@@ -810,7 +814,7 @@ function scheduleJob(jobDef: CronJob, config: Config): void {
     try {
       await executeJobPayload(jobDef, config);
     } catch (err) {
-      console.error(`[cron] Scheduled job "${jobDef.id}" failed: ${toErrorMessage(err)}`);
+      console.error(`[cron] Scheduled job "${jobDef.id}" failed: ${redactSecretText(toErrorMessage(err))}`);
     }
   };
 
@@ -1021,19 +1025,20 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
       }
     } else if (jobDef.payload.kind === 'script') {
       const scriptTraceId = startTrace('cron');
+      const redactedScript = redactSecretText(jobDef.payload.script || '');
       addEvent(scriptTraceId, {
         type: 'script_start',
-        summary: `${jobDef.name}: ${(jobDef.payload.script || '').slice(0, 100)}`,
+        summary: `${jobDef.name}: ${redactedScript.slice(0, 100)}`,
         durationMs: 0,
       });
-      appendCronLogLine(jobDef.id, `Script started: ${(jobDef.payload.script || '').slice(0, 100)}`);
+      appendCronLogLine(jobDef.id, `Script started: ${redactedScript.slice(0, 100)}`);
       try {
         const output = await executeScript(jobDef, config);
         logEntry.output = output.slice(0, 50000);
         appendCronLogLine(jobDef.id, `Script completed (${output.length} chars)`);
         addEvent(scriptTraceId, {
           type: 'script_complete',
-          summary: `Output: ${output.slice(0, 150)}`,
+          summary: `Output: ${redactSecretText(output).slice(0, 150)}`,
           durationMs: 0,
         });
         await endTrace(scriptTraceId, 'ok');
@@ -1050,7 +1055,7 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
         const scriptErrMsg = scriptErr instanceof Error ? scriptErr.message : String(scriptErr);
         addEvent(scriptTraceId, {
           type: 'script_error',
-          summary: scriptErrMsg.slice(0, 150),
+          summary: redactSecretText(scriptErrMsg).slice(0, 150),
           durationMs: 0,
         });
         await endTrace(scriptTraceId, 'error');
@@ -1113,7 +1118,7 @@ async function executeJobPayload(jobDef: CronJob, config: Config): Promise<void>
         }
       }
     } catch (notifyErr) {
-      console.error(`[cron] Failed to send notification: ${notifyErr}`);
+      console.error(`[cron] Failed to send notification: ${redactSecretText(toErrorMessage(notifyErr))}`);
     }
   }
 }
@@ -1140,7 +1145,8 @@ async function executeScript(jobDef: CronJob, _config: Config): Promise<string> 
     let overflowError: Error | null = null;
     let timeoutError: Error | null = null;
     let sigkillTimer: ReturnType<typeof setTimeout> | null = null;
-    console.log(`[cron:script] Running: ${script.slice(0, 100)}${script.length > 100 ? '...' : ''}`);
+    const redactedScript = redactSecretText(script);
+    console.log(`[cron:script] Running: ${redactedScript.slice(0, 100)}${redactedScript.length > 100 ? '...' : ''}`);
     if (cwd) console.log(`[cron:script] cwd: ${cwd}`);
 
     const child = spawn(script, {
@@ -1161,8 +1167,8 @@ async function executeScript(jobDef: CronJob, _config: Config): Promise<string> 
       settled = true;
       clearTimers(options);
       const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-      console.error(`[cron:script] Failed after ${elapsed}s: ${error.message}`);
-      if (stderr) console.error(`[cron:script] stderr: ${stderr.slice(0, 500)}`);
+      console.error(`[cron:script] Failed after ${elapsed}s: ${redactSecretText(error.message)}`);
+      if (stderr) console.error(`[cron:script] stderr: ${redactSecretText(stderr).slice(0, 500)}`);
       reject(error);
     };
 
@@ -1249,7 +1255,7 @@ async function executeScript(jobDef: CronJob, _config: Config): Promise<string> 
         const preview = lines.length > 5
           ? lines.slice(0, 3).join('\n') + `\n... (${lines.length} lines total)`
           : stdout.trim();
-        console.log(`[cron:script] Output:\n${preview}`);
+        console.log(`[cron:script] Output:\n${redactSecretText(preview)}`);
       }
       resolve(stdout || '');
     });
@@ -1379,7 +1385,7 @@ export function triggerCronJob(id: string, config: Config): CronRunTarget {
 
   void executeJobPayload(jobDef, config).catch((error) => {
     const msg = error instanceof Error ? error.message : String(error);
-    console.error(`[cron] Manual job "${jobDef.id}" failed: ${msg}`);
+    console.error(`[cron] Manual job "${jobDef.id}" failed: ${redactSecretText(msg)}`);
   });
 
   return { id: jobDef.id, name: jobDef.name };

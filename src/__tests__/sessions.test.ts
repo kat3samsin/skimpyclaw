@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdirSync, rmSync, existsSync, readFileSync } from 'fs';
+import { chmodSync, mkdirSync, rmSync, existsSync, readFileSync, statSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import {
@@ -44,10 +44,16 @@ describe('loadHistory', () => {
 
 describe('saveExchange', () => {
   it('creates the session file and writes one entry', async () => {
+    const filePath = join(testSessionsDir, 'telegram-111.jsonl');
+    writeFileSync(filePath, '', 'utf-8');
+    chmodSync(testSessionsDir, 0o755);
+    chmodSync(filePath, 0o644);
+
     await saveExchange('telegram', '111', 'hello', 'hi there');
 
-    const filePath = join(testSessionsDir, 'telegram-111.jsonl');
     expect(existsSync(filePath)).toBe(true);
+    expect(statSync(testSessionsDir).mode & 0o777).toBe(0o700);
+    expect(statSync(filePath).mode & 0o777).toBe(0o600);
 
     const content = readFileSync(filePath, 'utf-8');
     expect(content.trim().startsWith('ENCv1:')).toBe(true);

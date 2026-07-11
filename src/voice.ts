@@ -1,5 +1,5 @@
 // Voice transcription — local Whisper CLI (free) with API fallback
-import { existsSync, readFileSync, unlinkSync, readdirSync } from 'fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, unlinkSync, readdirSync, writeFileSync } from 'fs';
 import { execSync, spawn } from 'child_process';
 import { randomUUID } from 'crypto';
 import { basename, dirname, join } from 'path';
@@ -11,6 +11,17 @@ export interface TranscriptionResult {
   text: string;
   duration?: number;
   provider: string;
+}
+
+export function writeTemporaryVoiceFile(prefix: string, extension: string, buffer: Buffer): string {
+  const tempDir = join(tmpdir(), 'skimpyclaw-voice');
+  mkdirSync(tempDir, { recursive: true, mode: 0o700 });
+  chmodSync(tempDir, 0o700);
+  const safeExtension = extension.replace(/[^a-z0-9]/gi, '') || 'audio';
+  const path = join(tempDir, `${prefix}-${randomUUID()}.${safeExtension}`);
+  writeFileSync(path, buffer, { mode: 0o600 });
+  chmodSync(path, 0o600);
+  return path;
 }
 
 interface VoiceProcessResult {

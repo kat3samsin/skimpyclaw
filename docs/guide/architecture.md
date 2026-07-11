@@ -223,10 +223,8 @@ templates/              # Bundled agent template markdown files
   USER.md               # User context and preferences           [copied by default]
   HEARTBEAT.md          # Heartbeat check instructions           [copied by default]
   TOOLS.md              # Tool usage instructions
-  BOOT.md               # Startup behavior
   MEMORY.md             # Memory management guidelines
   AGENTS.md             # Multi-agent coordination (optional reference)
-  BOOTSTRAP.md          # First-run bootstrap instructions (optional, loaded via hasBootstrap())
 
 web/dashboard/          # Preact/Vite dashboard frontend
   src/

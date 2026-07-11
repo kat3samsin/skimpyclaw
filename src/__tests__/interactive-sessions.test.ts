@@ -9,8 +9,11 @@ vi.mock('fs', async () => {
     readFileSync: vi.fn(() => '[]'),
     writeFileSync: vi.fn(),
     mkdirSync: vi.fn(),
+    chmodSync: vi.fn(),
   };
 });
+
+import { chmodSync, mkdirSync, writeFileSync } from 'fs';
 
 import {
   addSession,
@@ -39,7 +42,21 @@ function makeSession(threadId = 't1', cliAgent: 'claude' | 'codex' = 'claude'): 
 
 describe('interactive-sessions state store', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     _resetForTesting();
+  });
+
+  it('persists state with owner-only permissions', () => {
+    addSession(makeSession());
+
+    expect(mkdirSync).toHaveBeenCalledWith(expect.any(String), { recursive: true, mode: 0o700 });
+    expect(chmodSync).toHaveBeenCalledWith(expect.any(String), 0o700);
+    expect(writeFileSync).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(String),
+      { encoding: 'utf-8', mode: 0o600 },
+    );
+    expect(chmodSync).toHaveBeenCalledWith(expect.any(String), 0o600);
   });
 
   it('stores and retrieves a session', () => {

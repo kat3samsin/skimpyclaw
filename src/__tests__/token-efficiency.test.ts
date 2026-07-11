@@ -1,5 +1,5 @@
 import { describe, it, expect, afterAll, afterEach, vi } from 'vitest';
-import { existsSync, readFileSync, readdirSync, unlinkSync } from 'fs';
+import { existsSync, readFileSync, readdirSync, statSync, unlinkSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { fileURLToPath } from 'url';
@@ -43,9 +43,12 @@ describe('token efficiency', () => {
     it('masks large results to scratch file with path only', () => {
       const result = 'START' + 'x'.repeat(10_000) + 'END';
       const masked = truncateToolResult(result);
+      const path = masked.slice(1).replace(/^~/, homedir());
       expect(masked.length).toBeLessThan(result.length);
       expect(masked).toContain('→');
       expect(masked).toContain('.skimpyclaw/s/');
+      expect(statSync(scratchDir).mode & 0o777).toBe(0o700);
+      expect(statSync(path).mode & 0o777).toBe(0o600);
     });
 
     it('produces minimal output for masked results', () => {

@@ -55,13 +55,11 @@ After the agent finishes, SkimpyClaw removes the worktree only when it is clean 
 
 ```bash
 skimpyclaw agents              # List all agents (active + recent)
-skimpyclaw agents <id>         # Show details for an agent (task, children, live output)
+skimpyclaw agents <id>         # Show details for an agent (task and live output)
 skimpyclaw agents <id> --follow  # Follow live output (refreshes every 3s until done)
 ```
 
-For team coordinators, this shows all child agents grouped by wave with status, elapsed time, and live output.
-
-The dashboard (`/dashboard` → Coding page) also shows real-time agent status with expandable subagent cards.
+The dashboard (`/dashboard` → Coding page) also shows real-time agent status and live output.
 
 ## Discord notifications
 
@@ -71,7 +69,6 @@ Notification format:
 - **Start**: Response includes "Started coding agent ca-N" which triggers thread creation
 - **Success**: `✅ Coding agent {id} completed ({duration}). Task: {preview}. Result: {output}`
 - **Failure**: Includes error details and output snippet
-- **Team tasks**: Structured summary with per-child status and validation results
 
 Notifications are also sent to the active channel (Telegram or Discord) via `sendActiveChannelProactiveMessage()`. Long messages are chunked at 1900 characters for Discord.
 

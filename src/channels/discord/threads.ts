@@ -14,21 +14,6 @@ export interface DiscordTextAttachment {
   description?: string;
 }
 
-// taskId → threadId mapping (in-memory, resets on restart)
-const taskThreads = new Map<string, string>();
-
-// Regex to detect "Started coding agent ca-N" or "Started coding team ca-N"
-const STARTED_AGENT_RE = /Started coding (?:agent|team) (ca-\d+)/;
-
-/**
- * Detect if a response contains a coding agent start message.
- * Returns the task ID if found, null otherwise.
- */
-export function detectCodeAgentStart(response: string): string | null {
-  const match = response.match(STARTED_AGENT_RE);
-  return match ? match[1] : null;
-}
-
 /**
  * Create a thread from the user's message for a coding agent task.
  * Returns the thread ID, or null if thread creation fails.
@@ -55,7 +40,6 @@ export async function createTaskThread(
       autoArchiveDuration: 1440, // 24 hours
     });
 
-    taskThreads.set(taskId, thread.id);
     console.log(`[discord] Created thread ${thread.id} for task ${taskId}`);
     return thread.id;
   } catch (err) {
@@ -71,20 +55,6 @@ export async function createTaskThread(
 export function buildThreadUrl(guildId: string | null | undefined, threadId: string): string | undefined {
   if (!guildId) return undefined;
   return `https://discord.com/channels/${guildId}/${threadId}`;
-}
-
-/**
- * Register an existing thread for a task (e.g. restored from disk).
- */
-export function registerTaskThread(taskId: string, threadId: string): void {
-  taskThreads.set(taskId, threadId);
-}
-
-/**
- * Get the thread ID for a task, if one exists.
- */
-export function getTaskThreadId(taskId: string): string | undefined {
-  return taskThreads.get(taskId);
 }
 
 /**
@@ -218,20 +188,4 @@ export async function sendToThreadWithVoice(
     console.error(`[discord] Failed to send to thread ${threadId} with voice:`, err);
     return false;
   }
-}
-
-/**
- * Clean up thread mapping for a task (e.g. after completion).
- * We keep the mapping around for a while since late notifications may arrive.
- */
-export function clearTaskThread(taskId: string): void {
-  // Delay cleanup by 5 minutes to catch late notifications
-  setTimeout(() => {
-    taskThreads.delete(taskId);
-  }, 5 * 60 * 1000);
-}
-
-/** Export for testing. */
-export function _getTaskThreadsMap(): Map<string, string> {
-  return taskThreads;
 }
