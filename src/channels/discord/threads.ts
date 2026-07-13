@@ -87,6 +87,26 @@ export function getTaskThreadId(taskId: string): string | undefined {
   return taskThreads.get(taskId);
 }
 
+async function fetchDiscordChannel(client: Client, channelId: string) {
+  try {
+    const channel = await client.channels.fetch(channelId);
+    if (!channel) {
+      console.warn(`[discord] Channel/thread ${channelId} not found`);
+    }
+    return channel;
+  } catch (err) {
+    const code = typeof err === 'object' && err !== null && 'code' in err
+      ? (err as { code?: unknown }).code
+      : undefined;
+    if (code === 10003) {
+      console.warn(`[discord] Channel/thread ${channelId} not found`);
+    } else {
+      console.error(`[discord] Failed to fetch channel/thread ${channelId}:`, err);
+    }
+    return null;
+  }
+}
+
 /**
  * Send a message to a Discord thread. Handles chunking for long messages.
  * Returns true if sent successfully.
@@ -97,11 +117,8 @@ export async function sendToThread(
   text: string,
 ): Promise<boolean> {
   try {
-    const thread = await client.channels.fetch(threadId).catch(() => null);
-    if (!thread) {
-      console.warn(`[discord] Channel/thread ${threadId} not found`);
-      return false;
-    }
+    const thread = await fetchDiscordChannel(client, threadId);
+    if (!thread) return false;
 
     // Accept threads and text-based channels (GuildText, PublicThread, PrivateThread)
     if (!('send' in thread) || typeof (thread as any).send !== 'function') {
@@ -135,11 +152,8 @@ export async function sendToThreadWithAttachments(
   attachments: DiscordTextAttachment[] = [],
 ): Promise<boolean> {
   try {
-    const thread = await client.channels.fetch(threadId).catch(() => null);
-    if (!thread) {
-      console.warn(`[discord] Channel/thread ${threadId} not found`);
-      return false;
-    }
+    const thread = await fetchDiscordChannel(client, threadId);
+    if (!thread) return false;
 
     if (!('send' in thread) || typeof (thread as any).send !== 'function') {
       console.warn(`[discord] Channel ${threadId} is not sendable (type=${thread.type})`);
@@ -179,11 +193,8 @@ export async function sendToThreadWithVoice(
   voiceFormat?: string,
 ): Promise<boolean> {
   try {
-    const thread = await client.channels.fetch(threadId).catch(() => null);
-    if (!thread) {
-      console.warn(`[discord] Channel/thread ${threadId} not found`);
-      return false;
-    }
+    const thread = await fetchDiscordChannel(client, threadId);
+    if (!thread) return false;
 
     if (!('send' in thread) || typeof (thread as any).send !== 'function') {
       console.warn(`[discord] Channel ${threadId} is not sendable (type=${thread.type})`);

@@ -5,6 +5,7 @@ import { join } from 'path';
 
 const {
   runAgentTurnMock,
+  getActiveChannelIdMock,
   sendActiveChannelProactiveMessageMock,
   sendToDiscordThreadMock,
   sendToDiscordThreadWithVoiceMock,
@@ -18,6 +19,7 @@ const {
   testHome,
 } = vi.hoisted(() => ({
   runAgentTurnMock: vi.fn(),
+  getActiveChannelIdMock: vi.fn(() => 'telegram'),
   sendActiveChannelProactiveMessageMock: vi.fn(async () => true),
   sendToDiscordThreadMock: vi.fn(async () => false),
   sendToDiscordThreadWithVoiceMock: vi.fn(async () => false),
@@ -75,7 +77,7 @@ vi.mock('../agent.js', () => ({
 vi.mock('../channels.js', () => ({
   sendActiveChannelProactiveMessage: sendActiveChannelProactiveMessageMock,
   sendActiveChannelProactiveVoice: vi.fn(async () => false),
-  getActiveChannelId: () => 'telegram',
+  getActiveChannelId: getActiveChannelIdMock,
 }));
 
 vi.mock('../digests.js', () => ({
@@ -162,6 +164,7 @@ describe('runCronJob digest chat output', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    getActiveChannelIdMock.mockReturnValue('telegram');
     cronCallbacks.length = 0;
     configWatchCallbacks.length = 0;
     spawnMock.mockReset();
@@ -750,7 +753,7 @@ describe('runCronJob digest chat output', () => {
     expect(sendActiveChannelProactiveMessageMock).not.toHaveBeenCalled();
   });
 
-  it('falls back to active channel when discordThreadId is invalid', async () => {
+  it('fails closed when discordThreadId is invalid', async () => {
     const digestText = 'No links today';
     runAgentTurnMock.mockResolvedValue(digestText);
     parseAndSaveDigestMock.mockReturnValue({ summary: digestText, articles: [] });
@@ -776,10 +779,72 @@ describe('runCronJob digest chat output', () => {
     await runCronJob('tech-digest', threadConfig);
 
     expect(sendToDiscordThreadMock).not.toHaveBeenCalled();
-    expect(sendActiveChannelProactiveMessageMock).toHaveBeenCalledWith(
-      threadConfig,
+    expect(sendActiveChannelProactiveMessageMock).not.toHaveBeenCalled();
+  });
+
+  it('does not send a Discord cron notification without an explicit target', async () => {
+    const digestText = 'No links today';
+    getActiveChannelIdMock.mockReturnValue('discord');
+    runAgentTurnMock.mockResolvedValue(digestText);
+    parseAndSaveDigestMock.mockReturnValue({ summary: digestText, articles: [] });
+
+    await runCronJob('tech-digest', config);
+
+    expect(sendToDiscordThreadMock).not.toHaveBeenCalled();
+    expect(sendActiveChannelProactiveMessageMock).not.toHaveBeenCalled();
+  });
+
+  it('routes an untargeted Discord cron to defaultChannelId without DM fallback', async () => {
+    const digestText = 'No links today';
+    const defaultChannelId = '987654321098765432';
+    getActiveChannelIdMock.mockReturnValue('discord');
+    runAgentTurnMock.mockResolvedValue(digestText);
+    parseAndSaveDigestMock.mockReturnValue({ summary: digestText, articles: [] });
+    sendToDiscordThreadMock.mockResolvedValue(false);
+    const defaultChannelConfig = {
+      ...config,
+      channels: {
+        ...config.channels,
+        active: 'discord',
+        discord: {
+          enabled: true,
+          allowFrom: ['123456789012345678'],
+          defaultChannelId,
+        },
+      },
+    } as any;
+
+    await runCronJob('tech-digest', defaultChannelConfig);
+
+    expect(sendToDiscordThreadMock).toHaveBeenCalledWith(
+      defaultChannelId,
       expect.stringContaining('Cron: Tech Digest'),
     );
+    expect(sendActiveChannelProactiveMessageMock).not.toHaveBeenCalled();
+  });
+
+  it('fails closed when the Discord defaultChannelId is invalid', async () => {
+    const digestText = 'No links today';
+    getActiveChannelIdMock.mockReturnValue('discord');
+    runAgentTurnMock.mockResolvedValue(digestText);
+    parseAndSaveDigestMock.mockReturnValue({ summary: digestText, articles: [] });
+    const invalidDefaultConfig = {
+      ...config,
+      channels: {
+        ...config.channels,
+        active: 'discord',
+        discord: {
+          enabled: true,
+          allowFrom: ['123456789012345678'],
+          defaultChannelId: 'not-a-channel-id',
+        },
+      },
+    } as any;
+
+    await runCronJob('tech-digest', invalidDefaultConfig);
+
+    expect(sendToDiscordThreadMock).not.toHaveBeenCalled();
+    expect(sendActiveChannelProactiveMessageMock).not.toHaveBeenCalled();
   });
 
   it('no thread id uses active-channel send', async () => {
