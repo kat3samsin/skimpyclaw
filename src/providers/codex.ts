@@ -10,7 +10,7 @@ import { buildUsageRecord, recordUsage } from '../usage.js';
 const DEFAULT_CODEX_HOME = join(homedir(), '.codex');
 const DEFAULT_CODEX_AUTH_PATH = join(DEFAULT_CODEX_HOME, 'auth.json');
 const DEFAULT_CODEX_BASE_URL = 'https://chatgpt.com/backend-api';
-const DEFAULT_CODEX_FETCH_TIMEOUT_MS = 120_000;
+const DEFAULT_CODEX_FETCH_TIMEOUT_MS = 300_000;
 const DEFAULT_CODEX_FETCH_RETRY_DELAYS_MS = [1_000, 3_000];
 
 let codexAuthPath = DEFAULT_CODEX_AUTH_PATH;
