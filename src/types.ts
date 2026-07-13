@@ -163,7 +163,7 @@ export interface CronPayload {
   timeoutMs?: number;
   tools?: ToolConfig;
   sendAsVoice?: boolean;
-  /** Discord thread ID for routing notifications. Invalid/unavailable thread targets fall back to default channel delivery. */
+  /** Discord channel/thread ID for cron notifications. Invalid targets fail closed; absent targets use defaultChannelId. */
   discordThreadId?: string;
 }
 

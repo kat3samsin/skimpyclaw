@@ -189,7 +189,7 @@ Two payload types: `agentTurn` and `script`.
 
 Use `agent` to run a cron job with a configured agent from `agents.list`. If omitted, the job uses `agents.default`.
 
-If `payload.discordThreadId` is valid, cron notifications route only to that Discord thread. Delivery failures are logged and do not fall back to the active channel. If the configured thread ID is invalid, SkimpyClaw ignores it and uses normal active-channel delivery.
+If `payload.discordThreadId` is valid, cron notifications route only to that Discord channel or thread. When it is omitted, Discord delivery requires `channels.discord.defaultChannelId`. Missing, invalid, or failed Discord targets are logged and do not fall back to `allowFrom` or a user DM.
 
 ### Script
 

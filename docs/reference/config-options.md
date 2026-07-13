@@ -131,7 +131,7 @@ Map of shorthand names to full `provider/model-id`. See [Model Aliases](./model-
 | `timeoutMs` | number | Timeout in milliseconds (defaults to 10 minutes for `agentTurn` and `script`) |
 | `tools` | ToolConfig | Tool access config (for `agentTurn`) |
 | `sendAsVoice` | boolean | Send result as voice message |
-| `discordThreadId` | string | Discord thread ID to send cron notifications to. Valid thread targets do not fall back to the active channel on delivery failure; invalid IDs are ignored and use normal active-channel delivery |
+| `discordThreadId` | string | Discord channel/thread ID for cron notifications. When absent, Discord delivery uses `channels.discord.defaultChannelId`; missing, invalid, or failed targets do not fall back to a user DM |
 
 ## `heartbeat`
 
