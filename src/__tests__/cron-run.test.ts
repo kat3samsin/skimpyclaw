@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EventEmitter } from 'events';
-import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
 const {
@@ -90,7 +90,7 @@ vi.mock('../channels/discord/index.js', () => ({
 }));
 
 vi.mock('../config.js', () => ({
-  getLogsDir: () => '/tmp',
+  getLogsDir: () => `${testHome}/.skimpyclaw/logs`,
   getConfigPath: () => '/tmp/config.json',
   loadConfig: loadConfigMock,
   resolveAllowedPaths: () => ['/tmp'],
@@ -116,6 +116,10 @@ vi.mock('node:os', async (importOriginal) => {
 });
 
 import { getCronJobDetails, getCronJobs, initCron, runCronJob, stopCron, triggerCronJob } from '../cron.js';
+
+function cronLogDate(): string {
+  return new Date().toISOString().split('T')[0];
+}
 
 function localDate(): string {
   const date = new Date();
@@ -188,6 +192,69 @@ describe('runCronJob digest chat output', () => {
 
     expect(parseAndSaveDigestMock).toHaveBeenCalledWith('tech-digest', 'Tech Digest', digestText);
     expect(sendActiveChannelProactiveMessageMock).toHaveBeenCalledWith(config, digestText);
+  });
+
+  it('tightens permissions on existing cron logs', async () => {
+    const logDir = join(testHome, '.skimpyclaw', 'logs', 'cron');
+    const logPath = join(logDir, `tech-digest-${cronLogDate()}.log`);
+    mkdirSync(logDir, { recursive: true });
+    writeFileSync(logPath, 'old log\n');
+    chmodSync(logDir, 0o755);
+    chmodSync(logPath, 0o644);
+    runAgentTurnMock.mockResolvedValue('No links today');
+    parseAndSaveDigestMock.mockReturnValue({ summary: 'No links today', articles: [] });
+
+    await runCronJob('tech-digest', config);
+
+    expect(statSync(logDir).mode & 0o777).toBe(0o700);
+    expect(statSync(logPath).mode & 0o777).toBe(0o600);
+  });
+
+  it('redacts script secrets from cron logs, audit events, and console output', async () => {
+    const secret = 'plain-cron-secret';
+    const child = new EventEmitter() as any;
+    child.pid = 4321;
+    child.stdout = new EventEmitter();
+    child.stderr = new EventEmitter();
+    spawnMock.mockReturnValue(child);
+    parseAndSaveDigestMock.mockReturnValue({ summary: '', articles: [] });
+    const scriptConfig = {
+      ...config,
+      cron: {
+        jobs: [{
+          id: 'secret-script',
+          name: 'Secret Script',
+          schedule: { kind: 'cron', expr: '* * * * *', tz: 'UTC' },
+          payload: { kind: 'script', script: `INTERNAL_TOKEN=${secret} command`, timeoutMs: 60_000 },
+        }],
+      },
+    } as any;
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    try {
+      const run = runCronJob('secret-script', scriptConfig);
+      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1));
+      child.stdout.emit('data', Buffer.from(`token: ${secret}`));
+      child.emit('close', 0, null);
+      await run;
+
+      const { addEvent } = await import('../audit.js');
+      const logPath = join(testHome, '.skimpyclaw', 'logs', 'cron', `secret-script-${cronLogDate()}.log`);
+      const persisted = readFileSync(logPath, 'utf-8');
+      const logged = [
+        persisted,
+        JSON.stringify(vi.mocked(addEvent).mock.calls),
+        JSON.stringify(logSpy.mock.calls),
+        JSON.stringify(errorSpy.mock.calls),
+      ].join('\n');
+      expect(logged).not.toContain(secret);
+      expect(logged).toContain('[REDACTED_SECRET]');
+      expect(JSON.stringify(sendActiveChannelProactiveMessageMock.mock.calls)).toContain(secret);
+    } finally {
+      logSpy.mockRestore();
+      errorSpy.mockRestore();
+    }
   });
 
   it('does not send digest summary to chat when digest has no articles', async () => {

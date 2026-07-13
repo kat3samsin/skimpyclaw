@@ -72,6 +72,8 @@ const DEFAULT_MODEL_ALIASES: Record<string, string> = {
   'codex5.2': 'codex/gpt-5.2-codex',
   'codex5.3': 'codex/gpt-5.3-codex',
   'codex5.5': 'codex/gpt-5.5',
+  'codex5.6': 'codex/gpt-5.6-sol',
+  codex: 'codex/gpt-5.6-sol',
 };
 
 const MAX_LOG_TAIL_BYTES = 256 * 1024;
@@ -124,7 +126,7 @@ function getSkillsDir(cfg: Config): string {
   return cfg.skills?.directory || join(homedir(), '.skimpyclaw', 'skills');
 }
 
-const THINKING_LEVELS = new Set<ThinkingLevel>(['none', 'low', 'medium', 'high', 'xhigh']);
+const THINKING_LEVELS = new Set<ThinkingLevel>(['none', 'low', 'medium', 'high', 'xhigh', 'ultra']);
 
 function parseThinkingLevel(value: unknown): ThinkingLevel | undefined {
   if (typeof value !== 'string') return undefined;
@@ -160,39 +162,6 @@ function resolveCronPromptPath(inputPath: string): string | null {
     return null;
   }
   return expanded;
-}
-
-interface TodoItem {
-  id: number;
-  text: string;
-  completed: boolean;
-  lineIndex: number;
-  prefix: string;
-}
-
-function getTodoPath(): string {
-  return process.env.SKIMPYCLAW_TODO_PATH || join(process.cwd(), 'TODO.md');
-}
-
-function parseTodoItems(content: string): TodoItem[] {
-  const lines = content.split('\n');
-  const items: TodoItem[] = [];
-  let id = 0;
-
-  for (let i = 0; i < lines.length; i++) {
-    const match = lines[i].match(/^(\s*-\s*)\[( |x|X)\]\s+(.*)$/);
-    if (!match) continue;
-
-    items.push({
-      id: id++,
-      text: match[3],
-      completed: match[2].toLowerCase() === 'x',
-      lineIndex: i,
-      prefix: match[1],
-    });
-  }
-
-  return items;
 }
 
 export function registerDashboardAPI(fastify: FastifyInstance, config: Config): void {
@@ -231,41 +200,6 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
       activeChannel: getActiveChannelId() ?? runtimeConfig.channels.active ?? null,
       cronJobs: jobs,
     };
-  });
-
-  // --- Sessions ---
-  fastify.get('/api/dashboard/sessions', async () => {
-    const sessionsDir = getSessionsDir();
-    if (!existsSync(sessionsDir)) {
-      return { sessions: [] };
-    }
-
-    const files = readdirSync(sessionsDir).filter(f => f.endsWith('.json'));
-    const sessions = files.map(file => {
-      try {
-        const content = readFileSync(join(sessionsDir, file), 'utf-8');
-        const session = JSON.parse(content);
-        return {
-          id: session.id || file.replace('.json', ''),
-          agentId: session.agentId,
-          model: session.model,
-          createdAt: session.createdAt,
-          updatedAt: session.updatedAt,
-          turnCount: session.turns?.length || 0,
-        };
-      } catch {
-        return null;
-      }
-    }).filter(Boolean);
-
-    // Sort newest first
-    sessions.sort((a: any, b: any) => {
-      const dateA = new Date(a.updatedAt || a.createdAt || 0).getTime();
-      const dateB = new Date(b.updatedAt || b.createdAt || 0).getTime();
-      return dateB - dateA;
-    });
-
-    return { sessions };
   });
 
   // --- Conversations (Telegram/Discord chat history from .jsonl sessions) ---
@@ -352,27 +286,6 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
       };
     } catch {
       return reply.code(500).send({ error: 'Failed to read conversation' });
-    }
-  });
-
-  fastify.get<{ Params: { id: string } }>('/api/dashboard/sessions/:id', async (request, reply) => {
-    const { id } = request.params;
-    if (!validateFilename(id)) {
-      return reply.code(400).send({ error: 'Invalid session id' });
-    }
-
-    const sessionsDir = getSessionsDir();
-    const filePath = join(sessionsDir, `${id}.json`);
-    if (!existsSync(filePath)) {
-      return reply.code(404).send({ error: 'Session not found' });
-    }
-
-    try {
-      const content = readFileSync(filePath, 'utf-8');
-      const session = JSON.parse(content);
-      return { session };
-    } catch {
-      return reply.code(500).send({ error: 'Failed to read session' });
     }
   });
 
@@ -718,68 +631,6 @@ export function registerDashboardAPI(fastify: FastifyInstance, config: Config): 
     const logsDir = getLogsDir();
     const files = collectLogFiles(logsDir).sort((a, b) => b.modified.localeCompare(a.modified));
     return { files };
-  });
-
-  // --- TODOs ---
-  fastify.get('/api/dashboard/todos', async (_request, reply) => {
-    const todoPath = getTodoPath();
-    if (!existsSync(todoPath)) {
-      return reply.code(404).send({ error: `TODO file not found: ${todoPath}` });
-    }
-
-    const content = readFileSync(todoPath, 'utf-8');
-    const items = parseTodoItems(content).map(({ prefix: _prefix, lineIndex: _lineIndex, ...item }) => item);
-    const completed = items.filter(i => i.completed).length;
-
-    return {
-      path: todoPath,
-      total: items.length,
-      completed,
-      remaining: items.length - completed,
-      items,
-    };
-  });
-
-  fastify.put<{
-    Params: { id: string };
-    Body: { completed?: boolean };
-  }>('/api/dashboard/todos/:id', async (request, reply) => {
-    const todoId = Number.parseInt(request.params.id, 10);
-    if (Number.isNaN(todoId) || todoId < 0) {
-      return reply.code(400).send({ error: 'Invalid todo id' });
-    }
-
-    const todoPath = getTodoPath();
-    if (!existsSync(todoPath)) {
-      return reply.code(404).send({ error: `TODO file not found: ${todoPath}` });
-    }
-
-    const content = readFileSync(todoPath, 'utf-8');
-    const hadTrailingNewline = content.endsWith('\n');
-    const lines = content.split('\n');
-    const items = parseTodoItems(content);
-    const target = items.find(i => i.id === todoId);
-    if (!target) {
-      return reply.code(404).send({ error: 'TODO item not found' });
-    }
-
-    const nextCompleted = typeof request.body?.completed === 'boolean'
-      ? request.body.completed
-      : !target.completed;
-    lines[target.lineIndex] = `${target.prefix}[${nextCompleted ? 'x' : ' '}] ${target.text}`;
-    const nextContent = lines.join('\n') + (hadTrailingNewline ? '\n' : '');
-    writeFileSync(todoPath, nextContent, 'utf-8');
-
-    const updatedItems = parseTodoItems(nextContent).map(({ prefix: _prefix, lineIndex: _lineIndex, ...item }) => item);
-    const completed = updatedItems.filter(i => i.completed).length;
-    return {
-      updated: true,
-      item: updatedItems.find(i => i.id === todoId),
-      total: updatedItems.length,
-      completed,
-      remaining: updatedItems.length - completed,
-      items: updatedItems,
-    };
   });
 
   fastify.get<{

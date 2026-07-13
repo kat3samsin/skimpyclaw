@@ -12,7 +12,8 @@ These are created by the setup wizard:
 | `codex5.2` | `codex/gpt-5.2-codex` |
 | `codex5.3` | `codex/gpt-5.3-codex` |
 | `codex5.5` | `codex/gpt-5.5` |
-| `codex` | `codex/gpt-5.5` |
+| `codex5.6` | `codex/gpt-5.6-sol` |
+| `codex` | `codex/gpt-5.6-sol` |
 
 Claude models should be configured with their exact model IDs, such as `anthropic/claude-opus-4-7`, `anthropic/claude-sonnet-4-6`, or `anthropic/claude-haiku-4-5`.
 
@@ -20,7 +21,7 @@ Claude models should be configured with their exact model IDs, such as `anthropi
 
 Models can be specified three ways:
 
-1. **Alias** -- `codex5.5`
+1. **Alias** -- `codex5.6`
 2. **Full provider/model** -- `anthropic/claude-haiku-4-5`
 3. **Bare model ID** -- `claude-haiku-4-5` (must contain `-` or `.`)
 

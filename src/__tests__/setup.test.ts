@@ -1,7 +1,24 @@
 import { describe, expect, it } from 'vitest';
-import { buildSetupArtifacts, buildSetupConfig } from '../setup.js';
+import { chmodSync, mkdtempSync, rmSync, statSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
+import { buildSetupArtifacts, buildSetupConfig, writeSetupEnvFile } from '../setup.js';
 
 describe('setup config generation', () => {
+  it('stores fallback environment secrets with owner-only permissions', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'skimpyclaw-setup-'));
+    const path = join(dir, '.env');
+    try {
+      writeSetupEnvFile(path, 'API_KEY=first\n');
+      chmodSync(path, 0o644);
+      writeSetupEnvFile(path, 'API_KEY=second\n');
+
+      expect(statSync(path).mode & 0o777).toBe(0o600);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('builds Anthropic+Codex config with expected defaults', () => {
     const selectedProviders = new Set(['anthropic-api', 'codex-oauth'] as const);
     const config = buildSetupConfig({
@@ -13,7 +30,8 @@ describe('setup config generation', () => {
       providerSecrets: { anthropicKey: 'sk-ant-test' },
     }) as any;
 
-    expect(config.agents.list.main.model).toBe('anthropic/claude-opus-4-7');
+    expect(config.agents.list.main.model).toBe('codex/gpt-5.6-sol');
+    expect(config.agents.list.main.thinking).toBe('ultra');
     expect(config.models.providers.anthropic.apiKey).toBe('${ANTHROPIC_API_KEY}');
     expect(config.models.providers.codex.authPath).toBe('${HOME}/.codex/auth.json');
     expect(config.channels.telegram.allowFrom).toEqual([12345]);
@@ -21,11 +39,12 @@ describe('setup config generation', () => {
     expect(config.channels.telegram.defaultAllowedPaths).toEqual(['${HOME}/.skimpyclaw']);
     expect(config.channels.discord.defaultAllowedPaths).toEqual(['${HOME}/.skimpyclaw']);
     expect(config.heartbeat.tools.allowedPaths).toEqual(['${HOME}/.skimpyclaw']);
-    expect(config.models.aliases.codex).toBe('codex/gpt-5.5');
+    expect(config.models.aliases.codex).toBe('codex/gpt-5.6-sol');
     expect(config.models.aliases['codex5.1']).toBe('codex/gpt-5.1-codex');
     expect(config.models.aliases['codex5.2']).toBe('codex/gpt-5.2-codex');
     expect(config.models.aliases['codex5.3']).toBe('codex/gpt-5.3-codex');
     expect(config.models.aliases['codex5.5']).toBe('codex/gpt-5.5');
+    expect(config.models.aliases['codex5.6']).toBe('codex/gpt-5.6-sol');
   });
 
   it('includes oauth placeholders when Anthropic OAuth is selected', () => {
@@ -57,6 +76,8 @@ describe('setup config generation', () => {
 
     expect(config.gateway.host).toBe('127.0.0.1');
     expect(config.gateway.port).toBe(18790);
+    expect(config.agents.list.main.model).toBe('anthropic/claude-opus-4-7');
+    expect(config.agents.list.main.thinking).toBe('low');
   });
 
   it('does not include browser tools in generated config', () => {

@@ -1,7 +1,7 @@
 export const BOT_COMMANDS: { command: string; description: string }[] = [
   { command: 'help', description: 'Show available commands' },
   { command: 'model', description: 'Switch model' },
-  { command: 'effort', description: 'Set reasoning effort (none/low/medium/high/xhigh)' },
+  { command: 'effort', description: 'Set reasoning effort (none/low/medium/high/xhigh/ultra)' },
   { command: 'status', description: 'Show bot status' },
   { command: 'agent', description: 'Manage Discord agent profiles' },
   { command: 'clear', description: 'Clear conversation history' },

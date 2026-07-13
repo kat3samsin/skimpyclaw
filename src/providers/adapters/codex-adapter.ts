@@ -20,6 +20,10 @@ import { codexFetch, parseCodexSSE, isCodexAvailable, recordCodexUsage } from '.
 
 type CodexReasoningEffort = 'low' | 'medium' | 'high' | 'xhigh';
 
+function isSolModel(modelId: string): boolean {
+  return modelId === 'gpt-5.6-sol' || modelId === 'gpt-5.6';
+}
+
 function codexReasoningEffort(thinking?: ThinkingLevel): CodexReasoningEffort {
   switch (thinking) {
     case 'low':
@@ -27,6 +31,8 @@ function codexReasoningEffort(thinking?: ThinkingLevel): CodexReasoningEffort {
     case 'high':
     case 'xhigh':
       return thinking;
+    case 'ultra':
+      return 'xhigh';
     default:
       return 'medium';
   }
@@ -34,6 +40,12 @@ function codexReasoningEffort(thinking?: ThinkingLevel): CodexReasoningEffort {
 
 function codexReasoning(options: ChatOptions): { effort: CodexReasoningEffort; summary: 'auto' } {
   return { effort: codexReasoningEffort(options.thinking), summary: 'auto' };
+}
+
+function enableFastTierForSol(body: Record<string, unknown>, modelId: string): void {
+  if (isSolModel(modelId)) {
+    body.service_tier = 'priority';
+  }
 }
 
 function codexTextTypeForRole(role: unknown): 'input_text' | 'output_text' {
@@ -145,6 +157,7 @@ export class CodexAdapter implements ProviderAdapter {
       reasoning: codexReasoning(options),
       include: ['reasoning.encrypted_content'],
     };
+    enableFastTierForSol(body, modelId);
 
     const sseText = await fetchCodex(body, options.abortSignal);
     const parsed = parseCodexSSE(sseText);
@@ -207,6 +220,7 @@ export class CodexAdapter implements ProviderAdapter {
       reasoning: codexReasoning(options),
       include: ['reasoning.encrypted_content'],
     };
+    enableFastTierForSol(body, modelId);
     if (toolDefs?.length) {
       body.tools = toolDefs;
     }
@@ -296,6 +310,7 @@ export class CodexAdapter implements ProviderAdapter {
       reasoning: codexReasoning(options),
       include: ['reasoning.encrypted_content'],
     };
+    enableFastTierForSol(body, modelId);
 
     console.log('[codex] Finalizing tool run with a text-only follow-up');
     const sseText = await fetchCodex(body, options.abortSignal);

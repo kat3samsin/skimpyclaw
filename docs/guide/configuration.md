@@ -67,7 +67,7 @@ When the app writes `~/.skimpyclaw/config.json`, it enforces restrictive `0600` 
 }
 ```
 
-Thinking levels: `none`, `low`, `medium`, `high`, `xhigh` (enables extended thinking for supported models).
+Thinking levels: `none`, `low`, `medium`, `high`, `xhigh`, `ultra` (enables extended thinking for supported models).
 
 Each key in `agents.list` is a runnable SkimpyClaw agent. The runtime loads prompt templates from `~/.skimpyclaw/agents/<agent-id>/`, so additional agents can have their own `IDENTITY.md`, `TOOLS.md`, and memory. Discord profiles are a channel-specific alias layer that can point at any configured agent and add per-profile model, effort, and prompt overrides.
 
@@ -104,7 +104,8 @@ See [Agents](./agents.md) for core agent setup and the Discord `/agent` and `@al
   "aliases": {
     "codex5.3": "codex/gpt-5.3-codex",
     "codex5.5": "codex/gpt-5.5",
-    "codex": "codex/gpt-5.5"
+    "codex5.6": "codex/gpt-5.6-sol",
+    "codex": "codex/gpt-5.6-sol"
   },
   "promptCaching": true
 }

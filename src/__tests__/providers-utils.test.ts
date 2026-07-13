@@ -85,4 +85,8 @@ describe('provider utils', () => {
   it('supports xhigh thinking budgets', () => {
     expect(buildThinkingConfig('xhigh')).toEqual({ budget: 32768, maxTokens: 36864 });
   });
+
+  it('caps Anthropic ultra thinking at the existing xhigh budget', () => {
+    expect(buildThinkingConfig('ultra')).toEqual({ budget: 32768, maxTokens: 36864 });
+  });
 });

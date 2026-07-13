@@ -10,7 +10,7 @@ skimpyclaw start            # Start in foreground
 skimpyclaw start --daemon   # Start macOS launchd daemon
 skimpyclaw stop             # Stop macOS launchd daemon
 skimpyclaw restart          # Restart macOS launchd daemon
-skimpyclaw status           # Show service + gateway status
+skimpyclaw status           # Show service, gateway, and dashboard URL (never credentials)
 skimpyclaw logs --file stdout --lines 200 --follow
 skimpyclaw logs cleanup --dry-run # Preview log retention cleanup
 skimpyclaw logs cleanup     # Prune old runtime artifacts and scratch files

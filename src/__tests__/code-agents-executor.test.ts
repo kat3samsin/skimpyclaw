@@ -40,6 +40,7 @@ vi.mock('fs', async () => {
   const actual = await vi.importActual<typeof import('fs')>('fs');
   return {
     ...actual,
+    chmodSync: vi.fn(),
     createWriteStream: vi.fn(() => ({
       write: vi.fn(() => true),
       end: vi.fn(),
@@ -158,6 +159,10 @@ describe('executor - bounded streaming output', () => {
       outputPreview: 'bounded final answer 🦞',
     });
     expect(backpressured).toBe(true);
+    expect(createWriteStream).toHaveBeenCalledWith(
+      '/tmp/test-code-agents/ca-stream-test.log',
+      { flags: 'w', mode: 0o600 },
+    );
     expect(logStream.end).toHaveBeenCalledTimes(1);
     const archived = Buffer.concat(logStream.write.mock.calls.map(([data]) => (
       Buffer.isBuffer(data) ? data : Buffer.from(data)

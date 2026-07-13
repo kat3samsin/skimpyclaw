@@ -1,6 +1,6 @@
 // Agent runner: loads templates, calls models, manages memory
 
-import { readFileSync, writeFileSync, appendFileSync, existsSync, mkdirSync, unlinkSync } from 'fs';
+import { readFileSync, writeFileSync, appendFileSync, chmodSync, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { getAgentDir } from './config.js';
 import { buildSafeSystemPrompt, sanitizeUserInput, redactSecretText } from './security.js';
@@ -39,7 +39,7 @@ export type { ToolChatResult } from './providers/types.js';
 
 // --- Template Loading ---
 
-export const TEMPLATE_FILES = ['SOUL.md', 'IDENTITY.md', 'USER.md', 'TOOLS.md', 'BOOT.md', 'HEARTBEAT.md', 'MEMORY.md'];
+export const TEMPLATE_FILES = ['SOUL.md', 'IDENTITY.md', 'USER.md', 'TOOLS.md', 'HEARTBEAT.md', 'MEMORY.md'];
 
 const templateCache = new TTLCache<Record<string, string>>(60_000);
 
@@ -120,12 +120,14 @@ export function getTodayMemoryPath(agentId: string): string {
 export function appendToMemory(agentId: string, entry: string): void {
   const memoryDir = getMemoryDir(agentId);
   if (!existsSync(memoryDir)) {
-    mkdirSync(memoryDir, { recursive: true });
+    mkdirSync(memoryDir, { recursive: true, mode: 0o700 });
   }
+  chmodSync(memoryDir, 0o700);
 
   const path = getTodayMemoryPath(agentId);
   const timestamp = new Date().toISOString();
-  appendFileSync(path, `\n## ${timestamp}\n\n${entry}\n`, 'utf-8');
+  appendFileSync(path, `\n## ${timestamp}\n\n${entry}\n`, { encoding: 'utf-8', mode: 0o600 });
+  chmodSync(path, 0o600);
 }
 
 function truncateForMemory(value: string, maxChars: number = MEMORY_FIELD_MAX_CHARS): string {
@@ -153,7 +155,7 @@ export function formatMemoryEntry(userMessage: string, assistantMessage: string,
 // Langfuse app tagging
 const LANGFUSE_APP_NAME = 'skimpyclaw';
 const LANGFUSE_APP_TAG = 'app:skimpyclaw';
-const THINKING_LEVELS = new Set<ThinkingLevel>(['none', 'low', 'medium', 'high', 'xhigh']);
+const THINKING_LEVELS = new Set<ThinkingLevel>(['none', 'low', 'medium', 'high', 'xhigh', 'ultra']);
 
 function metadataThinking(value: unknown): ThinkingLevel | undefined {
   return typeof value === 'string' && THINKING_LEVELS.has(value as ThinkingLevel)
@@ -379,32 +381,19 @@ export async function runAgentTurn(
         return result;
       } catch (err) {
         const errorMessage = toErrorMessage(err);
+        const redactedError = redactSecretText(errorMessage);
         agentObs.update({
           level: 'ERROR',
-          statusMessage: errorMessage,
-          output: sanitizeLangfusePayload({ error: errorMessage }),
+          statusMessage: redactedError,
+          output: sanitizeLangfusePayload({ error: redactedError }),
         });
-        updateActiveTrace({ output: sanitizeLangfusePayload({ error: errorMessage }) });
+        updateActiveTrace({ output: sanitizeLangfusePayload({ error: redactedError }) });
         await endTrace(auditTraceId, 'error');
         throw err;
       }
     },
     { asType: 'agent' }
   );
-}
-
-// --- Bootstrap Check ---
-
-export function hasBootstrap(agentId: string): boolean {
-  const path = join(getAgentDir(agentId), 'BOOTSTRAP.md');
-  return existsSync(path);
-}
-
-export function deleteBootstrap(agentId: string): void {
-  const path = join(getAgentDir(agentId), 'BOOTSTRAP.md');
-  if (existsSync(path)) {
-    unlinkSync(path);
-  }
 }
 
 export function getAgentTemplateContent(agentId: string, templateName: string): string | null {

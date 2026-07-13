@@ -64,7 +64,7 @@ export const CODE_WITH_AGENT_TOOL = {
       },
       effort: {
         type: 'string' as const,
-        enum: ['none', 'low', 'medium', 'high', 'xhigh'],
+        enum: ['none', 'low', 'medium', 'high', 'xhigh', 'ultra'],
         description: 'Optional reasoning effort for coding agents that support it.',
       },
       worktree: {
@@ -106,34 +106,3 @@ export const DELEGATE_TO_AGENT_TOOL = {
     required: ['alias', 'task'],
   },
 };
-
-// Glob tool reference for dynamic loading
-const GLOB_TOOL = BUILTIN_TOOL_DEFINITIONS.find(t => t.name === 'Glob')!;
-
-// Write tool reference for dynamic loading
-const WRITE_TOOL = BUILTIN_TOOL_DEFINITIONS.find(t => t.name === 'Write')!;
-
-// Core tools — always sent. Extended tools added when conversation references them.
-export const CORE_TOOL_DEFINITIONS = [...BUILTIN_TOOL_DEFINITIONS.filter(t => t.name !== 'Glob' && t.name !== 'Write')];
-export const EXTENDED_TOOL_DEFINITIONS = [WRITE_TOOL, GLOB_TOOL, FETCH_TOOL_DEFINITION, CODE_WITH_AGENT_TOOL, CHECK_CODE_AGENT_TOOL, DELEGATE_TO_AGENT_TOOL];
-
-// Keywords that trigger inclusion of extended tools
-const TOOL_TRIGGERS: Record<string, string[]> = {
-  Write: ['write', 'create file', 'save', 'update file', 'fix', 'edit', 'modify', 'change'],
-  Glob: ['glob', 'list_directory', 'find files', 'directory listing'],
-  Fetch: ['fetch', 'http://', 'https://', 'curl', 'api call'],
-  code_with_agent: ['code_with_agent', 'delegate', 'subagent', 'sub-agent'],
-  check_code_agent: ['check_code_agent', 'agent status', 'agent_id'],
-  delegate_to_agent: ['delegate_to_agent', 'delegate to agent', 'call agent', 'ask agent', '@agent'],
-};
-
-/** Return tool defs filtered by what's been used/mentioned in conversation */
-export function getActiveToolDefs(messages: any[]): any[] {
-  const msgStr = JSON.stringify(messages).toLowerCase();
-  const extra: any[] = [];
-  for (const t of EXTENDED_TOOL_DEFINITIONS) {
-    const triggers = TOOL_TRIGGERS[t.name] || [t.name.toLowerCase()];
-    if (triggers.some(kw => msgStr.includes(kw))) extra.push(t);
-  }
-  return [...CORE_TOOL_DEFINITIONS, ...extra];
-}

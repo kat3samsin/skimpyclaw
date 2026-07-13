@@ -4,6 +4,11 @@ All notable documentation and behavior updates should be recorded here.
 
 ## Unreleased
 
+- Security: stopped routine status output from exposing dashboard credentials; redacted secrets from tool, audit, cron, console, and Langfuse observability previews; and enforced owner-only permissions for config, core logs/state, agent memory, tool scratch output, setup secrets, and temporary voice files. User-facing cron notification bodies remain unchanged.
+- Repo cleanup: removed unreachable team context, unused Codex-interactive formatting, dead Discord thread bookkeeping, inert bootstrap templates, obsolete dynamic tool filtering, and stale tool prompt instructions.
+- Dashboard: removed the orphan `TODO.md` API, legacy plaintext `.json` session API, and remaining team/subagent Coding UI and types. Encrypted `.jsonl` conversation APIs remain unchanged.
+- Models: GPT-5.6 Sol is now the setup default whenever Codex is selected, including dual-provider Anthropic + Codex setups. Added the `codex5.6` alias, user-facing `ultra`, Fast service-tier routing, dashboard/profile support, and priority-tier usage pricing. Direct backend turns map `ultra` to the maximum accepted `xhigh`; Codex CLI coding agents receive true `ultra` orchestration.
+- Cron: agent turns now default to a 10-minute wall-clock timeout, and Chief/Chief P2 runs fail when their required HTML artifacts are missing instead of reporting false success.
 - Discord: added reusable agent profiles managed with `/agent`, backed by `~/.skimpyclaw/discord-thread-agents.json`. Profiles can point at any configured `agents.list` entry and carry model, effort, and prompt overrides.
 - Discord: added `@alias <message>` profile mentions. In server channels they create and bind a thread; in existing threads they bind the thread; in DMs they run directly without thread creation.
 - Discord: `/agent prompt` now accepts supported document attachments for profile prompt overlays, with 2 MB attachment downloads, 100k extracted-text cap, and 20k stored-prompt cap.

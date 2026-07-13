@@ -2,8 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   stripAnsi,
   chunkForDiscord,
-  parseCodexJsonl,
-  formatCodexOutput,
 } from '../code-agents/stream-formatter.js';
 
 describe('stripAnsi', () => {
@@ -62,75 +60,5 @@ describe('chunkForDiscord', () => {
 
   it('trims trailing whitespace but preserves internal', () => {
     expect(chunkForDiscord('hello\n\n  \n')).toEqual(['hello']);
-  });
-});
-
-describe('parseCodexJsonl', () => {
-  it('captures thread_id from thread.started', () => {
-    const input = JSON.stringify({ type: 'thread.started', thread_id: 'abc-123' });
-    const r = parseCodexJsonl(input);
-    expect(r.threadId).toBe('abc-123');
-    expect(r.messages).toEqual([]);
-  });
-
-  it('extracts agent_message text', () => {
-    const input = [
-      JSON.stringify({ type: 'thread.started', thread_id: 't1' }),
-      JSON.stringify({ type: 'turn.started' }),
-      JSON.stringify({ type: 'item.completed', item: { type: 'agent_message', text: 'hi there' } }),
-      JSON.stringify({ type: 'turn.completed' }),
-    ].join('\n');
-    const r = parseCodexJsonl(input);
-    expect(r.threadId).toBe('t1');
-    expect(r.messages).toEqual(['hi there']);
-  });
-
-  it('condenses command_execution as tool-call line', () => {
-    const input = JSON.stringify({
-      type: 'item.completed',
-      item: { type: 'command_execution', command: 'ls -la', status: 'completed' },
-    });
-    const r = parseCodexJsonl(input);
-    expect(r.messages[0]).toContain('✓');
-    expect(r.messages[0]).toContain('ls -la');
-  });
-
-  it('condenses file_change with paths', () => {
-    const input = JSON.stringify({
-      type: 'item.completed',
-      item: { type: 'file_change', changes: [{ path: 'src/foo.ts' }, { path: 'src/bar.ts' }] },
-    });
-    const r = parseCodexJsonl(input);
-    expect(r.messages[0]).toContain('src/foo.ts');
-    expect(r.messages[0]).toContain('src/bar.ts');
-  });
-
-  it('ignores turn.started/completed', () => {
-    const input = [
-      JSON.stringify({ type: 'turn.started' }),
-      JSON.stringify({ type: 'turn.completed' }),
-    ].join('\n');
-    const r = parseCodexJsonl(input);
-    expect(r.messages).toEqual([]);
-  });
-
-  it('tolerates invalid JSON lines', () => {
-    const input = [
-      'not json',
-      JSON.stringify({ type: 'item.completed', item: { type: 'agent_message', text: 'hi' } }),
-      '{"broken":',
-    ].join('\n');
-    const r = parseCodexJsonl(input);
-    expect(r.messages).toEqual(['hi']);
-  });
-});
-
-describe('formatCodexOutput', () => {
-  it('chunks each message independently', () => {
-    const short = 'hi';
-    const long = 'y'.repeat(5000);
-    const chunks = formatCodexOutput([short, long]);
-    expect(chunks[0]).toBe('hi');
-    expect(chunks.slice(1).every(c => c.length <= 1900)).toBe(true);
   });
 });

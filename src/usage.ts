@@ -1,7 +1,7 @@
 // Usage tracking — JSONL append-only storage at ~/.skimpyclaw/logs/usage/YYYY-MM-DD.jsonl
 
 import { randomUUID } from 'crypto';
-import { appendFileSync, existsSync, mkdirSync } from 'fs';
+import { appendFileSync, chmodSync, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { formatDate, readJsonlDir } from './utils.js';
@@ -71,11 +71,13 @@ export function recordUsage(record: UsageRecord): void {
   try {
     const dir = getUsageDir();
     if (!existsSync(dir)) {
-      mkdirSync(dir, { recursive: true });
+      mkdirSync(dir, { recursive: true, mode: 0o700 });
     }
+    chmodSync(dir, 0o700);
     const dateStr = record.timestamp.slice(0, 10); // YYYY-MM-DD from ISO
     const filePath = getFilePath(dateStr);
-    appendFileSync(filePath, JSON.stringify(record) + '\n', 'utf-8');
+    appendFileSync(filePath, JSON.stringify(record) + '\n', { encoding: 'utf-8', mode: 0o600 });
+    chmodSync(filePath, 0o600);
   } catch (err) {
     console.warn('[usage] Failed to record usage:', err);
   }

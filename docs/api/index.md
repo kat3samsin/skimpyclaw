@@ -4,7 +4,7 @@ SkimpyClaw exposes two groups of HTTP endpoints on port `18790`:
 
 | Group | Prefix | Auth | Purpose |
 |-------|--------|------|---------|
-| **Gateway** | `/` | None | Health, status, message relay, cron triggers |
+| **Gateway** | `/` | Mixed | Public health/artifact routes; bearer-authenticated status and write routes |
 | **Dashboard** | `/api/dashboard/*` | Bearer token | Full management API |
 
 ## Authentication
@@ -15,7 +15,9 @@ All `/api/dashboard/*` routes require a Bearer token in the `Authorization` head
 Authorization: Bearer <token>
 ```
 
-The token is set in `~/.skimpyclaw/config.json` under `dashboard.token`. If no token is configured, auth is skipped.
+The token is generated during setup when missing and stored through
+`~/.skimpyclaw/config.json` under `dashboard.token`, normally as a macOS
+Keychain reference.
 
 ## Gateway Routes
 

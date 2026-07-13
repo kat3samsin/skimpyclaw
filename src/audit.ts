@@ -1,7 +1,7 @@
 // Audit log reader/writer for ~/.skimpyclaw/logs/audit/YYYY-MM-DD.jsonl
 
 import { randomUUID } from 'crypto';
-import { appendFileSync, existsSync, mkdirSync } from 'fs';
+import { appendFileSync, chmodSync, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import type { AuditTrace, AuditEvent } from './types.js';
@@ -98,11 +98,13 @@ export async function readAuditTraces(options: ReadAuditOptions = {}): Promise<{
 
 export async function writeAuditTrace(trace: AuditTrace): Promise<void> {
   if (!existsSync(AUDIT_DIR)) {
-    mkdirSync(AUDIT_DIR, { recursive: true });
+    mkdirSync(AUDIT_DIR, { recursive: true, mode: 0o700 });
   }
+  chmodSync(AUDIT_DIR, 0o700);
 
   const date = new Date(trace.startedAt || trace.endedAt);
   const filePath = getAuditLogPath(date);
   const line = JSON.stringify(trace) + '\n';
-  appendFileSync(filePath, line, 'utf-8');
+  appendFileSync(filePath, line, { encoding: 'utf-8', mode: 0o600 });
+  chmodSync(filePath, 0o600);
 }

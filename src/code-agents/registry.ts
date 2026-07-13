@@ -1,6 +1,6 @@
 // Code Agent Registry - Task storage and management
 
-import { existsSync, mkdirSync, writeFileSync, readdirSync, readFileSync } from 'fs';
+import { chmodSync, existsSync, mkdirSync, writeFileSync, readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import type { CodeAgentTask } from './types.js';
@@ -19,15 +19,17 @@ export function getCodeAgentsDir(): string {
 
 export function ensureCodeAgentsDir(): void {
   if (!existsSync(CODE_AGENTS_DIR)) {
-    mkdirSync(CODE_AGENTS_DIR, { recursive: true });
+    mkdirSync(CODE_AGENTS_DIR, { recursive: true, mode: 0o700 });
   }
+  chmodSync(CODE_AGENTS_DIR, 0o700);
 }
 
 export function writeCodeAgentTask(task: CodeAgentTask): void {
   try {
     ensureCodeAgentsDir();
     const filePath = join(CODE_AGENTS_DIR, `${task.id}.json`);
-    writeFileSync(filePath, JSON.stringify(task, null, 2), 'utf-8');
+    writeFileSync(filePath, JSON.stringify(task, null, 2), { encoding: 'utf-8', mode: 0o600 });
+    chmodSync(filePath, 0o600);
   } catch { /* best effort */ }
 }
 

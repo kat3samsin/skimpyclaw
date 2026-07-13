@@ -13,6 +13,8 @@
 - Claude: `claude -p --verbose --output-format stream-json --dangerously-skip-permissions ... <task>`
 - Codex: `codex exec --full-auto --json --color never ... <task>`
 
+When the selected Codex model is GPT-5.6 Sol, `code_with_agent` passes `service_tier=fast`. An `ultra` effort override is passed as `model_reasoning_effort=ultra` for Sol and clamped to `xhigh` for an explicitly selected non-Sol model.
+
 ## Execution Flow
 
 - Tool schema: `src/tools/definitions.ts` (`code_with_agent`)
@@ -98,14 +100,13 @@ Interactive coding sessions let Discord users hold a back-and-forth conversation
 |------|------|
 | `src/code-agents/interactive-sessions.ts` | Session store (disk-persisted + in-memory), FIFO queue per thread |
 | `src/code-agents/interactive-resume.ts` | Spawns `claude --resume` subprocesses, drains queue, posts output |
-| `src/code-agents/stream-formatter.ts` | `stripAnsi`, `chunkForDiscord`, `parseCodexJsonl`, `formatCodexOutput` |
+| `src/code-agents/stream-formatter.ts` | `stripAnsi`, `chunkForDiscord` |
 
 ### Stream formatter
 
 `src/code-agents/stream-formatter.ts` converts raw CLI stdout to Discord-ready chunks:
 
-- **Claude**: plain-text output, ANSI stripped, paragraph-aware chunking at ≤1900 chars
-- **Codex**: JSONL stream parsed for non-interactive output formatting (`item.completed` agent messages, command results, file changes)
+- Plain-text output is ANSI stripped and split into paragraph-aware chunks of ≤1900 chars.
 
 ### Storage
 

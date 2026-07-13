@@ -45,6 +45,7 @@ function initFakeCodexAuth(): { authPath: string; token: string } {
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   resetCodexProviderState();
   for (const dir of tempDirs.splice(0)) {
@@ -53,6 +54,30 @@ afterEach(() => {
 });
 
 describe('codexFetch', () => {
+  it('allows the default request to run for five minutes before timing out', async () => {
+    initFakeCodexAuth();
+    vi.useFakeTimers();
+    let wasAborted = false;
+    const fetchMock = vi.fn((_url: string, init: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      init.signal?.addEventListener('abort', () => {
+        wasAborted = true;
+        reject(new DOMException('aborted', 'AbortError'));
+      }, { once: true });
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const rejection = expect(codexFetch({ model: 'gpt-5.5' })).rejects.toThrow(
+      'Codex request timed out after 300s',
+    );
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(wasAborted).toBe(false);
+    await vi.advanceTimersByTimeAsync(180_000);
+
+    expect(wasAborted).toBe(true);
+    await rejection;
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('cancels an in-flight fetch from the caller signal', async () => {
     initFakeCodexAuth();
     const controller = new AbortController();

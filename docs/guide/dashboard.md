@@ -2,7 +2,9 @@
 
 ## Web dashboard
 
-Open `http://127.0.0.1:18790/dashboard` in a browser. The bearer token is shown in startup logs and stored in `config.dashboard.token`.
+Open `http://127.0.0.1:18790/dashboard` in a browser. The bearer token is shown
+once during setup and is normally stored in macOS Keychain through the
+`config.dashboard.token` reference. Routine status and startup logs do not print it.
 
 The dashboard is a framework SPA (Preact/Vite) served from built assets in `dist/dashboard/`.
 If the build output is missing, `/dashboard` returns a `503` with build instructions.
@@ -46,12 +48,10 @@ All routes require `Authorization: Bearer <token>`.
 | GET    | `/api/dashboard/health`                    | Doctor checks + feature toggles         |
 | GET    | `/api/dashboard/doctor`                    | Full doctor report                      |
 
-### Sessions & Conversations
+### Conversations
 
 | Method | Path                                       | Description                             |
 | ------ | ------------------------------------------ | --------------------------------------- |
-| GET    | `/api/dashboard/sessions`                  | Session list                            |
-| GET    | `/api/dashboard/sessions/:id`              | Session detail                          |
 | GET    | `/api/dashboard/conversations`             | Chat conversations list                 |
 | GET    | `/api/dashboard/conversations/:id`         | Conversation messages                   |
 
@@ -155,10 +155,3 @@ All routes require `Authorization: Bearer <token>`.
 | ------ | ------------------------------------------ | --------------------------------------- |
 | POST   | `/api/dashboard/messages/send`             | Send message to active channel          |
 | POST   | `/api/dashboard/messages/agent`            | Run agent turn (get response)           |
-
-### TODOs
-
-| Method | Path                                       | Description                             |
-| ------ | ------------------------------------------ | --------------------------------------- |
-| GET    | `/api/dashboard/todos`                     | List TODO items                         |
-| PUT    | `/api/dashboard/todos/:id`                 | Toggle TODO completion                  |

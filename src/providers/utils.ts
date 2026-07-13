@@ -1,6 +1,6 @@
 // Provider Utilities
 
-import { writeFileSync, mkdirSync, existsSync } from 'fs';
+import { chmodSync, writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { randomUUID } from 'crypto';
@@ -215,11 +215,13 @@ export function truncateToolResult(result: string, _maxBytes: number = 10_240): 
 
   try {
     const scratchDir = join(homedir(), '.skimpyclaw', 's');
-    if (!existsSync(scratchDir)) mkdirSync(scratchDir, { recursive: true });
+    if (!existsSync(scratchDir)) mkdirSync(scratchDir, { recursive: true, mode: 0o700 });
+    chmodSync(scratchDir, 0o700);
 
     const id = randomUUID();
     const filePath = join(scratchDir, id);
-    writeFileSync(filePath, result);
+    writeFileSync(filePath, result, { encoding: 'utf-8', mode: 0o600 });
+    chmodSync(filePath, 0o600);
 
     const home = homedir().replace(/\/+$/, '');
     const shortFP = filePath.startsWith(home) ? '~' + filePath.slice(home.length) : filePath;
@@ -238,10 +240,12 @@ export function truncateToolResult(result: string, _maxBytes: number = 10_240): 
 function writeScratchFile(result: string): string | null {
   try {
     const scratchDir = join(homedir(), '.skimpyclaw', 's');
-    if (!existsSync(scratchDir)) mkdirSync(scratchDir, { recursive: true });
+    if (!existsSync(scratchDir)) mkdirSync(scratchDir, { recursive: true, mode: 0o700 });
+    chmodSync(scratchDir, 0o700);
     const id = randomUUID();
     const filePath = join(scratchDir, id);
-    writeFileSync(filePath, result);
+    writeFileSync(filePath, result, { encoding: 'utf-8', mode: 0o600 });
+    chmodSync(filePath, 0o600);
     return filePath;
   } catch {
     return null;
@@ -336,6 +340,7 @@ export function buildThinkingConfig(thinking?: ThinkingLevel): { budget: number;
     medium: 8192,
     high: 16384,
     xhigh: 32768,
+    ultra: 32768,
   };
   const budget = budgetTokens[thinking] || 2048;
   return {

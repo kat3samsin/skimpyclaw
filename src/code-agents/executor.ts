@@ -2,7 +2,7 @@
 
 import { spawn, exec, execSync } from 'child_process';
 import type { ChildProcess } from 'child_process';
-import { createWriteStream, existsSync, readFileSync } from 'fs';
+import { chmodSync, createWriteStream, existsSync, readFileSync } from 'fs';
 import { join, dirname } from 'path';
 
 /**
@@ -374,7 +374,7 @@ export async function runCodeAgentBackground(
     detail: { agent, workdir, model: input.model, validate },
   });
 
-  // Per-invocation timeout (configurable defaults for team vs solo)
+  // Per-invocation timeout
   const defaultTimeout = options?.defaultTimeoutMinutes ?? 30;
   const maxTimeout = options?.maxTimeoutMinutes ?? 30;
   const timeoutMinutes = Math.min(input.timeout_minutes || defaultTimeout, maxTimeout);
@@ -398,7 +398,8 @@ export async function runCodeAgentBackground(
   // Full log file — untruncated stdout + stderr
   const logPath = join(getCodeAgentsDir(), `${id}.log`);
   ensureCodeAgentsDir();
-  const logStream = createWriteStream(logPath, { flags: 'w' });
+  if (existsSync(logPath)) chmodSync(logPath, 0o600);
+  const logStream = createWriteStream(logPath, { flags: 'w', mode: 0o600 });
   let logStreamEnded = false;
   const logWrite = (data: string | Buffer, source?: { pause: () => unknown; resume: () => unknown }) => {
     if (logStreamEnded) return;

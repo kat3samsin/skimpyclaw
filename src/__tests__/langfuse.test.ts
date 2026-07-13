@@ -26,6 +26,14 @@ describe('calculateUsageCost', () => {
     expect(cost.totalCost).toBe(35);
   });
 
+  it('resolves GPT-5.6 Sol alias pricing', () => {
+    const cost = calculateUsageCost('codex5.6', 1_000_000, 1_000_000);
+
+    expect(cost.inputCost).toBe(10);
+    expect(cost.outputCost).toBe(60);
+    expect(cost.totalCost).toBe(70);
+  });
+
   it('resolves codex5.1 model pricing', () => {
     const cost = calculateUsageCost('codex/gpt-5.1-codex', 1_000_000, 1_000_000);
 
@@ -36,6 +44,24 @@ describe('calculateUsageCost', () => {
 });
 
 describe('sanitizeLangfusePayload', () => {
+  it('redacts secrets from observability strings', () => {
+    const secret = 'plain-observability-token';
+    const sanitized = sanitizeLangfusePayload(`INTERNAL_TOKEN=${secret}`);
+
+    expect(sanitized).not.toContain(secret);
+    expect(sanitized).toContain('[REDACTED_SECRET]');
+  });
+
+  it('redacts short secrets stored under sensitive keys', () => {
+    const sanitized = sanitizeLangfusePayload({
+      nested: { token: 'short', password: 'hunter2', label: 'kept' },
+    });
+
+    expect(sanitized).toEqual({
+      nested: { token: '[REDACTED]', password: '[REDACTED]', label: 'kept' },
+    });
+  });
+
   it('replaces base64 data URIs with compact media placeholders', () => {
     const sanitized = sanitizeLangfusePayload('data:image/png;base64,aGVsbG8=');
 
@@ -89,7 +115,7 @@ describe('sanitizeLangfusePayload', () => {
 
   it('leaves non-media strings unchanged', () => {
     const payload = {
-      token: 'YWJjZA==',
+      value: 'YWJjZA==',
       url: 'https://example.com/image.png',
     };
 

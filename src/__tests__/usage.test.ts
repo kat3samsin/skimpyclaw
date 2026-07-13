@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterAll } from 'vitest';
-import { mkdirSync, rmSync, readFileSync, existsSync, writeFileSync } from 'fs';
+import { chmodSync, mkdirSync, rmSync, readFileSync, existsSync, statSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import {
@@ -63,7 +63,25 @@ describe('recordUsage', () => {
     const parsed = JSON.parse(content);
     expect(parsed.model).toBe('claude-sonnet-4-5');
     expect(parsed.totalCost).toBe(0.0105);
+    expect(statSync(subDir).mode & 0o777).toBe(0o700);
+    expect(statSync(filePath).mode & 0o777).toBe(0o600);
 
+    setUsageDirForTesting(TEST_DIR);
+  });
+
+  it('tightens permissions on existing usage storage', () => {
+    const subDir = join(TEST_DIR, 'existing');
+    const filePath = join(subDir, '2026-02-21.jsonl');
+    mkdirSync(subDir, { recursive: true });
+    writeFileSync(filePath, '', 'utf-8');
+    chmodSync(subDir, 0o755);
+    chmodSync(filePath, 0o644);
+    setUsageDirForTesting(subDir);
+
+    recordUsage(makeRecord({ timestamp: '2026-02-21T10:00:00.000Z' }));
+
+    expect(statSync(subDir).mode & 0o777).toBe(0o700);
+    expect(statSync(filePath).mode & 0o777).toBe(0o600);
     setUsageDirForTesting(TEST_DIR);
   });
 

@@ -9,10 +9,8 @@ import { runConversationTurn } from '../../conversation-queue.js';
 
 import { getCurrentModel } from '../../gateway.js';
 import { getApproval, approveRequest, denyRequest } from '../../exec-approval.js';
-import { transcribeAudio, synthesizeSpeech } from '../../voice.js';
-import { existsSync, mkdirSync, writeFileSync, unlinkSync } from 'fs';
-import { join } from 'path';
-import { tmpdir } from 'os';
+import { transcribeAudio, synthesizeSpeech, writeTemporaryVoiceFile } from '../../voice.js';
+import { unlinkSync } from 'fs';
 
 import { state, BOT_COMMANDS } from './types.js';
 import {
@@ -258,15 +256,12 @@ export async function initTelegram(cfg: Config): Promise<Bot | null> {
       const buffer = Buffer.from(await response.arrayBuffer());
 
       const ext = file.file_path?.split('.').pop() || 'oga';
-      const tempDir = join(tmpdir(), 'skimpyclaw-voice');
-      if (!existsSync(tempDir)) mkdirSync(tempDir, { recursive: true });
-      const tempPath = join(tempDir, `voice-${Date.now()}.${ext}`);
-      writeFileSync(tempPath, buffer);
+      const tempPath = writeTemporaryVoiceFile('telegram-voice', ext, buffer);
 
       try {
         const result = await transcribeAudio(tempPath, cfg.voice);
         const transcription = result.text.trim();
-        console.log(`[telegram] Transcription result: ${transcription}`);
+        console.log(`[telegram] Transcription complete (${transcription.length} chars)`);
 
         if (!transcription) {
           await ctx.reply('Could not transcribe audio — no speech detected.');

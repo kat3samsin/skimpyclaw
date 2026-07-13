@@ -125,7 +125,8 @@ function migratePlaintextSecrets(obj: unknown, path: string[] = []): { value: un
 }
 
 function writeConfigFile(rawConfig: unknown): void {
-  mkdirSync(CONFIG_DIR, { recursive: true });
+  mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
+  chmodSync(CONFIG_DIR, 0o700);
   writeFileSync(CONFIG_PATH, JSON.stringify(rawConfig, null, 2), { encoding: 'utf-8', mode: 0o600 });
   chmodSync(CONFIG_PATH, 0o600);
 }

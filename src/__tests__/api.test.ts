@@ -23,7 +23,6 @@ const LOGS_DIR = join(TEST_ROOT, 'logs');
 const AGENT_DIR = join(TEST_ROOT, 'agents', 'default');
 const MEMORY_DIR = join(AGENT_DIR, 'memory', 'logs');
 const CONFIG_PATH = join(TEST_ROOT, 'config.json');
-const TODO_PATH = join(TEST_ROOT, 'TODO.md');
 const SKILLS_DIR = join(TEST_ROOT, 'skills');
 
 const TEST_CONFIG = {
@@ -214,9 +213,9 @@ vi.mock('../cron.js', () => ({
 // Mock agent.ts
 const mockInitProviders = vi.fn();
 vi.mock('../agent.js', () => ({
-  TEMPLATE_FILES: ['SOUL.md', 'IDENTITY.md', 'USER.md', 'TOOLS.md', 'BOOT.md', 'HEARTBEAT.md', 'MEMORY.md'],
+  TEMPLATE_FILES: ['SOUL.md', 'IDENTITY.md', 'USER.md', 'TOOLS.md', 'HEARTBEAT.md', 'MEMORY.md'],
   getAgentTemplateContent: (agentId: string, name: string) => {
-    const TEMPLATE_FILES = ['SOUL.md', 'IDENTITY.md', 'USER.md', 'TOOLS.md', 'BOOT.md', 'HEARTBEAT.md', 'MEMORY.md'];
+    const TEMPLATE_FILES = ['SOUL.md', 'IDENTITY.md', 'USER.md', 'TOOLS.md', 'HEARTBEAT.md', 'MEMORY.md'];
     if (!TEMPLATE_FILES.includes(name)) return null;
     const { existsSync, readFileSync } = require('fs');
     const filePath = join(TEST_ROOT, 'agents', agentId, name);
@@ -224,7 +223,7 @@ vi.mock('../agent.js', () => ({
     return readFileSync(filePath, 'utf-8');
   },
   saveAgentTemplate: (agentId: string, name: string, content: string) => {
-    const TEMPLATE_FILES = ['SOUL.md', 'IDENTITY.md', 'USER.md', 'TOOLS.md', 'BOOT.md', 'HEARTBEAT.md', 'MEMORY.md'];
+    const TEMPLATE_FILES = ['SOUL.md', 'IDENTITY.md', 'USER.md', 'TOOLS.md', 'HEARTBEAT.md', 'MEMORY.md'];
     if (!TEMPLATE_FILES.includes(name)) {
       throw new Error(`Invalid template name: ${name}. Must be one of: ${TEMPLATE_FILES.join(', ')}`);
     }
@@ -386,41 +385,11 @@ function inject(opts: Record<string, any>) {
 // --- Setup & Teardown ---
 
 beforeAll(async () => {
-  process.env.SKIMPYCLAW_TODO_PATH = TODO_PATH;
-
   // Create directory structure
   mkdirSync(SESSIONS_DIR, { recursive: true });
   mkdirSync(LOGS_DIR, { recursive: true });
   mkdirSync(AGENT_DIR, { recursive: true });
   mkdirSync(MEMORY_DIR, { recursive: true });
-
-  // Seed session files
-  writeFileSync(
-    join(SESSIONS_DIR, 'session-1.json'),
-    JSON.stringify({
-      id: 'session-1',
-      agentId: 'default',
-      model: 'claude-sonnet-4-20250514',
-      createdAt: '2026-02-01T10:00:00Z',
-      updatedAt: '2026-02-01T11:00:00Z',
-      turns: [
-        { role: 'user', content: 'Hello', timestamp: '2026-02-01T10:00:00Z' },
-        { role: 'assistant', content: 'Hi there', timestamp: '2026-02-01T10:01:00Z' },
-      ],
-    })
-  );
-
-  writeFileSync(
-    join(SESSIONS_DIR, 'session-2.json'),
-    JSON.stringify({
-      id: 'session-2',
-      agentId: 'default',
-      model: 'claude-sonnet-4-20250514',
-      createdAt: '2026-02-02T10:00:00Z',
-      updatedAt: '2026-02-02T11:00:00Z',
-      turns: [],
-    })
-  );
 
   // Seed memory files
   writeFileSync(join(MEMORY_DIR, '2026-02-01.md'), '# Memory for Feb 1\nSome notes.');
@@ -464,16 +433,6 @@ beforeAll(async () => {
   writeFileSync(join(LOGS_DIR, 'app.log'), 'line1\nline2\nline3\nline4\nline5\n');
   writeFileSync(join(LOGS_DIR, 'error.log'), 'error1\nerror2\n');
 
-  // Seed TODO file
-  writeFileSync(TODO_PATH, [
-    '# TODO',
-    '',
-    '- [ ] Ship dashboard todo tracking',
-    '- [x] Existing done task',
-    '- [ ] Add e2e tests',
-    '',
-  ].join('\n'));
-
   // Seed config file
   writeFileSync(CONFIG_PATH, JSON.stringify(TEST_CONFIG, null, 2));
 
@@ -485,7 +444,6 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await app.close();
-  delete process.env.SKIMPYCLAW_TODO_PATH;
   rmSync(TEST_ROOT, { recursive: true, force: true });
   rmSync(mockHome, { recursive: true, force: true });
 });
@@ -535,15 +493,6 @@ beforeEach(() => {
   ];
   // Re-seed config in case a test modified it
   writeFileSync(CONFIG_PATH, JSON.stringify(TEST_CONFIG, null, 2));
-  // Re-seed TODO file in case a test modified it
-  writeFileSync(TODO_PATH, [
-    '# TODO',
-    '',
-    '- [ ] Ship dashboard todo tracking',
-    '- [x] Existing done task',
-    '- [ ] Add e2e tests',
-    '',
-  ].join('\n'));
 });
 
 // ===== TESTS =====
@@ -559,39 +508,6 @@ describe('Status endpoint', () => {
     expect(body).toHaveProperty('cronJobs');
     expect(Array.isArray(body.cronJobs)).toBe(true);
     expect(body.cronJobs[0]).toHaveProperty('id', 'daily-check');
-  });
-});
-
-describe('Sessions endpoints', () => {
-  it('GET /api/dashboard/sessions lists sessions', async () => {
-    const res = await inject({ method: 'GET', url: '/api/dashboard/sessions' });
-    expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.sessions).toHaveLength(2);
-    // Should be sorted newest first
-    expect(body.sessions[0].id).toBe('session-2');
-    expect(body.sessions[1].id).toBe('session-1');
-    expect(body.sessions[1]).toHaveProperty('turnCount', 2);
-  });
-
-  it('GET /api/dashboard/sessions/:id returns specific session', async () => {
-    const res = await inject({ method: 'GET', url: '/api/dashboard/sessions/session-1' });
-    expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.session.id).toBe('session-1');
-    expect(body.session.turns).toHaveLength(2);
-  });
-
-  it('GET /api/dashboard/sessions/:id returns 404 for missing session', async () => {
-    const res = await inject({ method: 'GET', url: '/api/dashboard/sessions/nonexistent' });
-    expect(res.statusCode).toBe(404);
-    expect(res.json()).toHaveProperty('error', 'Session not found');
-  });
-
-  it('GET /api/dashboard/sessions/:id returns 400 for path traversal', async () => {
-    const res = await inject({ method: 'GET', url: '/api/dashboard/sessions/..%2F..%2Fetc%2Fpasswd' });
-    expect(res.statusCode).toBe(400);
-    expect(res.json()).toHaveProperty('error', 'Invalid session id');
   });
 });
 
@@ -733,7 +649,7 @@ describe('Templates endpoints', () => {
     const res = await inject({ method: 'GET', url: '/api/dashboard/templates/default' });
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    expect(body.templates).toHaveLength(7);
+    expect(body.templates).toHaveLength(6);
     const soul = body.templates.find((t: any) => t.name === 'SOUL.md');
     expect(soul).toBeDefined();
     expect(soul.exists).toBe(true);
@@ -955,51 +871,6 @@ describe('Config endpoints', () => {
     expect(saved.models.providers.anthropic.apiKey).toBe('sk-ant-test-secret-key');
     expect(saved.channels.telegram.token).toBe('tg-secret-token');
     expect(saved.channels.discord.token).toBe('discord-secret-token');
-  });
-});
-
-describe('TODO endpoints', () => {
-  it('GET /api/dashboard/todos returns checklist items and summary', async () => {
-    const res = await inject({ method: 'GET', url: '/api/dashboard/todos' });
-    expect(res.statusCode).toBe(200);
-
-    const body = res.json();
-    expect(body.total).toBe(3);
-    expect(body.completed).toBe(1);
-    expect(body.remaining).toBe(2);
-    expect(body.items).toHaveLength(3);
-    expect(body.items[0]).toMatchObject({
-      id: 0,
-      text: 'Ship dashboard todo tracking',
-      completed: false,
-    });
-  });
-
-  it('PUT /api/dashboard/todos/:id toggles completion state', async () => {
-    const res = await inject({
-      method: 'PUT',
-      url: '/api/dashboard/todos/0',
-      payload: { completed: true },
-    });
-    expect(res.statusCode).toBe(200);
-    const body = res.json();
-    expect(body.updated).toBe(true);
-    expect(body.item).toMatchObject({ id: 0, completed: true });
-    expect(body.completed).toBe(2);
-
-    const verify = await inject({ method: 'GET', url: '/api/dashboard/todos' });
-    const verifyBody = verify.json();
-    expect(verifyBody.items.find((i: any) => i.id === 0).completed).toBe(true);
-  });
-
-  it('PUT /api/dashboard/todos/:id returns 404 for missing item', async () => {
-    const res = await inject({
-      method: 'PUT',
-      url: '/api/dashboard/todos/999',
-      payload: { completed: true },
-    });
-    expect(res.statusCode).toBe(404);
-    expect(res.json()).toHaveProperty('error', 'TODO item not found');
   });
 });
 

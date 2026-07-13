@@ -61,7 +61,7 @@ function statusIcon(status: CodeAgent['status']) {
 }
 
 function formatAgentLabel(task: CodeAgent): string {
-  return task.agent === 'team-coordinator' ? 'TEAM' : (task.agent?.toUpperCase() || 'CLAUDE');
+  return task.agent?.toUpperCase() || 'CLAUDE';
 }
 
 function formatModelLabel(task: CodeAgent): string {
@@ -121,34 +121,22 @@ export function Coding() {
     }
   }
 
-  const childMap = useMemo(() => {
-    const map = new Map<string, CodeAgent[]>();
-    for (const a of agents) {
-      if (!a.parentTaskId) continue;
-      const arr = map.get(a.parentTaskId) ?? [];
-      arr.push(a);
-      map.set(a.parentTaskId, arr);
-    }
-    return map;
-  }, [agents]);
-
-  const roots = useMemo(() => agents.filter(a => !a.parentTaskId), [agents]);
-  const pagedRoots = useMemo(() => {
+  const pagedAgents = useMemo(() => {
     const start = page * PAGE_SIZE;
-    return roots.slice(start, start + PAGE_SIZE);
-  }, [roots, page]);
+    return agents.slice(start, start + PAGE_SIZE);
+  }, [agents, page]);
 
   useEffect(() => {
-    const maxPage = Math.max(0, Math.ceil(roots.length / PAGE_SIZE) - 1);
+    const maxPage = Math.max(0, Math.ceil(agents.length / PAGE_SIZE) - 1);
     if (page > maxPage) setPage(maxPage);
-  }, [roots.length, page]);
+  }, [agents.length, page]);
 
   const stats = useMemo(() => {
-    const running = roots.filter(t => statusClass(t.status) === 'running').length;
-    const completed = roots.filter(t => statusClass(t.status) === 'completed').length;
-    const failed = roots.filter(t => statusClass(t.status) === 'failed').length;
+    const running = agents.filter(t => statusClass(t.status) === 'running').length;
+    const completed = agents.filter(t => statusClass(t.status) === 'completed').length;
+    const failed = agents.filter(t => statusClass(t.status) === 'failed').length;
     return { running, completed, failed, cost: todayCost };
-  }, [roots, todayCost]);
+  }, [agents, todayCost]);
 
   return (
     <div
@@ -172,7 +160,7 @@ export function Coding() {
         <div style={{ display: 'flex', justifyContent: 'center', padding: '48px' }}>
           <div class="spinner" />
         </div>
-      ) : roots.length === 0 ? (
+      ) : agents.length === 0 ? (
         <div class="empty-state">
           <div class="empty-state-icon"><LuCode size={18} /></div>
           <div class="empty-state-text">No coding agent sessions</div>
@@ -210,8 +198,7 @@ export function Coding() {
             </div>
           </div>
 
-          {pagedRoots.map(task => {
-            const children = childMap.get(task.id) ?? [];
+          {pagedAgents.map(task => {
             const output = task.liveOutput || task.outputPreview;
             const cls = statusClass(task.status);
             const canCancel = cls === 'running';
@@ -230,7 +217,7 @@ export function Coding() {
                   <div class="coding-task-content">
                     <div class="coding-task-pills">
                       <span class="coding-pill id">{task.id}</span>
-                      <span class="coding-pill">{task.agent === 'team-coordinator' ? `${formatAgentLabel(task)} (${children.length})` : formatAgentLabel(task)}</span>
+                      <span class="coding-pill">{formatAgentLabel(task)}</span>
                       <span class="coding-pill model" title={task.modelLabel || task.model || ''}>{formatModelLabel(task)}</span>
                       <span class="coding-pill effort">{formatEffortLabel(task)}</span>
                       <span class={`coding-pill status ${cls}`}>{task.status}</span>
@@ -274,73 +261,6 @@ export function Coding() {
                 </div>
                 <div class={`coding-task-progress ${cls}`} />
 
-                {children.length > 0 && (
-                  <details class="coding-subagents" open>
-                    <summary><LuChevronDown size={14} /> Subagents ({children.length})</summary>
-                    <div class="coding-subagents-list">
-                      {children.map(child => {
-                        const childCls = statusClass(child.status);
-                        const childAccent = accentForTask(child.id);
-                        const childOutput = child.liveOutput || child.outputPreview;
-                        return (
-                          <details
-                            key={child.id}
-                            class={`coding-subagent-card ${childCls}`}
-                            style={{
-                              '--card-accent': childAccent.color,
-                              '--card-accent-soft': childAccent.soft,
-                            } as any}
-                            open={child.status === 'running' || child.status === 'validating'}
-                          >
-                            <summary class="coding-subagent-header">
-                              <span class="coding-subagent-chevron"><LuChevronDown size={13} /></span>
-                              <span class={`coding-subagent-icon ${childCls}`}>{statusIcon(child.status)}</span>
-                              <span class="audit-id">{child.id}</span>
-                              <span class="coding-pill">{formatAgentLabel(child)}</span>
-                              <span class="coding-pill model" title={child.model || ''}>{formatModelLabel(child)}</span>
-                              <span class="coding-pill effort">{formatEffortLabel(child)}</span>
-                              <span class={`ca-status-badge ${child.status}`}>{child.status}</span>
-                              {child.wave != null && <span class="coding-pill">Wave {child.wave + 1}</span>}
-                              {child.retryCount ? <span class="coding-pill" style={{ color: '#d4a03c' }}>retry #{child.retryCount}</span> : null}
-                              <span class="coding-pill">{child.totalCost != null ? `$${child.totalCost.toFixed(2)}` : '$--'}</span>
-                              <span class="coding-subagent-time"><LuClock3 size={12} /> {formatElapsed(child)}</span>
-                              {child.status === 'running' || child.status === 'validating' ? (
-                                <button
-                                  class={`coding-task-action ${childCls}`}
-                                  type="button"
-                                  disabled={cancellingIds.has(child.id)}
-                                  onClick={(e) => { e.preventDefault(); void onCancel(child.id); }}
-                                  style={{ marginLeft: 'auto', fontSize: '11px', padding: '2px 8px' }}
-                                >
-                                  {cancellingIds.has(child.id) ? '…' : 'Cancel'}
-                                </button>
-                              ) : null}
-                            </summary>
-                            <div class="coding-subagent-body">
-                              <Markdown content={child.subtask || child.task} className="coding-subagent-task markdown-content" />
-                              {childOutput ? (
-                                <Markdown
-                                  content={childOutput}
-                                  className={`ca-output markdown-content ca-subagent-output${child.error ? ' ca-error' : ''}`}
-                                />
-                              ) : null}
-                              {!childOutput && child.error ? (
-                                <div class="ca-output ca-error" style={{ fontSize: '12px', padding: '8px', whiteSpace: 'pre-wrap' }}>{child.error}</div>
-                              ) : null}
-                              {child.validationOutput ? (
-                                <details class="coding-validation-detail">
-                                  <summary style={{ fontSize: '11px', color: 'var(--text-muted)', cursor: 'pointer' }}>Validation output</summary>
-                                  <pre style={{ fontSize: '11px', maxHeight: '200px', overflow: 'auto', padding: '8px', background: 'rgba(0,0,0,0.15)', borderRadius: '4px', margin: '4px 0' }}>{child.validationOutput.slice(0, 2000)}</pre>
-                                </details>
-                              ) : null}
-                            </div>
-                          </details>
-                        );
-                      })}
-                    </div>
-                  </details>
-                )}
-
                 <details class="coding-output">
                   <summary><LuChevronDown size={14} /> Live output</summary>
                   {output ? (
@@ -355,18 +275,12 @@ export function Coding() {
                       className="ca-output markdown-content ca-error"
                     />
                   ) : null}
-                  {!output && !task.error && task.synthesisResult ? (
-                    <Markdown
-                      content={task.synthesisResult}
-                      className="ca-output markdown-content"
-                    />
-                  ) : null}
                 </details>
               </div>
             );
           })}
 
-          {roots.length > PAGE_SIZE && (
+          {agents.length > PAGE_SIZE && (
             <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', padding: '12px' }}>
               <button
                 class="btn btn-sm"
@@ -376,11 +290,11 @@ export function Coding() {
                 Previous
               </button>
               <span style={{ fontSize: '12px', color: 'var(--text-muted)', alignSelf: 'center' }}>
-                {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, roots.length)} of {roots.length}
+                {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, agents.length)} of {agents.length}
               </span>
               <button
                 class="btn btn-sm"
-                disabled={(page + 1) * PAGE_SIZE >= roots.length}
+                disabled={(page + 1) * PAGE_SIZE >= agents.length}
                 onClick={() => setPage(p => p + 1)}
               >
                 Next

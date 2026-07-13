@@ -326,6 +326,33 @@ describe('runCli', () => {
     );
   });
 
+  it('shows the dashboard URL in status without printing its token', async () => {
+    const dashboardToken = 'dashboard-secret-value';
+    mockLoadConfig.mockReturnValue({
+      gateway: { port: 19000 },
+      dashboard: { token: dashboardToken },
+    });
+    const fetchMock = vi.mocked(fetch);
+    fetchMock
+      .mockResolvedValueOnce(mockJsonResponse({ uptime: 12_000 }))
+      .mockResolvedValueOnce(mockJsonResponse({
+        agent: 'main',
+        model: 'codex/gpt-5',
+        lastMessage: null,
+        cronJobs: [],
+      }));
+
+    const code = await runCli(['status']);
+
+    expect(code).toBe(0);
+    expect(console.log).toHaveBeenCalledWith('Dashboard: http://127.0.0.1:19000/dashboard');
+    const output = vi.mocked(console.log).mock.calls.flat().join('\n');
+    expect(output).not.toContain(dashboardToken);
+    expect(output).not.toContain('Dashboard token:');
+    const headers = fetchMock.mock.calls[0][1]?.headers as Headers;
+    expect(headers.get('authorization')).toBe(`Bearer ${dashboardToken}`);
+  });
+
   it('lists and runs cron jobs', async () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock
