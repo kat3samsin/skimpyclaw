@@ -180,7 +180,7 @@ describe('CodexAdapter', () => {
 
     expect(mockCodexFetch).toHaveBeenCalledWith(
       expect.any(Object),
-      undefined,
+      null,
       controller.signal,
     );
   });
