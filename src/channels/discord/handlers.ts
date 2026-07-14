@@ -10,6 +10,8 @@ import {
   type GuildTextBasedChannel,
 } from 'discord.js';
 import { unlinkSync } from 'fs';
+import { homedir } from 'node:os';
+import { join } from 'path';
 import type { AbortSignalLike, Config, ThinkingLevel } from '../../types.js';
 import { getCurrentModel, getCurrentThinking, setCurrentModel, setCurrentThinking } from '../../gateway.js';
 import { getCronJobs, triggerCronJob } from '../../cron.js';
@@ -84,7 +86,9 @@ const THINKING_LEVELS: ThinkingLevel[] = ['none', 'low', 'medium', 'high', 'xhig
 const AGENT_PROMPT_MAX_CHARS = 20_000;
 const AGENT_PROGRESS_UPDATE_MS = 75_000;
 const AGENT_RUN_TIMEOUT_MS = 12 * 60_000;
-const MAYORA_ARTIFACT_DIR = '/Users/katre/.skimpyclaw/reports/mayora-daily-briefing';
+const SKIMPYCLAW_HOME = join(homedir(), '.skimpyclaw');
+const MAYORA_ARTIFACT_DIR = join(SKIMPYCLAW_HOME, 'reports', 'mayora-daily-briefing');
+const MAYORA_TEMPLATE_PATH = join(SKIMPYCLAW_HOME, 'agents', 'mayora', 'HTML_TEMPLATE.html');
 
 function parseThinkingLevel(value: string | undefined): ThinkingLevel | null {
   const normalized = (value || '').trim().toLowerCase().replace(/^x[-_ ]?high$/, 'xhigh');
@@ -171,11 +175,11 @@ function buildMayoraArtifactRepairPrompt(originalPrompt: string, previousRespons
     `Verification failure: ${reason}`,
     '',
     'Create the HTML artifact now. Requirements:',
-    '- Read /Users/katre/.skimpyclaw/agents/mayora/HTML_TEMPLATE.html.',
-    '- Write /Users/katre/.skimpyclaw/reports/mayora-daily-briefing/<YYYY-MM-DD>.html using the local briefing date.',
+    `- Read ${MAYORA_TEMPLATE_PATH}.`,
+    `- Write ${MAYORA_ARTIFACT_DIR}/<YYYY-MM-DD>.html using the local briefing date.`,
     '- Use the navigable Mayora template structure and include a Voice Briefing link if a voice file URL or path is available.',
     '- Verify the file exists after writing it.',
-    '- Reply with [Mayora Daily Briefing HTML](/Users/katre/.skimpyclaw/reports/mayora-daily-briefing/<YYYY-MM-DD>.html) and only 1-3 terse bullets.',
+    `- Reply with [Mayora Daily Briefing HTML](${MAYORA_ARTIFACT_DIR}/<YYYY-MM-DD>.html) and only 1-3 terse bullets.`,
     '- If you cannot create and verify the file, do not include an HTML link; state the exact blocker instead.',
     '',
     `Original request:\n${originalPrompt}`,
