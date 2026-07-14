@@ -96,6 +96,28 @@ describe('codexFetch', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it('lets the caller signal own the timeout when the request timeout is disabled', async () => {
+    initFakeCodexAuth();
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    let wasAborted = false;
+    const fetchMock = vi.fn((_url: string, init: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      init.signal?.addEventListener('abort', () => {
+        wasAborted = true;
+        reject(new DOMException('aborted', 'AbortError'));
+      }, { once: true });
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const request = codexFetch({ model: 'gpt-5.5' }, null, controller.signal);
+    await vi.advanceTimersByTimeAsync(300_000);
+    expect(wasAborted).toBe(false);
+
+    controller.abort();
+    await expect(request).rejects.toThrow('Codex request cancelled');
+    expect(wasAborted).toBe(true);
+  });
+
   it('cancels retry backoff without making another request', async () => {
     initFakeCodexAuth();
     setCodexFetchRetryDelaysForTesting([10_000]);

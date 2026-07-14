@@ -228,7 +228,7 @@ function formatCodexFetchError(error: unknown, url: string): string {
  */
 export async function codexFetch(
   body: any,
-  timeoutMs: number = DEFAULT_CODEX_FETCH_TIMEOUT_MS,
+  timeoutMs: number | null = DEFAULT_CODEX_FETCH_TIMEOUT_MS,
   abortSignal?: AbortSignal,
 ): Promise<string> {
   if (!codexAuth) {
@@ -242,10 +242,12 @@ export async function codexFetch(
     if (abortSignal?.aborted) throw new Error('Codex request cancelled');
     const controller = new AbortController();
     let timedOut = false;
-    const timeoutId = setTimeout(() => {
-      timedOut = true;
-      controller.abort();
-    }, Math.max(1_000, timeoutMs));
+    const timeoutId = timeoutMs === null
+      ? null
+      : setTimeout(() => {
+          timedOut = true;
+          controller.abort();
+        }, Math.max(1_000, timeoutMs));
     const onAbort = () => controller.abort();
     abortSignal?.addEventListener('abort', onAbort, { once: true });
     try {
@@ -295,9 +297,10 @@ export async function codexFetch(
         throw new Error('Codex request cancelled');
       }
       if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error(timedOut
-          ? `Codex request timed out after ${Math.round(timeoutMs / 1000)}s`
-          : 'Codex request cancelled');
+        if (timedOut && timeoutMs !== null) {
+          throw new Error(`Codex request timed out after ${Math.round(timeoutMs / 1000)}s`);
+        }
+        throw new Error('Codex request cancelled');
       }
 
       if (attempt >= codexFetchRetryDelaysMs.length || !isRetryableCodexFetchError(error)) {
@@ -311,7 +314,7 @@ export async function codexFetch(
       );
       await sleep(delayMs, abortSignal);
     } finally {
-      clearTimeout(timeoutId);
+      if (timeoutId) clearTimeout(timeoutId);
       abortSignal?.removeEventListener('abort', onAbort);
     }
   }

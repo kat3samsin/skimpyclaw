@@ -53,8 +53,9 @@ function codexTextTypeForRole(role: unknown): 'input_text' | 'output_text' {
 }
 
 function fetchCodex(body: any, abortSignal?: AbortSignal): Promise<string> {
+  // Signal-carrying turns are wrapped by a bounded cron or Discord deadline.
   return abortSignal
-    ? codexFetch(body, undefined, abortSignal)
+    ? codexFetch(body, null, abortSignal)
     : codexFetch(body);
 }
 
