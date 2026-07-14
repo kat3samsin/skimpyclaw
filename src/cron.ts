@@ -543,7 +543,14 @@ function resolveDiscordNotificationTarget(jobDef: CronJob, config: Config): stri
   return defaultChannelId;
 }
 
-const DEFAULT_OBSIDIAN_VAULT_ROOT = '/Users/katre/Library/Mobile Documents/iCloud~md~obsidian/Documents/2ndBrain';
+const DEFAULT_OBSIDIAN_VAULT_ROOT = join(
+  homedir(),
+  'Library',
+  'Mobile Documents',
+  'iCloud~md~obsidian',
+  'Documents',
+  '2ndBrain',
+);
 
 function obsidianVaultRoot(): string {
   return process.env.SKIMPYCLAW_OBSIDIAN_VAULT_ROOT || DEFAULT_OBSIDIAN_VAULT_ROOT;

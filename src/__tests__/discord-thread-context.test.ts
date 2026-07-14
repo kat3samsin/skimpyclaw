@@ -16,7 +16,7 @@ function makeTask(overrides: Partial<CodeAgentTask> = {}): CodeAgentTask {
     discordThreadId: 'thread-1',
     startedAt: '2026-04-27T14:00:00.000Z',
     endedAt: '2026-04-27T14:05:00.000Z',
-    workdir: '/Users/katre/Sites/skimpyclaw',
+    workdir: '/workspace/skimpyclaw',
     outputPreview: 'Implemented a context bridge.',
     validationPassed: true,
     ...overrides,

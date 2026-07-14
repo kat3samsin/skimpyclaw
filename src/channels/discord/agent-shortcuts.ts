@@ -1,7 +1,8 @@
 import { existsSync } from 'fs';
+import { homedir } from 'node:os';
 import { join } from 'path';
 
-const CHIEF_DAILY_READER_DIR = '/Users/katre/.skimpyclaw/reports/chief-daily-reader';
+const CHIEF_DAILY_READER_DIR = join(homedir(), '.skimpyclaw', 'reports', 'chief-daily-reader');
 
 function formatLocalDate(date: Date): string {
   const year = date.getFullYear();
